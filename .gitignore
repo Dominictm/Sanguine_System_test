@@ -1,0 +1,9 @@
+web/node_modules/
+*.jpg
+*.jpeg
+*.png
+*.gif
+*.webp
+.claude/settings.local.json
+Thumbs.db
+desktop.ini

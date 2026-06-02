@@ -1,0 +1,1522 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VTM Chronicle Manager</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Cinzel+Decorative:wght@700&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<style>
+@font-face {
+  font-family: 'Inkulinati';
+  src: url('fonts/Inkulinati-Regular.otf') format('opentype');
+  font-weight: normal;
+  font-style: normal;
+}
+:root {
+  --bg:           #07050a;
+  --bg2:          #0d0a10;
+  --bg3:          #120f18;
+  --bg4:          #181420;
+  --border:       rgba(139,0,0,.22);
+  --border2:      rgba(180,20,0,.45);
+  --accent:       #8B0000;
+  --accent2:      #B80000;
+  --accent3:      #CC2200;
+  --glow:         rgba(180,0,0,.35);
+  --gold:         #B8860B;
+  --gold2:        #DAA520;
+  --text:         #E8E0D0;
+  --text2:        #a89880;
+  --text3:        #5a5050;
+  --crimson:      #DC143C;
+  --f-display:    'Cinzel Decorative', 'Cinzel', serif;
+  --f-heading:    'Cinzel', serif;
+  --f-body:       'Cormorant Garamond', Georgia, serif;
+  --f-mono:       'Share Tech Mono', 'Courier New', monospace;
+  --sidebar-w:    210px;
+  --ease:         cubic-bezier(.4,0,.2,1);
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body { height: 100%; overflow: hidden; }
+
+body {
+  font-family: var(--f-body);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 32px;
+  line-height: 1.6;
+}
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar { width: 5px; }
+::-webkit-scrollbar-track { background: var(--bg2); }
+::-webkit-scrollbar-thumb { background: var(--accent); border-radius: 3px; }
+
+/* ── Layout ── */
+#app { display: flex; height: 100vh; }
+
+/* ── Sidebar ── */
+#sidebar {
+  width: var(--sidebar-w);
+  min-width: var(--sidebar-w);
+  background: var(--bg2);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow: hidden;
+}
+
+#sidebar::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 60% 30% at 50% 0%, rgba(139,0,0,.12) 0%, transparent 70%),
+    radial-gradient(ellipse 40% 50% at 50% 100%, rgba(80,0,0,.08) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.sidebar-logo {
+  padding: 28px 20px 22px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.logo-drop {
+  font-size: 16px;
+  animation: pulse-blood 3s ease-in-out infinite;
+  filter: drop-shadow(0 0 6px rgba(180,0,0,.7));
+}
+
+@keyframes pulse-blood {
+  0%,100% { opacity: 1; transform: scale(1); }
+  50%      { opacity: .75; transform: scale(.93); }
+}
+
+.logo-text { line-height: 1.15; }
+.logo-text .t1 {
+  display: block;
+  font-family: var(--f-display);
+  font-size: 16px;
+  color: var(--accent3);
+  letter-spacing: .22em;
+  text-transform: uppercase;
+}
+.logo-text .t2 {
+  display: block;
+  font-family: var(--f-heading);
+  font-size: 16px;
+  color: var(--text2);
+  letter-spacing: .14em;
+  text-transform: uppercase;
+}
+
+.nav-menu {
+  flex: 1;
+  padding: 18px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 11px 20px;
+  font-family: var(--f-heading);
+  font-size: 13px;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+  color: var(--text2);
+  text-decoration: none;
+  border-left: 2px solid transparent;
+  transition: all .2s var(--ease);
+  cursor: pointer;
+  user-select: none;
+}
+
+.nav-item:hover {
+  color: var(--text);
+  background: rgba(139,0,0,.08);
+  border-left-color: var(--accent);
+}
+
+.nav-item.active {
+  color: var(--text);
+  background: rgba(139,0,0,.14);
+  border-left-color: var(--accent3);
+}
+
+.nav-icon { font-size: 13px; opacity: .8; }
+
+.sidebar-footer {
+  padding: 16px 20px;
+  border-top: 1px solid var(--border);
+}
+
+.domain-badge {
+  font-family: var(--f-mono);
+  font-size: 13px;
+  color: var(--text3);
+  letter-spacing: .05em;
+  display: block;
+}
+.domain-badge span { color: var(--gold); }
+
+/* ── Main content ── */
+#main {
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+}
+
+.page { display: none; height: 100vh; overflow-y: auto; padding: 36px 40px; }
+.page.active { display: block; }
+#page-graph { padding: 0; overflow: hidden; }
+#page-graph.active { display: flex; flex-direction: column; }
+
+/* ── Page header ── */
+.page-header {
+  margin-bottom: 32px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.page-title { display: none; }
+
+.page-sub {
+  font-family: 'Inkulinati', 'Inknut Antiqua', serif;
+  font-size: 48px;
+  color: var(--text3);
+  font-style: normal;
+  text-align: center;
+}
+
+/* ── Ornament ── */
+.ornament {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--accent2);
+  font-size: 24px;
+  margin-bottom: 28px;
+}
+.ornament::before, .ornament::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  opacity: .4;
+}
+
+/* ── Stat cards ── */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 24px;
+  margin-bottom: 36px;
+}
+
+.stat-card {
+  background: var(--bg3);
+  border: 5px solid var(--border);
+  border-radius: 10px;
+  padding: 44px 25px;
+  position: relative;
+  overflow: hidden;
+  transition: border-color .25s;
+  text-align: center;
+}
+
+.stat-card::after {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, var(--accent), transparent);
+  opacity: 0;
+  transition: opacity .25s;
+}
+
+.stat-card:hover { border-color: var(--border2); }
+.stat-card:hover::after { opacity: 1; }
+
+.stat-label {
+  font-family: var(--f-heading);
+  font-size: 16px;
+  letter-spacing: .22em;
+  text-transform: uppercase;
+  color: var(--text3);
+  margin-bottom: 8px;
+}
+
+.stat-value {
+  font-family: var(--f-heading);
+  font-size: 64px;
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1;
+  letter-spacing: -.01em;
+}
+
+.stat-value.accent { color: var(--accent3); }
+.stat-value.gold   { color: var(--gold2); }
+
+.stat-detail {
+  font-size: 20px;
+  color: var(--text2);
+  margin-top: 6px;
+  font-style: italic;
+}
+
+/* ── Sub-stats row ── */
+.substats {
+  display: flex;
+  gap: 24px;
+  flex-wrap: wrap;
+  margin-bottom: 32px;
+}
+
+.substat {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-family: var(--f-body);
+  font-size: 24px;
+  color: var(--text2);
+}
+
+.substat-dot {
+  width: 14px; height: 14px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* ── Character cards ── */
+.filter-bar {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.filter-input {
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 8px 14px;
+  font-family: var(--f-body);
+  font-size: 30px;
+  border-radius: 2px;
+  outline: none;
+  transition: border-color .2s;
+}
+.filter-input:focus { border-color: var(--accent2); }
+.filter-input::placeholder { color: var(--text3); }
+
+.filter-select {
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  color: var(--text2);
+  padding: 8px 14px;
+  font-family: var(--f-heading);
+  font-size: 20px;
+  letter-spacing: .15em;
+  text-transform: uppercase;
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+  transition: border-color .2s;
+  -webkit-appearance: none;
+}
+.filter-select:focus { border-color: var(--accent2); }
+
+.chars-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 14px;
+}
+
+.char-card {
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  padding: 18px;
+  cursor: pointer;
+  transition: all .2s var(--ease);
+  position: relative;
+  overflow: hidden;
+}
+
+.char-card:hover {
+  border-color: var(--border2);
+  background: var(--bg4);
+  transform: translateY(-1px);
+}
+
+.char-card::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 3px;
+  background: var(--accent);
+  opacity: 0;
+  transition: opacity .2s;
+}
+.char-card:hover::before { opacity: 1; }
+
+.char-lineage-icon { font-size: 44px; margin-bottom: 10px; display: block; }
+
+.char-name {
+  font-family: var(--f-heading);
+  font-size: 25px;
+  letter-spacing: .08em;
+  color: var(--text);
+  margin-bottom: 4px;
+  text-transform: uppercase;
+}
+
+.char-clan {
+  font-size: 28px;
+  color: var(--text2);
+  font-style: italic;
+  margin-bottom: 10px;
+}
+
+.char-badges { display: flex; gap: 6px; flex-wrap: wrap; }
+
+.badge {
+  font-family: var(--f-heading);
+  font-size: 16px;
+  letter-spacing: .15em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: 1px;
+  border: 1px solid;
+}
+
+.badge-active   { color: #7dce82; border-color: rgba(125,206,130,.35); background: rgba(125,206,130,.06); }
+.badge-torpor   { color: #8888cc; border-color: rgba(136,136,204,.35); background: rgba(136,136,204,.06); }
+.badge-dead     { color: var(--text3); border-color: rgba(90,80,80,.4); background: rgba(40,30,30,.4); }
+.badge-vampire  { color: var(--accent3); border-color: rgba(180,0,0,.35); background: rgba(139,0,0,.08); }
+.badge-fairy    { color: #8dcc6a; border-color: rgba(141,204,106,.3); background: rgba(50,90,40,.1); }
+.badge-mortal   { color: var(--text2); border-color: rgba(150,140,130,.3); background: rgba(60,55,50,.1); }
+.badge-unknown  { color: var(--text3); border-color: var(--border); }
+
+/* ── Graph page ── */
+#graph-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 20px;
+  background: var(--bg2);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.graph-title {
+  font-family: var(--f-heading);
+  font-size: 22px;
+  letter-spacing: .2em;
+  text-transform: uppercase;
+  color: var(--text3);
+  margin-right: 8px;
+}
+
+.btn-icon {
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  color: var(--text2);
+  padding: 6px 12px;
+  font-family: var(--f-heading);
+  font-size: 20px;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  border-radius: 2px;
+  cursor: pointer;
+  transition: all .18s;
+}
+.btn-icon:hover { border-color: var(--accent2); color: var(--text); }
+
+.graph-legend {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-left: auto;
+  align-items: center;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 21px;
+  color: var(--text3);
+  font-family: var(--f-heading);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.legend-line {
+  width: 20px;
+  height: 2px;
+  border-radius: 1px;
+}
+
+#graph-wrap {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+}
+
+#graph-svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* ── Info panel ── */
+#info-panel {
+  position: absolute;
+  right: 0; top: 0; bottom: 0;
+  width: 550px;
+  background: var(--bg2);
+  border-left: 1px solid var(--border);
+  transform: translateX(100%);
+  transition: transform .3s var(--ease);
+  overflow-y: auto;
+  z-index: 10;
+  padding: 24px 20px;
+}
+
+#info-panel.open { transform: translateX(0); }
+
+.info-close {
+  position: absolute;
+  top: 16px; right: 16px;
+  background: none;
+  border: none;
+  color: var(--text3);
+  font-size: 36px;
+  cursor: pointer;
+  line-height: 1;
+  padding: 4px;
+  transition: color .15s;
+}
+.info-close:hover { color: var(--text); }
+
+.info-lineage-icon { font-size: 64px; margin-bottom: 12px; display: block; }
+
+.info-name {
+  font-family: var(--f-heading);
+  font-size: 30px;
+  font-weight: 600;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+
+.info-meta {
+  font-size: 27px;
+  color: var(--text2);
+  font-style: italic;
+  margin-bottom: 6px;
+}
+
+.info-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 16px 0;
+}
+
+.info-section-label {
+  font-family: var(--f-heading);
+  font-size: 18px;
+  letter-spacing: .22em;
+  text-transform: uppercase;
+  color: var(--text3);
+  margin-bottom: 10px;
+}
+
+.rel-item {
+  padding: 9px 0;
+  border-bottom: 1px solid rgba(139,0,0,.1);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.rel-target {
+  font-family: var(--f-heading);
+  font-size: 22px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.rel-type-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.rel-desc {
+  font-size: 26px;
+  color: var(--text2);
+  font-style: italic;
+  padding-left: 15px;
+}
+
+/* ── Tools page ── */
+.tab-bar {
+  display: flex;
+  gap: 0;
+  margin-bottom: 28px;
+  border-bottom: 1px solid var(--border);
+}
+
+.tab-btn {
+  padding: 10px 22px;
+  font-family: var(--f-heading);
+  font-size: 20px;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: var(--text3);
+  background: none;
+  border: none;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  transition: all .18s;
+}
+.tab-btn:hover { color: var(--text2); }
+.tab-btn.active { color: var(--text); border-bottom-color: var(--accent3); }
+
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+
+.form-group { margin-bottom: 20px; }
+
+.form-label {
+  display: block;
+  font-family: var(--f-heading);
+  font-size: 19px;
+  letter-spacing: .2em;
+  text-transform: uppercase;
+  color: var(--text2);
+  margin-bottom: 7px;
+}
+
+.form-control {
+  width: 100%;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 10px 14px;
+  font-family: var(--f-body);
+  font-size: 32px;
+  border-radius: 2px;
+  outline: none;
+  transition: border-color .2s;
+}
+.form-control:focus { border-color: var(--accent2); }
+.form-control::placeholder { color: var(--text3); }
+
+textarea.form-control { resize: vertical; min-height: 80px; }
+
+select.form-control {
+  cursor: pointer;
+  -webkit-appearance: none;
+}
+
+.form-hint {
+  font-size: 26px;
+  color: var(--text3);
+  font-style: italic;
+  margin-top: 5px;
+}
+
+.form-row { display: flex; gap: 14px; }
+.form-row .form-group { flex: 1; }
+
+.btn-submit {
+  background: var(--accent);
+  border: 1px solid var(--accent2);
+  color: var(--text);
+  padding: 12px 28px;
+  font-family: var(--f-heading);
+  font-size: 21px;
+  letter-spacing: .2em;
+  text-transform: uppercase;
+  border-radius: 2px;
+  cursor: pointer;
+  transition: all .2s;
+  position: relative;
+  overflow: hidden;
+}
+
+.btn-submit:hover {
+  background: var(--accent2);
+  border-color: var(--accent3);
+  box-shadow: 0 0 20px var(--glow);
+}
+
+.btn-submit:disabled {
+  opacity: .5;
+  cursor: not-allowed;
+}
+
+.btn-submit::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(255,255,255,.07) 0%, transparent 50%);
+  pointer-events: none;
+}
+
+.output-area {
+  margin-top: 20px;
+  background: #000;
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  padding: 16px;
+  font-family: var(--f-mono);
+  font-size: 24px;
+  color: #aaa;
+  min-height: 80px;
+  max-height: 300px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  line-height: 1.6;
+  display: none;
+}
+.output-area.show { display: block; }
+.output-area .ok  { color: #7dce82; }
+.output-area .err { color: var(--accent3); }
+
+/* ── Loading ── */
+.loading-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  height: 200px;
+  color: var(--text3);
+  font-family: var(--f-heading);
+  font-size: 22px;
+  letter-spacing: .2em;
+  text-transform: uppercase;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+.spinner {
+  width: 16px; height: 16px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent3);
+  border-radius: 50%;
+  animation: spin .8s linear infinite;
+}
+
+/* ── D3 styles ── */
+.node-circle { cursor: pointer; }
+.node-label  { pointer-events: none; }
+.graph-link  { pointer-events: none; }
+
+/* ── Responsive ── */
+@media (max-width: 700px) {
+  #sidebar { width: 52px; min-width: 52px; }
+  .logo-text, .nav-item span:last-child, .sidebar-footer { display: none; }
+  .sidebar-logo { padding: 20px 14px; }
+  .nav-item { padding: 12px 18px; }
+  .page { padding: 20px; }
+}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- ── Sidebar ── -->
+  <aside id="sidebar">
+    <div class="sidebar-logo">
+      <span class="logo-drop">🩸</span>
+      <div class="logo-text">
+        <span class="t1">VTM</span>
+        <span class="t2">Chronicle Manager</span>
+      </div>
+    </div>
+
+    <nav class="nav-menu">
+      <a class="nav-item active" data-page="dashboard">
+        <span class="nav-icon">⚔️</span><span>Панель</span>
+      </a>
+      <a class="nav-item" data-page="characters">
+        <span class="nav-icon">🎭</span><span>Персонажи</span>
+      </a>
+      <a class="nav-item" data-page="graph">
+        <span class="nav-icon">🕸</span><span>Связи</span>
+      </a>
+      <a class="nav-item" data-page="tools">
+        <span class="nav-icon">⚙️</span><span>Инструменты</span>
+      </a>
+    </nav>
+
+    <div class="sidebar-footer">
+      <span class="domain-badge" id="domain-label">⏳ Загрузка...</span>
+    </div>
+  </aside>
+
+  <!-- ── Main ── -->
+  <div id="main">
+
+    <!-- Dashboard -->
+    <section id="page-dashboard" class="page active">
+      <div class="page-header">
+        <h1 class="page-title">Панель</h1>
+        <span class="page-sub">Состояние хроники</span>
+      </div>
+      <div id="dash-content">
+        <div class="loading-state"><div class="spinner"></div>Загрузка данных...</div>
+      </div>
+    </section>
+
+    <!-- Characters -->
+    <section id="page-characters" class="page">
+      <div class="page-header">
+        <h1 class="page-title">Персонажи</h1>
+        <span class="page-sub" id="chars-count-label"></span>
+      </div>
+
+      <div class="filter-bar">
+        <input class="filter-input" id="search-input" placeholder="Поиск по имени..." style="flex:1;max-width:280px">
+        <select class="filter-select" id="filter-lineage">
+          <option value="all">Все линейки</option>
+          <option value="vampire">🧛 Вампиры</option>
+          <option value="fairy">🧚 Феи</option>
+          <option value="mortal">🧑 Смертные</option>
+          <option value="werewolf">🐺 Оборотни</option>
+          <option value="mage">🔮 Маги</option>
+        </select>
+        <select class="filter-select" id="filter-status">
+          <option value="all">Все статусы</option>
+          <option value="active">Активен</option>
+          <option value="torpor">Торпор</option>
+          <option value="dead">Погиб</option>
+        </select>
+      </div>
+
+      <div id="chars-grid" class="chars-grid">
+        <div class="loading-state"><div class="spinner"></div>Загрузка...</div>
+      </div>
+    </section>
+
+    <!-- Graph -->
+    <section id="page-graph" class="page">
+      <div id="graph-toolbar">
+        <span class="graph-title">🕸 Граф отношений</span>
+        <button class="btn-icon" id="btn-zoom-in">+ Приблизить</button>
+        <button class="btn-icon" id="btn-zoom-out">− Отдалить</button>
+        <button class="btn-icon" id="btn-reset">↺ Сброс</button>
+        <div class="graph-legend" id="graph-legend"></div>
+      </div>
+
+      <div id="graph-wrap">
+        <svg id="graph-svg"></svg>
+        <div id="info-panel">
+          <button class="info-close" id="info-close">✕</button>
+          <div id="info-content"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Tools -->
+    <section id="page-tools" class="page">
+      <div class="page-header">
+        <h1 class="page-title">Инструменты</h1>
+        <span class="page-sub">запуск скриптов</span>
+      </div>
+
+      <div class="tab-bar">
+        <button class="tab-btn active" data-tab="new-city">Новый домен</button>
+        <button class="tab-btn" data-tab="new-npc">Новый НПС</button>
+        <button class="tab-btn" data-tab="new-module">Модуль</button>
+        <button class="tab-btn" data-tab="validate">Проверка</button>
+      </div>
+
+      <!-- New City -->
+      <div class="tab-panel active" id="tab-new-city">
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Город *</label>
+            <input class="form-control" id="city-name" placeholder="Берлин" type="text">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Год *</label>
+            <input class="form-control" id="city-year" placeholder="2010" type="text" maxlength="4" style="max-width:120px">
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Районы (через запятую)</label>
+          <input class="form-control" id="city-districts" placeholder="Митте, Кройцберг, Прензлауэр Берг">
+          <p class="form-hint">Будут созданы папки в locations/ для каждого района</p>
+        </div>
+        <button class="btn-submit" id="btn-new-city">Создать домен</button>
+        <pre class="output-area" id="out-new-city"></pre>
+      </div>
+
+      <!-- New NPC -->
+      <div class="tab-panel" id="tab-new-npc">
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Имя НПС *</label>
+            <input class="form-control" id="npc-name" placeholder="Эмилия Вольф">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Линейка *</label>
+            <select class="form-control" id="npc-type">
+              <option value="vampire">Вампир</option>
+              <option value="mortal">Смертный</option>
+              <option value="fairy">Фея / Ченджлинг</option>
+              <option value="werewolf">Оборотень</option>
+              <option value="mage">Маг</option>
+              <option value="hunter">Охотник</option>
+            </select>
+          </div>
+        </div>
+        <button class="btn-submit" id="btn-new-npc">Создать карточку</button>
+        <pre class="output-area" id="out-new-npc"></pre>
+      </div>
+
+      <!-- New Module -->
+      <div class="tab-panel" id="tab-new-module">
+        <div class="form-group">
+          <label class="form-label">Название модуля *</label>
+          <input class="form-control" id="module-name" placeholder="ноябрь_2010_опера">
+          <p class="form-hint">Формат: месяц_год_описание — например ноябрь_2010_охота</p>
+        </div>
+        <button class="btn-submit" id="btn-new-module">Создать модуль</button>
+        <pre class="output-area" id="out-new-module"></pre>
+      </div>
+
+      <!-- Validate -->
+      <div class="tab-panel" id="tab-validate">
+        <p style="color:var(--text2);font-size:32px;margin-bottom:22px;font-style:italic">
+          Проверяет все внутренние ссылки в .md файлах проекта. Находит битые ссылки и отсутствующие файлы.
+        </p>
+        <button class="btn-submit" id="btn-validate">Запустить проверку</button>
+        <pre class="output-area" id="out-validate"></pre>
+      </div>
+    </section>
+
+  </div><!-- #main -->
+</div><!-- #app -->
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+// Constants
+// ═══════════════════════════════════════════════════════════════
+
+const LINEAGE_ICONS = {
+  vampire: '🧛', fairy: '🧚', mortal: '🧑',
+  werewolf: '🐺', mage: '🔮', hunter: '🏹', unknown: '👤'
+};
+
+const STATUS_LABELS = {
+  active: 'Активен', torpor: 'Торпор', dead: 'Погиб', unknown: '—'
+};
+
+const REL_COLORS = {
+  family:     '#C94040',
+  sire:       '#DC143C',
+  childe:     '#DC143C',
+  ally:       '#4A8FD9',
+  enemy:      '#E06000',
+  loyalty:    '#B8860B',
+  romantic:   '#D06890',
+  suspicious: '#9B6BAE',
+  neutral:    '#555555'
+};
+
+const REL_LABELS = {
+  family:     'Семья',
+  sire:       'Сир/Чайлд',
+  childe:     'Чайлд',
+  ally:       'Союзник',
+  enemy:      'Враг',
+  loyalty:    'Преданность',
+  romantic:   'Романтика',
+  suspicious: 'Подозрение',
+  neutral:    'Нейтральный'
+};
+
+const NODE_COLORS = {
+  vampire:  '#7A0000',
+  fairy:    '#2A5020',
+  mortal:   '#4A4A4A',
+  werewolf: '#5A3A1A',
+  mage:     '#1A2A5A',
+  hunter:   '#4A3A1A',
+  unknown:  '#333333'
+};
+
+// Mock data shown before server responds
+const MOCK_GRAPH = {
+  nodes: [
+    { id: 'Верене де Кюстин',  lineage: 'vampire', clan: 'Малкавиан',  status: 'active' },
+    { id: 'Клер де Кюстин',    lineage: 'vampire', clan: 'Vengeance',  status: 'active' },
+    { id: 'Филиппа де Россет', lineage: 'vampire', clan: 'Тореадор',   status: 'active' },
+    { id: 'Госпожа Бубенчик',  lineage: 'vampire', clan: 'Малкавиан',  status: 'active' },
+    { id: 'Франсуа Вийон',     lineage: 'vampire', clan: 'Тореадор',   status: 'active' },
+    { id: 'Ямала',             lineage: 'fairy',   clan: 'Красная Шапка', status: 'active' },
+  ],
+  links: [
+    { source: 'Верене де Кюстин',  target: 'Клер де Кюстин',    type: 'family',  label: 'старшая сестра', description: 'старшая сестра' },
+    { source: 'Верене де Кюстин',  target: 'Филиппа де Россет', type: 'loyalty', label: 'мать-наставница', description: 'воспринимает как мать' },
+    { source: 'Верене де Кюстин',  target: 'Госпожа Бубенчик',  type: 'sire',    label: 'Сир', description: 'Сир; выбрала намеренно за специфику безумия' },
+    { source: 'Клер де Кюстин',    target: 'Филиппа де Россет', type: 'loyalty', label: 'свита', description: 'преданная свита, старый союз' },
+    { source: 'Филиппа де Россет', target: 'Франсуа Вийон',     type: 'sire',    label: 'Сир', description: 'создатель; страх, уважение, сложность' },
+    { source: 'Госпожа Бубенчик',  target: 'Франсуа Вийон',     type: 'neutral', label: 'старший по домену', description: 'старейшина домена' },
+    { source: 'Ямала',             target: 'Филиппа де Россет', type: 'ally',    label: 'союзница', description: 'долгосрочный союз, взаимная выгода' },
+    { source: 'Ямала',             target: 'Клер де Кюстин',    type: 'neutral', label: 'знакома', description: 'знакома через свиту Филиппы' },
+  ]
+};
+
+// ═══════════════════════════════════════════════════════════════
+// State & routing
+// ═══════════════════════════════════════════════════════════════
+
+const STATE = {
+  page: 'dashboard',
+  characters: [],
+  filter: { lineage: 'all', status: 'all', search: '' },
+  graph: { data: null, svg: null, zoom: null, sim: null, nodes: null, links: null },
+  selectedNode: null
+};
+
+function navigate(page) {
+  STATE.page = page;
+  document.querySelectorAll('.nav-item').forEach(el =>
+    el.classList.toggle('active', el.dataset.page === page));
+  document.querySelectorAll('.page').forEach(el =>
+    el.classList.toggle('active', el.id === `page-${page}`));
+
+  if (page === 'dashboard')  loadDashboard();
+  if (page === 'characters') loadCharacters();
+  if (page === 'graph')      loadGraph();
+}
+
+document.querySelectorAll('[data-page]').forEach(el =>
+  el.addEventListener('click', () => navigate(el.dataset.page)));
+
+// ═══════════════════════════════════════════════════════════════
+// Dashboard
+// ═══════════════════════════════════════════════════════════════
+
+async function loadDashboard() {
+  const el = document.getElementById('dash-content');
+  el.innerHTML = '<div class="loading-state"><div class="spinner"></div>Загрузка...</div>';
+  try {
+    const stats = await fetch('/api/status').then(r => r.json());
+    document.getElementById('domain-label').innerHTML =
+      `<span>${stats.domain || 'Домен'}</span>`;
+    renderDashboard(stats, el);
+  } catch {
+    el.innerHTML = '<div class="loading-state" style="color:var(--accent3)">⚠ Сервер недоступен</div>';
+  }
+}
+
+function animateValue(el, target, dur = 900) {
+  let start = null;
+  const step = ts => {
+    if (!start) start = ts;
+    const p = Math.min((ts - start) / dur, 1);
+    el.textContent = Math.round(p * p * target);
+    if (p < 1) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+}
+
+function renderDashboard(s, container) {
+  const LINEAGES = [
+    { key: 'vampires',   label: 'вампиров',   color: '#8B0000' },
+    { key: 'fairies',    label: 'фей',         color: '#5a9e40' },
+    { key: 'mortals',    label: 'смертных',    color: '#888888' },
+    { key: 'werewolves', label: 'оборотней',   color: '#8B6530' },
+    { key: 'mages',      label: 'магов',       color: '#3A5A9B' },
+    { key: 'hunters',    label: 'охотников',   color: '#7A6020' },
+  ];
+
+  const lineageDetail = LINEAGES
+    .filter(l => (s[l.key] || 0) > 0)
+    .map(l => `${s[l.key]} ${l.label}`)
+    .join(' · ') || '—';
+
+  const lineageSubstats = LINEAGES
+    .filter(l => (s[l.key] || 0) > 0)
+    .map(l => `<div class="substat">
+        <div class="substat-dot" style="background:${l.color}"></div>
+        <span>${s[l.key]} ${l.label}</span>
+      </div>`)
+    .join('');
+
+  container.innerHTML = `
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-label">Персонажи</div>
+        <div class="stat-value accent" id="sv-chars">0</div>
+        <div class="stat-detail">${lineageDetail}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Активны</div>
+        <div class="stat-value" id="sv-active">0</div>
+        <div class="stat-detail">${s.torpor || 0} в торпоре</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Модули</div>
+        <div class="stat-value gold" id="sv-modules">0</div>
+        <div class="stat-detail">сессии хроники</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Локации</div>
+        <div class="stat-value" id="sv-locations">0</div>
+        <div class="stat-detail">карточек мест</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Открытые нити</div>
+        <div class="stat-value accent" id="sv-threads">0</div>
+        <div class="stat-detail">требуют разрешения</div>
+      </div>
+    </div>
+    <div class="substats">
+      <div class="substat">
+        <div class="substat-dot" style="background:#7dce82"></div>
+        <span>${s.active || 0} активных персонажей</span>
+      </div>
+      <div class="substat">
+        <div class="substat-dot" style="background:#8888cc"></div>
+        <span>${s.torpor || 0} в торпоре</span>
+      </div>
+      ${lineageSubstats}
+    </div>`;
+
+  animateValue(document.getElementById('sv-chars'), s.characters || 0);
+  animateValue(document.getElementById('sv-active'), s.active || 0);
+  animateValue(document.getElementById('sv-modules'), s.modules || 0);
+  animateValue(document.getElementById('sv-locations'), s.locations || 0);
+  animateValue(document.getElementById('sv-threads'), s.openThreads || 0, 1200);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Characters
+// ═══════════════════════════════════════════════════════════════
+
+async function loadCharacters() {
+  if (STATE.characters.length) { renderChars(); return; }
+  document.getElementById('chars-grid').innerHTML =
+    '<div class="loading-state"><div class="spinner"></div>Загрузка...</div>';
+  try {
+    STATE.characters = await fetch('/api/characters').then(r => r.json());
+    renderChars();
+  } catch {
+    document.getElementById('chars-grid').innerHTML =
+      '<div class="loading-state" style="color:var(--accent3)">⚠ Не удалось загрузить персонажей</div>';
+  }
+}
+
+function renderChars() {
+  const { lineage, status, search } = STATE.filter;
+  let list = STATE.characters;
+  if (lineage !== 'all') list = list.filter(c => c.lineage === lineage);
+  if (status  !== 'all') list = list.filter(c => c.statusType === status);
+  if (search)            list = list.filter(c => c.name.toLowerCase().includes(search.toLowerCase()));
+
+  document.getElementById('chars-count-label').textContent = `${list.length} персонажей`;
+
+  const grid = document.getElementById('chars-grid');
+  if (!list.length) {
+    grid.innerHTML = '<div class="loading-state" style="height:100px">Персонажи не найдены</div>';
+    return;
+  }
+
+  grid.innerHTML = list.map(c => {
+    const icon   = LINEAGE_ICONS[c.lineage] || '👤';
+    const stType = c.statusType || 'unknown';
+    const stLbl  = STATUS_LABELS[stType] || '—';
+    const linBadge = `<span class="badge badge-${c.lineage}">${c.lineage === 'vampire' ? '🧛 Вампир' : c.lineage === 'fairy' ? '🧚 Фея' : c.lineage === 'mortal' ? '🧑 Смертный' : c.lineage}</span>`;
+    const stBadge  = `<span class="badge badge-${stType}">${stLbl}</span>`;
+    const relCount = (c.relationships || []).length;
+    return `<div class="char-card">
+      <span class="char-lineage-icon">${icon}</span>
+      <div class="char-name">${c.name}</div>
+      <div class="char-clan">${c.clan || c.lineageLabel || '—'}</div>
+      <div class="char-badges">${linBadge}${stBadge}${relCount ? `<span class="badge" style="color:var(--text3);border-color:rgba(90,80,80,.4)">${relCount} связей</span>` : ''}</div>
+    </div>`;
+  }).join('');
+}
+
+document.getElementById('search-input').addEventListener('input', e => {
+  STATE.filter.search = e.target.value;
+  if (STATE.characters.length) renderChars();
+});
+
+document.getElementById('filter-lineage').addEventListener('change', e => {
+  STATE.filter.lineage = e.target.value;
+  if (STATE.characters.length) renderChars();
+});
+
+document.getElementById('filter-status').addEventListener('change', e => {
+  STATE.filter.status = e.target.value;
+  if (STATE.characters.length) renderChars();
+});
+
+// ═══════════════════════════════════════════════════════════════
+// Relationship Graph (D3 v7)
+// ═══════════════════════════════════════════════════════════════
+
+let graphInited = false;
+
+async function loadGraph() {
+  if (graphInited) return;
+  graphInited = true;
+
+  let data = MOCK_GRAPH;
+  try {
+    const fetched = await fetch('/api/graph').then(r => r.json());
+    if (fetched.nodes && fetched.nodes.length) data = fetched;
+  } catch {}
+
+  STATE.graph.data = data;
+  buildLegend();
+  renderGraph(data);
+}
+
+function buildLegend() {
+  const types = ['family','sire','ally','enemy','loyalty','neutral'];
+  document.getElementById('graph-legend').innerHTML = types.map(t =>
+    `<div class="legend-item">
+      <div class="legend-line" style="background:${REL_COLORS[t]}"></div>
+      ${REL_LABELS[t]}
+    </div>`
+  ).join('');
+}
+
+function renderGraph(data) {
+  const wrap  = document.getElementById('graph-wrap');
+  const svgEl = document.getElementById('graph-svg');
+  const W = wrap.clientWidth, H = wrap.clientHeight;
+
+  const svg = d3.select(svgEl)
+    .attr('width', W).attr('height', H);
+
+  svg.selectAll('*').remove();
+
+  // ── Defs ──
+  const defs = svg.append('defs');
+
+  // Glow filter
+  const gf = defs.append('filter').attr('id', 'node-glow').attr('x', '-50%').attr('y', '-50%').attr('width', '200%').attr('height', '200%');
+  gf.append('feGaussianBlur').attr('in', 'SourceGraphic').attr('stdDeviation', '4').attr('result', 'blur');
+  const fm = gf.append('feMerge');
+  fm.append('feMergeNode').attr('in', 'blur');
+  fm.append('feMergeNode').attr('in', 'SourceGraphic');
+
+  // Arrow markers
+  Object.entries(REL_COLORS).forEach(([type, color]) => {
+    defs.append('marker')
+      .attr('id', `arr-${type}`)
+      .attr('viewBox', '0 -4 8 8')
+      .attr('refX', 22).attr('refY', 0)
+      .attr('markerWidth', 5).attr('markerHeight', 5)
+      .attr('orient', 'auto')
+      .append('path').attr('d', 'M0,-4L8,0L0,4').attr('fill', color).attr('opacity', .7);
+  });
+
+  // Node radial gradients
+  Object.entries(NODE_COLORS).forEach(([lin, col]) => {
+    const grad = defs.append('radialGradient').attr('id', `grad-${lin}`);
+    grad.append('stop').attr('offset', '0%').attr('stop-color', col).attr('stop-opacity', .95);
+    grad.append('stop').attr('offset', '100%').attr('stop-color', col).attr('stop-opacity', .6);
+  });
+
+  // ── Simulation ──
+  const nodes = data.nodes.map(d => ({ ...d }));
+  const links = data.links.map(d => ({ ...d }));
+
+  const sim = d3.forceSimulation(nodes)
+    .force('link',      d3.forceLink(links).id(d => d.id).distance(180).strength(.6))
+    .force('charge',    d3.forceManyBody().strength(-320))
+    .force('center',    d3.forceCenter(W / 2, H / 2))
+    .force('collision', d3.forceCollide(36));
+
+  STATE.graph.sim = sim;
+
+  // ── Zoom ──
+  const g = svg.append('g');
+  const zoom = d3.zoom().scaleExtent([.2, 4]).on('zoom', e => g.attr('transform', e.transform));
+  svg.call(zoom);
+  STATE.graph.zoom = zoom;
+  STATE.graph.svg  = svg;
+
+  // ── Links ──
+  const link = g.append('g').attr('class', 'links')
+    .selectAll('line').data(links).join('line')
+    .attr('class', 'graph-link')
+    .attr('stroke', d => REL_COLORS[d.type] || REL_COLORS.neutral)
+    .attr('stroke-width', 1.5)
+    .attr('stroke-opacity', .55)
+    .attr('marker-end', d => `url(#arr-${d.type})`);
+
+  // ── Nodes ──
+  const nodeG = g.append('g').attr('class', 'nodes')
+    .selectAll('g').data(nodes).join('g')
+    .attr('class', 'node-group')
+    .call(d3.drag()
+      .on('start', (e, d) => { if (!e.active) sim.alphaTarget(.3).restart(); d.fx = d.x; d.fy = d.y; })
+      .on('drag',  (e, d) => { d.fx = e.x; d.fy = e.y; })
+      .on('end',   (e, d) => { if (!e.active) sim.alphaTarget(0); d.fx = null; d.fy = null; })
+    );
+
+  const r = d => d.lineage === 'vampire' ? 18 : d.lineage === 'fairy' ? 16 : 14;
+
+  nodeG.append('circle')
+    .attr('class', 'node-circle')
+    .attr('r', r)
+    .attr('fill', d => `url(#grad-${d.lineage || 'unknown'})`)
+    .attr('stroke', d => d.status === 'active' ? '#CC2200' : d.status === 'torpor' ? '#5555aa' : '#444')
+    .attr('stroke-width', 2)
+    .attr('filter', 'url(#node-glow)');
+
+  nodeG.append('text')
+    .attr('class', 'node-label')
+    .attr('text-anchor', 'middle')
+    .attr('dy', d => r(d) + 14)
+    .attr('font-family', 'Cinzel, serif')
+    .attr('font-size', 19)
+    .attr('fill', '#c0b4a8')
+    .attr('letter-spacing', '.06em')
+    .text(d => d.id.split(' ').slice(0, 2).join(' '));
+
+  nodeG.append('text')
+    .attr('text-anchor', 'middle').attr('dy', '0.4em')
+    .attr('font-size', 22).attr('pointer-events', 'none')
+    .text(d => LINEAGE_ICONS[d.lineage] || '👤');
+
+  // ── Hover ──
+  nodeG.on('mouseenter', (e, d) => {
+    if (STATE.selectedNode) return;
+    highlightNode(d, link, nodeG, links);
+  }).on('mouseleave', () => {
+    if (STATE.selectedNode) return;
+    resetHighlight(link, nodeG);
+  });
+
+  // ── Click ──
+  nodeG.on('click', (e, d) => {
+    e.stopPropagation();
+    STATE.selectedNode = d;
+    highlightNode(d, link, nodeG, links);
+    showInfoPanel(d, links, data.nodes);
+  });
+
+  svg.on('click', () => {
+    STATE.selectedNode = null;
+    resetHighlight(link, nodeG);
+    closeInfoPanel();
+  });
+
+  STATE.graph.nodes = nodeG;
+  STATE.graph.links = link;
+
+  // ── Tick ──
+  sim.on('tick', () => {
+    link
+      .attr('x1', d => d.source.x).attr('y1', d => d.source.y)
+      .attr('x2', d => d.target.x).attr('y2', d => d.target.y);
+    nodeG.attr('transform', d => `translate(${d.x},${d.y})`);
+  });
+}
+
+function highlightNode(d, link, nodeG, links) {
+  const connIds = new Set(
+    links.filter(l => l.source.id === d.id || l.target.id === d.id)
+         .flatMap(l => [l.source.id, l.target.id])
+  );
+
+  link.attr('stroke-opacity', l =>
+      l.source.id === d.id || l.target.id === d.id ? .95 : .08)
+    .attr('stroke-width', l =>
+      l.source.id === d.id || l.target.id === d.id ? 2.5 : 1);
+
+  nodeG.attr('opacity', n => connIds.has(n.id) ? 1 : .25);
+}
+
+function resetHighlight(link, nodeG) {
+  link.attr('stroke-opacity', .55).attr('stroke-width', 1.5);
+  nodeG.attr('opacity', 1);
+}
+
+function showInfoPanel(d, links, nodes) {
+  const outLinks = links.filter(l => l.source.id === d.id || l.target.id === d.id);
+
+  const relsByType = {};
+  for (const l of outLinks) {
+    const isSource = l.source.id === d.id;
+    const other    = isSource ? l.target.id : l.source.id;
+    const desc     = isSource ? l.description : `← ${l.description}`;
+    const type     = l.type;
+    if (!relsByType[type]) relsByType[type] = [];
+    relsByType[type].push({ other, desc });
+  }
+
+  const relsHtml = Object.entries(relsByType).map(([type, items]) =>
+    items.map(({ other, desc }) => `
+      <div class="rel-item">
+        <div class="rel-target">
+          <div class="rel-type-dot" style="background:${REL_COLORS[type] || '#555'}"></div>
+          ${other}
+        </div>
+        <div class="rel-desc">${desc}</div>
+      </div>`).join('')
+  ).join('');
+
+  document.getElementById('info-content').innerHTML = `
+    <span class="info-lineage-icon">${LINEAGE_ICONS[d.lineage] || '👤'}</span>
+    <div class="info-name">${d.id}</div>
+    <div class="info-meta">${d.clan || d.lineage || ''}</div>
+    <div class="char-badges" style="margin-bottom:4px">
+      <span class="badge badge-${d.lineage}">${d.lineage}</span>
+      <span class="badge badge-${d.status}">${STATUS_LABELS[d.status] || d.status}</span>
+    </div>
+    <div class="info-divider"></div>
+    <div class="info-section-label">Связи (${outLinks.length})</div>
+    ${relsHtml || '<div style="color:var(--text3);font-size:26px;font-style:italic">Нет известных связей</div>'}
+  `;
+
+  document.getElementById('info-panel').classList.add('open');
+}
+
+function closeInfoPanel() {
+  document.getElementById('info-panel').classList.remove('open');
+  STATE.selectedNode = null;
+  if (STATE.graph.links && STATE.graph.nodes)
+    resetHighlight(STATE.graph.links, STATE.graph.nodes);
+}
+
+document.getElementById('info-close').addEventListener('click', e => {
+  e.stopPropagation();
+  closeInfoPanel();
+});
+
+// Zoom controls
+document.getElementById('btn-zoom-in').addEventListener('click', () => {
+  if (!STATE.graph.svg) return;
+  STATE.graph.svg.transition().call(STATE.graph.zoom.scaleBy, 1.4);
+});
+document.getElementById('btn-zoom-out').addEventListener('click', () => {
+  if (!STATE.graph.svg) return;
+  STATE.graph.svg.transition().call(STATE.graph.zoom.scaleBy, .7);
+});
+document.getElementById('btn-reset').addEventListener('click', () => {
+  if (!STATE.graph.svg) return;
+  STATE.graph.svg.transition().duration(500).call(
+    STATE.graph.zoom.transform, d3.zoomIdentity);
+});
+
+// ═══════════════════════════════════════════════════════════════
+// Tools
+// ═══════════════════════════════════════════════════════════════
+
+// Tab switching
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const tab = btn.dataset.tab;
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.id === `tab-${tab}`));
+  });
+});
+
+async function runTool(tool, params, outId, btn) {
+  const out = document.getElementById(outId);
+  btn.disabled = true;
+  btn.textContent = '⏳ Выполняется...';
+  out.className = 'output-area show';
+  out.textContent = '$ powershell ' + tool + '.ps1\n\n';
+
+  try {
+    const res = await fetch('/api/run-tool', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tool, params })
+    });
+    const data = await res.json();
+    const cls = data.success ? 'ok' : 'err';
+    out.innerHTML = `$ powershell ${tool}.ps1\n\n<span class="${cls}">${escHtml(data.output || '(нет вывода)')}</span>`;
+    if (data.success) {
+      STATE.characters = [];  // invalidate cache
+    }
+  } catch (e) {
+    out.innerHTML = `<span class="err">⚠ Ошибка соединения с сервером\n${e.message}</span>`;
+  }
+
+  btn.disabled = false;
+  btn.textContent = getOrigLabel(btn.id);
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+function getOrigLabel(id) {
+  return { 'btn-new-city': 'Создать домен', 'btn-new-npc': 'Создать карточку',
+           'btn-new-module': 'Создать модуль', 'btn-validate': 'Запустить проверку' }[id] || 'Выполнить';
+}
+
+document.getElementById('btn-new-city').addEventListener('click', () => {
+  const city = document.getElementById('city-name').value.trim();
+  const year = document.getElementById('city-year').value.trim();
+  if (!city || !year) { alert('Укажите город и год'); return; }
+  runTool('new_city', { City: city, Year: year, Districts: document.getElementById('city-districts').value },
+    'out-new-city', document.getElementById('btn-new-city'));
+});
+
+document.getElementById('btn-new-npc').addEventListener('click', () => {
+  const name = document.getElementById('npc-name').value.trim();
+  if (!name) { alert('Укажите имя НПС'); return; }
+  runTool('new_npc', { Name: name, Type: document.getElementById('npc-type').value },
+    'out-new-npc', document.getElementById('btn-new-npc'));
+});
+
+document.getElementById('btn-new-module').addEventListener('click', () => {
+  const name = document.getElementById('module-name').value.trim();
+  if (!name) { alert('Укажите название модуля'); return; }
+  runTool('new_module', { Name: name }, 'out-new-module', document.getElementById('btn-new-module'));
+});
+
+document.getElementById('btn-validate').addEventListener('click', () => {
+  runTool('validate_links', {}, 'out-validate', document.getElementById('btn-validate'));
+});
+
+// ═══════════════════════════════════════════════════════════════
+// Init
+// ═══════════════════════════════════════════════════════════════
+
+loadDashboard();
+</script>
+</body>
+</html>

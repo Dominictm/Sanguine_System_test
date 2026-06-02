@@ -30,9 +30,9 @@ $typeInfo = @{
     "vampire"  = @{ Folder = "vampires";   SectionEnd = "`n---`n`n## 🧚 Феи";      DefaultEmoji = "🧛"; Tmpl = "vampire" }
     "fairy"    = @{ Folder = "fairies";    SectionEnd = "`n---`n`n## 🧑 Смертные"; DefaultEmoji = "🧚"; Tmpl = "fairy"   }
     "mortal"   = @{ Folder = "mortals";    SectionEnd = "`n---`n`n## 📂 Пустые";   DefaultEmoji = "👤"; Tmpl = "mortal"  }
-    "werewolf" = @{ Folder = "werewolves"; SectionEnd = $null;                      DefaultEmoji = "🐺"; Tmpl = "vampire" }
-    "mage"     = @{ Folder = "mages";      SectionEnd = $null;                      DefaultEmoji = "🔮"; Tmpl = "vampire" }
-    "hunter"   = @{ Folder = "hunters";    SectionEnd = $null;                      DefaultEmoji = "🏹"; Tmpl = "vampire" }
+    "werewolf" = @{ Folder = "werewolves"; SectionEnd = "`n---`n`n## 🔮 Маги";      DefaultEmoji = "🐺"; Tmpl = "vampire" }
+    "mage"     = @{ Folder = "mages";      SectionEnd = "`n---`n`n## 🏹 Охотники"; DefaultEmoji = "🔮"; Tmpl = "vampire" }
+    "hunter"   = @{ Folder = "hunters";    SectionEnd = "`n---`n`n## 📂 Прочие";   DefaultEmoji = "🏹"; Tmpl = "vampire" }
 }
 
 $info       = $typeInfo[$Type]
