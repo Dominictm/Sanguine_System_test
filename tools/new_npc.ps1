@@ -18,7 +18,8 @@ param(
     [string]$Clan  = "⚠️ Заполнить",
     [string]$Sect  = "⚠️ Заполнить",
     [string]$Role  = "⚠️ Заполнить",
-    [string]$Emoji = ""
+    [string]$Emoji = "",
+    [switch]$Force
 )
 
 $Root        = Split-Path -Parent $PSScriptRoot
@@ -253,5 +254,7 @@ Write-Host "    -- Обратные ссылки в карточки связа�
 Write-Host ""
 Write-Host "  tools\validate_links.ps1" -ForegroundColor DarkGray
 Write-Host ""
-Write-Host "  Нажмите любую клавишу..." -ForegroundColor DarkGray
-$null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+if (-not $Force) {
+    Write-Host "  Нажмите любую клавишу..." -ForegroundColor DarkGray
+    $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+}

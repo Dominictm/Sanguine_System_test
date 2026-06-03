@@ -205,7 +205,8 @@ async function loadCharacters() {
   document.getElementById('chars-grid').innerHTML =
     '<div class="loading-state"><div class="spinner"></div>Загрузка...</div>';
   try {
-    STATE.characters = await fetch('/api/characters').then(r => r.json());
+    const data = await fetch('/api/characters').then(r => r.json());
+    STATE.characters = Array.isArray(data) ? data : [];
     renderChars();
   } catch {
     document.getElementById('chars-grid').innerHTML =
@@ -277,6 +278,17 @@ document.getElementById('filter-status').addEventListener('change', e => {
 async function loadGraph() {
   if (STATE.graph.inited) return;
   STATE.graph.inited = true;
+
+  // Stop previous simulation to prevent CPU leak on re-init
+  if (STATE.graph.sim) { STATE.graph.sim.stop(); STATE.graph.sim = null; }
+
+  // Pre-load characters so portraits show in info panel without visiting Characters page
+  if (!STATE.characters.length) {
+    try {
+      const chars = await fetch('/api/characters').then(r => r.json());
+      STATE.characters = Array.isArray(chars) ? chars : [];
+    } catch {}
+  }
 
   let data = MOCK_GRAPH;
   try {
@@ -472,9 +484,9 @@ function showInfoPanel(d, links, nodes) {
       <div class="rel-item">
         <div class="rel-target">
           <div class="rel-type-dot" style="background:${REL_COLORS[type] || '#555'}"></div>
-          ${other}
+          ${escHtml(other)}
         </div>
-        <div class="rel-desc">${desc}</div>
+        <div class="rel-desc">${escHtml(desc)}</div>
       </div>`).join('')
   ).join('');
 
@@ -819,8 +831,8 @@ modalSubmit.addEventListener('click', async () => {
     if (d.success) {
       modalOut.classList.add('ok');
       STATE.graph.inited = false;
-      fetch('/api/characters').then(r => r.json()).then(chars => {
-        STATE.characters = chars;
+      fetch('/api/characters').then(r => r.json()).then(data => {
+        STATE.characters = Array.isArray(data) ? data : [];
         if (STATE.page === 'characters') renderChars();
       }).catch(() => { STATE.characters = []; });
       setTimeout(closeCharModal, 900);

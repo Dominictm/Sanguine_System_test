@@ -239,8 +239,8 @@ app.post('/api/run-tool', async (req, res) => {
 
   const script = path.join(ROOT, 'tools', `${tool}.ps1`);
 
-  // -Force skips interactive prompts (Read-Host / ReadKey) — encoding-safe
-  const extraFlags = ['new_city', 'new_npc'].includes(tool) ? ' -Force' : '';
+  // -Force skips all interactive Read-Host / ReadKey prompts
+  const extraFlags = ['new_city', 'new_npc', 'new_module'].includes(tool) ? ' -Force' : '';
 
   const paramStr = Object.entries(params)
     .filter(([, v]) => v !== undefined && v !== null && String(v).trim() !== '')
@@ -256,20 +256,13 @@ app.post('/api/run-tool', async (req, res) => {
 
   const args = ['-ExecutionPolicy', 'Bypass', '-NoProfile', '-Command', cmd];
 
-  // Stdin only for tools that still use Read-Host
-  const stdinMap = {
-    new_npc:    `д\n`,
-    new_module: `\n\n\n`,
-  };
-  const stdinData = stdinMap[tool] || '';
-
   const ps = spawn('powershell.exe', args, {
     cwd: ROOT,
     env: { ...process.env, POWERSHELL_TELEMETRY_OPTOUT: '1' }
   });
 
+  ps.stdin.end();
   let out = '', err = '';
-  if (stdinData) { ps.stdin.write(Buffer.from(stdinData, 'utf8')); ps.stdin.end(); }
   ps.stdout.on('data', d => { out += d.toString('utf8'); });
   ps.stderr.on('data', d => { err += d.toString('utf8'); });
 

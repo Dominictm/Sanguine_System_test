@@ -4,7 +4,8 @@
 
 param(
     [Parameter(Mandatory=$true)]
-    [string]$Name
+    [string]$Name,
+    [switch]$Force
 )
 
 $Root      = Split-Path -Parent $PSScriptRoot
@@ -37,7 +38,11 @@ Write-Host ""
 $linkedDisplayName = ""
 $linkedFinaleNote  = ""
 
-$linkAnswer = Read-Host "Связан ли этот модуль с другими хрониками/модулями? [д/н]"
+if (-not $Force) {
+    $linkAnswer = Read-Host "Связан ли этот модуль с другими хрониками/модулями? [д/н]"
+} else {
+    $linkAnswer = "н"
+}
 if ($linkAnswer -match '^[дД]') {
     $modulesRoot = Join-Path $Root "modules"
     $finaleFiles = Get-ChildItem -Path $modulesRoot -Recurse -Filter "финал.md" -ErrorAction SilentlyContinue
@@ -73,7 +78,11 @@ if ($linkAnswer -match '^[дД]') {
 # ─── Шаг 2: НПС ──────────────────────────────────────────────────────────────
 
 Write-Host ""
-$npcInput = Read-Host "Перечислите НПС модуля через запятую (Enter — пропустить)"
+if (-not $Force) {
+    $npcInput = Read-Host "Перечислите НПС модуля через запятую (Enter — пропустить)"
+} else {
+    $npcInput = ""
+}
 $npcNames = @()
 if ($npcInput.Trim() -ne "") {
     $npcNames = ($npcInput -split ",") | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne "" }
@@ -81,7 +90,11 @@ if ($npcInput.Trim() -ne "") {
 
 # ─── Шаг 3: Локации ──────────────────────────────────────────────────────────
 
-$locInput = Read-Host "Перечислите локации через запятую (Enter — пропустить)"
+if (-not $Force) {
+    $locInput = Read-Host "Перечислите локации через запятую (Enter — пропустить)"
+} else {
+    $locInput = ""
+}
 $locNames = @()
 if ($locInput.Trim() -ne "") {
     $locNames = ($locInput -split ",") | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne "" }
@@ -286,5 +299,7 @@ Write-Host "    4. Добавить запись в Stories_of_Paris.md"
 Write-Host "    5. Создать финал.md когда сессия разыграна"
 Write-Host "    6. Запустить tools\validate_links.ps1"
 Write-Host ""
-Write-Host "  Нажмите любую клавишу для закрытия..." -ForegroundColor DarkGray
-$null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+if (-not $Force) {
+    Write-Host "  Нажмите любую клавишу для закрытия..." -ForegroundColor DarkGray
+    $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+}

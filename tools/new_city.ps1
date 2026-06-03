@@ -10,9 +10,11 @@
 # Запускать ОДИН РАЗ при старте нового проекта из шаблона.
 
 param(
-    [string]$City    = "",
-    [string]$Year    = "",
-    [string]$Country = ""
+    [string]$City      = "",
+    [string]$Year      = "",
+    [string]$Country   = "",
+    [string]$Districts = "",
+    [switch]$Force
 )
 
 $Root    = Split-Path -Parent $PSScriptRoot
@@ -44,9 +46,13 @@ if ($claudeText -notmatch '\[ГОРОД\]') {
     Write-Host "  WARN: В CLAUDE.md не найдено [ГОРОД]." -ForegroundColor Yellow
     Write-Host "  Домен уже настроен, или файл был изменён вручную."
     Write-Host ""
-    $force = Read-Host "  Продолжить всё равно? [д/н]"
-    if ($force -notmatch '^[дД]') { exit 0 }
-    Write-Host ""
+    if (-not $Force) {
+        $ans = Read-Host "  Продолжить всё равно? [д/н]"
+        if ($ans -notmatch '^[дД]') { exit 0 }
+        Write-Host ""
+    } else {
+        Write-Host "  -Force: продолжаем." -ForegroundColor DarkGray
+    }
 }
 
 # ─── Сбор данных ─────────────────────────────────────────────────────────────
@@ -68,7 +74,13 @@ if ($Year -notmatch '^\d{4}$') {
 }
 
 Write-Host ""
-$rawDistricts = (Read-Host "  Районы через запятую (Enter — пропустить)").Trim()
+if ($Districts) {
+    $rawDistricts = $Districts
+} elseif (-not $Force) {
+    $rawDistricts = (Read-Host "  Районы через запятую (Enter — пропустить)").Trim()
+} else {
+    $rawDistricts = ""
+}
 $districts = @()
 if ($rawDistricts) {
     $districts = $rawDistricts -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ }
@@ -81,9 +93,11 @@ if ($districts.Count) {
     Write-Host "  Районы: $($districts -join ', ')" -ForegroundColor White
 }
 Write-Host ""
-$confirm = (Read-Host "  Применить? [д/н]").Trim()
-if ($confirm -notmatch '^[дД]') { Write-Host "  Отменено."; exit 0 }
-Write-Host ""
+if (-not $Force) {
+    $confirm = (Read-Host "  Применить? [д/н]").Trim()
+    if ($confirm -notmatch '^[дД]') { Write-Host "  Отменено."; exit 0 }
+    Write-Host ""
+}
 
 $safeCityName = $City -replace '[:\\/*?"<>| ]', '_'
 $changed = 0
@@ -180,5 +194,7 @@ Write-Host "  Следующий шаг:" -ForegroundColor Cyan
 Write-Host "    .\tools\new_npc.ps1 -Name `"Имя`" -Type vampire"
 Write-Host "    .\tools\new_module.ps1"
 Write-Host ""
-Write-Host "  Нажмите любую клавишу..." -ForegroundColor DarkGray
-$null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+if (-not $Force) {
+    Write-Host "  Нажмите любую клавишу..." -ForegroundColor DarkGray
+    $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+}
