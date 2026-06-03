@@ -704,6 +704,38 @@ select.form-control {
 
 .validate-hint { color: var(--text2); font-size: 32px; margin-bottom: 22px; font-style: italic; }
 
+.btn-row { display: flex; gap: 12px; flex-wrap: wrap; }
+
+.btn-secondary {
+  background: none;
+  border-color: var(--gold);
+  color: var(--gold);
+}
+.btn-secondary:hover {
+  background: rgba(184,134,11,.15);
+  border-color: var(--gold2);
+  color: var(--gold2);
+  box-shadow: 0 0 16px rgba(184,134,11,.25);
+}
+
+/* ── Dashboard integrity badge ── */
+.integrity-row {
+  margin-top: 4px;
+  margin-bottom: 12px;
+}
+.badge-integrity {
+  font-family: var(--f-heading);
+  font-size: 17px;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  padding: 4px 12px;
+  border-radius: 2px;
+  border: 1px solid;
+}
+.badge-integrity.ok      { color: #7dce82; border-color: rgba(125,206,130,.4); background: rgba(125,206,130,.06); }
+.badge-integrity.err     { color: var(--accent3); border-color: rgba(200,40,0,.4); background: rgba(139,0,0,.08); }
+.badge-integrity.neutral { color: var(--text3); border-color: var(--border); background: transparent; }
+
 .form-row { display: flex; gap: 14px; }
 .form-row .form-group { flex: 1; }
 

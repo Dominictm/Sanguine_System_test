@@ -10,6 +10,10 @@ const ROOT = path.join(__dirname, '..');
 let _cache = { chars: null, ts: 0 };
 const CHARS_TTL = 15_000;
 
+// Last known broken-link count from validate_links.ps1.
+// null = never validated; 0 = clean; N = N broken links remaining.
+let _brokenLinks = null;
+
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 app.use('/char-img', express.static(path.join(ROOT, 'characters')));
@@ -141,6 +145,25 @@ async function countMdFiles(dir) {
   return n;
 }
 
+// ── Background validation ─────────────────────────────────────────────────────
+
+// Run validate_links.ps1 silently; store exit code as brokenLinks count.
+// Called automatically after tools that modify project files.
+function runValidationBackground() {
+  const script = path.join(ROOT, 'tools', 'validate_links.ps1');
+  const cmd = [
+    '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8',
+    '$OutputEncoding = [System.Text.Encoding]::UTF8',
+    `& '${script.replace(/\\/g, '\\\\').replace(/'/g, "''")}' -Force`
+  ].join('; ');
+  const ps = spawn('powershell.exe',
+    ['-ExecutionPolicy', 'Bypass', '-NoProfile', '-Command', cmd],
+    { cwd: ROOT, env: { ...process.env, POWERSHELL_TELEMETRY_OPTOUT: '1' } });
+  ps.stdout.resume();
+  ps.stderr.resume();
+  ps.on('close', code => { _brokenLinks = code; });
+}
+
 // ── API ───────────────────────────────────────────────────────────────────────
 
 app.get('/api/status', async (req, res) => {
@@ -182,7 +205,8 @@ app.get('/api/status', async (req, res) => {
       torpor:     chars.filter(c => c.statusType === 'torpor').length,
       modules,
       locations,
-      openThreads
+      openThreads,
+      brokenLinks: _brokenLinks   // null = never validated, 0 = clean, N = broken
     });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -202,7 +226,6 @@ app.get('/api/graph', async (req, res) => {
 
     const idSet = new Set(nodes.map(n => n.id));
 
-    // Fuzzy-match a relationship target to a known node id
     function resolveTarget(tgt) {
       if (idSet.has(tgt)) return tgt;
       for (const id of idSet) {
@@ -231,7 +254,15 @@ app.get('/api/graph', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// Run a PowerShell tool
+// ── Run a PowerShell tool ─────────────────────────────────────────────────────
+
+// Switch params: passed as bare flags (-Name) without a value string.
+// List them here so they aren't quoted as strings in the PS command.
+const SWITCH_PARAMS = ['Fix'];
+
+// Tools that write project files → trigger background revalidation on success.
+const FILE_MUTATING_TOOLS = new Set(['new_npc', 'new_module', 'new_city']);
+
 app.post('/api/run-tool', async (req, res) => {
   const { tool, params = {} } = req.body;
   const allowed = ['new_city','new_npc','new_module','validate_links','status','search'];
@@ -239,27 +270,33 @@ app.post('/api/run-tool', async (req, res) => {
 
   const script = path.join(ROOT, 'tools', `${tool}.ps1`);
 
-  // -Force skips all interactive Read-Host / ReadKey prompts
-  const extraFlags = ['new_city', 'new_npc', 'new_module'].includes(tool) ? ' -Force' : '';
+  // -Force skips interactive Read-Host / ReadKey for all interactive tools
+  const forceFlag = ['new_city', 'new_npc', 'new_module', 'validate_links'].includes(tool)
+    ? '-Force' : '';
 
-  const paramStr = Object.entries(params)
-    .filter(([, v]) => v !== undefined && v !== null && String(v).trim() !== '')
+  // Regular params (-Key 'Value')
+  const regularParamStr = Object.entries(params)
+    .filter(([k, v]) => !SWITCH_PARAMS.includes(k) && v !== undefined && v !== null && String(v).trim() !== '')
     .map(([k, v]) => `-${k} '${String(v).replace(/'/g, "''")}'`)
     .join(' ');
 
-  // Force UTF-8 output — fixes Cyrillic garbling on CP866/CP1251 systems
+  // Switch params (-Key with no value)
+  const switchParamStr = SWITCH_PARAMS
+    .filter(k => params[k] === true || params[k] === 'true')
+    .map(k => `-${k}`)
+    .join(' ');
+
+  const allArgs = [regularParamStr, forceFlag, switchParamStr].filter(Boolean).join(' ');
+
   const cmd = [
     '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8',
     '$OutputEncoding = [System.Text.Encoding]::UTF8',
-    `& '${script.replace(/\\/g, '\\\\').replace(/'/g, "''")}' ${paramStr}${extraFlags}`
+    `& '${script.replace(/\\/g, '\\\\').replace(/'/g, "''")}' ${allArgs}`
   ].join('; ');
 
-  const args = ['-ExecutionPolicy', 'Bypass', '-NoProfile', '-Command', cmd];
-
-  const ps = spawn('powershell.exe', args, {
-    cwd: ROOT,
-    env: { ...process.env, POWERSHELL_TELEMETRY_OPTOUT: '1' }
-  });
+  const ps = spawn('powershell.exe',
+    ['-ExecutionPolicy', 'Bypass', '-NoProfile', '-Command', cmd],
+    { cwd: ROOT, env: { ...process.env, POWERSHELL_TELEMETRY_OPTOUT: '1' } });
 
   ps.stdin.end();
   let out = '', err = '';
@@ -270,7 +307,12 @@ app.post('/api/run-tool', async (req, res) => {
 
   ps.on('close', code => {
     clearTimeout(timer);
-    if (code === 0) _cache = { chars: null, ts: 0 };
+    if (code === 0) {
+      _cache = { chars: null, ts: 0 };
+      if (FILE_MUTATING_TOOLS.has(tool)) runValidationBackground();
+    }
+    // For validate_links the exit code IS the broken link count
+    if (tool === 'validate_links') _brokenLinks = code;
     res.json({ success: code === 0, output: out || err, exitCode: code });
   });
   ps.on('error', e => {
@@ -283,4 +325,6 @@ app.listen(PORT, () => {
   console.log(`\n  \u{1F9DB} VTM Chronicle Manager`);
   console.log(`  ───────────────────────`);
   console.log(`  http://localhost:${PORT}\n`);
+  // Run initial validation on startup
+  runValidationBackground();
 });

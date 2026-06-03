@@ -127,6 +127,14 @@ function animateValue(el, target, dur = 900) {
 }
 
 function renderDashboard(s, container) {
+  // Broken links badge
+  const blCount = s.brokenLinks;
+  const blBadge = blCount === null || blCount === undefined
+    ? `<span class="badge-integrity neutral">⚠ Не проверено</span>`
+    : blCount === 0
+      ? `<span class="badge-integrity ok">✓ Ссылки OK</span>`
+      : `<span class="badge-integrity err">${blCount} битых ссылок</span>`;
+
   const LINEAGES = [
     { key: 'vampires',   label: 'вампиров',   color: '#8B0000' },
     { key: 'fairies',    label: 'фей',         color: '#5a9e40' },
@@ -187,7 +195,8 @@ function renderDashboard(s, container) {
         <span>${s.torpor || 0} в торпоре</span>
       </div>
       ${lineageSubstats}
-    </div>`;
+    </div>
+    <div class="integrity-row">${blBadge}</div>`;
 
   animateValue(document.getElementById('sv-chars'), s.characters || 0);
   animateValue(document.getElementById('sv-active'), s.active || 0);
@@ -582,8 +591,13 @@ function escHtml(s) {
   return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 function getOrigLabel(id) {
-  return { 'btn-new-city': 'Создать домен', 'btn-new-npc': 'Создать карточку',
-           'btn-new-module': 'Создать модуль', 'btn-validate': 'Запустить проверку' }[id] || 'Выполнить';
+  return {
+    'btn-new-city':    'Создать домен',
+    'btn-new-npc':     'Создать карточку',
+    'btn-new-module':  'Создать модуль',
+    'btn-validate':    'Проверить',
+    'btn-validate-fix':'Исправить автоматически',
+  }[id] || 'Выполнить';
 }
 
 document.getElementById('btn-new-city').addEventListener('click', () => {
@@ -609,6 +623,10 @@ document.getElementById('btn-new-module').addEventListener('click', () => {
 
 document.getElementById('btn-validate').addEventListener('click', () => {
   runTool('validate_links', {}, 'out-validate', document.getElementById('btn-validate'));
+});
+
+document.getElementById('btn-validate-fix').addEventListener('click', () => {
+  runTool('validate_links', { Fix: 'true' }, 'out-validate', document.getElementById('btn-validate-fix'));
 });
 
 // ═══════════════════════════════════════════════════════════════

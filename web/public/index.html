@@ -180,7 +180,10 @@
         <p class="validate-hint">
           Проверяет все внутренние ссылки в .md файлах проекта. Находит битые ссылки и отсутствующие файлы.
         </p>
-        <button class="btn-submit" id="btn-validate">Запустить проверку</button>
+        <div class="btn-row">
+          <button class="btn-submit" id="btn-validate">Проверить</button>
+          <button class="btn-submit btn-secondary" id="btn-validate-fix">Исправить автоматически</button>
+        </div>
         <pre class="output-area" id="out-validate"></pre>
       </div>
     </section>
