@@ -10,6 +10,7 @@ $skipped  = 0
 
 $mdFiles = Get-ChildItem -Path $Root -Recurse -Filter "*.md" |
     Where-Object { $_.FullName -notmatch '\\.claude\\' } |
+    Where-Object { $_.FullName -notmatch '\\node_modules\\' } |
     Where-Object { $IncludeRules -or ($_.FullName -notmatch '\\rules\\') }
 
 if ($Filter) {
