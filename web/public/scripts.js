@@ -768,14 +768,14 @@ function openCharDetail(name) {
       <div class="cdet-rel-desc">${escHtml(r.description)}</div>
     </div>`).join('');
 
-  const headerMedia = c.imageUrl
-    ? `<img class="cdet-art" src="${c.imageUrl}" alt="${escHtml(c.name)}">`
-    : `<span class="cdet-icon">${icon}</span>`;
+  const portraitCol = c.imageUrl
+    ? `<img class="cdet-portrait-full" src="${c.imageUrl}" alt="${escHtml(c.name)}">`
+    : `<div class="cdet-no-portrait">${icon}</div>`;
 
   document.getElementById('char-detail-content').innerHTML = `
-    <div class="cdet-header">
-      ${headerMedia}
-      <div>
+    <div class="cdet-portrait-col">${portraitCol}</div>
+    <div class="cdet-info-col">
+      <div class="cdet-sticky-header">
         <div class="cdet-name">${escHtml(c.name)}</div>
         <div class="cdet-badges">
           <span class="badge badge-${c.lineage}">${LINEAGE_LABELS[c.lineage] || c.lineage}</span>
@@ -783,17 +783,19 @@ function openCharDetail(name) {
         </div>
         ${c.statusDetails ? `<div class="cdet-status-details">${escHtml(c.statusDetails)}</div>` : ''}
       </div>
-    </div>
-    ${fields ? `<div class="cdet-divider"></div><div class="cdet-fields">${fields}</div>` : ''}
-    ${c.biography && !c.biography.includes('⚠️') ? `
-      <div class="cdet-divider"></div>
-      <div class="cdet-section-title">Биография</div>
-      <div class="cdet-bio">${escHtml(c.biography)}</div>` : ''}
-    ${c.voice && !c.voice.includes('⚠️') ? `
-      <div class="cdet-divider"></div>
-      <div class="cdet-section-title">Голос</div>
-      <div class="cdet-voice">${escHtml(c.voice)}</div>` : ''}
-    ${rels ? `<div class="cdet-divider"></div><div class="cdet-section-title">Отношения (${c.relationships.length})</div>${rels}` : ''}`;
+      <div class="cdet-scroll-body">
+        ${fields ? `<div class="cdet-fields">${fields}</div><div class="cdet-divider"></div>` : ''}
+        ${c.biography && !c.biography.includes('⚠️') ? `
+          <div class="cdet-section-title">Биография</div>
+          <div class="cdet-bio">${escHtml(c.biography)}</div>
+          <div class="cdet-divider"></div>` : ''}
+        ${c.voice && !c.voice.includes('⚠️') ? `
+          <div class="cdet-section-title">Голос</div>
+          <div class="cdet-voice">${escHtml(c.voice)}</div>
+          <div class="cdet-divider"></div>` : ''}
+        ${rels ? `<div class="cdet-section-title">Отношения (${c.relationships.length})</div>${rels}` : ''}
+      </div>
+    </div>`;
 
   document.getElementById('char-detail-modal').classList.add('open');
 }

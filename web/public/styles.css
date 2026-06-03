@@ -968,25 +968,75 @@ select.form-control {
 #modal-output { margin-top: 14px; }
 
 /* ── Char Detail Modal ─────────────────────────────────────── */
-.modal-detail { width: min(680px, 95vw); }
-
-.cdet-header {
-  display: flex;
-  align-items: flex-start;
-  gap: 22px;
-  margin-bottom: 22px;
+.modal-detail {
+  width: min(900px, 96vw);
+  height: min(82vh, 700px);
+  padding: 0;
+  overflow: hidden;
 }
-.cdet-icon { font-size: 58px; line-height: 1; flex-shrink: 0; margin-top: 4px; }
-.cdet-art {
-  width: 140px;
-  height: 190px;
+
+#char-detail-content {
+  display: flex;
+  width: 100%;
+  height: 100%;
+}
+
+/* Left: portrait column */
+.cdet-portrait-col {
+  width: 260px;
+  min-width: 365px;
+  flex-shrink: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg3);
+  position: relative;
+}
+.cdet-portrait-full {
+  width: 100%;
+  height: 100%;
   object-fit: cover;
   object-position: top center;
-  border-radius: 2px;
-  border: 1px solid var(--border2);
-  flex-shrink: 0;
-  box-shadow: 0 4px 20px rgba(0,0,0,.5);
+  display: block;
 }
+.cdet-no-portrait {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 80px;
+  background: linear-gradient(180deg, var(--bg3) 0%, var(--bg2) 100%);
+}
+
+/* Right: info column */
+.cdet-info-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  height: 100%;
+  border-left: 1px solid var(--border);
+}
+
+/* Sticky name + status header */
+.cdet-sticky-header {
+  flex-shrink: 0;
+  padding: 24px 52px 20px 28px;
+  background: var(--bg2);
+  border-bottom: 1px solid var(--border);
+  box-shadow: 0 6px 20px rgba(0,0,0,.4);
+  position: relative;
+  z-index: 2;
+}
+
+/* Scrollable content body */
+.cdet-scroll-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 22px 28px 28px;
+}
+
+/* Name & badges */
 .cdet-name {
   font-family: var(--f-heading);
   font-size: 26px;
@@ -1022,14 +1072,6 @@ select.form-control {
 }
 .cdet-val { font-size: 20px; color: var(--text2); font-style: italic; }
 
-.cdet-rels-title {
-  font-family: var(--f-heading);
-  font-size: 13px;
-  letter-spacing: .15em;
-  text-transform: uppercase;
-  color: var(--gold);
-  margin-bottom: 12px;
-}
 .cdet-rel {
   padding: 10px 0;
   border-bottom: 1px solid rgba(139,0,0,.12);
