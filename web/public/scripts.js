@@ -8,7 +8,7 @@ const LINEAGE_ICONS = {
 };
 
 const STATUS_LABELS = {
-  active: 'Активен', torpor: 'Торпор', dead: 'Погиб', unknown: '—'
+  active: 'Жив / Жива', torpor: 'Торпор', dead: 'Мёртв / Мертва', unknown: 'Неизвестно'
 };
 const LINEAGE_LABELS = {
   vampire: '🧛 Вампир', fairy: '🧚 Фея', mortal: '🧑 Смертный',
@@ -93,6 +93,8 @@ function navigate(page) {
   if (page === 'dashboard')  loadDashboard();
   if (page === 'characters') loadCharacters();
   if (page === 'graph')      loadGraph();
+  if (page === 'modules')    loadModules();
+  if (page === 'threads')    loadThreads();
 }
 
 document.querySelectorAll('[data-page]').forEach(el =>
@@ -241,7 +243,7 @@ function renderChars() {
   grid.innerHTML = list.map(c => {
     const icon   = LINEAGE_ICONS[c.lineage] || '👤';
     const stType = c.statusType || 'unknown';
-    const stLbl  = STATUS_LABELS[stType] || '—';
+    const stLbl  = statusLabel(c);
     const linBadge = `<span class="badge badge-${c.lineage}">${LINEAGE_LABELS[c.lineage] || c.lineage}</span>`;
     const stBadge  = stType !== 'unknown' ? `<span class="badge badge-${stType}">${stLbl}</span>` : '';
     const relCount = (c.relationships || []).length;
@@ -299,11 +301,26 @@ async function loadGraph() {
     } catch {}
   }
 
-  let data = MOCK_GRAPH;
+  let data = null;
   try {
     const fetched = await fetch('/api/graph').then(r => r.json());
-    if (fetched.nodes && fetched.nodes.length) data = fetched;
+    if (fetched.nodes) data = fetched;
   } catch {}
+  if (!data) data = MOCK_GRAPH;
+
+  if (!data.nodes.length) {
+    d3.select('#graph-svg').selectAll('*').remove();
+    if (!document.getElementById('graph-empty-state')) {
+      const overlay = document.createElement('div');
+      overlay.id = 'graph-empty-state';
+      overlay.style.cssText = 'position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--text3);font-family:var(--f-heading);letter-spacing:.2em;text-transform:uppercase;font-size:22px;pointer-events:none';
+      overlay.textContent = 'Нет персонажей — создайте первого';
+      document.getElementById('graph-wrap').appendChild(overlay);
+    }
+    return;
+  }
+  const _es = document.getElementById('graph-empty-state');
+  if (_es) _es.remove();
 
   STATE.graph.data = data;
   buildLegend();
@@ -504,14 +521,18 @@ function showInfoPanel(d, links, nodes) {
     ? `<img class="info-portrait" src="${charData.imageUrl}" alt="${d.id}">`
     : `<span class="info-lineage-icon">${LINEAGE_ICONS[d.lineage] || '👤'}</span>`;
 
+  const graphStatusLbl = charData?.status || STATUS_LABELS[d.status] || d.status;
+  const graphStatusDetails = charData?.statusDetails || '';
+
   document.getElementById('info-content').innerHTML = `
     ${portraitHtml}
     <div class="info-name">${escHtml(d.id)}</div>
     <div class="info-meta">${escHtml(d.clan || d.lineage || '')}</div>
     <div class="char-badges" style="margin-bottom:4px">
       <span class="badge badge-${d.lineage}">${LINEAGE_LABELS[d.lineage] || d.lineage}</span>
-      ${d.status !== 'unknown' ? `<span class="badge badge-${d.status}">${STATUS_LABELS[d.status] || d.status}</span>` : ''}
+      ${d.status !== 'unknown' ? `<span class="badge badge-${d.status}">${escHtml(graphStatusLbl)}</span>` : ''}
     </div>
+    ${graphStatusDetails ? `<div class="cdet-status-details" style="margin-bottom:6px">${escHtml(graphStatusDetails)}</div>` : ''}
     <div class="info-divider"></div>
     <div class="info-section-label">Связи (${outLinks.length})</div>
     ${relsHtml || '<div style="color:var(--text3);font-size:26px;font-style:italic">Нет известных связей</div>'}
@@ -577,7 +598,9 @@ async function runTool(tool, params, outId, btn) {
     const cls = data.success ? 'ok' : 'err';
     out.innerHTML = `$ powershell ${tool}.ps1\n\n<span class="${cls}">${escHtml(data.output || '(нет вывода)')}</span>`;
     if (data.success) {
-      STATE.characters = [];  // invalidate cache
+      STATE.characters = [];
+      STATE.graph.inited = false;
+      if (STATE.page === 'dashboard') loadDashboard();
     }
   } catch (e) {
     out.innerHTML = `<span class="err">⚠ Ошибка соединения с сервером\n${e.message}</span>`;
@@ -588,7 +611,13 @@ async function runTool(tool, params, outId, btn) {
 }
 
 function escHtml(s) {
-  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function statusLabel(c) {
+  const raw = c.status || '';
+  if (raw && !raw.includes('⚠️')) return raw;
+  return STATUS_LABELS[c.statusType || 'unknown'] || '—';
 }
 function getOrigLabel(id) {
   return {
@@ -630,6 +659,77 @@ document.getElementById('btn-validate-fix').addEventListener('click', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════
+// Modules
+// ═══════════════════════════════════════════════════════════════
+
+async function loadModules() {
+  const el = document.getElementById('modules-list');
+  el.innerHTML = '<div class="loading-state"><div class="spinner"></div>Загрузка...</div>';
+  try {
+    const mods = await fetch('/api/modules').then(r => r.json());
+    document.getElementById('modules-sub').textContent =
+      mods.length ? `${mods.length} модулей` : 'Хроника';
+    if (!mods.length) {
+      el.innerHTML = '<div class="loading-state" style="height:120px">Модули не найдены</div>';
+      return;
+    }
+    el.innerHTML = mods.map(m => `
+      <div class="module-card">
+        <div class="module-title">${escHtml(m.title)}</div>
+        ${m.time ? `<div class="module-time">${escHtml(m.time)}</div>` : ''}
+        <div class="module-meta">
+          ${m.tone   ? `<span class="module-tag">${escHtml(m.tone)}</span>`   : ''}
+          ${m.format ? `<span class="module-tag">${escHtml(m.format)}</span>` : ''}
+          ${m.type   ? `<span class="module-tag mod-type">${escHtml(m.type)}</span>` : ''}
+        </div>
+        <div class="module-slug">${escHtml(m.name)}</div>
+      </div>`).join('');
+  } catch {
+    el.innerHTML = '<div class="loading-state" style="color:var(--accent3)">⚠ Не удалось загрузить</div>';
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Threads
+// ═══════════════════════════════════════════════════════════════
+
+async function loadThreads() {
+  const el = document.getElementById('threads-list');
+  el.innerHTML = '<div class="loading-state"><div class="spinner"></div>Загрузка...</div>';
+  try {
+    const threads = await fetch('/api/threads').then(r => r.json());
+    const active = threads.filter(t => t.status === 'active');
+    const bg     = threads.filter(t => t.status === 'background');
+    document.getElementById('threads-sub').textContent =
+      `${active.length} активных · ${bg.length} фоновых`;
+
+    const renderThread = t => `
+      <div class="thread-card thread-${escHtml(t.status)}">
+        <div class="thread-num">${t.id}</div>
+        <div class="thread-body">
+          <div class="thread-title">${escHtml(t.title)}</div>
+          ${t.description ? `<div class="thread-desc">${escHtml(t.description)}</div>` : ''}
+          <div class="thread-source">${escHtml(t.source)}</div>
+        </div>
+        <div class="thread-priority priority-${escHtml(t.priority.toLowerCase())}">${escHtml(t.priority)}</div>
+      </div>`;
+
+    let html = '';
+    if (active.length) {
+      html += `<div class="threads-section-header">🔴 Активные (${active.length})</div>`;
+      html += active.map(renderThread).join('');
+    }
+    if (bg.length) {
+      html += `<div class="threads-section-header" style="margin-top:32px">🟡 Фоновые (${bg.length})</div>`;
+      html += bg.map(renderThread).join('');
+    }
+    el.innerHTML = html || '<div class="loading-state" style="height:120px">Нитей нет</div>';
+  } catch {
+    el.innerHTML = '<div class="loading-state" style="color:var(--accent3)">⚠ Не удалось загрузить</div>';
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
 // Init
 // ═══════════════════════════════════════════════════════════════
 
@@ -655,6 +755,7 @@ function openCharDetail(name) {
 
   const icon    = LINEAGE_ICONS[c.lineage] || '👤';
   const stType  = c.statusType || 'unknown';
+  const stLbl   = statusLabel(c);
 
   const fields = CHAR_FIELD_LABELS
     .filter(([k]) => c[k] && c[k] !== '—' && !String(c[k]).includes('⚠️'))
@@ -678,8 +779,9 @@ function openCharDetail(name) {
         <div class="cdet-name">${escHtml(c.name)}</div>
         <div class="cdet-badges">
           <span class="badge badge-${c.lineage}">${LINEAGE_LABELS[c.lineage] || c.lineage}</span>
-          ${stType !== 'unknown' ? `<span class="badge badge-${stType}">${STATUS_LABELS[stType]}</span>` : ''}
+          ${stType !== 'unknown' ? `<span class="badge badge-${stType}">${stLbl}</span>` : ''}
         </div>
+        ${c.statusDetails ? `<div class="cdet-status-details">${escHtml(c.statusDetails)}</div>` : ''}
       </div>
     </div>
     ${fields ? `<div class="cdet-divider"></div><div class="cdet-fields">${fields}</div>` : ''}
@@ -696,7 +798,7 @@ function openCharDetail(name) {
   document.getElementById('char-detail-modal').classList.add('open');
 }
 
-document.getElementById('chars-grid').addEventListener('dblclick', e => {
+document.getElementById('chars-grid').addEventListener('click', e => {
   const card = e.target.closest('.char-card[data-name]');
   if (card) openCharDetail(card.dataset.name);
 });

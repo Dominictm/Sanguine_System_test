@@ -558,14 +558,14 @@ body {
 .info-lineage-icon { font-size: 64px; margin-bottom: 12px; display: block; }
 
 .info-portrait {
-  width: 33%;
-  height: 220px;
+  width: 120px;
+  height: 160px;
   object-fit: cover;
   object-position: top center;
   display: block;
-  border-radius: 4px;
+  border-radius: 3px;
   margin-bottom: 12px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--border2);
   box-shadow: 0 4px 24px rgba(0,0,0,.6);
 }
 
@@ -996,6 +996,13 @@ select.form-control {
   margin-bottom: 10px;
 }
 .cdet-badges { display: flex; gap: 8px; flex-wrap: wrap; }
+.cdet-status-details {
+  margin-top: 8px;
+  font-size: 25px;
+  color: var(--text3);
+  font-style: italic;
+  line-height: 1.4;
+}
 
 .cdet-divider { height: 1px; background: var(--border); margin: 20px 0; }
 
@@ -1060,3 +1067,136 @@ select.form-control {
   border-left: 2px solid var(--border2);
   padding-left: 14px;
 }
+
+/* ── Modules page ─────────────────────────────────────────── */
+#modules-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 16px;
+}
+
+.module-card {
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--gold);
+  border-radius: 2px;
+  padding: 22px 26px;
+  transition: all .2s var(--ease);
+}
+.module-card:hover {
+  border-color: var(--border2);
+  border-left-color: var(--gold2);
+  background: var(--bg4);
+  transform: translateY(-1px);
+}
+.module-title {
+  font-family: var(--f-heading);
+  font-size: 20px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--text);
+  margin-bottom: 5px;
+}
+.module-time {
+  font-size: 18px;
+  color: var(--gold);
+  font-style: italic;
+  margin-bottom: 10px;
+}
+.module-meta {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+.module-tag {
+  font-family: var(--f-heading);
+  font-size: 14px;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--text3);
+  border: 1px solid var(--border);
+  padding: 2px 8px;
+  border-radius: 1px;
+}
+.module-tag.mod-type { color: var(--text2); border-color: rgba(184,134,11,.3); }
+.module-slug {
+  font-family: var(--f-mono);
+  font-size: 13px;
+  color: var(--text3);
+  opacity: .6;
+}
+
+/* ── Threads page ─────────────────────────────────────────── */
+.threads-section-header {
+  font-family: var(--f-heading);
+  font-size: 14px;
+  letter-spacing: .22em;
+  text-transform: uppercase;
+  color: var(--text3);
+  padding: 10px 0 12px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 4px;
+}
+
+.thread-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 16px 20px;
+  border-bottom: 1px solid rgba(139,0,0,.08);
+  border-left: 3px solid transparent;
+  transition: background .15s, border-left-color .15s;
+}
+.thread-card:hover { background: var(--bg3); }
+.thread-active     { border-left-color: var(--accent3); }
+.thread-background { border-left-color: var(--text3); opacity: .7; }
+
+.thread-num {
+  font-family: var(--f-mono);
+  font-size: 15px;
+  color: var(--text3);
+  min-width: 26px;
+  padding-top: 3px;
+  flex-shrink: 0;
+}
+.thread-body { flex: 1; min-width: 0; }
+.thread-title {
+  font-family: var(--f-heading);
+  font-size: 19px;
+  letter-spacing: .06em;
+  color: var(--text);
+  margin-bottom: 3px;
+}
+.thread-desc {
+  font-size: 18px;
+  color: var(--text2);
+  font-style: italic;
+  line-height: 1.5;
+  margin-bottom: 5px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.thread-source {
+  font-family: var(--f-mono);
+  font-size: 13px;
+  color: var(--text3);
+}
+.thread-priority {
+  font-family: var(--f-heading);
+  font-size: 13px;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: 1px;
+  border: 1px solid var(--border);
+  color: var(--text3);
+  white-space: nowrap;
+  flex-shrink: 0;
+  align-self: flex-start;
+  margin-top: 2px;
+}
+.priority-высокий { color: var(--accent3); border-color: rgba(204,34,0,.35); }
+.priority-средний { color: var(--gold);    border-color: rgba(184,134,11,.35); }

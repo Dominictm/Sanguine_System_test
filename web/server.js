@@ -50,7 +50,8 @@ function parseCharacter(rawContent, folderName, lineage) {
     if (k === 'Клан')         c.clan         = v;
     if (k === 'Секта')        c.sect         = v;
     if (k === 'Поколение')    c.generation   = v;
-    if (k === 'Статус')       c.status       = v;
+    if (k === 'Статус')         c.status        = v;
+    if (k === 'Детали статуса') c.statusDetails = v;
     if (k === 'Линейка WoD')  c.lineageLabel = v;
     if (k === 'Роль')         c.role         = v;
     if (k === 'Год обращения') c.embraceYear = v;
@@ -90,9 +91,10 @@ function parseCharacter(rawContent, folderName, lineage) {
 
   // Status type
   const sl = (c.status || '').toLowerCase();
-  c.statusType = sl.includes('активен') || sl.includes('активна') ? 'active'
+  c.statusType = (sl.includes('жив') || sl.includes('жива') || sl.includes('активен') || sl.includes('активна')) ? 'active'
     : sl.includes('торпор') ? 'torpor'
-    : (sl.includes('погиб') || sl.includes('уничтожен') || sl.includes('убит')) ? 'dead'
+    : (sl.includes('мёртв') || sl.includes('мертва') || sl.includes('погиб') || sl.includes('уничтожен') || sl.includes('убит')) ? 'dead'
+    : sl.includes('неизвестно') ? 'unknown'
     : 'unknown';
 
   return c;
@@ -251,6 +253,58 @@ app.get('/api/graph', async (req, res) => {
     }
 
     res.json({ nodes, links });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/modules', async (req, res) => {
+  try {
+    const modsDir = path.join(ROOT, 'modules');
+    const entries = await fs.readdir(modsDir, { withFileTypes: true });
+    const mods = [];
+    for (const e of entries) {
+      if (!e.isDirectory() || e.name.startsWith('.')) continue;
+      const mod = { name: e.name, title: e.name };
+      try {
+        // Main module file is not named after the folder — find it among root .md files
+        const allFiles = await fs.readdir(path.join(modsDir, e.name), { withFileTypes: true });
+        const mainFile = allFiles.find(f =>
+          f.isFile() && f.name.endsWith('.md') &&
+          f.name !== 'нпс.md' && !f.name.endsWith('-лист.md'));
+        if (!mainFile) continue;
+        const content = await fs.readFile(
+          path.join(modsDir, e.name, mainFile.name), 'utf-8');
+        const hm = content.match(/^#\s+(.+)$/m);
+        if (hm) mod.title = hm[1].replace(/[*[\]]/g, '').trim();
+        for (const [label, key] of [['Тип','type'],['Формат','format'],['Время','time'],['Тон','tone']]) {
+          const fm = content.match(new RegExp(`\\|\\s*\\*\\*${label}\\*\\*\\s*\\|\\s*([^|\\n]+)\\|`));
+          if (fm) mod[key] = fm[1].trim();
+        }
+      } catch {}
+      mods.push(mod);
+    }
+    res.json(mods);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/threads', async (req, res) => {
+  try {
+    const content = await fs.readFile(
+      path.join(ROOT, 'rules', 'open_threads.md'), 'utf-8');
+    const threads = [];
+    for (const line of content.split('\n')) {
+      const m = line.match(/^\|\s*(\d+)\s*\|\s*\*\*([^*]+)\*\*(.*?)\|\s*([^|]+)\|\s*([^|]+)\|\s*([^|]+)\|/);
+      if (!m) continue;
+      const sc = m[5].trim();
+      threads.push({
+        id:          parseInt(m[1]),
+        title:       m[2].trim(),
+        description: m[3].replace(/^[\s—\-]+/, '').trim(),
+        source:      m[4].trim(),
+        status:      sc.includes('🔴') ? 'active' : sc.includes('🟡') ? 'background' : sc.includes('🟢') ? 'closed' : 'unknown',
+        priority:    m[6].replace(/\|?\s*$/, '').trim()
+      });
+    }
+    res.json(threads);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 

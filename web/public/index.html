@@ -32,6 +32,12 @@
       <a class="nav-item" data-page="graph">
         <span class="nav-icon">🕸</span><span>Связи</span>
       </a>
+      <a class="nav-item" data-page="modules">
+        <span class="nav-icon">📖</span><span>Модули</span>
+      </a>
+      <a class="nav-item" data-page="threads">
+        <span class="nav-icon">🧵</span><span>Нити</span>
+      </a>
       <a class="nav-item" data-page="tools">
         <span class="nav-icon">⚙️</span><span>Инструменты</span>
       </a>
@@ -75,9 +81,9 @@
         </select>
         <select class="filter-select" id="filter-status">
           <option value="all">Все статусы</option>
-          <option value="active">Активен</option>
+          <option value="active">Жив / Жива</option>
           <option value="torpor">Торпор</option>
-          <option value="dead">Погиб</option>
+          <option value="dead">Мёртв / Мертва</option>
         </select>
         <button class="btn-create-char" id="btn-open-create-char">+ Создать</button>
       </div>
@@ -103,6 +109,28 @@
           <button class="info-close" id="info-close">✕</button>
           <div id="info-content"></div>
         </div>
+      </div>
+    </section>
+
+    <!-- Modules -->
+    <section id="page-modules" class="page">
+      <div class="page-header">
+        <h1 class="page-title">Модули</h1>
+        <span class="page-sub" id="modules-sub">Хроника</span>
+      </div>
+      <div id="modules-list">
+        <div class="loading-state"><div class="spinner"></div>Загрузка...</div>
+      </div>
+    </section>
+
+    <!-- Threads -->
+    <section id="page-threads" class="page">
+      <div class="page-header">
+        <h1 class="page-title">Нити</h1>
+        <span class="page-sub" id="threads-sub">Открытые нити</span>
+      </div>
+      <div id="threads-list">
+        <div class="loading-state"><div class="spinner"></div>Загрузка...</div>
       </div>
     </section>
 
