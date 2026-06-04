@@ -42,6 +42,12 @@ echo   Server started: http://localhost:3000
 echo   Close this window to stop the server.
 echo.
 
+rem Default Claude model for web prose generation (override per-run in the UI dropdown).
+rem Options: sonnet (cheaper), opus (best), haiku (cheapest). Empty = session default.
+set CLAUDE_MODEL=sonnet
+echo   Claude model (web prose): %CLAUDE_MODEL%
+echo.
+
 node server.js
 
 echo.

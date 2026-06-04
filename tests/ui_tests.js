@@ -409,10 +409,10 @@ async function main() {
         if (!(await el.isDisplayed())) throw new Error('Logo not visible');
       });
 
-    await t('7 пунктов навигации', '.nav-item — 7 элементов',
+    await t('8 пунктов навигации', '.nav-item — 8 элементов',
       async () => {
         const items = await driver.findElements(By.css('.nav-item'));
-        if (items.length < 7) throw new Error('nav-item: ' + items.length + ', expected 7');
+        if (items.length < 8) throw new Error('nav-item: ' + items.length + ', expected 8');
       });
 
     await t('Панель активна по умолчанию', '#page-dashboard имеет класс active',

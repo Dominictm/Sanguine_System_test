@@ -93,6 +93,7 @@ function navigate(page) {
     el.classList.toggle('active', el.id === `page-${page}`));
 
   if (page === 'dashboard')  loadDashboard();
+  if (page === 'chronicle')  loadChronicle();
   if (page === 'characters') loadCharacters();
   if (page === 'graph')      loadGraph();
   if (page === 'modules')    loadModules();
@@ -115,6 +116,7 @@ async function loadDashboard() {
     document.getElementById('domain-label').innerHTML =
       `<span>${stats.domain || 'Домен'}</span>`;
     renderDashboard(stats, el);
+    loadIntegrity();
   } catch {
     el.innerHTML = '<div class="loading-state" style="color:var(--accent3)">⚠ Сервер недоступен</div>';
   }
@@ -184,6 +186,11 @@ function renderDashboard(s, container) {
         <div class="stat-value" id="sv-locations">0</div>
         <div class="stat-detail">карточек мест</div>
       </div>
+      <div class="stat-card stat-clickable" data-nav="chronicle">
+        <div class="stat-label">События</div>
+        <div class="stat-value gold" id="sv-events">0</div>
+        <div class="stat-detail">записей хроники →</div>
+      </div>
       <div class="stat-card">
         <div class="stat-label">Открытые нити</div>
         <div class="stat-value accent" id="sv-threads">0</div>
@@ -201,14 +208,89 @@ function renderDashboard(s, container) {
       </div>
       ${lineageSubstats}
     </div>
-    <div class="integrity-row">${blBadge}</div>`;
+    <div class="integrity-row">${blBadge}</div>
+    <div id="integrity-panel" class="integrity-panel"></div>`;
 
   animateValue(document.getElementById('sv-chars'), s.characters || 0);
   animateValue(document.getElementById('sv-active'), s.active || 0);
   animateValue(document.getElementById('sv-modules'), s.modules || 0);
   animateValue(document.getElementById('sv-locations'), s.locations || 0);
+  animateValue(document.getElementById('sv-events'), s.events || 0, 1100);
   animateValue(document.getElementById('sv-threads'), s.openThreads || 0, 1200);
 }
+
+// ── Integrity panel ────────────────────────────────────────────
+async function loadIntegrity() {
+  const el = document.getElementById('integrity-panel');
+  if (!el) return;
+  el.innerHTML = '<div class="ip-loading">🛡 Проверка целостности…</div>';
+  let data;
+  try { data = await fetch('/api/integrity').then(r => r.json()); }
+  catch { el.innerHTML = ''; return; }
+  if (!data || data.error) { el.innerHTML = ''; return; }
+  renderIntegrity(data, el);
+}
+
+function renderIntegrity(data, el) {
+  const dot = sev => `<span class="ip-dot ip-${sev}"></span>`;
+  const blState = data.brokenLinks == null ? 'neutral' : data.brokenLinks === 0 ? 'ok' : 'err';
+  const blCount = data.brokenLinks == null ? '—' : data.brokenLinks;
+
+  const total = (data.totalIssues || 0) + (data.brokenLinks > 0 ? data.brokenLinks : 0);
+
+  // Broken-links pseudo-check (no expandable list — details live in Tools→Проверка)
+  let rows = `
+    <div class="ip-check">
+      <div class="ip-check-head">
+        ${dot(blState)}<span class="ip-label">Битые ссылки</span>
+        <span class="ip-count ${data.brokenLinks > 0 ? 'has' : ''}">${blCount}</span>
+      </div>
+    </div>`;
+
+  for (const c of (data.checks || [])) {
+    const n = c.items.length;
+    const sev = n === 0 ? 'ok' : c.severity;
+    const shown = c.items.slice(0, 40);
+    const more = n - shown.length;
+    rows += `
+      <div class="ip-check">
+        <div class="ip-check-head ${n > 0 ? 'ip-expandable' : ''}" data-check="${c.id}">
+          ${dot(sev)}<span class="ip-label">${escHtml(c.label)}</span>
+          <span class="ip-count ${n > 0 ? 'has' : ''}">${n}</span>
+          ${n > 0 ? '<span class="ip-chevron">▾</span>' : ''}
+        </div>
+        ${n > 0 ? `<div class="ip-items" data-items="${c.id}" hidden>
+          <div class="ip-hint">${escHtml(c.hint)}</div>
+          ${shown.map(i => `<div class="ip-item">${escHtml(i)}</div>`).join('')}
+          ${more > 0 ? `<div class="ip-more">…и ещё ${more}</div>` : ''}
+        </div>` : ''}
+      </div>`;
+  }
+
+  el.innerHTML = `
+    <div class="ip-header">
+      <span class="ip-title">🛡 Целостность данных</span>
+      <span class="ip-summary ${total === 0 ? 'ip-clean' : ''}">${total === 0 ? '✓ Чисто' : total + ' замечаний'}</span>
+    </div>
+    ${rows}`;
+}
+
+// Clickable dashboard stat cards → navigate; integrity rows → expand
+document.getElementById('dash-content').addEventListener('click', e => {
+  const card = e.target.closest('.stat-clickable[data-nav]');
+  if (card) { navigate(card.dataset.nav); return; }
+
+  const head = e.target.closest('.ip-check-head.ip-expandable');
+  if (head) {
+    const items = document.querySelector(`.ip-items[data-items="${head.dataset.check}"]`);
+    const chev = head.querySelector('.ip-chevron');
+    if (items) {
+      const opening = items.hasAttribute('hidden');
+      items.toggleAttribute('hidden', !opening);
+      if (chev) chev.textContent = opening ? '▴' : '▾';
+    }
+  }
+});
 
 // ═══════════════════════════════════════════════════════════════
 // Characters
@@ -615,6 +697,66 @@ function escHtml(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
+// Compact, safe Markdown → HTML renderer for module files & chronicle prose.
+// Escapes first, then applies a limited block/inline grammar. Links render as
+// styled text (relative .md paths don't resolve in the browser).
+function mdInline(s) {
+  return escHtml(s)
+    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+    .replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<em>$2</em>')
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<span class="md-link">$1</span>');
+}
+function mdToHtml(md) {
+  if (!md) return '';
+  const lines = md.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
+  let html = '', i = 0;
+  const isBlockStart = t => /^(#{1,6}\s|>|[-*]\s|\d+\.\s|\|)/.test(t) || /^---+$/.test(t);
+  while (i < lines.length) {
+    const t = lines[i].trim();
+    if (!t) { i++; continue; }
+
+    if (/^---+$/.test(t)) { html += '<hr class="md-hr">'; i++; continue; }
+
+    const h = t.match(/^(#{1,6})\s+(.*)$/);
+    if (h) { const lvl = Math.min(h[1].length, 6); html += `<div class="md-h md-h${lvl}">${mdInline(h[2])}</div>`; i++; continue; }
+
+    if (/^>\s?/.test(t)) {
+      const buf = [];
+      while (i < lines.length && /^>\s?/.test(lines[i].trim())) { buf.push(lines[i].trim().replace(/^>\s?/, '')); i++; }
+      html += `<blockquote class="md-quote">${mdInline(buf.join(' '))}</blockquote>`; continue;
+    }
+
+    if (/^\|/.test(t) && i + 1 < lines.length && /^\|[\s:|-]+\|?$/.test(lines[i + 1].trim())) {
+      const rows = [];
+      while (i < lines.length && /^\|/.test(lines[i].trim())) { rows.push(lines[i].trim()); i++; }
+      const cells = r => r.replace(/^\|/, '').replace(/\|$/, '').split('|').map(c => c.trim());
+      const head = cells(rows[0]);
+      const body = rows.slice(2).map(cells);
+      html += '<table class="md-table"><thead><tr>' + head.map(c => `<th>${mdInline(c)}</th>`).join('') +
+        '</tr></thead><tbody>' + body.map(r => '<tr>' + r.map(c => `<td>${mdInline(c)}</td>`).join('') + '</tr>').join('') +
+        '</tbody></table>';
+      continue;
+    }
+
+    if (/^[-*]\s+/.test(t)) {
+      const buf = [];
+      while (i < lines.length && /^[-*]\s+/.test(lines[i].trim())) { buf.push(lines[i].trim().replace(/^[-*]\s+/, '')); i++; }
+      html += '<ul class="md-ul">' + buf.map(b => `<li>${mdInline(b)}</li>`).join('') + '</ul>'; continue;
+    }
+    if (/^\d+\.\s+/.test(t)) {
+      const buf = [];
+      while (i < lines.length && /^\d+\.\s+/.test(lines[i].trim())) { buf.push(lines[i].trim().replace(/^\d+\.\s+/, '')); i++; }
+      html += '<ol class="md-ol">' + buf.map(b => `<li>${mdInline(b)}</li>`).join('') + '</ol>'; continue;
+    }
+
+    const buf = [];
+    while (i < lines.length && lines[i].trim() && !isBlockStart(lines[i].trim())) { buf.push(lines[i].trim()); i++; }
+    html += `<p class="md-p">${mdInline(buf.join(' '))}</p>`;
+  }
+  return html;
+}
+
 function statusLabel(c) {
   const raw = c.status || '';
   if (raw && !raw.includes('⚠️')) return raw;
@@ -674,8 +816,14 @@ async function loadModules() {
       el.innerHTML = '<div class="loading-state" style="height:120px">Модули не найдены</div>';
       return;
     }
-    el.innerHTML = mods.map(m => `
-      <div class="module-card">
+    el.innerHTML = mods.map(m => {
+      const files = [
+        m.hasScenario ? '<span class="module-file">📝 Сценарий</span>' : '',
+        m.hasFinale   ? '<span class="module-file file-finale">📜 Финал</span>' : '',
+        m.hasNpc      ? '<span class="module-file">👥 НПС</span>' : '',
+      ].filter(Boolean).join('');
+      return `
+      <div class="module-card" data-name="${escHtml(m.name)}">
         <div class="module-title">${escHtml(m.title)}</div>
         ${m.time ? `<div class="module-time">${escHtml(m.time)}</div>` : ''}
         <div class="module-meta">
@@ -683,8 +831,10 @@ async function loadModules() {
           ${m.format ? `<span class="module-tag">${escHtml(m.format)}</span>` : ''}
           ${m.type   ? `<span class="module-tag mod-type">${escHtml(m.type)}</span>` : ''}
         </div>
+        ${files ? `<div class="module-files">${files}</div>` : ''}
         <div class="module-slug">${escHtml(m.name)}</div>
-      </div>`).join('');
+      </div>`;
+    }).join('');
   } catch {
     el.innerHTML = '<div class="loading-state" style="color:var(--accent3)">⚠ Не удалось загрузить</div>';
   }
@@ -729,6 +879,534 @@ async function loadThreads() {
     el.innerHTML = '<div class="loading-state" style="color:var(--accent3)">⚠ Не удалось загрузить</div>';
   }
 }
+
+// ═══════════════════════════════════════════════════════════════
+// Chronicle (Stories_of_*.md)
+// ═══════════════════════════════════════════════════════════════
+
+const SPINNER = '<div class="loading-state"><div class="spinner"></div>Загрузка...</div>';
+
+async function ensureCharsLoaded() {
+  if (STATE.characters.length) return;
+  try {
+    const data = await fetch('/api/characters').then(r => r.json());
+    STATE.characters = Array.isArray(data) ? data : [];
+  } catch {}
+}
+async function ensureLocsLoaded() {
+  if (STATE.locations.length) return;
+  try {
+    const data = await fetch('/api/locations').then(r => r.json());
+    STATE.locations = Array.isArray(data) ? data : [];
+  } catch {}
+}
+
+// Resolve a chronicle participant name to a real character card (fuzzy, like the graph)
+function resolveCharByName(raw) {
+  if (!raw) return null;
+  const chars = STATE.characters || [];
+  let c = chars.find(x => x.name === raw);
+  if (c) return c;
+  const rl = raw.toLowerCase();
+  c = chars.find(x => x.name.toLowerCase() === rl);
+  if (c) return c;
+  c = chars.find(x => {
+    const il = x.name.toLowerCase();
+    return il.startsWith(rl) || rl.startsWith(il.split(' ')[0]);
+  });
+  return c || null;
+}
+
+async function loadChronicle() {
+  const el = document.getElementById('chronicle-content');
+  if (STATE.chronicle && STATE.chronicle.data) { renderChronicle(); return; }
+  el.innerHTML = SPINNER;
+  await Promise.all([ensureCharsLoaded(), ensureLocsLoaded()]);
+  try {
+    const data = await fetch('/api/chronicle').then(r => r.json());
+    STATE.chronicle = { data, tab: (STATE.chronicle && STATE.chronicle.tab) || 'timeline' };
+    renderChronicle();
+  } catch {
+    el.innerHTML = '<div class="loading-state" style="color:var(--accent3)">⚠ Не удалось загрузить хронику</div>';
+  }
+}
+
+function renderChronicle() {
+  const st = STATE.chronicle;
+  const el = document.getElementById('chronicle-content');
+  if (!st || !st.data) return;
+  const data = st.data;
+  document.querySelectorAll('.chron-tab').forEach(b =>
+    b.classList.toggle('active', b.dataset.chronTab === st.tab));
+
+  if (!data.exists) {
+    document.getElementById('chronicle-sub').textContent = 'Хроника не настроена';
+    el.innerHTML = '<div class="loading-state" style="height:140px">Файл хроники не найден (Stories_of_*.md)</div>';
+    return;
+  }
+  const evCount = (data.events || []).length;
+  document.getElementById('chronicle-sub').textContent =
+    st.tab === 'world' ? 'Состояние мира' : `${evCount} событий`;
+  el.innerHTML = st.tab === 'world'
+    ? renderWorldState(data.worldState)
+    : renderTimeline(data.events || []);
+}
+
+function renderTable(t) {
+  if (!t || !t.headers) return '';
+  return '<table class="ws-table"><thead><tr>' +
+    t.headers.map(h => `<th>${mdInline(h)}</th>`).join('') +
+    '</tr></thead><tbody>' +
+    t.rows.map(r => '<tr>' + r.map(c => `<td>${mdInline(c)}</td>`).join('') + '</tr>').join('') +
+    '</tbody></table>';
+}
+
+function renderWorldState(ws) {
+  if (!ws || !ws.sections || !ws.sections.length)
+    return '<div class="cdet-empty" style="padding:30px">Состояние мира не заполнено</div>';
+  let html = '';
+  if (ws.lastUpdate)
+    html += `<div class="ws-updated">Последнее обновление: <b>${escHtml(ws.lastUpdate)}</b></div>`;
+  for (const s of ws.sections) {
+    html += `<section class="ws-section"><div class="ws-heading">${escHtml(s.heading)}</div>`;
+    if (s.table) html += renderTable(s.table);
+    if (s.prose && s.prose.length)
+      html += s.prose.map(p => `<div class="ws-prose">${mdInline(p)}</div>`).join('');
+    html += '</section>';
+  }
+  return html;
+}
+
+function renderTimeline(events) {
+  if (!events.length)
+    return '<div class="cdet-empty" style="padding:30px">Событий пока нет</div>';
+
+  return events.map(ev => {
+    // Participant chips
+    const chips = (ev.participants || []).map(p => {
+      const char = resolveCharByName(p.name);
+      if (char) {
+        const icon = LINEAGE_ICONS[char.lineage] || '👤';
+        return `<button class="chron-chip chip-char" data-char="${escHtml(char.name)}" title="${escHtml(p.text)}">${icon} ${escHtml(p.name)}</button>`;
+      }
+      return `<span class="chron-chip" title="${escHtml(p.text)}">${escHtml(p.name)}</span>`;
+    }).join('');
+
+    // Known-location chips (subset of the location line that has cards)
+    const locChips = (ev.location.links || [])
+      .filter(l => (STATE.locations || []).some(x => x.slug === l.slug))
+      .map(l => `<button class="chron-chip chip-loc" data-loc="${escHtml(l.slug)}">📍 ${escHtml(l.text)}</button>`)
+      .join('');
+
+    // Footer links → module modal
+    const linkChips = (ev.links || []).map(l => {
+      const label = l.kind === 'finale' ? '📜 Финал'
+        : l.kind === 'module' ? '📖 Модуль'
+        : l.kind === 'npc' ? '👥 НПС' : escHtml(l.text);
+      const tab = l.kind === 'finale' ? 'finale' : l.kind === 'npc' ? 'npc' : 'overview';
+      return l.module
+        ? `<button class="chron-chip chip-mod" data-mod="${escHtml(l.module)}" data-tab="${tab}">${label}</button>`
+        : `<span class="chron-chip">${label}</span>`;
+    }).join('');
+
+    const body = [
+      ev.eventsText ? `<div class="chron-block-label">📋 События</div><div class="md-body chron-md">${mdToHtml(ev.eventsText)}</div>` : '',
+      ev.consequences.length ? `<div class="chron-block-label">⚖️ Последствия</div><ul class="chron-list">${ev.consequences.map(c => `<li>${mdInline(c)}</li>`).join('')}</ul>` : '',
+      ev.worldChanges.length ? `<div class="chron-block-label">🌍 Изменения мира</div><ul class="chron-list">${ev.worldChanges.map(c => `<li>${mdInline(c)}</li>`).join('')}</ul>` : '',
+      linkChips ? `<div class="chron-block-label">🔗 Связанные файлы</div><div class="chron-chips">${linkChips}</div>` : '',
+    ].filter(Boolean).join('');
+
+    return `
+      <article class="chron-event" data-id="${ev.id}">
+        <div class="chron-event-head">
+          <div class="chron-event-date">📅 ${escHtml(ev.date)}</div>
+          ${ev.parallel ? `<span class="chron-parallel" title="${escHtml(ev.parallel)}">⚡ параллельная</span>` : ''}
+        </div>
+        ${ev.title ? `<div class="chron-event-title">${escHtml(ev.title)}</div>` : ''}
+        ${ev.location.text ? `<div class="chron-event-loc">📍 ${escHtml(ev.location.text)}</div>` : ''}
+        ${locChips ? `<div class="chron-chips chron-locchips">${locChips}</div>` : ''}
+        ${chips ? `<div class="chron-chips">${chips}</div>` : ''}
+        ${body ? `<button class="chron-toggle" data-id="${ev.id}">Подробнее ▾</button>
+        <div class="chron-event-body" data-body="${ev.id}" hidden>${body}</div>` : ''}
+      </article>`;
+  }).join('');
+}
+
+// Chronicle tab switching
+document.querySelectorAll('.chron-tab').forEach(b => b.addEventListener('click', () => {
+  if (!STATE.chronicle) { STATE.chronicle = { data: null, tab: b.dataset.chronTab }; }
+  STATE.chronicle.tab = b.dataset.chronTab;
+  document.querySelectorAll('.chron-tab').forEach(x => x.classList.toggle('active', x === b));
+  if (STATE.chronicle.data) renderChronicle();
+}));
+
+// Chronicle delegated clicks: toggle bodies, open char/loc/module
+document.getElementById('chronicle-content').addEventListener('click', e => {
+  const tog = e.target.closest('.chron-toggle');
+  if (tog) {
+    const body = document.querySelector(`.chron-event-body[data-body="${tog.dataset.id}"]`);
+    if (body) {
+      const open = body.hasAttribute('hidden');
+      if (open) { body.removeAttribute('hidden'); tog.textContent = 'Свернуть ▴'; }
+      else      { body.setAttribute('hidden', ''); tog.textContent = 'Подробнее ▾'; }
+    }
+    return;
+  }
+  const cc = e.target.closest('.chip-char');
+  if (cc) { openCharDetail(cc.dataset.char); return; }
+  const lc = e.target.closest('.chip-loc');
+  if (lc) { openLocDetail(lc.dataset.loc); return; }
+  const mc = e.target.closest('.chip-mod');
+  if (mc) { openModuleDetail(mc.dataset.mod, mc.dataset.tab); return; }
+});
+
+// ═══════════════════════════════════════════════════════════════
+// Module Detail Modal
+// ═══════════════════════════════════════════════════════════════
+
+async function openModuleDetail(name, preferTab) {
+  const modal   = document.getElementById('module-detail-modal');
+  const content = document.getElementById('module-detail-content');
+  content.innerHTML = `<div class="mod-loading">${SPINNER}</div>`;
+  modal.classList.add('open');
+
+  let d;
+  try { d = await fetch(`/api/modules/${encodeURIComponent(name)}`).then(r => r.json()); }
+  catch { content.innerHTML = '<div class="cdet-empty" style="padding:40px">⚠ Не удалось загрузить модуль</div>'; return; }
+  if (d.error) { content.innerHTML = `<div class="cdet-empty" style="padding:40px">${escHtml(d.error)}</div>`; return; }
+
+  const tabs = [];
+  if (d.main)     tabs.push(['overview', 'Обзор',    d.main]);
+  if (d.scenario) tabs.push(['scenario', 'Сценарий', d.scenario]);
+  if (d.finale)   tabs.push(['finale',   'Финал',    d.finale]);
+  if (d.npc)      tabs.push(['npc',      'НПС',      d.npc]);
+  if (!tabs.length) tabs.push(['overview', 'Обзор', '*Файлы модуля не найдены.*']);
+
+  const active = preferTab && tabs.some(t => t[0] === preferTab) ? preferTab : tabs[0][0];
+
+  content.innerHTML = `
+    <div class="cdet-info-col mod-info-col">
+      <div class="cdet-sticky-header">
+        <div class="cdet-name">${escHtml(d.title || name)}</div>
+        <div class="mod-modal-slug">📁 ${escHtml(d.name)}</div>
+      </div>
+      <div class="cdet-tab-bar">
+        ${tabs.map(t => `<button class="cdet-tab ${t[0] === active ? 'active' : ''} ${t[0] === 'finale' ? 'tab-finale' : ''}" data-tab="${t[0]}">${escHtml(t[1])}</button>`).join('')}
+      </div>
+      <div class="cdet-panels">
+        ${tabs.map(t => `<div class="cdet-panel ${t[0] === active ? 'active' : ''}" data-panel="${t[0]}"><div class="md-body">${mdToHtml(t[2])}</div></div>`).join('')}
+      </div>
+    </div>`;
+}
+
+// Module card clicks
+document.getElementById('modules-list').addEventListener('click', e => {
+  const card = e.target.closest('.module-card[data-name]');
+  if (card) openModuleDetail(card.dataset.name);
+});
+
+// Module modal: tab switching (same pattern as char/loc modals)
+document.getElementById('module-detail-content').addEventListener('click', e => {
+  const tab = e.target.closest('.cdet-tab');
+  if (!tab) return;
+  const col = tab.closest('.cdet-info-col');
+  col.querySelectorAll('.cdet-tab').forEach(t => t.classList.remove('active'));
+  tab.classList.add('active');
+  col.querySelectorAll('.cdet-panel').forEach(p => p.classList.remove('active'));
+  col.querySelector(`[data-panel="${tab.dataset.tab}"]`).classList.add('active');
+  const panels = col.querySelector('.cdet-panels');
+  if (panels) panels.scrollTop = 0;
+});
+
+// Module modal close
+const moduleDetailModal = document.getElementById('module-detail-modal');
+document.getElementById('module-detail-close').addEventListener('click', () => moduleDetailModal.classList.remove('open'));
+moduleDetailModal.addEventListener('click', e => { if (e.target === moduleDetailModal) moduleDetailModal.classList.remove('open'); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') moduleDetailModal.classList.remove('open'); });
+
+// ═══════════════════════════════════════════════════════════════
+// Log Session (Tools → Сессия)
+// ═══════════════════════════════════════════════════════════════
+
+let lsInited = false;
+let lsPreviewState = null;   // { hash, payload } after a successful preview
+
+function lsSceneRow() {
+  const d = document.createElement('div');
+  d.className = 'ls-row ls-scene-row';
+  d.innerHTML = `
+    <input class="form-control ls-scene-title" placeholder="Название сцены">
+    <textarea class="form-control ls-scene-text" rows="1" placeholder="Что произошло"></textarea>
+    <button class="ls-del" type="button" title="Убрать">✕</button>`;
+  return d;
+}
+function lsPartRow() {
+  const d = document.createElement('div');
+  d.className = 'ls-part-row';
+  d.innerHTML = `
+    <div class="ls-row">
+      <input class="form-control ls-part-name" list="ls-charnames" placeholder="Имя (из карточек)">
+      <input class="form-control ls-part-role" placeholder="роль в сцене">
+      <label class="ls-check"><input type="checkbox" class="ls-part-diary"> дневник</label>
+      <label class="ls-check"><input type="checkbox" class="ls-part-pc"> ПК</label>
+      <button class="ls-del" type="button" title="Убрать">✕</button>
+    </div>
+    <div class="ls-row ls-row-sub">
+      <input class="form-control ls-part-status" placeholder="смена статуса (опц.)">
+      <input class="form-control ls-part-statusd" placeholder="детали статуса">
+      <input class="form-control ls-part-comment" placeholder="коммент к дневнику (для генерации прозы)">
+    </div>`;
+  return d;
+}
+function lsThreadRow() {
+  const d = document.createElement('div');
+  d.className = 'ls-row ls-thread-row';
+  d.innerHTML = `
+    <input class="form-control ls-thread-title" placeholder="Заголовок нити">
+    <input class="form-control ls-thread-desc" placeholder="Описание">
+    <select class="form-control ls-thread-prio"><option>Высокий</option><option>Средний</option><option>Низкий</option></select>
+    <button class="ls-del" type="button" title="Убрать">✕</button>`;
+  return d;
+}
+
+async function lsInit() {
+  if (lsInited) return;
+  lsInited = true;
+
+  await ensureCharsLoaded();
+  document.getElementById('ls-charnames').innerHTML =
+    (STATE.characters || []).map(c => `<option value="${escHtml(c.name)}">`).join('');
+  try {
+    const mods = await fetch('/api/modules').then(r => r.json());
+    document.getElementById('ls-modules').innerHTML =
+      (mods || []).map(m => `<option value="${escHtml(m.name)}">`).join('');
+  } catch {}
+
+  document.getElementById('ls-scenes').appendChild(lsSceneRow());
+  document.getElementById('ls-parts').appendChild(lsPartRow());
+
+  document.getElementById('ls-add-scene').addEventListener('click', () => { document.getElementById('ls-scenes').appendChild(lsSceneRow()); lsInvalidate(); });
+  document.getElementById('ls-add-part').addEventListener('click', () => { document.getElementById('ls-parts').appendChild(lsPartRow()); lsInvalidate(); });
+  document.getElementById('ls-add-thread').addEventListener('click', () => { document.getElementById('ls-threads').appendChild(lsThreadRow()); lsInvalidate(); });
+
+  const panel = document.getElementById('tab-log-session');
+  panel.addEventListener('click', e => {
+    const del = e.target.closest('.ls-del');
+    if (del) { del.closest('.ls-scene-row, .ls-part-row, .ls-thread-row').remove(); lsInvalidate(); }
+  });
+  panel.addEventListener('input', lsInvalidate);
+
+  document.getElementById('ls-finale').addEventListener('change', e => {
+    document.getElementById('ls-finale-comment-wrap').style.display = e.target.checked ? '' : 'none';
+  });
+
+  document.getElementById('ls-preview').addEventListener('click', lsRunPreview);
+  document.getElementById('ls-write').addEventListener('click', lsRunWrite);
+}
+
+function lsInvalidate() {
+  lsPreviewState = null;
+  const w = document.getElementById('ls-write');
+  if (w) w.disabled = true;
+}
+
+function collectLsPayload() {
+  const linesOf = s => (s || '').split('\n').map(x => x.trim()).filter(Boolean);
+  const $ = id => document.getElementById(id);
+
+  const scenes = [...document.querySelectorAll('.ls-scene-row')].map(r => ({
+    title: r.querySelector('.ls-scene-title').value.trim(),
+    text:  r.querySelector('.ls-scene-text').value.trim()
+  })).filter(s => s.title || s.text);
+
+  const participants = [...document.querySelectorAll('.ls-part-row')].map(r => ({
+    name:          r.querySelector('.ls-part-name').value.trim(),
+    role:          r.querySelector('.ls-part-role').value.trim(),
+    diary:         r.querySelector('.ls-part-diary').checked,
+    isPC:          r.querySelector('.ls-part-pc').checked,
+    statusChange:  r.querySelector('.ls-part-status').value.trim() || null,
+    statusDetails: r.querySelector('.ls-part-statusd').value.trim(),
+    diaryComment:  r.querySelector('.ls-part-comment').value.trim()
+  })).filter(p => p.name);
+
+  const threadsNew = [...document.querySelectorAll('.ls-thread-row')].map(r => ({
+    title:    r.querySelector('.ls-thread-title').value.trim(),
+    desc:     r.querySelector('.ls-thread-desc').value.trim(),
+    priority: r.querySelector('.ls-thread-prio').value
+  })).filter(t => t.title);
+
+  const close = ($('ls-close').value || '').split(/[\s,]+/).map(Number).filter(n => !isNaN(n));
+  const folder = $('ls-mod-name').value.trim();
+
+  return {
+    module: { mode: $('ls-mod-mode').value, newName: folder, folder, type: $('ls-mod-type').value },
+    event: {
+      month: $('ls-month').value.trim(),
+      dateLabel: $('ls-date').value.trim(),
+      title: $('ls-title').value.trim(),
+      locationLine: $('ls-location').value.trim(),
+      parallel: $('ls-parallel').value.trim() || null,
+      summary: $('ls-summary').value.trim(),
+      scenes,
+      consequences: linesOf($('ls-consequences').value),
+      worldChanges: linesOf($('ls-world').value)
+    },
+    participants,
+    threads: { new: threadsNew, close },
+    finale: { create: $('ls-finale').checked, comment: $('ls-finale-comment').value.trim() }
+  };
+}
+
+const LS_ACTION_LABEL = { create: '＋ создать', modify: '✎ изменить' };
+
+function renderLsChanges(changes, withPreview) {
+  return `<div class="ls-changes">${changes.map(c => `
+    <div class="ls-change">
+      <span class="ls-change-act act-${c.action}">${LS_ACTION_LABEL[c.action] || c.action}</span>
+      <span class="ls-change-rel">${escHtml(c.rel)}</span>
+      ${withPreview && c.preview ? `<span class="ls-change-prev">${escHtml(c.preview)}</span>` : ''}
+    </div>`).join('')}</div>`;
+}
+
+async function lsRunPreview() {
+  const payload = collectLsPayload();
+  payload.dryRun = true;
+  const res = document.getElementById('ls-result');
+  res.innerHTML = SPINNER;
+  let j;
+  try {
+    j = await fetch('/api/log-session', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    }).then(r => r.json());
+  } catch { res.innerHTML = '<div class="ls-err">⚠ Сервер недоступен</div>'; return; }
+
+  if (!j.ok) {
+    lsInvalidate();
+    res.innerHTML = `<div class="ls-err"><b>Нельзя записать:</b><ul>${(j.errors || []).map(e => `<li>${escHtml(e)}</li>`).join('')}</ul></div>`;
+    return;
+  }
+
+  lsPreviewState = { hash: j.previewHash, payload };
+  document.getElementById('ls-write').disabled = false;
+
+  const s = j.summary || {};
+  res.innerHTML = `
+    <div class="ls-preview-head">
+      <span class="ls-badge">ПРЕДПРОСМОТР</span>
+      Модуль <b>${escHtml(s.module || '')}</b>${s.moduleNew ? ' (новый)' : ''} ·
+      участников: ${s.participants} · дневников: ${s.diaries} · финал: ${s.finale ? 'да' : 'нет'}
+    </div>
+    ${renderLsChanges(j.changes || [], true)}
+    ${(j.warnings || []).length ? `<div class="ls-warn">⚠ ${j.warnings.map(escHtml).join('<br>⚠ ')}</div>` : ''}
+    ${(j.notes || []).length ? `<div class="ls-note">ℹ ${j.notes.map(escHtml).join('<br>ℹ ')}</div>` : ''}
+    ${(j.stubs || []).length ? `<div class="ls-stubs"><b>Stub'ы для прозы Claude:</b><ul>${j.stubs.map(x => `<li>${escHtml(x)}</li>`).join('')}</ul></div>` : ''}
+    <div class="ls-hint-confirm">Проверьте план и нажмите «Записать».</div>`;
+}
+
+async function lsRunWrite() {
+  if (!lsPreviewState) return;
+  const res  = document.getElementById('ls-result');
+  const wbtn = document.getElementById('ls-write');
+  wbtn.disabled = true; wbtn.textContent = '⏳ Запись...';
+  let j;
+  try {
+    j = await fetch('/api/log-session', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...lsPreviewState.payload, dryRun: false, previewHash: lsPreviewState.hash })
+    }).then(r => r.json());
+  } catch { res.innerHTML = '<div class="ls-err">⚠ Сервер недоступен</div>'; wbtn.textContent = 'Записать'; return; }
+  wbtn.textContent = 'Записать';
+
+  if (!j.ok) {
+    lsInvalidate();
+    res.innerHTML = `<div class="ls-err"><b>Не записано:</b><ul>${(j.errors || []).map(e => `<li>${escHtml(e)}</li>`).join('')}</ul>Повторите предпросмотр.</div>`;
+    return;
+  }
+
+  // refresh caches so other pages reflect new data
+  STATE.characters = [];
+  STATE.chronicle = null;
+  STATE.locations = [];
+  STATE.graph.inited = false;
+  lsPreviewState = null;
+
+  res.innerHTML = `
+    <div class="ls-ok-head">✓ Записано — ${(j.written || []).length} файлов</div>
+    ${renderLsChanges(j.written || [], false)}
+    ${(j.stubs || []).length ? `
+      <div class="ls-stubs">
+        <b>Проза дневников и финала — stub'ы:</b>
+        <ul>${j.stubs.map(x => `<li>${escHtml(x)}</li>`).join('')}</ul>
+        <div id="ls-prose-zone"></div>
+      </div>` : ''}
+    ${(j.notes || []).length ? `<div class="ls-note">ℹ ${j.notes.map(escHtml).join('<br>ℹ ')}</div>` : ''}`;
+
+  lsSetupProseZone(j.stubs || []);
+}
+
+// Render the prose-generation control (gated on Claude CLI availability)
+async function lsSetupProseZone(stubs) {
+  const zone = document.getElementById('ls-prose-zone');
+  if (!zone || !stubs.length) return;
+  let avail = false;
+  try { avail = (await fetch('/api/claude/health').then(r => r.json())).available; } catch {}
+  if (!avail) {
+    zone.innerHTML = `<div class="ls-claude-msg">CLI «claude» не найден на сервере. Попросите Claude в терминале: «сгенерируй прозу для stub'ов этой сессии».</div>`;
+    return;
+  }
+  zone.innerHTML = `
+    <div class="ls-prose-controls">
+      <select class="form-control ls-prose-model" id="ls-prose-model">
+        <option value="">Модель: по умолчанию</option>
+        <option value="opus">Opus — лучшее качество, дороже</option>
+        <option value="sonnet">Sonnet — баланс, дешевле</option>
+        <option value="haiku">Haiku — быстро и дёшево</option>
+      </select>
+      <button class="btn-submit btn-genprose" id="ls-genprose" type="button">🪄 Сгенерировать прозу (Claude)</button>
+    </div>
+    <div class="ls-prose-note">Claude напишет дневники и финал по фактам события и комментариям Мастера. Дешевле — Sonnet/Haiku, качественнее — Opus. Тратит токены.</div>
+    <div class="ls-prose-result" id="ls-prose-result"></div>`;
+  document.getElementById('ls-genprose').addEventListener('click', () => lsGenProse(stubs));
+}
+
+async function lsGenProse(stubs) {
+  const btn = document.getElementById('ls-genprose');
+  const out = document.getElementById('ls-prose-result');
+  const model = (document.getElementById('ls-prose-model') || {}).value || '';
+  btn.disabled = true; btn.textContent = '⏳ Claude пишет прозу…';
+  out.innerHTML = `<div class="ls-note">Идёт генерация${model ? ` (${model})` : ''} — не закрывайте вкладку…</div>`;
+
+  let j;
+  try {
+    j = await fetch('/api/claude/generate-prose', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ stubs, model })
+    }).then(r => r.json());
+  } catch (e) {
+    out.innerHTML = `<div class="ls-err">⚠ ${escHtml(e.message)}</div>`;
+    btn.disabled = false; btn.textContent = '🪄 Сгенерировать прозу (Claude)';
+    return;
+  }
+
+  if (!j.ok && !(j.written || []).length) {
+    out.innerHTML = `<div class="ls-err">⚠ ${escHtml(j.error || 'Не удалось сгенерировать прозу')}</div>`;
+    btn.disabled = false; btn.textContent = '🪄 Сгенерировать прозу (Claude)';
+    return;
+  }
+
+  STATE.characters = []; STATE.chronicle = null; STATE.graph.inited = false;
+  btn.textContent = '✓ Готово';
+  out.innerHTML = `
+    <div class="ls-ok-head">✓ Проза записана${j.cost != null ? ` · $${Number(j.cost).toFixed(3)}` : ''}</div>
+    <div class="ls-changes">${(j.written || []).map(s =>
+      `<div class="ls-change"><span class="ls-change-act act-modify">✎ проза</span><span class="ls-change-rel">${escHtml(s)}</span></div>`).join('')}</div>
+    ${(j.pending || []).length ? `<div class="ls-warn">⚠ Без прозы остались: ${j.pending.map(escHtml).join(', ')}</div>` : ''}
+    <div class="ls-note">Проверьте <b>git diff</b> перед коммитом.</div>`;
+}
+
+// Lazy-init the Log Session form when its tab is first opened
+document.querySelector('.tab-btn[data-tab="log-session"]').addEventListener('click', lsInit);
 
 // ═══════════════════════════════════════════════════════════════
 // Init

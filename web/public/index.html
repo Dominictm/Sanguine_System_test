@@ -26,6 +26,9 @@
       <a class="nav-item active" data-page="dashboard">
         <span class="nav-icon">⚔️</span><span>Панель</span>
       </a>
+      <a class="nav-item" data-page="chronicle">
+        <span class="nav-icon">📜</span><span>Хроника</span>
+      </a>
       <a class="nav-item" data-page="characters">
         <span class="nav-icon">🎭</span><span>Персонажи</span>
       </a>
@@ -62,6 +65,23 @@
       </div>
       <div id="dash-content">
         <div class="loading-state"><div class="spinner"></div>Загрузка данных...</div>
+      </div>
+    </section>
+
+    <!-- Chronicle -->
+    <section id="page-chronicle" class="page">
+      <div class="page-header">
+        <h1 class="page-title">Хроника</h1>
+        <span class="page-sub" id="chronicle-sub">События домена</span>
+      </div>
+
+      <div class="chronicle-tabbar">
+        <button class="chron-tab active" data-chron-tab="timeline">🕰 Хронология</button>
+        <button class="chron-tab" data-chron-tab="world">🌍 Состояние мира</button>
+      </div>
+
+      <div id="chronicle-content">
+        <div class="loading-state"><div class="spinner"></div>Загрузка...</div>
       </div>
     </section>
 
@@ -178,6 +198,7 @@
         <button class="tab-btn active" data-tab="new-city">Новый домен</button>
         <button class="tab-btn" data-tab="new-npc">Новый НПС</button>
         <button class="tab-btn" data-tab="new-module">Модуль</button>
+        <button class="tab-btn" data-tab="log-session">📓 Сессия</button>
         <button class="tab-btn" data-tab="validate">Проверка</button>
       </div>
 
@@ -246,6 +267,89 @@
           <button class="btn-submit btn-secondary" id="btn-validate-fix">Исправить автоматически</button>
         </div>
         <pre class="output-area" id="out-validate"></pre>
+      </div>
+
+      <!-- Log Session -->
+      <div class="tab-panel" id="tab-log-session">
+        <p class="form-hint" style="margin-bottom:18px">
+          Записывает все фактические артефакты сыгранной сессии (хроника, модуль, нити, статусы) одним действием.
+          Проза дневников и финала не сочиняется — создаются stub'ы с фактами и комментариями Мастера, прозу пишет Claude отдельным шагом.
+          <b>Сначала «Предпросмотр», затем «Записать».</b>
+        </p>
+
+        <div class="ls-section">
+          <div class="ls-sec-title">Модуль</div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Режим</label>
+              <select class="form-control" id="ls-mod-mode">
+                <option value="new">Новый модуль</option>
+                <option value="existing">Существующий</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Папка модуля *</label>
+              <input class="form-control" id="ls-mod-name" placeholder="январь_2011_опера_крови" list="ls-modules">
+              <datalist id="ls-modules"></datalist>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Тип</label>
+              <select class="form-control" id="ls-mod-type">
+                <option>Игровая сессия</option>
+                <option>Внесессионное событие</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div class="ls-section">
+          <div class="ls-sec-title">Событие</div>
+          <div class="form-row">
+            <div class="form-group"><label class="form-label">Месяц YYYY-MM *</label><input class="form-control" id="ls-month" placeholder="2011-01" maxlength="7"></div>
+            <div class="form-group"><label class="form-label">Дата (текст) *</label><input class="form-control" id="ls-date" placeholder="Январь 2011, ночь"></div>
+          </div>
+          <div class="form-group"><label class="form-label">Заголовок события *</label><input class="form-control" id="ls-title" placeholder="Кровь на премьере"></div>
+          <div class="form-group"><label class="form-label">Локация (строка)</label><input class="form-control" id="ls-location" placeholder="Опера Гарнье (9-й) → катакомбы"></div>
+          <div class="form-group"><label class="form-label">Параллельная хроника (опц.)</label><input class="form-control" id="ls-parallel" placeholder="Разворачивается одновременно с …"></div>
+          <div class="form-group"><label class="form-label">Вступление / краткое содержание</label><textarea class="form-control" id="ls-summary" rows="2"></textarea></div>
+        </div>
+
+        <div class="ls-section">
+          <div class="ls-sec-title">Сцены <button class="ls-add" id="ls-add-scene" type="button">+ сцена</button></div>
+          <div id="ls-scenes"></div>
+        </div>
+
+        <div class="ls-section">
+          <div class="ls-sec-title">Последствия и мир</div>
+          <div class="form-group"><label class="form-label">Последствия (по строке)</label><textarea class="form-control" id="ls-consequences" rows="3"></textarea></div>
+          <div class="form-group"><label class="form-label">Изменения состояния мира (по строке)</label><textarea class="form-control" id="ls-world" rows="2"></textarea></div>
+        </div>
+
+        <div class="ls-section">
+          <div class="ls-sec-title">Участники <button class="ls-add" id="ls-add-part" type="button">+ участник</button></div>
+          <div id="ls-parts"></div>
+          <datalist id="ls-charnames"></datalist>
+        </div>
+
+        <div class="ls-section">
+          <div class="ls-sec-title">Нити <button class="ls-add" id="ls-add-thread" type="button">+ нить</button></div>
+          <div id="ls-threads"></div>
+          <div class="form-group" style="margin-top:10px"><label class="form-label">Закрыть нити (№ через запятую)</label><input class="form-control" id="ls-close" placeholder="10, 12"></div>
+        </div>
+
+        <div class="ls-section">
+          <label class="ls-check"><input type="checkbox" id="ls-finale"> Создать stub финала</label>
+          <div class="form-group" id="ls-finale-comment-wrap" style="display:none;margin-top:10px">
+            <label class="form-label">Комментарий Мастера к финалу (для генерации)</label>
+            <textarea class="form-control" id="ls-finale-comment" rows="2"></textarea>
+          </div>
+        </div>
+
+        <div class="btn-row">
+          <button class="btn-submit" id="ls-preview" type="button">Предпросмотр</button>
+          <button class="btn-submit btn-secondary" id="ls-write" type="button" disabled>Записать</button>
+        </div>
+        <div id="ls-result" class="ls-result"></div>
       </div>
     </section>
 
@@ -319,6 +423,14 @@
   <div class="modal-box modal-loc-detail">
     <button class="modal-close" id="loc-detail-close">✕</button>
     <div id="loc-detail-content"></div>
+  </div>
+</div>
+
+<!-- ── Module Detail Modal ── -->
+<div id="module-detail-modal" class="modal-overlay">
+  <div class="modal-box modal-module-detail">
+    <button class="modal-close" id="module-detail-close">✕</button>
+    <div id="module-detail-content"></div>
   </div>
 </div>
 
