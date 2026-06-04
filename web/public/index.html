@@ -38,6 +38,9 @@
       <a class="nav-item" data-page="threads">
         <span class="nav-icon">🧵</span><span>Нити</span>
       </a>
+      <a class="nav-item" data-page="locations">
+        <span class="nav-icon">📍</span><span>Локации</span>
+      </a>
       <a class="nav-item" data-page="tools">
         <span class="nav-icon">⚙️</span><span>Инструменты</span>
       </a>
@@ -130,6 +133,36 @@
         <span class="page-sub" id="threads-sub">Открытые нити</span>
       </div>
       <div id="threads-list">
+        <div class="loading-state"><div class="spinner"></div>Загрузка...</div>
+      </div>
+    </section>
+
+    <!-- Locations -->
+    <section id="page-locations" class="page">
+      <div class="page-header">
+        <span class="page-sub" id="locations-sub">Локации</span>
+      </div>
+      <div class="filter-bar">
+        <input class="filter-input" id="loc-search" placeholder="Поиск по названию...">
+        <select class="filter-select" id="loc-filter-zone">
+          <option value="all">Все зоны</option>
+          <option value="elysium">🏛️ Элизиум</option>
+          <option value="nosferatu">🟣 Носферату</option>
+          <option value="neutral">🟡 Нейтральная</option>
+          <option value="danger">🔴 Опасная</option>
+          <option value="other">📍 Прочие</option>
+        </select>
+        <select class="filter-select" id="loc-filter-district">
+          <option value="all">Все округа</option>
+        </select>
+        <select class="filter-select" id="loc-filter-masq">
+          <option value="all">Маскарад: все</option>
+          <option value="low">🟢 Низкий</option>
+          <option value="medium">🟡 Средний</option>
+          <option value="high">🔴 Высокий</option>
+        </select>
+      </div>
+      <div id="locs-grid" class="locs-grid">
         <div class="loading-state"><div class="spinner"></div>Загрузка...</div>
       </div>
     </section>
@@ -257,6 +290,16 @@
         <div class="modal-title" id="modal-s2-title"></div>
       </div>
       <div id="modal-fields"></div>
+
+      <div id="modal-img-section">
+        <div id="modal-img-preview" style="display:none">
+          <img id="modal-img-thumb" src="" alt="preview">
+          <button class="modal-img-clear" id="modal-img-clear" title="Убрать">✕</button>
+        </div>
+        <button class="btn-img-upload" id="modal-img-btn">🖼 Добавить изображение</button>
+        <input type="file" id="modal-img-input" accept="image/jpeg,image/png,image/webp,image/gif" style="display:none">
+      </div>
+
       <button class="btn-submit" id="modal-submit">Создать персонажа</button>
       <pre class="output-area" id="modal-output" style="display:none"></pre>
     </div>
@@ -268,6 +311,14 @@
   <div class="modal-box modal-detail">
     <button class="modal-close" id="char-detail-close">✕</button>
     <div id="char-detail-content"></div>
+  </div>
+</div>
+
+<!-- ── Location Detail Modal ── -->
+<div id="loc-detail-modal" class="modal-overlay">
+  <div class="modal-box modal-loc-detail">
+    <button class="modal-close" id="loc-detail-close">✕</button>
+    <div id="loc-detail-content"></div>
   </div>
 </div>
 

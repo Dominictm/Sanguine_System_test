@@ -80,7 +80,9 @@ const STATE = {
   characters: [],
   filter: { lineage: 'all', status: 'all', search: '' },
   graph: { data: null, svg: null, zoom: null, sim: null, nodes: null, links: null, inited: false },
-  selectedNode: null
+  selectedNode: null,
+  locations: [],
+  locFilter: { zone: 'all', masq: 'all', district: 'all', search: '' },
 };
 
 function navigate(page) {
@@ -95,6 +97,7 @@ function navigate(page) {
   if (page === 'graph')      loadGraph();
   if (page === 'modules')    loadModules();
   if (page === 'threads')    loadThreads();
+  if (page === 'locations')  loadLocations();
 }
 
 document.querySelectorAll('[data-page]').forEach(el =>
@@ -246,13 +249,11 @@ function renderChars() {
     const stLbl  = statusLabel(c);
     const linBadge = `<span class="badge badge-${c.lineage}">${LINEAGE_LABELS[c.lineage] || c.lineage}</span>`;
     const stBadge  = stType !== 'unknown' ? `<span class="badge badge-${stType}">${stLbl}</span>` : '';
-    const relCount = (c.relationships || []).length;
-    const relBadge = relCount ? `<span class="badge" style="color:var(--text3);border-color:rgba(90,80,80,.4)">${relCount} связей</span>` : '';
     const textBlock = `
       <div class="char-name">${escHtml(c.name)}</div>
-      <div class="char-clan">${escHtml(c.clan || c.lineageLabel || '—')}</div>
+      <div class="char-clan">${c.lineage === 'mortal' ? '' : escHtml(c.clan || c.lineageLabel || '—')}</div>
       <div class="char-status-row">${stBadge}</div>
-      <div class="char-badges">${linBadge}${relBadge}</div>`;
+      <div class="char-badges">${linBadge}</div>`;
 
     if (c.imageUrl) {
       return `<div class="char-card has-art" data-name="${escHtml(c.name)}">
@@ -739,30 +740,100 @@ loadDashboard();
 // Char Detail Modal
 // ═══════════════════════════════════════════════════════════════
 
-const CHAR_FIELD_LABELS = [
-  ['clan',        'Клан'],
-  ['sect',        'Секта'],
-  ['generation',  'Поколение'],
-  ['birthYear',   'Год рождения'],
-  ['embraceYear', 'Год обращения'],
-  ['sire',        'Сир'],
-  ['role',        'Роль'],
+const INFO_FIELDS = [
+  ['clan',         'Клан'],
+  ['sect',         'Секта'],
+  ['generation',   'Поколение'],
+  ['birthYear',    'Год рождения'],
+  ['embraceYear',  'Год обращения'],
+  ['sire',         'Сир'],
+  ['childe',       'Дитя'],
+  ['location',     'Домен / Локация'],
+  ['hierarchy',    'Иерархия'],
+  ['disciplines',  'Дисциплины'],
+  ['derangements', 'Деранжементы'],
+  ['profession',   'Профессия'],
+  ['role',         'Роль'],
 ];
+
+function renderDiaryList(c) {
+  if (!c.diaries?.length) return '<div class="cdet-empty">Дневников нет</div>';
+  return `<div class="diaries-list">${c.diaries.map(d => `
+    <div class="diary-item" data-char="${escHtml(c.name)}" data-file="${escHtml(d.file)}" data-title="${escHtml(d.title)}">
+      <span class="diary-item-icon">📜</span>
+      <span class="diary-item-title">${escHtml(d.title)}</span>
+      <span class="diary-item-arrow">→</span>
+    </div>`).join('')}</div>`;
+}
+
+function formatDiaryText(text) {
+  if (!text) return '';
+  return text.split(/\n\n+/)
+    .filter(Boolean)
+    .map(para => `<p>${escHtml(para).replace(/\n/g, '<br>')}</p>`)
+    .join('');
+}
+
+async function loadDiaryEntry(charName, file) {
+  const panel = document.querySelector('#char-detail-content [data-panel="diaries"]');
+  if (!panel) return;
+  panel.innerHTML = '<div class="diary-loading"><div class="spinner"></div>Загрузка...</div>';
+  try {
+    const data = await fetch(
+      `/api/characters/${encodeURIComponent(charName)}/diary?file=${encodeURIComponent(file)}`
+    ).then(r => r.json());
+    if (data.error) throw new Error(data.error);
+    const panels = panel.closest('.cdet-panels');
+    if (panels) panels.scrollTop = 0;
+
+    if (data.format === 'retrospective') {
+      panel.innerHTML = `
+        <button class="diary-back" data-char="${escHtml(charName)}">← Все дневники</button>
+        ${data.title ? `<div class="diary-retro-title">${escHtml(data.title)}</div>` : ''}
+        ${(data.sections || []).map(s => `
+          <div class="diary-retro-section">
+            <div class="diary-retro-date">📅 ${escHtml(s.title)}</div>
+            <div class="diary-retro-body">${formatDiaryText(s.body)}</div>
+          </div>
+          <div class="diary-divider"></div>
+        `).join('')}`;
+    } else {
+      panel.innerHTML = `
+        <button class="diary-back" data-char="${escHtml(charName)}">← Все дневники</button>
+        ${data.session   ? `<div class="diary-session">📅 ${escHtml(data.session)}</div>`   : ''}
+        ${data.location  ? `<div class="diary-meta">📍 ${escHtml(data.location)}</div>`      : ''}
+        ${data.tone      ? `<div class="diary-meta">🎭 ${escHtml(data.tone)}</div>`          : ''}
+        ${data.text      ? `<div class="diary-divider"></div><div class="diary-text">${escHtml(data.text)}</div>` : ''}
+        ${data.crossRefs?.length ? `
+          <div class="diary-divider"></div>
+          <div class="cdet-section-title">🔗 Зеркальная ссылка</div>
+          <div class="diary-crossrefs">${data.crossRefs.map(r =>
+            `<div class="diary-crossref">${escHtml(r)}</div>`).join('')}
+          </div>` : ''}`;
+    }
+  } catch (err) {
+    const panels = panel.closest('.cdet-panels');
+    if (panels) panels.scrollTop = 0;
+    panel.innerHTML = `
+      <button class="diary-back" data-char="${escHtml(charName)}">← Все дневники</button>
+      <div class="cdet-empty">Ошибка загрузки: ${escHtml(err.message)}</div>`;
+  }
+}
 
 function openCharDetail(name) {
   const c = STATE.characters.find(ch => ch.name === name);
   if (!c) return;
 
-  const icon    = LINEAGE_ICONS[c.lineage] || '👤';
-  const stType  = c.statusType || 'unknown';
-  const stLbl   = statusLabel(c);
+  const icon   = LINEAGE_ICONS[c.lineage] || '👤';
+  const stType = c.statusType || 'unknown';
+  const stLbl  = statusLabel(c);
 
-  const fields = CHAR_FIELD_LABELS
+  const infoFields = INFO_FIELDS
     .filter(([k]) => c[k] && c[k] !== '—' && !String(c[k]).includes('⚠️'))
     .map(([k, lbl]) => `<div class="cdet-key">${lbl}</div><div class="cdet-val">${escHtml(c[k])}</div>`)
     .join('');
 
-  const rels = (c.relationships || []).map(r => `
+  const relsHtml = (c.relationships || []).map(r => `
     <div class="cdet-rel">
       <div class="cdet-rel-name">${escHtml(r.target)}</div>
       <div class="cdet-rel-desc">${escHtml(r.description)}</div>
@@ -772,8 +843,25 @@ function openCharDetail(name) {
     ? `<img class="cdet-portrait-full" src="${c.imageUrl}" alt="${escHtml(c.name)}">`
     : `<div class="cdet-no-portrait">${icon}</div>`;
 
+  const descHtml = [
+    c.appearance && !c.appearance.includes('⚠️') ? `
+      <div class="cdet-section-title">Внешность</div>
+      <div class="cdet-bio">${escHtml(c.appearance)}</div>
+      <div class="cdet-divider"></div>` : '',
+    c.voice && !c.voice.includes('⚠️') ? `
+      <div class="cdet-section-title">Голос</div>
+      <div class="cdet-voice">${escHtml(c.voice)}</div>
+      <div class="cdet-divider"></div>` : '',
+    c.imagePrompt ? `
+      <div class="cdet-section-title">Промт для генерации</div>
+      <textarea class="cdet-prompt-box" readonly>${escHtml(c.imagePrompt)}</textarea>
+      ${c.negativePrompt ? `
+        <div class="cdet-section-title" style="margin-top:14px">Негативный промт</div>
+        <textarea class="cdet-prompt-box cdet-prompt-neg" readonly>${escHtml(c.negativePrompt)}</textarea>` : ''}` : '',
+  ].filter(Boolean).join('');
+
   document.getElementById('char-detail-content').innerHTML = `
-    <div class="cdet-portrait-col">${portraitCol}</div>
+    <div class="cdet-portrait-col" id="cdet-portrait-col">${portraitCol}</div>
     <div class="cdet-info-col">
       <div class="cdet-sticky-header">
         <div class="cdet-name">${escHtml(c.name)}</div>
@@ -783,17 +871,37 @@ function openCharDetail(name) {
         </div>
         ${c.statusDetails ? `<div class="cdet-status-details">${escHtml(c.statusDetails)}</div>` : ''}
       </div>
-      <div class="cdet-scroll-body">
-        ${fields ? `<div class="cdet-fields">${fields}</div><div class="cdet-divider"></div>` : ''}
-        ${c.biography && !c.biography.includes('⚠️') ? `
-          <div class="cdet-section-title">Биография</div>
-          <div class="cdet-bio">${escHtml(c.biography)}</div>
-          <div class="cdet-divider"></div>` : ''}
-        ${c.voice && !c.voice.includes('⚠️') ? `
-          <div class="cdet-section-title">Голос</div>
-          <div class="cdet-voice">${escHtml(c.voice)}</div>
-          <div class="cdet-divider"></div>` : ''}
-        ${rels ? `<div class="cdet-section-title">Отношения (${c.relationships.length})</div>${rels}` : ''}
+      <div class="cdet-tab-bar">
+        <button class="cdet-tab active" data-tab="info">Информация</button>
+        <button class="cdet-tab" data-tab="bio">Биография</button>
+        <button class="cdet-tab" data-tab="rels">Отношения</button>
+        <button class="cdet-tab" data-tab="diaries">Дневники${c.diaries?.length ? ` (${c.diaries.length})` : ''}</button>
+        <button class="cdet-tab" data-tab="desc">Описание</button>
+      </div>
+      <div class="cdet-panels">
+        <div class="cdet-panel active" data-panel="info">
+          ${infoFields
+            ? `<div class="cdet-fields">${infoFields}</div>`
+            : '<div class="cdet-empty">Нет данных</div>'}
+        </div>
+        <div class="cdet-panel" data-panel="bio">
+          ${c.biography && !c.biography.includes('⚠️')
+            ? `<div class="cdet-bio">${escHtml(c.biography)}</div>`
+            : '<div class="cdet-empty">Биография не заполнена</div>'}
+        </div>
+        <div class="cdet-panel" data-panel="rels">
+          ${relsHtml
+            ? `<div class="cdet-rels-list">${relsHtml}</div>`
+            : '<div class="cdet-empty">Нет известных связей</div>'}
+        </div>
+        <div class="cdet-panel" data-panel="diaries">
+          ${renderDiaryList(c)}
+        </div>
+        <div class="cdet-panel" data-panel="desc">
+          ${descHtml || '<div class="cdet-empty">Описание не заполнено</div>'}
+          <button class="cdet-upload-btn" data-char="${escHtml(c.name)}">📷 Загрузить изображение</button>
+          ${c.imageUrl ? '<div class="cdet-upload-hint">Загрузите новое изображение чтобы заменить текущее</div>' : ''}
+        </div>
       </div>
     </div>`;
 
@@ -809,6 +917,361 @@ const charDetailModal = document.getElementById('char-detail-modal');
 document.getElementById('char-detail-close').addEventListener('click', () => charDetailModal.classList.remove('open'));
 charDetailModal.addEventListener('click', e => { if (e.target === charDetailModal) charDetailModal.classList.remove('open'); });
 document.addEventListener('keydown', e => { if (e.key === 'Escape') charDetailModal.classList.remove('open'); });
+
+// Tab switching & image upload — delegated on the persistent content container
+document.getElementById('char-detail-content').addEventListener('click', e => {
+  const tab = e.target.closest('.cdet-tab');
+  if (tab) {
+    const col = tab.closest('.cdet-info-col');
+    col.querySelectorAll('.cdet-tab').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+    col.querySelectorAll('.cdet-panel').forEach(p => p.classList.remove('active'));
+    col.querySelector(`[data-panel="${tab.dataset.tab}"]`).classList.add('active');
+    const panels = col.querySelector('.cdet-panels');
+    if (panels) panels.scrollTop = 0;
+    return;
+  }
+  const uploadBtn = e.target.closest('.cdet-upload-btn');
+  if (uploadBtn) { triggerImageUpload(uploadBtn.dataset.char); return; }
+
+  const diaryItem = e.target.closest('.diary-item');
+  if (diaryItem) { loadDiaryEntry(diaryItem.dataset.char, diaryItem.dataset.file); return; }
+
+  const diaryBack = e.target.closest('.diary-back');
+  if (diaryBack) {
+    const c = STATE.characters.find(ch => ch.name === diaryBack.dataset.char);
+    const panel = document.querySelector('#char-detail-content [data-panel="diaries"]');
+    if (panel && c) {
+      panel.innerHTML = renderDiaryList(c);
+      const panels = panel.closest('.cdet-panels');
+      if (panels) panels.scrollTop = 0;
+    }
+    return;
+  }
+});
+
+async function triggerImageUpload(charName) {
+  const input = document.createElement('input');
+  input.type  = 'file';
+  input.accept = 'image/jpeg,image/png,image/webp,image/gif';
+  input.onchange = async () => {
+    const file = input.files[0];
+    if (!file) return;
+    const btn = document.querySelector('.cdet-upload-btn');
+    if (btn) { btn.textContent = '⏳ Загрузка...'; btn.disabled = true; }
+    try {
+      const ext    = file.name.split('.').pop().toLowerCase();
+      const base64 = await new Promise((res, rej) => {
+        const r = new FileReader();
+        r.onload  = () => res(r.result.split(',')[1]);
+        r.onerror = rej;
+        r.readAsDataURL(file);
+      });
+      const resp   = await fetch(`/api/characters/${encodeURIComponent(charName)}/upload-image`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ base64, ext })
+      });
+      const result = await resp.json();
+      if (result.success) {
+        const newUrl = result.url + '?t=' + Date.now();
+        // Update portrait in modal immediately
+        const col = document.getElementById('cdet-portrait-col');
+        if (col) col.innerHTML = `<img class="cdet-portrait-full" src="${newUrl}" alt="${escHtml(charName)}">`;
+        // Patch the character in STATE so the card and modal re-open correctly
+        const charInState = STATE.characters.find(ch => ch.name === charName);
+        if (charInState) charInState.imageUrl = newUrl;
+        // Re-render cards if user is on the characters page
+        if (STATE.page === 'characters') renderChars();
+        const b = document.querySelector('.cdet-upload-btn');
+        if (b) {
+          b.textContent = '✓ Загружено — нажмите для замены';
+          b.style.background = 'rgba(0,80,0,.25)';
+          b.disabled = false;
+        }
+      } else {
+        throw new Error(result.error || 'Неизвестная ошибка');
+      }
+    } catch (err) {
+      const isOffline = err.message.includes('Failed to fetch') || err.name === 'TypeError';
+      const b = document.querySelector('.cdet-upload-btn');
+      if (b) { b.textContent = '📷 Загрузить изображение'; b.disabled = false; }
+      if (isOffline) {
+        alert('Сервер недоступен. Перезапустите start.bat и попробуйте снова.');
+      } else {
+        alert('Ошибка загрузки: ' + err.message);
+      }
+    }
+  };
+  input.click();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Locations
+// ═══════════════════════════════════════════════════════════════
+
+const ZONE_CLASS_LABELS = {
+  elysium:    '🏛️ Элизиум',
+  nosferatu:  '🟣 Носферату',
+  neutral:    '🟡 Нейтральная',
+  danger:     '🔴 Опасная',
+  other:      '📍 Локация',
+};
+
+const MASQ_BADGE_LABELS = {
+  low:     '🟢 Низкий',
+  medium:  '🟡 Средний',
+  high:    '🔴 Высокий',
+};
+
+function zoneClass(zone) {
+  if (!zone) return 'other';
+  const z = zone.toLowerCase();
+  if (z.includes('элизиум'))                return 'elysium';
+  if (z.includes('носферату'))              return 'nosferatu';
+  if (z.includes('нейтральн'))              return 'neutral';
+  if (z.includes('опасн') || (z.includes('шабаш') && !z.includes('нейтральн'))) return 'danger';
+  return 'other';
+}
+
+async function loadLocations() {
+  if (STATE.locations.length) { renderLocations(); return; }
+  document.getElementById('locs-grid').innerHTML =
+    '<div class="loading-state"><div class="spinner"></div>Загрузка...</div>';
+  try {
+    const data = await fetch('/api/locations').then(r => r.json());
+    STATE.locations = Array.isArray(data) ? data : [];
+    populateDistrictFilter();
+    renderLocations();
+  } catch {
+    document.getElementById('locs-grid').innerHTML =
+      '<div class="loading-state" style="color:var(--accent3)">⚠ Не удалось загрузить локации</div>';
+  }
+}
+
+function populateDistrictFilter() {
+  const sel = document.getElementById('loc-filter-district');
+  const current = sel.value;
+  const districts = [...new Set(
+    STATE.locations.map(l => l.district).filter(Boolean)
+  )].sort((a, b) => {
+    const na = parseInt(a), nb = parseInt(b);
+    if (!isNaN(na) && !isNaN(nb)) return na - nb;
+    return a.localeCompare(b, 'ru');
+  });
+  sel.innerHTML = '<option value="all">Все округа</option>' +
+    districts.map(d => `<option value="${escHtml(d)}">${escHtml(d)}</option>`).join('');
+  if (districts.includes(current)) sel.value = current;
+}
+
+function renderLocations() {
+  const { zone, masq, district, search } = STATE.locFilter;
+  let list = STATE.locations;
+  if (zone     !== 'all') list = list.filter(l => zoneClass(l.zone) === zone);
+  if (masq     !== 'all') list = list.filter(l => l.masqueradeLevel === masq);
+  if (district !== 'all') list = list.filter(l => l.district === district);
+  if (search) {
+    const q = search.toLowerCase();
+    list = list.filter(l =>
+      (l.title || l.slug).toLowerCase().includes(q) ||
+      (l.subtype      || '').toLowerCase().includes(q) ||
+      (l.district     || '').toLowerCase().includes(q) ||
+      (l.neighborhood || '').toLowerCase().includes(q) ||
+      (l.address      || '').toLowerCase().includes(q)
+    );
+  }
+
+  document.getElementById('locations-sub').textContent = `${list.length} локаций`;
+
+  const grid = document.getElementById('locs-grid');
+  if (!list.length) {
+    grid.innerHTML = '<div class="loading-state" style="height:100px">Локации не найдены</div>';
+    return;
+  }
+  grid.innerHTML = list.map(loc => {
+    const zc    = zoneClass(loc.zone);
+    const mLvl  = loc.masqueradeLevel || 'unknown';
+    const masqBadge = MASQ_BADGE_LABELS[mLvl]
+      ? `<span class="badge badge-masq-${mLvl}">${MASQ_BADGE_LABELS[mLvl]}</span>`
+      : '';
+    const zoneBadge = `<span class="badge badge-loc-${zc}">${ZONE_CLASS_LABELS[zc]}</span>`;
+
+    const distLine = [loc.district, loc.neighborhood].filter(Boolean).map(escHtml).join(' · ');
+    const cardTitle = loc.subtype || loc.title || loc.slug;
+    const textBlock = `
+      <div class="loc-title">${escHtml(cardTitle)}</div>
+      ${distLine    ? `<div class="loc-district">${distLine}</div>` : ''}
+      ${loc.address ? `<div class="loc-address">${escHtml(loc.address)}</div>` : ''}
+      <div class="loc-badges">${zoneBadge}${masqBadge}</div>`;
+
+    if (loc.imageUrl) {
+      return `<div class="loc-card has-art" data-slug="${escHtml(loc.slug)}">
+        <img class="loc-card-img" src="${loc.imageUrl}" alt="${escHtml(loc.title || loc.slug)}">
+        <div class="loc-card-overlay">${textBlock}</div>
+      </div>`;
+    }
+    return `<div class="loc-card" data-slug="${escHtml(loc.slug)}">
+      <span class="loc-zone-icon">${ZONE_CLASS_LABELS[zc][0]}</span>
+      ${textBlock}
+    </div>`;
+  }).join('');
+}
+
+function openLocDetail(slug) {
+  const loc = STATE.locations.find(l => l.slug === slug);
+  if (!loc) return;
+
+  const zc   = zoneClass(loc.zone);
+  const mLvl = loc.masqueradeLevel || 'unknown';
+
+  const imgCol = loc.imageUrl
+    ? `<img class="locdet-img" src="${loc.imageUrl}" alt="${escHtml(loc.title || loc.slug)}">`
+    : `<div class="locdet-no-img">${ZONE_CLASS_LABELS[zc][0]}</div>`;
+
+  const atmHtml = loc.atmosphere
+    ? `<div class="locdet-atm">${escHtml(loc.atmosphere)}</div>`
+    : '<div class="cdet-empty">Описание не заполнено</div>';
+
+  const vtmSections = [
+    ['Статус',            loc.locStatus],
+    ['Фракция',           loc.faction],
+    ['Постоянные фигуры', loc.figures],
+    ['Угрозы',            loc.threats],
+    ['Маскарад',          loc.masquerade],
+  ].filter(([, v]) => v);
+
+  const vtmParts = [];
+  if (loc.vtmText) vtmParts.push(`<div class="locdet-atm">${escHtml(loc.vtmText)}</div>`);
+  vtmSections.forEach(([k, v]) => vtmParts.push(
+    `<div class="vtm-section">
+      <div class="vtm-lbl">${escHtml(k)}</div>
+      <div class="vtm-body">${escHtml(v)}</div>
+    </div>`
+  ));
+  const vtmHtml = vtmParts.length
+    ? vtmParts.join('<div class="diary-divider"></div>')
+    : '<div class="cdet-empty">Контекст не заполнен</div>';
+
+  const keyPointsHtml = loc.keyPoints?.length
+    ? `<div class="locdet-table">${loc.keyPoints.map(kp =>
+        `<div class="locdet-row">
+          <div class="locdet-key">${escHtml(kp.place)}</div>
+          <div class="locdet-val">${escHtml(kp.desc)}</div>
+        </div>`).join('')}</div>`
+    : '<div class="cdet-empty">Ключевые точки не заполнены</div>';
+
+  const hooksHtml = loc.hooks?.length
+    ? `<div class="locdet-hooks">${loc.hooks.map((h, i) =>
+        `<div class="locdet-hook">
+          <span class="locdet-hook-num">${i + 1}</span>
+          <span class="locdet-hook-text">${escHtml(h)}</span>
+        </div>`).join('')}</div>`
+    : '<div class="cdet-empty">Крючки не заполнены</div>';
+
+  const promptTab  = loc.imagePrompt ? '<button class="cdet-tab" data-tab="prompt">Промт</button>' : '';
+  const promptPanel = loc.imagePrompt ? `<div class="cdet-panel" data-panel="prompt">
+    <div class="cdet-section-title">Промт для генерации</div>
+    <textarea class="cdet-prompt-box" readonly>${escHtml(loc.imagePrompt)}</textarea>
+    ${loc.negativePrompt ? `<div class="cdet-section-title" style="margin-top:14px">Негативный промт</div>
+    <textarea class="cdet-prompt-box cdet-prompt-neg" readonly>${escHtml(loc.negativePrompt)}</textarea>` : ''}
+  </div>` : '';
+
+  const masqBadge = MASQ_BADGE_LABELS[mLvl]
+    ? `<span class="badge badge-masq-${mLvl}">${MASQ_BADGE_LABELS[mLvl]}</span>`
+    : '';
+
+  const metaRows = [
+    ['Название',   loc.subtype],
+    ['Округ',      loc.district],
+    ['Район',      loc.neighborhood],
+    ['Адрес',      loc.address],
+    ['Зона',       loc.zone],
+    ['Контроль',   loc.control],
+  ].filter(([, v]) => v);
+  const metaHtml = `<div class="locdet-table">${metaRows.map(([k, v]) =>
+    `<div class="locdet-row"><div class="locdet-key">${escHtml(k)}</div><div class="locdet-val">${escHtml(v)}</div></div>`
+  ).join('')}</div>`;
+
+  document.getElementById('loc-detail-content').innerHTML = `
+    <div class="locdet-img-col">${imgCol}</div>
+    <div class="cdet-info-col">
+      <div class="cdet-sticky-header">
+        <div class="cdet-name">${escHtml(loc.title || loc.slug)}</div>
+        ${loc.subtype ? `<div class="locdet-subtype">${escHtml(loc.subtype)}</div>` : ''}
+        <div class="locdet-legend-row">
+          <div class="locdet-legend-item">
+            <span class="locdet-legend-lbl">Зона контроля</span>
+            <span class="badge badge-loc-${zc}">${ZONE_CLASS_LABELS[zc]}</span>
+          </div>
+          ${mLvl !== 'unknown' ? `<div class="locdet-legend-item">
+            <span class="locdet-legend-lbl">Маскарад</span>
+            <span class="badge badge-masq-${mLvl}">${MASQ_BADGE_LABELS[mLvl]}</span>
+          </div>` : ''}
+        </div>
+      </div>
+      <div class="cdet-tab-bar">
+        <button class="cdet-tab active" data-tab="meta">Метаданные</button>
+        <button class="cdet-tab" data-tab="atm">Атмосфера</button>
+        <button class="cdet-tab" data-tab="vtm">VtM</button>
+        <button class="cdet-tab" data-tab="keys">Ключевые точки</button>
+        <button class="cdet-tab" data-tab="hooks">Крючки</button>
+        ${promptTab}
+      </div>
+      <div class="cdet-panels">
+        <div class="cdet-panel active" data-panel="meta">${metaHtml}</div>
+        <div class="cdet-panel" data-panel="atm">${atmHtml}</div>
+        <div class="cdet-panel" data-panel="vtm">${vtmHtml}</div>
+        <div class="cdet-panel" data-panel="keys">${keyPointsHtml}</div>
+        <div class="cdet-panel" data-panel="hooks">${hooksHtml}</div>
+        ${promptPanel}
+      </div>
+    </div>`;
+
+  document.getElementById('loc-detail-modal').classList.add('open');
+}
+
+// Location card clicks
+document.getElementById('locs-grid').addEventListener('click', e => {
+  const card = e.target.closest('.loc-card[data-slug]');
+  if (card) openLocDetail(card.dataset.slug);
+});
+
+// Location filter events
+document.getElementById('loc-search').addEventListener('input', e => {
+  STATE.locFilter.search = e.target.value;
+  if (STATE.locations.length) renderLocations();
+});
+document.getElementById('loc-filter-zone').addEventListener('change', e => {
+  STATE.locFilter.zone = e.target.value;
+  if (STATE.locations.length) renderLocations();
+});
+document.getElementById('loc-filter-district').addEventListener('change', e => {
+  STATE.locFilter.district = e.target.value;
+  if (STATE.locations.length) renderLocations();
+});
+document.getElementById('loc-filter-masq').addEventListener('change', e => {
+  STATE.locFilter.masq = e.target.value;
+  if (STATE.locations.length) renderLocations();
+});
+
+// Location modal close
+const locDetailModal = document.getElementById('loc-detail-modal');
+document.getElementById('loc-detail-close').addEventListener('click', () => locDetailModal.classList.remove('open'));
+locDetailModal.addEventListener('click', e => { if (e.target === locDetailModal) locDetailModal.classList.remove('open'); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') locDetailModal.classList.remove('open'); });
+
+// Tab switching in location modal (same logic as char modal)
+document.getElementById('loc-detail-content').addEventListener('click', e => {
+  const tab = e.target.closest('.cdet-tab');
+  if (!tab) return;
+  const col = tab.closest('.cdet-info-col');
+  col.querySelectorAll('.cdet-tab').forEach(t => t.classList.remove('active'));
+  tab.classList.add('active');
+  col.querySelectorAll('.cdet-panel').forEach(p => p.classList.remove('active'));
+  col.querySelector(`[data-panel="${tab.dataset.tab}"]`).classList.add('active');
+  const panels = col.querySelector('.cdet-panels');
+  if (panels) panels.scrollTop = 0;
+});
 
 // ═══════════════════════════════════════════════════════════════
 // Create Character Modal
@@ -878,6 +1341,43 @@ const modalOut    = document.getElementById('modal-output');
 const modalSubmit = document.getElementById('modal-submit');
 let   modalLineage= null;
 
+const modalImgBtn     = document.getElementById('modal-img-btn');
+const modalImgInput   = document.getElementById('modal-img-input');
+const modalImgPreview = document.getElementById('modal-img-preview');
+const modalImgThumb   = document.getElementById('modal-img-thumb');
+const modalImgClear   = document.getElementById('modal-img-clear');
+let   modalImgB64 = null;
+let   modalImgExt = null;
+
+function resetModalImg() {
+  modalImgB64 = null;
+  modalImgExt = null;
+  modalImgInput.value = '';
+  modalImgThumb.src = '';
+  modalImgPreview.style.display = 'none';
+  modalImgBtn.textContent = '🖼 Добавить изображение';
+  modalImgBtn.style.borderColor = '';
+}
+
+modalImgBtn.addEventListener('click', () => modalImgInput.click());
+
+modalImgInput.addEventListener('change', () => {
+  const file = modalImgInput.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    modalImgB64 = e.target.result.split(',')[1];
+    modalImgExt = file.name.split('.').pop().toLowerCase();
+    modalImgThumb.src = e.target.result;
+    modalImgPreview.style.display = '';
+    modalImgBtn.textContent = '🖼 Изменить изображение';
+    modalImgBtn.style.borderColor = 'var(--gold)';
+  };
+  reader.readAsDataURL(file);
+});
+
+modalImgClear.addEventListener('click', () => resetModalImg());
+
 function openCharModal() {
   charModal.classList.add('open');
   showModalStep(1);
@@ -893,6 +1393,7 @@ function showModalStep(n) {
   modalOut.style.display = 'none';
   modalSubmit.disabled = false;
   modalSubmit.textContent = 'Создать персонажа';
+  if (n === 1) resetModalImg();
 }
 
 document.getElementById('btn-open-create-char').addEventListener('click', openCharModal);
@@ -953,6 +1454,21 @@ modalSubmit.addEventListener('click', async () => {
     if (d.success) {
       modalOut.classList.add('ok');
       STATE.graph.inited = false;
+
+      if (modalImgB64) {
+        const nameInp = modalFields.querySelector('input[data-param="Name"]');
+        const charName = nameInp ? nameInp.value.trim() : null;
+        if (charName) {
+          try {
+            await fetch(`/api/characters/${encodeURIComponent(charName)}/upload-image`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ base64: modalImgB64, ext: modalImgExt })
+            });
+          } catch { /* не критично */ }
+        }
+      }
+
       fetch('/api/characters').then(r => r.json()).then(data => {
         STATE.characters = Array.isArray(data) ? data : [];
         if (STATE.page === 'characters') renderChars();

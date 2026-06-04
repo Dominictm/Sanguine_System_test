@@ -1,0 +1,8 @@
+{
+  "name": "vtm-ui-tests",
+  "private": true,
+  "description": "Selenium UI tests for VTM Chronicle Manager",
+  "dependencies": {
+    "selenium-webdriver": "^4.22.0"
+  }
+}
