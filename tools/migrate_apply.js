@@ -10,6 +10,7 @@ const fs = require('fs');
 const path = require('path');
 const ROOT = path.resolve(__dirname, '..');
 const APPLY = process.argv.includes('--apply');
+const CLEANUP = process.argv.includes('--cleanup'); // удалить старые оригиналы картинок + пустые папки
 
 const MAPT = {
   а:'a',б:'b',в:'v',г:'g',д:'d',е:'e',ё:'e',ж:'zh',з:'z',и:'i',й:'y',
@@ -139,21 +140,28 @@ const deletes = moves.filter(m => m.new === null && m.old.toLowerCase().endsWith
 
 console.log(`md-файлов обработано: ${writes.length} · перемещений .md: ${deleteOld.filter(r => oldToNew.get(r)).length} · бинарь: ${binMoves.length} · удалить: ${deletes.length}`);
 console.log(`ссылок переписано: ${linkChanges}`);
-if (!APPLY) { console.log('\n(dry — запусти с --apply)'); process.exit(0); }
+if (!APPLY && !CLEANUP) { console.log('\n(dry — запусти --apply, затем после проверки --cleanup)'); process.exit(0); }
 
 // ── Исполнение ───────────────────────────────────────────────────────────
 const mkdirp = abs => fs.mkdirSync(path.dirname(abs), { recursive: true });
-for (const w of writes) { const a = path.join(ROOT, w.newRel); mkdirp(a); fs.writeFileSync(a, w.data, 'utf8'); }
-for (const m of binMoves) { const a = path.join(ROOT, m.new); mkdirp(a); fs.copyFileSync(path.join(ROOT, m.old), a); }
-// удаления старых
-for (const rel of deleteOld) { const a = path.join(ROOT, rel); if (fs.existsSync(a)) fs.unlinkSync(a); }
-for (const m of binMoves) { const a = path.join(ROOT, m.old); if (fs.existsSync(a)) fs.unlinkSync(a); }
-for (const m of deletes) { const a = path.join(ROOT, m.old); if (fs.existsSync(a)) fs.unlinkSync(a); }
-// чистка пустых старых папок
 function prune(rel) {
   const abs = path.join(ROOT, rel); if (!fs.existsSync(abs) || !isDir(abs)) return;
   for (const n of fs.readdirSync(abs)) prune(rel + '/' + n);
   if (fs.existsSync(abs) && isDir(abs) && fs.readdirSync(abs).length === 0) fs.rmdirSync(abs);
 }
-['characters', 'modules', 'locations', 'rules'].forEach(prune);
-console.log('✓ apply завершён');
+
+if (CLEANUP) {
+  // финальный шаг: удалить старые оригиналы (картинки и пр.) + пустые папки
+  let removed = 0;
+  for (const m of moves) { const a = path.join(ROOT, m.old); if (fs.existsSync(a)) { fs.unlinkSync(a); removed++; } }
+  ['characters', 'modules', 'locations', 'rules'].forEach(prune);
+  console.log(`✓ cleanup: удалено старых файлов ${removed}, пустые папки убраны`);
+  process.exit(0);
+}
+
+// APPLY (image-safe): .md → запись new + удаление old; картинки → ТОЛЬКО копирование (оригиналы целы)
+for (const w of writes) { const a = path.join(ROOT, w.newRel); mkdirp(a); fs.writeFileSync(a, w.data, 'utf8'); }
+for (const m of binMoves) { const a = path.join(ROOT, m.new); mkdirp(a); fs.copyFileSync(path.join(ROOT, m.old), a); }
+for (const rel of deleteOld) { const a = path.join(ROOT, rel); if (fs.existsSync(a)) fs.unlinkSync(a); } // только .md
+for (const m of deletes) { const a = path.join(ROOT, m.old); if (fs.existsSync(a)) fs.unlinkSync(a); }       // npc_image_mapping.md
+console.log('✓ apply завершён (image-safe: оригиналы картинок сохранены до --cleanup)');

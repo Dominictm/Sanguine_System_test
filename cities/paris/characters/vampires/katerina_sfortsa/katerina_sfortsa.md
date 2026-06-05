@@ -1,0 +1,27 @@
+﻿# 🛡️ Катерина Сфорца
+
+> 🔗 [Все персонажи](../../../archive/characters_index.md)
+
+---
+
+- **Линейка WoD:** Вампир
+- **Клан:** Цимисхи
+- **Секта:** Камарилья (перебежчик из Шабаша)
+- **Парижская иерархия:** Сенешаль
+- **Роль:** Сенешаль города
+- **Статус:** Жива
+- **Внешность:** Короткие тёмные волосы пикси. Серо-голубые глаза, едва заметные веснушки. Чёрный облегающий лонгслив, небольшое украшение на шее. Телосложение поджарое, никаких лишних движений. Фирменная черта: стоит или сидит вполоборота — смотрит на тебя через плечо. Не демонстрирует силу — именно поэтому опасна.
+- **Дисциплины:** Animalism, Auspex, Vicissitude (клановые Цимисхи; предположительно)
+- **Голос:** Минималистична — только суть, ни одного лишнего слова. Наблюдает дольше, чем отвечает. Когда молчит в разговоре — это позиция, не растерянность.
+- **🎨 Промт для генерации изображения:**
+  [Блок 1] Cinematic dark fantasy portrait, female vampire seneschal, sitting slightly turned, short dark pixie hair, grey-blue attentive eyes with barely visible freckles, pale skin, black fitted long-sleeve, no accessories — nothing unnecessary, body angled to the side, watching the viewer over her shoulder, cold evaluation without a trace of warmth or unnecessary gesture
+  [Блок 2] Cold blue-white light from the left, silver-grey rim-light from behind, deep grey shadows filling the frame, silver-grey-black painterly background with abstract swirling brushstroke textures, cold mist and still air
+  [Блок 3] Dark fantasy digital painting, visible painterly brushstrokes, textured oil-paint effect, cinematic composition, moody gothic atmosphere, Vampire the Masquerade aesthetic, concept art quality, painterly realism, artstation quality, masterpiece
+- **🚫 Негативный промт:**
+  photorealistic photography, digital art, anime, cartoon, illustration, watermark, text overlay, blurry, low quality, artifacts, deformed anatomy, extra limbs, oversaturated colors, bright white background, 3D render, CGI.
+
+---
+
+## 🖼️ Изображения
+
+- [Образ 2 — Катерина Сфорца.png](art/katerina_sfortsa.png)

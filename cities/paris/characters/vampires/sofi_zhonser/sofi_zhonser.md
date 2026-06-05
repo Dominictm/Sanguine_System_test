@@ -1,0 +1,34 @@
+﻿# 🔮 Софи Жонсьер
+
+> 🔗 [Все персонажи](../../../archive/characters_index.md)
+
+---
+
+- **Линейка WoD:** Вампир
+- **Клан:** Тремер
+- **Секта:** Камарилья
+- **Сир:** Катрин Киваль
+- **Домен:** Капелла `L'Étude du 25` (Tour Cristal), 13 этаж
+- **Парижская иерархия:** Примоген (Тремер)
+- **Роль:** Примаген Тремер
+- **Статус:** Жива
+- **Внешность:** Пышная хаотичная причёска сине-фиолетовых оттенков, непокорная. Бледная кожа. Чёрные длинные перчатки с имитацией когтей. Многоярусное театральное платье — пурпурные оборки, белые кружевные вставки, волочящийся подол. Образ работает как заявление: Примаген Парижа может выглядеть как угодно, потому что все и так знают, кто она.
+- **Дисциплины:** Auspex, Dominate, Thaumaturgy (клановые Тремер; предположительно)
+- **Голос:** Точный, с театральной ноткой — Примоген может позволить себе эффект. Говорит так, будто уже знает исход. Паузы расставляет намеренно, для веса. Французский — изысканный, с лёгким академическим оттенком.
+- **Отношения:**
+  - Аня (личный гуль; сестра Джека)
+  - [Джек](../dzhek/dzhek.md) (неонат берлинской капеллы, переведён в Париж — должен несколько одолжений; брат Ани)
+  - [Эмилия Индра-Ландорг](../emiliya_indra_landorg/emiliya_indra_landorg.md) (неофит, прислана на обучение в 2010; жена Ганеша; единственный известный контакт в домене)
+
+- **🎨 Промт для генерации изображения:**
+  [Блок 1] Cinematic dark fantasy portrait, female vampire primogen of clan Tremere, three-quarter view, wild voluminous blue-violet hair exploding untamed around the face, pale skin, long black opera gloves with decorative claw extensions, multi-tiered theatrical gown in deep purple with white lace ruffles and trailing hem, posture of absolute authority — she knows you have already lost, slight amused expression
+  [Блок 2] Violet arcane light from above, deep purple rim-light, shadows thick and heavy below, purple-black painterly background with abstract swirling brushstroke textures, arcane smoke curling through darkness
+  [Блок 3] Dark fantasy digital painting, visible painterly brushstrokes, textured oil-paint effect, cinematic composition, moody gothic atmosphere, Vampire the Masquerade aesthetic, concept art quality, painterly realism, artstation quality, masterpiece
+- **🚫 Негативный промт:**
+  photorealistic photography, digital art, anime, cartoon, illustration, watermark, text overlay, blurry, low quality, artifacts, deformed anatomy, extra limbs, oversaturated colors, bright white background, 3D render, CGI.
+
+---
+
+## 🖼️ Изображения
+
+- [Образ 2 — Софи Жонсьер-2.png](art/sofi_zhonser_2.png)

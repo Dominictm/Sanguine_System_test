@@ -1,0 +1,52 @@
+﻿# 🧛 Ева
+
+> 🔗 [Все персонажи](../../../archive/characters_index.md)
+
+---
+
+- **Линейка WoD:** Вампир
+- **Клан:** Малкавиан
+- **Секта:** Камарилья
+- **Поколение:** 9-е
+- **Год рождения:** 1920
+- **Год обращения:** 1937 (Париж, год Всемирной выставки)
+- **Сир:** Старый парижский Малкавиан — мёртв (уничтожен в 1940-е, точные обстоятельства неизвестны). В Париже поручительство взял [Тома Бошен](../toma_boshen/toma_boshen.md), Примоген Малкавиан — де-факто удочерил её
+- **Дитя:** —
+- **Домен / Локация:** Небольшой офис в 5-м арр., Rue Monge; формально без личного домена
+- **Парижская иерархия:** Не занимает должности. Зарегистрирована в домене под поручительством Тома Бошена. Камарилья пользуется её услугами для деликатных расследований, не подходящих для официальных каналов
+- **Роль:** Частный детектив; Персонаж Игрока
+- **Особенности:** Японка. Альбинос от рождения — белые волосы, красные глаза и белая кожа существовали до Embrace; обращение не изменило внешность
+- **Статус:** Жива
+- **Детали статуса:** Активна с 1937 года; пережила оккупацию, Liberation, послевоенный Париж
+
+- **Биография:** Родилась в Японии, 1920. Альбинос — в стране, где единообразие не просто норма, а требование. Белые волосы, красные глаза, кожа без пигмента: она была видна везде и не принадлежала нигде. В 1933 году, тринадцати лет, оказалась в Париже — с отцом-художником, приехавшим в орбиту японской колонии Монпарнаса (Фудзита ещё жил здесь, хотя дни его Парижа уже заканчивались). Отец умер в 1935-м. Она осталась. Французского за два года выучила достаточно, чтобы не пропасть; японская школа наблюдения сделала остальное. Когда в 1937 году парижский Малкавиан выбрал её для Embrace, он не перепутал — он именно её и хотел. Девочку-альбиноса из Японии, которая умеет смотреть так, что видит до дна. Обращение не изменило внешность — она и до того выглядела нечеловечески. Оно изменило восприятие: теперь она видит слои — что было, что осталось в стенах и предметах, что люди скрывают даже от самих себя. Сир погиб в 1940-е — при обстоятельствах, которые она до сих пор не установила до конца. В Париже за неё поручился Тома Бошен, Примоген Малкавиан: взял под личное покровительство, зарегистрировал в домене, де-факто удочерил. «Ева» — имя, которое она взяла во Франции. Настоящее — не говорит никому. Офис на Rue Monge открыт с 1952 года. За вывеской «E. Moreau — Investigations privées» — семьдесят три года практики и ни одного закрытого дела с пометкой «нераскрыто». В 2010-м вместе с Джеком вела расследование серии гибелей топ-менеджмента корпорации «Иль-де-Франс» — юридически принадлежащей капелле Тремер, фактически — Софи Жонсьер. Дело потребовало работы на стыке смертного и вампирского миров, что стало типичным для её метода.
+
+- **Внешность:** Японка-альбинос. Выглядит на 16–17 лет — Embrace заморозил этот возраст навсегда. Рост 150 см, хрупкое телосложение. Восточноазиатские черты лица — мягкие скулы, характерный разрез глаз с эпикантусом, тонкий нос — но полностью лишённые пигмента: кожа белая с голубоватым холодным оттенком, вены на запястьях и висках видны без усилия. Длинные прямые волосы нулевого пигмента — не платиновые, не серебристые, а белые именно так, как бывает только при врождённом альбинизме; ровная прямая чёлка до бровей. Глаза светло-красные, почти розово-красные — радужка лишена пигмента, видны подлежащие сосуды; при ярком освещении зрачки сужаются с задержкой. Взгляд неподвижный, изучающий — не мигает дольше, чем следует. На солнечном свету выглядит как нефритовая статуэтка, покрытая белой эмалью. Пальцы длинные, тонкие — непропорционально изящные. Одевается неброско: тёмные тона, ничего лишнего, никакой бижутерии. Одна деталь, которая повторяется всегда — тонкая чёрная записная книжка в нагрудном кармане. В многолюдных местах всегда в перчатках — не из холода.
+
+- **Дисциплины:** Auspex ●●●, Dominate ●●, Obfuscate ●●
+
+- **Деранжементы:** Психометрия как навязчивость: прикасаясь к предметам или входя в место, где произошло что-то значимое, непроизвольно «видит» эмоциональные следы — вспышки чужих переживаний, иногда целыми сценами. Не контролируется. Носит перчатки в многолюдных местах — не из холода.
+
+- **Голос:** Говорит тихо и редко. Французский после семидесяти трёх лет практики — почти без акцента, но порой синтаксис выдаёт язык, которым она думает. Японский сохранился полностью — использует его когда хочет, чтобы собеседник не понял. Задаёт вопросы так, что собеседник сам приходит к ответу. Паузы длиннее обычного. Никогда не перебивает. Если молчит дольше стандартного — значит, уже знает.
+
+- **Отношения:**
+  - [Тома Бошен](../toma_boshen/toma_boshen.md) — поручитель и де-факто приёмный отец; взял её под личное покровительство после гибели сира
+  - [Джек](../dzhek/dzhek.md) — партнёр по расследованию гибели руководства корпорации «Иль-де-Франс»
+  - [Мишель Моро](../mishel_moro/mishel_moro.md) — знакома; Мишель называет её «Сестрой»
+  - [Софи Жонсьер](../sofi_zhonser/sofi_zhonser.md) — фактический владелец корпорации «Иль-де-Франс»; фигурировала в расследовании (косвенно)
+
+- **🎨 Промт для генерации изображения:**
+  [Блок 1] Cinematic dark fantasy portrait, young-looking female Malkavian vampire detective, Japanese woman with congenital albinism, appears sixteen or seventeen years old — East Asian facial features: soft refined bone structure, characteristic epicanthic fold at the inner corners of the eyes, delicate jaw, Japanese facial proportions — but entirely depigmented: zero-pigment straight white hair (not platinum, not silver — pure white, the white of complete melanin absence) cut with straight blunt bangs to the brows, falling long and straight; eyes light pinkish-red with visible subretinal vessels through unpigmented irises — the pale red gaze of true albinism on East Asian eye shape, unsettling and unblinking; skin completely depigmented — cold blue-white translucent quality, faint blue veins at the inner wrists and temples; small fine-boned frame 150 cm, slender elongated fingers lightly interlaced or raised near the face, dressed in understated dark clothing — no jewelry, thin black leather gloves, one slim black notebook visible at the pocket; expression of absolute patient stillness — she already knows the answer before asking the question
+  [Блок 2] Cold blue-white overhead light catching the zero-pigment white hair and translucent skin with a faint bluish cast, pale crimson rim light from behind tracing the silhouette and catching the red of the irises, deep cool charcoal shadows, dark desaturated background with faint dissolved handwritten notes and floor plans in both French and Japanese — the residue of seventy years of cases, atmosphere of inhuman patience and precise cross-cultural observation
+  [Блок 3] Dark fantasy digital painting, visible painterly brushstrokes, textured oil-paint effect, cinematic composition, moody gothic atmosphere, Vampire the Masquerade aesthetic, concept art quality, painterly realism, artstation quality, masterpiece
+- **🚫 Негативный промт:**
+  photorealistic photography, digital art, anime, cartoon, illustration, watermark, text overlay, blurry, low quality, artifacts, deformed anatomy, extra limbs, oversaturated colors, bright white background, 3D render, CGI, colored hair, dark hair, yellow hair, grey hair, brown eyes, green eyes, blue eyes, purple eyes, smile, warm skin tone, tan skin, pink skin, European facial features, Caucasian face, modern streetwear, fantasy armor, wings.
+
+---
+
+## 🖼️ Изображения
+- [Образ 1 — Ева-4.png](art/eva_4.png)
+- [Образ 2 — ева1.png](art/eva1.png)
+- [Образ 3 — ева2.png](art/eva2.png)
+- [Образ 4 — ева3-1.png](art/eva3_1.png)
+- [Образ 5 — ева3-2.png](art/eva3_2.png)

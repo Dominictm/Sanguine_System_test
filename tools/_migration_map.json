@@ -10,6 +10,11 @@
     "kind": "character"
   },
   {
+    "old": "characters/vampires/Анет/portrait.png",
+    "new": "cities/paris/characters/vampires/anet/art/portrait.png",
+    "kind": "character"
+  },
+  {
     "old": "characters/vampires/Анет/Анет-3.png",
     "new": "cities/paris/characters/vampires/anet/art/anet_3.png",
     "kind": "character"
@@ -50,8 +55,18 @@
     "kind": "character"
   },
   {
+    "old": "characters/vampires/Верене де Кюстин/Верене ТВ.png",
+    "new": "cities/paris/characters/vampires/verene_de_kyustin/art/verene_tv.png",
+    "kind": "character"
+  },
+  {
     "old": "characters/vampires/Ви/Journal_Ви/2010-12.md",
     "new": "cities/paris/characters/vampires/vi/journal/2010-12.md",
+    "kind": "character"
+  },
+  {
+    "old": "characters/vampires/Ви/portrait.jpg",
+    "new": "cities/paris/characters/vampires/vi/art/portrait.jpg",
     "kind": "character"
   },
   {
@@ -72,6 +87,16 @@
   {
     "old": "characters/vampires/Ганеш/Ганеш.md",
     "new": "cities/paris/characters/vampires/ganesh/ganesh.md",
+    "kind": "character"
+  },
+  {
+    "old": "characters/vampires/Герсон/gerson_chelovek.png",
+    "new": "cities/paris/characters/vampires/gerson/art/gerson_chelovek.png",
+    "kind": "character"
+  },
+  {
+    "old": "characters/vampires/Герсон/gerson_izsuschenyy.png",
+    "new": "cities/paris/characters/vampires/gerson/art/gerson_izsuschenyy.png",
     "kind": "character"
   },
   {
@@ -110,8 +135,33 @@
     "kind": "character"
   },
   {
+    "old": "characters/vampires/Ева/Ева-4.png",
+    "new": "cities/paris/characters/vampires/eva/art/eva_4.png",
+    "kind": "character"
+  },
+  {
     "old": "characters/vampires/Ева/Ева.md",
     "new": "cities/paris/characters/vampires/eva/eva.md",
+    "kind": "character"
+  },
+  {
+    "old": "characters/vampires/Ева/ева1.png",
+    "new": "cities/paris/characters/vampires/eva/art/eva1.png",
+    "kind": "character"
+  },
+  {
+    "old": "characters/vampires/Ева/ева2.png",
+    "new": "cities/paris/characters/vampires/eva/art/eva2.png",
+    "kind": "character"
+  },
+  {
+    "old": "characters/vampires/Ева/ева3-1.png",
+    "new": "cities/paris/characters/vampires/eva/art/eva3_1.png",
+    "kind": "character"
+  },
+  {
+    "old": "characters/vampires/Ева/ева3-2.png",
+    "new": "cities/paris/characters/vampires/eva/art/eva3_2.png",
     "kind": "character"
   },
   {
@@ -310,6 +360,11 @@
     "kind": "character"
   },
   {
+    "old": "characters/vampires/Эмилия Индра-Ландорг/portrait.png",
+    "new": "cities/paris/characters/vampires/emiliya_indra_landorg/art/portrait.png",
+    "kind": "character"
+  },
+  {
     "old": "characters/vampires/Эмилия Индра-Ландорг/Эмилия Индра-Ландорг.md",
     "new": "cities/paris/characters/vampires/emiliya_indra_landorg/emiliya_indra_landorg.md",
     "kind": "character"
@@ -367,6 +422,11 @@
   {
     "old": "characters/fairies/Ямала/Journal_Ямала/retrospective_doc.md",
     "new": "cities/paris/characters/fairies/yamala/journal/retrospective_doc.md",
+    "kind": "character"
+  },
+  {
+    "old": "characters/fairies/Ямала/portrait.png",
+    "new": "cities/paris/characters/fairies/yamala/art/portrait.png",
     "kind": "character"
   },
   {
