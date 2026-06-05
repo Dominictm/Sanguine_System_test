@@ -649,8 +649,11 @@ app.get('/api/status', async (req, res) => {
     let locations = 0;
     try { locations = await countMdFiles(locsDir(city)); } catch {}
 
-    let openThreads = 0;
-    try { openThreads = ((await readOpenThreadsRaw(city)).match(/^\| \d+\s*\|/gm) || []).length; } catch {}
+    let openThreads = 0;   // только активные/фоновые (исключая 🟢 закрытые)
+    try {
+      openThreads = (await readOpenThreadsRaw(city)).split('\n')
+        .filter(l => /^\| \d+\s*\|/.test(l) && !/🟢/.test(l)).length;
+    } catch {}
 
     let events = 0;
     try { events = (await aggregateEvents(city)).length; } catch {}

@@ -17,6 +17,11 @@ async function initCitySwitch() {
   try {
     const { cities = [], default: def } = await fetch('/api/cities').then(r => r.json());
     const list = cities.length ? cities : [def || 'paris'];
+    // If the active city isn't available (e.g. fresh template), redirect to the first one.
+    const urlCity = new URLSearchParams(location.search).get('city');
+    if (!urlCity && cities.length && !cities.includes(CITY)) {
+      location.search = 'city=' + encodeURIComponent(cities[0]); return;
+    }
     sel.innerHTML = list.map(c => `<option value="${c}"${c === CITY ? ' selected' : ''}>${c}</option>`).join('');
     sel.onchange = () => { location.search = 'city=' + encodeURIComponent(sel.value); };
   } catch {}
