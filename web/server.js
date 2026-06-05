@@ -694,6 +694,22 @@ app.get('/api/cities', async (req, res) => {
   catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+app.get('/api/chronicles', async (req, res) => {
+  try {
+    const city = reqCity(req);
+    const out = [];
+    let chrs; try { chrs = await fs.readdir(chroniclesDir(city), { withFileTypes: true }); } catch { chrs = []; }
+    for (const ch of chrs) {
+      if (!ch.isDirectory()) continue;
+      let display = ch.name;
+      const raw = await fs.readFile(path.join(chroniclesDir(city), ch.name, 'events.md'), 'utf-8').catch(() => null);
+      if (raw) { const m = raw.replace(/^﻿/, '').match(/^#\s+(.+?)\s+—\s+События/m); if (m) display = m[1].replace(/^[^\p{L}\p{N}]+/u, '').trim(); }
+      out.push({ slug: ch.name, display });
+    }
+    res.json(out);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 app.get('/api/graph', async (req, res) => {
   try {
     const chars = await getAllCharacters(reqCity(req));

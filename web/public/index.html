@@ -293,8 +293,8 @@
               </select>
             </div>
             <div class="form-group">
-              <label class="form-label">Папка модуля *</label>
-              <input class="form-control" id="ls-mod-name" placeholder="январь_2011_опера_крови" list="ls-modules">
+              <label class="form-label">Название модуля *</label>
+              <input class="form-control" id="ls-mod-name" placeholder="Кровь на снегу" list="ls-modules">
               <datalist id="ls-modules"></datalist>
             </div>
             <div class="form-group">
@@ -303,6 +303,23 @@
                 <option>Игровая сессия</option>
                 <option>Внесессионное событие</option>
               </select>
+            </div>
+          </div>
+          <div class="form-row" id="ls-chron-row">
+            <div class="form-group">
+              <label class="form-label">Хроника (для нового модуля)</label>
+              <select class="form-control" id="ls-chron-mode">
+                <option value="existing">Существующая</option>
+                <option value="new">Новая</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Выбор хроники</label>
+              <select class="form-control" id="ls-chron-slug"></select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Название новой хроники</label>
+              <input class="form-control" id="ls-chron-new" placeholder="Зимний Париж 2011">
             </div>
           </div>
         </div>

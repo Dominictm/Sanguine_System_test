@@ -1206,6 +1206,23 @@ async function lsInit() {
     document.getElementById('ls-modules').innerHTML =
       (mods || []).map(m => `<option value="${escHtml(m.name)}">`).join('');
   } catch {}
+  try {
+    const chrs = await fetch('/api/chronicles').then(r => r.json());
+    document.getElementById('ls-chron-slug').innerHTML =
+      (chrs || []).map(c => `<option value="${escHtml(c.slug)}">${escHtml(c.display)}</option>`).join('');
+  } catch {}
+
+  // Chronicle picker is only relevant for a NEW module; toggle new-name vs existing-slug.
+  const syncChron = () => {
+    const modeNew  = document.getElementById('ls-mod-mode').value === 'new';
+    const chronNew = document.getElementById('ls-chron-mode').value === 'new';
+    document.getElementById('ls-chron-row').style.display = modeNew ? '' : 'none';
+    document.getElementById('ls-chron-slug').parentElement.style.display = chronNew ? 'none' : '';
+    document.getElementById('ls-chron-new').parentElement.style.display  = chronNew ? '' : 'none';
+  };
+  document.getElementById('ls-mod-mode').addEventListener('change', () => { syncChron(); lsInvalidate(); });
+  document.getElementById('ls-chron-mode').addEventListener('change', () => { syncChron(); lsInvalidate(); });
+  syncChron();
 
   document.getElementById('ls-scenes').appendChild(lsSceneRow());
   document.getElementById('ls-parts').appendChild(lsPartRow());
@@ -1265,6 +1282,7 @@ function collectLsPayload() {
 
   return {
     module: { mode: $('ls-mod-mode').value, newName: folder, folder, type: $('ls-mod-type').value },
+    chronicle: { mode: $('ls-chron-mode').value, slug: $('ls-chron-slug').value, newName: $('ls-chron-new').value.trim() },
     event: {
       month: $('ls-month').value.trim(),
       dateLabel: $('ls-date').value.trim(),
