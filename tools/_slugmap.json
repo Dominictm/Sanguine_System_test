@@ -1,0 +1,268 @@
+[
+  {
+    "type": "character",
+    "lineage": "vampires",
+    "old_path": "characters/vampires/Ален Дюбуа",
+    "new_path": "cities/paris/characters/vampires/alen_dyubua",
+    "slug": "alen_dyubua",
+    "display_name": "Ален Дюбуа"
+  },
+  {
+    "type": "character",
+    "lineage": "vampires",
+    "old_path": "characters/vampires/Анет",
+    "new_path": "cities/paris/characters/vampires/anet",
+    "slug": "anet",
+    "display_name": "Анет"
+  },
+  {
+    "type": "character",
+    "lineage": "vampires",
+    "old_path": "characters/vampires/Верене де Кюстин",
+    "new_path": "cities/paris/characters/vampires/verene_de_kyustin",
+    "slug": "verene_de_kyustin",
+    "display_name": "Верене де Кюстин"
+  },
+  {
+    "type": "character",
+    "lineage": "vampires",
+    "old_path": "characters/vampires/Ви",
+    "new_path": "cities/paris/characters/vampires/vi",
+    "slug": "vi",
+    "display_name": "Ви"
+  },
+  {
+    "type": "character",
+    "lineage": "vampires",
+    "old_path": "characters/vampires/Ганеш",
+    "new_path": "cities/paris/characters/vampires/ganesh",
+    "slug": "ganesh",
+    "display_name": "Ганеш"
+  },
+  {
+    "type": "character",
+    "lineage": "vampires",
+    "old_path": "characters/vampires/Госпожа Бубенчик",
+    "new_path": "cities/paris/characters/vampires/gospozha_bubenchik",
+    "slug": "gospozha_bubenchik",
+    "display_name": "Госпожа Бубенчик"
+  },
+  {
+    "type": "character",
+    "lineage": "vampires",
+    "old_path": "characters/vampires/Джек",
+    "new_path": "cities/paris/characters/vampires/dzhek",
+    "slug": "dzhek",
+    "display_name": "Джек"
+  },
+  {
+    "type": "character",
+    "lineage": "vampires",
+    "old_path": "characters/vampires/Диана Колсби",
+    "new_path": "cities/paris/characters/vampires/diana_kolsbi",
+    "slug": "diana_kolsbi",
+    "display_name": "Диана Колсби"
+  },
+  {
+    "type": "character",
+    "lineage": "vampires",
+    "old_path": "characters/vampires/Ева",
+    "new_path": "cities/paris/characters/vampires/eva",
+    "slug": "eva",
+    "display_name": "Ева"
+  },
+  {
+    "type": "character",
+    "lineage": "vampires",
+    "old_path": "characters/vampires/Катерина Сфорца",
+    "new_path": "cities/paris/characters/vampires/katerina_sfortsa",
+    "slug": "katerina_sfortsa",
+    "display_name": "Катерина Сфорца"
+  },
+  {
+    "type": "character",
+    "lineage": "vampires",
+    "old_path": "characters/vampires/Кетрин",
+    "new_path": "cities/paris/characters/vampires/ketrin",
+    "slug": "ketrin",
+    "display_name": "Кетрин"
+  },
+  {
+    "type": "character",
+    "lineage": "vampires",
+    "old_path": "characters/vampires/Клер де Кюстин",
+    "new_path": "cities/paris/characters/vampires/kler_de_kyustin",
+    "slug": "kler_de_kyustin",
+    "display_name": "Клер де Кюстин"
+  },
+  {
+    "type": "character",
+    "lineage": "vampires",
+    "old_path": "characters/vampires/Кристофер",
+    "new_path": "cities/paris/characters/vampires/kristofer",
+    "slug": "kristofer",
+    "display_name": "Кристофер"
+  },
+  {
+    "type": "character",
+    "lineage": "vampires",
+    "old_path": "characters/vampires/Мишель Альбер",
+    "new_path": "cities/paris/characters/vampires/mishel_alber",
+    "slug": "mishel_alber",
+    "display_name": "Мишель Альбер"
+  },
+  {
+    "type": "character",
+    "lineage": "vampires",
+    "old_path": "characters/vampires/Мишель Моро",
+    "new_path": "cities/paris/characters/vampires/mishel_moro",
+    "slug": "mishel_moro",
+    "display_name": "Мишель Моро"
+  },
+  {
+    "type": "character",
+    "lineage": "vampires",
+    "old_path": "characters/vampires/Муса Шимадзу",
+    "new_path": "cities/paris/characters/vampires/musa_shimadzu",
+    "slug": "musa_shimadzu",
+    "display_name": "Муса Шимадзу"
+  },
+  {
+    "type": "character",
+    "lineage": "vampires",
+    "old_path": "characters/vampires/Мэл (Тод Джеймсон)",
+    "new_path": "cities/paris/characters/vampires/mel",
+    "slug": "mel",
+    "display_name": "Мэл (Тод Джеймсон) / Аня",
+    "alias_hint": "Тод Джеймсон"
+  },
+  {
+    "type": "character",
+    "lineage": "vampires",
+    "old_path": "characters/vampires/Мэриам Дэвис",
+    "new_path": "cities/paris/characters/vampires/meriam_devis",
+    "slug": "meriam_devis",
+    "display_name": "Мэриам Дэвис"
+  },
+  {
+    "type": "character",
+    "lineage": "vampires",
+    "old_path": "characters/vampires/Пьер-Ив Оде",
+    "new_path": "cities/paris/characters/vampires/per_iv_ode",
+    "slug": "per_iv_ode",
+    "display_name": "Пьер-Ив Оде"
+  },
+  {
+    "type": "character",
+    "lineage": "vampires",
+    "old_path": "characters/vampires/Софи Жонсьер",
+    "new_path": "cities/paris/characters/vampires/sofi_zhonser",
+    "slug": "sofi_zhonser",
+    "display_name": "Софи Жонсьер"
+  },
+  {
+    "type": "character",
+    "lineage": "vampires",
+    "old_path": "characters/vampires/Тома Бошен",
+    "new_path": "cities/paris/characters/vampires/toma_boshen",
+    "slug": "toma_boshen",
+    "display_name": "Тома Бошен (Генри Колсби)"
+  },
+  {
+    "type": "character",
+    "lineage": "vampires",
+    "old_path": "characters/vampires/Филиппа де Россет",
+    "new_path": "cities/paris/characters/vampires/filippa_de_rosset",
+    "slug": "filippa_de_rosset",
+    "display_name": "Филиппа де Россет"
+  },
+  {
+    "type": "character",
+    "lineage": "vampires",
+    "old_path": "characters/vampires/Франсуа Вийон",
+    "new_path": "cities/paris/characters/vampires/fransua_viyon",
+    "slug": "fransua_viyon",
+    "display_name": "Франсуа Вийон"
+  },
+  {
+    "type": "character",
+    "lineage": "vampires",
+    "old_path": "characters/vampires/Эмилия Индра-Ландорг",
+    "new_path": "cities/paris/characters/vampires/emiliya_indra_landorg",
+    "slug": "emiliya_indra_landorg",
+    "display_name": "Эмилия Индра-Ландорг"
+  },
+  {
+    "type": "character",
+    "lineage": "fairies",
+    "old_path": "characters/fairies/Ален",
+    "new_path": "cities/paris/characters/fairies/alen",
+    "slug": "alen",
+    "display_name": "Ален"
+  },
+  {
+    "type": "character",
+    "lineage": "fairies",
+    "old_path": "characters/fairies/Квентин (Арлен Дафф)",
+    "new_path": "cities/paris/characters/fairies/kventin",
+    "slug": "kventin",
+    "display_name": "Квентин / Арлен Дафф",
+    "alias_hint": "Арлен Дафф"
+  },
+  {
+    "type": "character",
+    "lineage": "fairies",
+    "old_path": "characters/fairies/Мэви",
+    "new_path": "cities/paris/characters/fairies/mevi",
+    "slug": "mevi",
+    "display_name": "Мэви"
+  },
+  {
+    "type": "character",
+    "lineage": "fairies",
+    "old_path": "characters/fairies/Ямала",
+    "new_path": "cities/paris/characters/fairies/yamala",
+    "slug": "yamala",
+    "display_name": "Ямала"
+  },
+  {
+    "type": "character",
+    "lineage": "mortals",
+    "old_path": "characters/mortals/Агата",
+    "new_path": "cities/paris/characters/mortals/agata",
+    "slug": "agata",
+    "display_name": "Агата"
+  },
+  {
+    "type": "character",
+    "lineage": "mortals",
+    "old_path": "characters/mortals/Дритан Джика",
+    "new_path": "cities/paris/characters/mortals/dritan_dzhika",
+    "slug": "dritan_dzhika",
+    "display_name": "Дритан Джика"
+  },
+  {
+    "type": "character",
+    "lineage": "mortals",
+    "old_path": "characters/mortals/Люсьен Код",
+    "new_path": "cities/paris/characters/mortals/lyusen_kod",
+    "slug": "lyusen_kod",
+    "display_name": "Люсьен Код"
+  },
+  {
+    "type": "character",
+    "lineage": "mortals",
+    "old_path": "characters/mortals/Руслан Агаев",
+    "new_path": "cities/paris/characters/mortals/ruslan_agaev",
+    "slug": "ruslan_agaev",
+    "display_name": "Руслан Агаев"
+  },
+  {
+    "type": "character",
+    "lineage": "mortals",
+    "old_path": "characters/mortals/Эмбер",
+    "new_path": "cities/paris/characters/mortals/ember",
+    "slug": "ember",
+    "display_name": "Эмбер"
+  }
+]

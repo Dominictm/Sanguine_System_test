@@ -1,0 +1,1027 @@
+[
+  {
+    "old": "characters/vampires/Ален Дюбуа/Ален Дюбуа.jpg",
+    "new": "cities/paris/characters/vampires/alen_dyubua/art/alen_dyubua.jpg",
+    "kind": "character"
+  },
+  {
+    "old": "characters/vampires/Ален Дюбуа/Ален Дюбуа.md",
+    "new": "cities/paris/characters/vampires/alen_dyubua/alen_dyubua.md",
+    "kind": "character"
+  },
+  {
+    "old": "characters/vampires/Анет/portrait.png",
+    "new": "cities/paris/characters/vampires/anet/art/portrait.png",
+    "kind": "character"
+  },
+  {
+    "old": "characters/vampires/Анет/Анет-3.png",
+    "new": "cities/paris/characters/vampires/anet/art/anet_3.png",
+    "kind": "character"
+  },
+  {
+    "old": "characters/vampires/Анет/Анет-4.png",
+    "new": "cities/paris/characters/vampires/anet/art/anet_4.png",
+    "kind": "character"
+  },
+  {
+    "old": "characters/vampires/Анет/Анет.md",
+    "new": "cities/paris/characters/vampires/anet/anet.md",
+    "kind": "character"
+  },
+  {
+    "old": "characters/vampires/Анет/Анет.png",
+    "new": "cities/paris/characters/vampires/anet/art/anet.png",
+    "kind": "character"
+  },
+  {
+    "old": "characters/vampires/Верене де Кюстин/Journal_Верене/2010-11.md",
+    "new": "cities/paris/characters/vampires/verene_de_kyustin/journal/2010-11.md",
+    "kind": "character"
+  },
+  {
+    "old": "characters/vampires/Верене де Кюстин/Верене Де Кюстин-20-3.png",
+    "new": "cities/paris/characters/vampires/verene_de_kyustin/art/verene_de_kyustin_20_3.png",
+    "kind": "character"
+  },
+  {
+    "old": "characters/vampires/Верене де Кюстин/Верене де Кюстин-лист.md",
+    "new": "cities/paris/characters/vampires/verene_de_kyustin/verene_de_kyustin-sheet.md",
+    "kind": "character"
+  },
+  {
+    "old": "characters/vampires/Верене де Кюстин/Верене де Кюстин.md",
+    "new": "cities/paris/characters/vampires/verene_de_kyustin/verene_de_kyustin.md",
+    "kind": "character"
+  },
+  {
+    "old": "characters/vampires/Верене де Кюстин/Верене ТВ.png",
+    "new": "cities/paris/characters/vampires/verene_de_kyustin/art/verene_tv.png",
+    "kind": "character"
+  },
+  {
+    "old": "characters/vampires/Ви/Journal_Ви/2010-12.md",
+    "new": "cities/paris/characters/vampires/vi/journal/2010-12.md",
+    "kind": "character"
+  },
+  {
+    "old": "characters/vampires/Ви/portrait.jpg",
+    "new": "cities/paris/characters/vampires/vi/art/portrait.jpg",
+    "kind": "character"
+  },
+  {
+    "old": "characters/vampires/Ви/Ви.md",
+    "new": "cities/paris/characters/vampires/vi/vi.md",
+    "kind": "character"
+  },
+  {
+    "old": "characters/vampires/Ганеш/Ганееш-2.jpg",
+    "new": "cities/paris/characters/vampires/ganesh/art/ganeesh_2.jpg",
+    "kind": "character"
+  },
+  {
+    "old": "characters/vampires/Ганеш/Ганееш.jpg",
+    "new": "cities/paris/characters/vampires/ganesh/art/ganeesh.jpg",
+    "kind": "character"
+  },
+  {
+    "old": "characters/vampires/Ганеш/Ганеш.md",
+    "new": "cities/paris/characters/vampires/ganesh/ganesh.md",
+    "kind": "character"
+  },
+  {
+    "old": "characters/vampires/Госпожа Бубенчик/Госпожа Бубенчик.md",
+    "new": "cities/paris/characters/vampires/gospozha_bubenchik/gospozha_bubenchik.md",
+    "kind": "character"
+  },
+  {
+    "old": "characters/vampires/Госпожа Бубенчик/Госпожа- Бубеньчик-2.png",
+    "new": "cities/paris/characters/vampires/gospozha_bubenchik/art/gospozha_bubenchik_2.png",
+    "kind": "character"
+  },
+  {
+    "old": "characters/vampires/Джек/Джек.md",
+    "new": "cities/paris/characters/vampires/dzhek/dzhek.md",
+    "kind": "character"
+  },
+  {
+    "old": "characters/vampires/Джек/Джек.png",
+    "new": "cities/paris/characters/vampires/dzhek/art/dzhek.png",
+    "kind": "character"
+  },
+  {
+    "old": "characters/vampires/Диана Колсби/Диана Колдсби.jpg",
+    "new": "cities/paris/characters/vampires/diana_kolsbi/art/diana_koldsbi.jpg",
+    "kind": "character"
+  },
+  {
+    "old": "characters/vampires/Диана Колсби/Диана Колсби.md",
+    "new": "cities/paris/characters/vampires/diana_kolsbi/diana_kolsbi.md",
+    "kind": "character"
+  },
+  {
+    "old": "characters/vampires/Ева/Ева-4.png",
+    "new": "cities/paris/characters/vampires/eva/art/eva_4.png",
+    "kind": "character"
+  },
+  {
+    "old": "characters/vampires/Ева/Ева.md",
+    "new": "cities/paris/characters/vampires/eva/eva.md",
+    "kind": "character"
+  },
+  {
+    "old": "characters/vampires/Ева/ева1.png",
+    "new": "cities/paris/characters/vampires/eva/art/eva1.png",
+    "kind": "character"
+  },
+  {
+    "old": "characters/vampires/Ева/ева2.png",
+    "new": "cities/paris/characters/vampires/eva/art/eva2.png",
+    "kind": "character"
+  },
+  {
+    "old": "characters/vampires/Ева/ева3-1.png",
+    "new": "cities/paris/characters/vampires/eva/art/eva3_1.png",
+    "kind": "character"
+  },
+  {
+    "old": "characters/vampires/Ева/ева3-2.png",
+    "new": "cities/paris/characters/vampires/eva/art/eva3_2.png",
+    "kind": "character"
+  },
+  {
+    "old": "characters/vampires/Катерина Сфорца/Катерина Сфорца.md",
+    "new": "cities/paris/characters/vampires/katerina_sfortsa/katerina_sfortsa.md",
+    "kind": "character"
+  },
+  {
+    "old": "characters/vampires/Катерина Сфорца/Катерина Сфорца.png",
+    "new": "cities/paris/characters/vampires/katerina_sfortsa/art/katerina_sfortsa.png",
+    "kind": "character"
+  },
+  {
+    "old": "characters/vampires/Кетрин/Кетрин-3.png",
+    "new": "cities/paris/characters/vampires/ketrin/art/ketrin_3.png",
+    "kind": "character"
+  },
+  {
+    "old": "characters/vampires/Кетрин/Кетрин-4.png",
+    "new": "cities/paris/characters/vampires/ketrin/art/ketrin_4.png",
+    "kind": "character"
+  },
+  {
+    "old": "characters/vampires/Кетрин/Кетрин.md",
+    "new": "cities/paris/characters/vampires/ketrin/ketrin.md",
+    "kind": "character"
+  },
+  {
+    "old": "characters/vampires/Кетрин/Кетрин.png",
+    "new": "cities/paris/characters/vampires/ketrin/art/ketrin.png",
+    "kind": "character"
+  },
+  {
+    "old": "characters/vampires/Клер де Кюстин/Клер де Кюстин.md",
+    "new": "cities/paris/characters/vampires/kler_de_kyustin/kler_de_kyustin.md",
+    "kind": "character"
+  },
+  {
+    "old": "characters/vampires/Клер де Кюстин/Клер-1.png",
+    "new": "cities/paris/characters/vampires/kler_de_kyustin/art/kler_1.png",
+    "kind": "character"
+  },
+  {
+    "old": "characters/vampires/Клер де Кюстин/Клер-2.png",
+    "new": "cities/paris/characters/vampires/kler_de_kyustin/art/kler_2.png",
+    "kind": "character"
+  },
+  {
+    "old": "characters/vampires/Кристофер/Кристофер-1.png",
+    "new": "cities/paris/characters/vampires/kristofer/art/kristofer_1.png",
+    "kind": "character"
+  },
+  {
+    "old": "characters/vampires/Кристофер/Кристофер-2.png",
+    "new": "cities/paris/characters/vampires/kristofer/art/kristofer_2.png",
+    "kind": "character"
+  },
+  {
+    "old": "characters/vampires/Кристофер/Кристофер.md",
+    "new": "cities/paris/characters/vampires/kristofer/kristofer.md",
+    "kind": "character"
+  },
+  {
+    "old": "characters/vampires/Мишель Альбер/Мишель Альбер.jpg",
+    "new": "cities/paris/characters/vampires/mishel_alber/art/mishel_alber.jpg",
+    "kind": "character"
+  },
+  {
+    "old": "characters/vampires/Мишель Альбер/Мишель Альбер.md",
+    "new": "cities/paris/characters/vampires/mishel_alber/mishel_alber.md",
+    "kind": "character"
+  },
+  {
+    "old": "characters/vampires/Мишель Моро/Journal_Мишель_Моро/2010-11.md",
+    "new": "cities/paris/characters/vampires/mishel_moro/journal/2010-11.md",
+    "kind": "character"
+  },
+  {
+    "old": "characters/vampires/Мишель Моро/Мишель Моро-2.png",
+    "new": "cities/paris/characters/vampires/mishel_moro/art/mishel_moro_2.png",
+    "kind": "character"
+  },
+  {
+    "old": "characters/vampires/Мишель Моро/МИШЕЛЬ МОРО.jpg",
+    "new": "cities/paris/characters/vampires/mishel_moro/art/mishel_moro.jpg",
+    "kind": "character"
+  },
+  {
+    "old": "characters/vampires/Мишель Моро/Мишель Моро.md",
+    "new": "cities/paris/characters/vampires/mishel_moro/mishel_moro.md",
+    "kind": "character"
+  },
+  {
+    "old": "characters/vampires/Муса Шимадзу/Муса Шимадзу 3.png",
+    "new": "cities/paris/characters/vampires/musa_shimadzu/art/musa_shimadzu_3.png",
+    "kind": "character"
+  },
+  {
+    "old": "characters/vampires/Муса Шимадзу/Муса Шимадзу.md",
+    "new": "cities/paris/characters/vampires/musa_shimadzu/musa_shimadzu.md",
+    "kind": "character"
+  },
+  {
+    "old": "characters/vampires/Мэл (Тод Джеймсон)/Journal_Мэл/2010-11.md",
+    "new": "cities/paris/characters/vampires/mel/journal/2010-11.md",
+    "kind": "character"
+  },
+  {
+    "old": "characters/vampires/Мэл (Тод Джеймсон)/Мэл (Тод Джеймсон).md",
+    "new": "cities/paris/characters/vampires/mel/mel.md",
+    "kind": "character"
+  },
+  {
+    "old": "characters/vampires/Мэл (Тод Джеймсон)/Мэл-2.png",
+    "new": "cities/paris/characters/vampires/mel/art/mel_2.png",
+    "kind": "character"
+  },
+  {
+    "old": "characters/vampires/Мэл (Тод Джеймсон)/Мэл-Аня.png",
+    "new": "cities/paris/characters/vampires/mel/art/mel_anya.png",
+    "kind": "character"
+  },
+  {
+    "old": "characters/vampires/Мэриам Дэвис/Мэриам Дэвис.md",
+    "new": "cities/paris/characters/vampires/meriam_devis/meriam_devis.md",
+    "kind": "character"
+  },
+  {
+    "old": "characters/vampires/Мэриам Дэвис/Мэриам Дэвис.png",
+    "new": "cities/paris/characters/vampires/meriam_devis/art/meriam_devis.png",
+    "kind": "character"
+  },
+  {
+    "old": "characters/vampires/Мэриам Дэвис/Мэриам Дэвис1.jpg",
+    "new": "cities/paris/characters/vampires/meriam_devis/art/meriam_devis1.jpg",
+    "kind": "character"
+  },
+  {
+    "old": "characters/vampires/Мэриам Дэвис/Мэриам Дэвис2.jpg",
+    "new": "cities/paris/characters/vampires/meriam_devis/art/meriam_devis2.jpg",
+    "kind": "character"
+  },
+  {
+    "old": "characters/vampires/Пьер-Ив Оде/Пьер-Ив Оде-2.png",
+    "new": "cities/paris/characters/vampires/per_iv_ode/art/per_iv_ode_2.png",
+    "kind": "character"
+  },
+  {
+    "old": "characters/vampires/Пьер-Ив Оде/Пьер-Ив Оде.md",
+    "new": "cities/paris/characters/vampires/per_iv_ode/per_iv_ode.md",
+    "kind": "character"
+  },
+  {
+    "old": "characters/vampires/Софи Жонсьер/Софи Жонсьер-2.png",
+    "new": "cities/paris/characters/vampires/sofi_zhonser/art/sofi_zhonser_2.png",
+    "kind": "character"
+  },
+  {
+    "old": "characters/vampires/Софи Жонсьер/Софи Жонсьер.md",
+    "new": "cities/paris/characters/vampires/sofi_zhonser/sofi_zhonser.md",
+    "kind": "character"
+  },
+  {
+    "old": "characters/vampires/Тома Бошен/ТОМА БОШЕН.jpg",
+    "new": "cities/paris/characters/vampires/toma_boshen/art/toma_boshen.jpg",
+    "kind": "character"
+  },
+  {
+    "old": "characters/vampires/Тома Бошен/Тома Бошен.md",
+    "new": "cities/paris/characters/vampires/toma_boshen/toma_boshen.md",
+    "kind": "character"
+  },
+  {
+    "old": "characters/vampires/Филиппа де Россет/Филиппа де Россет-3.png",
+    "new": "cities/paris/characters/vampires/filippa_de_rosset/art/filippa_de_rosset_3.png",
+    "kind": "character"
+  },
+  {
+    "old": "characters/vampires/Филиппа де Россет/Филиппа де Россет.md",
+    "new": "cities/paris/characters/vampires/filippa_de_rosset/filippa_de_rosset.md",
+    "kind": "character"
+  },
+  {
+    "old": "characters/vampires/Филиппа де Россет/Филиппа де Россет.png",
+    "new": "cities/paris/characters/vampires/filippa_de_rosset/art/filippa_de_rosset.png",
+    "kind": "character"
+  },
+  {
+    "old": "characters/vampires/Франсуа Вийон/Франсуа Вийон.md",
+    "new": "cities/paris/characters/vampires/fransua_viyon/fransua_viyon.md",
+    "kind": "character"
+  },
+  {
+    "old": "characters/vampires/Франсуа Вийон/ФРАНСУА ВИЙОН.png",
+    "new": "cities/paris/characters/vampires/fransua_viyon/art/fransua_viyon.png",
+    "kind": "character"
+  },
+  {
+    "old": "characters/vampires/Эмилия Индра-Ландорг/portrait.png",
+    "new": "cities/paris/characters/vampires/emiliya_indra_landorg/art/portrait.png",
+    "kind": "character"
+  },
+  {
+    "old": "characters/vampires/Эмилия Индра-Ландорг/Эмилия Индра-Ландорг.md",
+    "new": "cities/paris/characters/vampires/emiliya_indra_landorg/emiliya_indra_landorg.md",
+    "kind": "character"
+  },
+  {
+    "old": "characters/fairies/Ален/Journal_Ален/2010-11.md",
+    "new": "cities/paris/characters/fairies/alen/journal/2010-11.md",
+    "kind": "character"
+  },
+  {
+    "old": "characters/fairies/Ален/Ален.md",
+    "new": "cities/paris/characters/fairies/alen/alen.md",
+    "kind": "character"
+  },
+  {
+    "old": "characters/fairies/Квентин (Арлен Дафф)/Journal_Квентин/2010-11.md",
+    "new": "cities/paris/characters/fairies/kventin/journal/2010-11.md",
+    "kind": "character"
+  },
+  {
+    "old": "characters/fairies/Квентин (Арлен Дафф)/Journal_Квентин/retrospective.md",
+    "new": "cities/paris/characters/fairies/kventin/journal/retrospective.md",
+    "kind": "character"
+  },
+  {
+    "old": "characters/fairies/Квентин (Арлен Дафф)/Квентин (Арлен Дафф).md",
+    "new": "cities/paris/characters/fairies/kventin/kventin.md",
+    "kind": "character"
+  },
+  {
+    "old": "characters/fairies/Квентин (Арлен Дафф)/Квентин.jpg",
+    "new": "cities/paris/characters/fairies/kventin/art/kventin.jpg",
+    "kind": "character"
+  },
+  {
+    "old": "characters/fairies/Мэви/Journal_Мэви/retrospective.md",
+    "new": "cities/paris/characters/fairies/mevi/journal/retrospective.md",
+    "kind": "character"
+  },
+  {
+    "old": "characters/fairies/Мэви/Мэви.md",
+    "new": "cities/paris/characters/fairies/mevi/mevi.md",
+    "kind": "character"
+  },
+  {
+    "old": "characters/fairies/Ямала/Journal_Ямала/2010-11.md",
+    "new": "cities/paris/characters/fairies/yamala/journal/2010-11.md",
+    "kind": "character"
+  },
+  {
+    "old": "characters/fairies/Ямала/Journal_Ямала/retrospective.md",
+    "new": "cities/paris/characters/fairies/yamala/journal/retrospective.md",
+    "kind": "character"
+  },
+  {
+    "old": "characters/fairies/Ямала/Journal_Ямала/retrospective_doc.md",
+    "new": "cities/paris/characters/fairies/yamala/journal/retrospective_doc.md",
+    "kind": "character"
+  },
+  {
+    "old": "characters/fairies/Ямала/portrait.png",
+    "new": "cities/paris/characters/fairies/yamala/art/portrait.png",
+    "kind": "character"
+  },
+  {
+    "old": "characters/fairies/Ямала/Фея-Ямала-2.jpg",
+    "new": "cities/paris/characters/fairies/yamala/art/feya_yamala_2.jpg",
+    "kind": "character"
+  },
+  {
+    "old": "characters/fairies/Ямала/Фея-Ямала.jpg",
+    "new": "cities/paris/characters/fairies/yamala/art/feya_yamala.jpg",
+    "kind": "character"
+  },
+  {
+    "old": "characters/fairies/Ямала/Ямала на улице.png",
+    "new": "cities/paris/characters/fairies/yamala/art/yamala_na_ulitse.png",
+    "kind": "character"
+  },
+  {
+    "old": "characters/fairies/Ямала/Ямала-Фригольд.png",
+    "new": "cities/paris/characters/fairies/yamala/art/yamala_frigold.png",
+    "kind": "character"
+  },
+  {
+    "old": "characters/fairies/Ямала/Ямала.md",
+    "new": "cities/paris/characters/fairies/yamala/yamala.md",
+    "kind": "character"
+  },
+  {
+    "old": "characters/mortals/Агата/Агата-2.png",
+    "new": "cities/paris/characters/mortals/agata/art/agata_2.png",
+    "kind": "character"
+  },
+  {
+    "old": "characters/mortals/Агата/Агата-3.png",
+    "new": "cities/paris/characters/mortals/agata/art/agata_3.png",
+    "kind": "character"
+  },
+  {
+    "old": "characters/mortals/Агата/Агата.jpg",
+    "new": "cities/paris/characters/mortals/agata/art/agata.jpg",
+    "kind": "character"
+  },
+  {
+    "old": "characters/mortals/Агата/Агата.md",
+    "new": "cities/paris/characters/mortals/agata/agata.md",
+    "kind": "character"
+  },
+  {
+    "old": "characters/mortals/Дритан Джика/Дритан Джика.md",
+    "new": "cities/paris/characters/mortals/dritan_dzhika/dritan_dzhika.md",
+    "kind": "character"
+  },
+  {
+    "old": "characters/mortals/Дритан Джика/Дритан Джика.png",
+    "new": "cities/paris/characters/mortals/dritan_dzhika/art/dritan_dzhika.png",
+    "kind": "character"
+  },
+  {
+    "old": "characters/mortals/Люсьен Код/Journal_Люсьен/retrospective.md",
+    "new": "cities/paris/characters/mortals/lyusen_kod/journal/retrospective.md",
+    "kind": "character"
+  },
+  {
+    "old": "characters/mortals/Люсьен Код/Люсьен Код.md",
+    "new": "cities/paris/characters/mortals/lyusen_kod/lyusen_kod.md",
+    "kind": "character"
+  },
+  {
+    "old": "characters/mortals/Руслан Агаев/Руслан Агаев.md",
+    "new": "cities/paris/characters/mortals/ruslan_agaev/ruslan_agaev.md",
+    "kind": "character"
+  },
+  {
+    "old": "characters/mortals/Руслан Агаев/Руслан Агаев.png",
+    "new": "cities/paris/characters/mortals/ruslan_agaev/art/ruslan_agaev.png",
+    "kind": "character"
+  },
+  {
+    "old": "characters/mortals/Эмбер/Эмбер.jpg",
+    "new": "cities/paris/characters/mortals/ember/art/ember.jpg",
+    "kind": "character"
+  },
+  {
+    "old": "characters/mortals/Эмбер/Эмбер.md",
+    "new": "cities/paris/characters/mortals/ember/ember.md",
+    "kind": "character"
+  },
+  {
+    "old": "modules/апрель_2010_фригольд/фригольд.md",
+    "new": "cities/paris/chronicles/parizh_2010_nachalo_goda/modules/frigold/frigold.md",
+    "kind": "module"
+  },
+  {
+    "old": "modules/декабрь_2010_цирк_цирк_цирк/Гиль-лист.md",
+    "new": "cities/paris/chronicles/zimniy_parizh_2010/modules/tsirk_tsirk_tsirk/gil-sheet.md",
+    "kind": "module"
+  },
+  {
+    "old": "modules/декабрь_2010_цирк_цирк_цирк/нпс.md",
+    "new": "cities/paris/chronicles/zimniy_parizh_2010/modules/tsirk_tsirk_tsirk/npc.md",
+    "kind": "module"
+  },
+  {
+    "old": "modules/декабрь_2010_цирк_цирк_цирк/Рено-лист.md",
+    "new": "cities/paris/chronicles/zimniy_parizh_2010/modules/tsirk_tsirk_tsirk/reno-sheet.md",
+    "kind": "module"
+  },
+  {
+    "old": "modules/декабрь_2010_цирк_цирк_цирк/цирк_цирк_цирк.md",
+    "new": "cities/paris/chronicles/zimniy_parizh_2010/modules/tsirk_tsirk_tsirk/tsirk_tsirk_tsirk.md",
+    "kind": "module"
+  },
+  {
+    "old": "modules/лос-анджелес_рок-звезда-должна-умереть/нпс.md",
+    "new": "cities/los_angeles/chronicles/los_angeles_2011/modules/rok_zvezda_dolzhna_umeret/npc.md",
+    "kind": "module"
+  },
+  {
+    "old": "modules/лос-анджелес_рок-звезда-должна-умереть/рок-звезда-должна-умереть.md",
+    "new": "cities/los_angeles/chronicles/los_angeles_2011/modules/rok_zvezda_dolzhna_umeret/rok_zvezda_dolzhna_umeret.md",
+    "kind": "module"
+  },
+  {
+    "old": "modules/лос-анджелес_рок-звезда-должна-умереть/сценарий.md",
+    "new": "cities/los_angeles/chronicles/los_angeles_2011/modules/rok_zvezda_dolzhna_umeret/scenario.md",
+    "kind": "module"
+  },
+  {
+    "old": "modules/март_2010_la_defence/la_defence.md",
+    "new": "cities/paris/chronicles/parizh_2010_nachalo_goda/modules/la_defence/la_defence.md",
+    "kind": "module"
+  },
+  {
+    "old": "modules/март_2010_la_defence/нпс.md",
+    "new": "cities/paris/chronicles/parizh_2010_nachalo_goda/modules/la_defence/npc.md",
+    "kind": "module"
+  },
+  {
+    "old": "modules/ноябрь_2010_кошки_и_мышки/кошки_и_мышки.md",
+    "new": "cities/paris/chronicles/zimniy_parizh_2010/modules/koshki_i_myshki/koshki_i_myshki.md",
+    "kind": "module"
+  },
+  {
+    "old": "modules/ноябрь_2010_кошки_и_мышки/нпс.md",
+    "new": "cities/paris/chronicles/zimniy_parizh_2010/modules/koshki_i_myshki/npc.md",
+    "kind": "module"
+  },
+  {
+    "old": "modules/ноябрь_2010_кошки_и_мышки/финал.md",
+    "new": "cities/paris/chronicles/zimniy_parizh_2010/modules/koshki_i_myshki/finale.md",
+    "kind": "module"
+  },
+  {
+    "old": "modules/ноябрь_2010_приглашение_домой/нпс.md",
+    "new": "cities/paris/chronicles/zimniy_parizh_2010/modules/priglashenie_domoy/npc.md",
+    "kind": "module"
+  },
+  {
+    "old": "modules/ноябрь_2010_приглашение_домой/приглашение_домой.md",
+    "new": "cities/paris/chronicles/zimniy_parizh_2010/modules/priglashenie_domoy/priglashenie_domoy.md",
+    "kind": "module"
+  },
+  {
+    "old": "modules/январь_2011_деньги_не_проблема/2 зуба/2 зуба-лист.md",
+    "new": "cities/paris/chronicles/sluchaynye_gosti/modules/dengi_ne_problema/2_zuba/2_zuba-sheet.md",
+    "kind": "module"
+  },
+  {
+    "old": "modules/январь_2011_деньги_не_проблема/2 зуба/2 зуба.md",
+    "new": "cities/paris/chronicles/sluchaynye_gosti/modules/dengi_ne_problema/2_zuba/2_zuba.md",
+    "kind": "module"
+  },
+  {
+    "old": "modules/январь_2011_деньги_не_проблема/2 зуба/2 зуба.png",
+    "new": "cities/paris/chronicles/sluchaynye_gosti/modules/dengi_ne_problema/2_zuba/2_zuba.png",
+    "kind": "module"
+  },
+  {
+    "old": "modules/январь_2011_деньги_не_проблема/деньги_не_проблема.md",
+    "new": "cities/paris/chronicles/sluchaynye_gosti/modules/dengi_ne_problema/dengi_ne_problema.md",
+    "kind": "module"
+  },
+  {
+    "old": "modules/январь_2011_деньги_не_проблема/нпс.md",
+    "new": "cities/paris/chronicles/sluchaynye_gosti/modules/dengi_ne_problema/npc.md",
+    "kind": "module"
+  },
+  {
+    "old": "modules/январь_2011_деньги_не_проблема/Педаль/Педаль-лист.md",
+    "new": "cities/paris/chronicles/sluchaynye_gosti/modules/dengi_ne_problema/pedal/pedal-sheet.md",
+    "kind": "module"
+  },
+  {
+    "old": "modules/январь_2011_деньги_не_проблема/Педаль/Педаль.md",
+    "new": "cities/paris/chronicles/sluchaynye_gosti/modules/dengi_ne_problema/pedal/pedal.md",
+    "kind": "module"
+  },
+  {
+    "old": "modules/январь_2011_деньги_не_проблема/Педаль/Педаль.png",
+    "new": "cities/paris/chronicles/sluchaynye_gosti/modules/dengi_ne_problema/pedal/pedal.png",
+    "kind": "module"
+  },
+  {
+    "old": "modules/январь_2011_деньги_не_проблема/постер.png",
+    "new": "cities/paris/chronicles/sluchaynye_gosti/modules/dengi_ne_problema/poster.png",
+    "kind": "module"
+  },
+  {
+    "old": "modules/январь_2011_деньги_не_проблема/Промокашка/Промокашка-лист.md",
+    "new": "cities/paris/chronicles/sluchaynye_gosti/modules/dengi_ne_problema/promokashka/promokashka-sheet.md",
+    "kind": "module"
+  },
+  {
+    "old": "modules/январь_2011_деньги_не_проблема/Промокашка/Промокашка.md",
+    "new": "cities/paris/chronicles/sluchaynye_gosti/modules/dengi_ne_problema/promokashka/promokashka.md",
+    "kind": "module"
+  },
+  {
+    "old": "modules/январь_2011_деньги_не_проблема/Промокашка/Промокашка.png",
+    "new": "cities/paris/chronicles/sluchaynye_gosti/modules/dengi_ne_problema/promokashka/promokashka.png",
+    "kind": "module"
+  },
+  {
+    "old": "locations/Chasse & Nature» — Рю де Вожирар.png",
+    "new": "cities/paris/locations/chasse_nature_ryu_de_vozhirar.png",
+    "kind": "location"
+  },
+  {
+    "old": "locations/Антрепо_10/Гар-дю-Нор_10/Гар-дю-Нор_01.jpg",
+    "new": "cities/paris/locations/district_10/antrepo/gar_dyu_nor/gar_dyu_nor_01.jpg",
+    "kind": "location"
+  },
+  {
+    "old": "locations/Антрепо_10/Гар-дю-Нор_10/Гар-дю-Нор_10.md",
+    "new": "cities/paris/locations/district_10/antrepo/gar_dyu_nor/gar_dyu_nor.md",
+    "kind": "location"
+  },
+  {
+    "old": "locations/Бастилия_11/Фобур-Сент-Антуан_11/подвальный этаж  временный схрон.png",
+    "new": "cities/paris/locations/district_11/bastiliya/fobur_sent_antuan/podvalnyy_etazh_vremennyy_shron.png",
+    "kind": "location"
+  },
+  {
+    "old": "locations/Бастилия_11/Фобур-Сент-Антуан_11/Фобур-Сент-Антуан_11.md",
+    "new": "cities/paris/locations/district_11/bastiliya/fobur_sent_antuan/fobur_sent_antuan.md",
+    "kind": "location"
+  },
+  {
+    "old": "locations/Венсен_12/Цирк_Венсен_12/Цирк.png",
+    "new": "cities/paris/locations/district_12/vensen/tsirk_vensen/tsirk.png",
+    "kind": "location"
+  },
+  {
+    "old": "locations/Венсен_12/Цирк_Венсен_12/Цирк_Венсен_12.md",
+    "new": "cities/paris/locations/district_12/vensen/tsirk_vensen/tsirk_vensen.md",
+    "kind": "location"
+  },
+  {
+    "old": "locations/Виллет_19/Склад_Канал_Юрк_19/Склад у канала Юрк — Набережная Марны.png",
+    "new": "cities/paris/locations/district_19/villet/sklad_kanal_yurk/sklad_u_kanala_yurk_naberezhnaya_marny.png",
+    "kind": "location"
+  },
+  {
+    "old": "locations/Виллет_19/Склад_Канал_Юрк_19/Склад_Канал_Юрк_19.md",
+    "new": "cities/paris/locations/district_19/villet/sklad_kanal_yurk/sklad_kanal_yurk.md",
+    "kind": "location"
+  },
+  {
+    "old": "locations/Вожирар_15/Шасс_э_Натюр_15/Шасс_э_Натюр_15.md",
+    "new": "cities/paris/locations/district_15/vozhirar/shass_e_natyur/shass_e_natyur.md",
+    "kind": "location"
+  },
+  {
+    "old": "locations/Вожирар_15/Шасс_э_Натюр_15/Шасс_э_Натюр_15.png",
+    "new": "cities/paris/locations/district_15/vozhirar/shass_e_natyur/shass_e_natyur_15.png",
+    "kind": "location"
+  },
+  {
+    "old": "locations/Ла-Дефанс_BD/Ла-Дефанс_BD/Ла-Дефанс_01.jpg",
+    "new": "cities/paris/locations/la_defans_bd/la_defans_bd/la_defans_01.jpg",
+    "kind": "location"
+  },
+  {
+    "old": "locations/Ла-Дефанс_BD/Ла-Дефанс_BD/Ла-Дефанс_BD.md",
+    "new": "cities/paris/locations/la_defans_bd/la_defans_bd/la_defans_bd.md",
+    "kind": "location"
+  },
+  {
+    "old": "locations/Лувр_01/Иль-де-ла-Сите_01/Иль-де-ла-Сите_01.md",
+    "new": "cities/paris/locations/district_01/luvr/il_de_la_site/il_de_la_site.md",
+    "kind": "location"
+  },
+  {
+    "old": "locations/Лувр_01/Иль-де-ла-Сите_01/Иль-де-ла-Сите_01.png",
+    "new": "cities/paris/locations/district_01/luvr/il_de_la_site/il_de_la_site_01.png",
+    "kind": "location"
+  },
+  {
+    "old": "locations/Лувр_01/Лувр_Закрытые_Галереи_01/Лувр_01.png",
+    "new": "cities/paris/locations/district_01/luvr/luvr_zakrytye_galerei/luvr_01.png",
+    "kind": "location"
+  },
+  {
+    "old": "locations/Лувр_01/Лувр_Закрытые_Галереи_01/Лувр_02.webp",
+    "new": "cities/paris/locations/district_01/luvr/luvr_zakrytye_galerei/luvr_02.webp",
+    "kind": "location"
+  },
+  {
+    "old": "locations/Лувр_01/Лувр_Закрытые_Галереи_01/Лувр_Закрытые_Галереи_01.md",
+    "new": "cities/paris/locations/district_01/luvr/luvr_zakrytye_galerei/luvr_zakrytye_galerei.md",
+    "kind": "location"
+  },
+  {
+    "old": "locations/Лувр_01/Метро_Шатле-Ле-Аль_01/Метро_Шатле-Ле-Аль_01.md",
+    "new": "cities/paris/locations/district_01/luvr/metro_shatle_le_al/metro_shatle_le_al.md",
+    "kind": "location"
+  },
+  {
+    "old": "locations/Лувр_01/Метро_Шатле-Ле-Аль_01/Метро_Шатле_01.png",
+    "new": "cities/paris/locations/district_01/luvr/metro_shatle_le_al/metro_shatle_01.png",
+    "kind": "location"
+  },
+  {
+    "old": "locations/Менильмонтан_20/Пер-Лашез_20/Пер-Лашез_01.jpg",
+    "new": "cities/paris/locations/district_20/menilmontan/per_lashez/per_lashez_01.jpg",
+    "kind": "location"
+  },
+  {
+    "old": "locations/Менильмонтан_20/Пер-Лашез_20/Пер-Лашез_20-2.png",
+    "new": "cities/paris/locations/district_20/menilmontan/per_lashez/per_lashez_20_2.png",
+    "kind": "location"
+  },
+  {
+    "old": "locations/Менильмонтан_20/Пер-Лашез_20/Пер-Лашез_20.md",
+    "new": "cities/paris/locations/district_20/menilmontan/per_lashez/per_lashez.md",
+    "kind": "location"
+  },
+  {
+    "old": "locations/Метро_Подземный/Станция-Призрак_Метро/Станция-Призрак_01.jpg",
+    "new": "cities/paris/locations/metro_podzemnyy/stantsiya_prizrak_metro/stantsiya_prizrak_01.jpg",
+    "kind": "location"
+  },
+  {
+    "old": "locations/Метро_Подземный/Станция-Призрак_Метро/Станция-Призрак_Метро.md",
+    "new": "cities/paris/locations/metro_podzemnyy/stantsiya_prizrak_metro/stantsiya_prizrak_metro.md",
+    "kind": "location"
+  },
+  {
+    "old": "locations/Монмартр_18/Барбес_Гут-д-Ор_18/Барбес_01.png",
+    "new": "cities/paris/locations/district_18/monmartr/barbes_gut_d_or/barbes_01.png",
+    "kind": "location"
+  },
+  {
+    "old": "locations/Монмартр_18/Барбес_Гут-д-Ор_18/Барбес_Гут-д-Ор_18.md",
+    "new": "cities/paris/locations/district_18/monmartr/barbes_gut_d_or/barbes_gut_d_or.md",
+    "kind": "location"
+  },
+  {
+    "old": "locations/Монмартр_18/Пигаль_18/Пигаль_01.jpg",
+    "new": "cities/paris/locations/district_18/monmartr/pigal/pigal_01.jpg",
+    "kind": "location"
+  },
+  {
+    "old": "locations/Монмартр_18/Пигаль_18/Пигаль_18.md",
+    "new": "cities/paris/locations/district_18/monmartr/pigal/pigal.md",
+    "kind": "location"
+  },
+  {
+    "old": "locations/Монмартр_18/Порт-де-ла-Шапель_18/Порт-де-ла-Шапель-1.png",
+    "new": "cities/paris/locations/district_18/monmartr/port_de_la_shapel/port_de_la_shapel_1.png",
+    "kind": "location"
+  },
+  {
+    "old": "locations/Монмартр_18/Порт-де-ла-Шапель_18/Порт-де-ла-Шапель-2.png",
+    "new": "cities/paris/locations/district_18/monmartr/port_de_la_shapel/port_de_la_shapel_2.png",
+    "kind": "location"
+  },
+  {
+    "old": "locations/Монмартр_18/Порт-де-ла-Шапель_18/Порт-де-ла-Шапель_18.md",
+    "new": "cities/paris/locations/district_18/monmartr/port_de_la_shapel/port_de_la_shapel.md",
+    "kind": "location"
+  },
+  {
+    "old": "locations/Монпарнас_14/Катакомбы_14/Катакомбы_01.jpg",
+    "new": "cities/paris/locations/district_14/monparnas/katakomby/katakomby_01.jpg",
+    "kind": "location"
+  },
+  {
+    "old": "locations/Монпарнас_14/Катакомбы_14/Катакомбы_14.md",
+    "new": "cities/paris/locations/district_14/monparnas/katakomby/katakomby.md",
+    "kind": "location"
+  },
+  {
+    "old": "locations/Опера_09/Опера_Гарнье_09/Опера_Гарнье_01.jpg",
+    "new": "cities/paris/locations/district_09/opera/opera_garne/opera_garne_01.jpg",
+    "kind": "location"
+  },
+  {
+    "old": "locations/Опера_09/Опера_Гарнье_09/Опера_Гарнье_02.png",
+    "new": "cities/paris/locations/district_09/opera/opera_garne/opera_garne_02.png",
+    "kind": "location"
+  },
+  {
+    "old": "locations/Опера_09/Опера_Гарнье_09/Опера_Гарнье_09.md",
+    "new": "cities/paris/locations/district_09/opera/opera_garne/opera_garne.md",
+    "kind": "location"
+  },
+  {
+    "old": "locations/Орли_Юг/Аэропорт Орли Юг .md",
+    "new": "cities/paris/locations/orli_yug/aeroport_orli_yug.md",
+    "kind": "location"
+  },
+  {
+    "old": "locations/Орли_Юг/Аэропорт.png",
+    "new": "cities/paris/locations/orli_yug/aeroport.png",
+    "kind": "location"
+  },
+  {
+    "old": "locations/Орли_Юг/Парковка.png",
+    "new": "cities/paris/locations/orli_yug/parkovka.png",
+    "kind": "location"
+  },
+  {
+    "old": "locations/Орли_Юг/Терминал Аэропорт.png",
+    "new": "cities/paris/locations/orli_yug/terminal_aeroport.png",
+    "kind": "location"
+  },
+  {
+    "old": "locations/Орли_Юг/Трасса A106 Дорога к аэропорту.png",
+    "new": "cities/paris/locations/orli_yug/trassa_a106_doroga_k_aeroportu.png",
+    "kind": "location"
+  },
+  {
+    "old": "locations/Осман_08/Кредит_Мютюэль_08/Кредит_Мютюэль_08.md",
+    "new": "cities/paris/locations/district_08/osman/kredit_myutyuel/kredit_myutyuel.md",
+    "kind": "location"
+  },
+  {
+    "old": "locations/Осман_08/Кредит_Мютюэль_08/Округ 8-й арр  квартал Осман.png",
+    "new": "cities/paris/locations/district_08/osman/kredit_myutyuel/okrug_8_y_arr_kvartal_osman.png",
+    "kind": "location"
+  },
+  {
+    "old": "locations/Отель-де-Виль_04/Набережная_Сены_04/Набережная_Сены_01.jpg",
+    "new": "cities/paris/locations/district_04/otel_de_vil/naberezhnaya_seny/naberezhnaya_seny_01.jpg",
+    "kind": "location"
+  },
+  {
+    "old": "locations/Отель-де-Виль_04/Набережная_Сены_04/Набережная_Сены_04.md",
+    "new": "cities/paris/locations/district_04/otel_de_vil/naberezhnaya_seny/naberezhnaya_seny.md",
+    "kind": "location"
+  },
+  {
+    "old": "locations/Пантеон_05/Метро_Сен-Мишель_05/Метро_Сен-Мишель_01.png",
+    "new": "cities/paris/locations/district_05/panteon/metro_sen_mishel/metro_sen_mishel_01.png",
+    "kind": "location"
+  },
+  {
+    "old": "locations/Пантеон_05/Метро_Сен-Мишель_05/Метро_Сен-Мишель_02.png",
+    "new": "cities/paris/locations/district_05/panteon/metro_sen_mishel/metro_sen_mishel_02.png",
+    "kind": "location"
+  },
+  {
+    "old": "locations/Пантеон_05/Метро_Сен-Мишель_05/Метро_Сен-Мишель_05.md",
+    "new": "cities/paris/locations/district_05/panteon/metro_sen_mishel/metro_sen_mishel.md",
+    "kind": "location"
+  },
+  {
+    "old": "locations/Сен-Дени_93/Промзона_Сен-Дени_93/Промзона Сен-Дени — Северный Край-2.png",
+    "new": "cities/paris/locations/district_93/sen_deni/promzona_sen_deni/promzona_sen_deni_severnyy_kray_2.png",
+    "kind": "location"
+  },
+  {
+    "old": "locations/Сен-Дени_93/Промзона_Сен-Дени_93/Промзона Сен-Дени — Северный Край.png",
+    "new": "cities/paris/locations/district_93/sen_deni/promzona_sen_deni/promzona_sen_deni_severnyy_kray.png",
+    "kind": "location"
+  },
+  {
+    "old": "locations/Сен-Дени_93/Промзона_Сен-Дени_93/Промзона_01.jpg",
+    "new": "cities/paris/locations/district_93/sen_deni/promzona_sen_deni/promzona_01.jpg",
+    "kind": "location"
+  },
+  {
+    "old": "locations/Сен-Дени_93/Промзона_Сен-Дени_93/Промзона_02.jpg",
+    "new": "cities/paris/locations/district_93/sen_deni/promzona_sen_deni/promzona_02.jpg",
+    "kind": "location"
+  },
+  {
+    "old": "locations/Сен-Дени_93/Промзона_Сен-Дени_93/Промзона_Сен-Дени_93.md",
+    "new": "cities/paris/locations/district_93/sen_deni/promzona_sen_deni/promzona_sen_deni.md",
+    "kind": "location"
+  },
+  {
+    "old": "locations/Сен-Дени_93/Трасса_А1_93/Трасса А1.png",
+    "new": "cities/paris/locations/district_93/sen_deni/trassa_a1/trassa_a1.png",
+    "kind": "location"
+  },
+  {
+    "old": "locations/Сен-Дени_93/Трасса_А1_93/Трасса_А1_93.md",
+    "new": "cities/paris/locations/district_93/sen_deni/trassa_a1/trassa_a1.md",
+    "kind": "location"
+  },
+  {
+    "old": "locations/Сен-Жермен_06/Сен-Жермен_06/Сен-Жермен_01.jpg",
+    "new": "cities/paris/locations/district_06/sen_zhermen/sen_zhermen/sen_zhermen_01.jpg",
+    "kind": "location"
+  },
+  {
+    "old": "locations/Сен-Жермен_06/Сен-Жермен_06/Сен-Жермен_06.md",
+    "new": "cities/paris/locations/district_06/sen_zhermen/sen_zhermen/sen_zhermen.md",
+    "kind": "location"
+  },
+  {
+    "old": "locations/Тампль_03/Марэ_Узкие_Улицы_03/Марэ_01.png",
+    "new": "cities/paris/locations/district_03/tampl/mare_uzkie_ulitsy/mare_01.png",
+    "kind": "location"
+  },
+  {
+    "old": "locations/Тампль_03/Марэ_Узкие_Улицы_03/Марэ_Узкие_Улицы_03.md",
+    "new": "cities/paris/locations/district_03/tampl/mare_uzkie_ulitsy/mare_uzkie_ulitsy.md",
+    "kind": "location"
+  },
+  {
+    "old": "locations/Толбиак_13/Гараж_Жирон_13/Mécanique Générale» (Гараж Жирона) — Рю де Толбиак.png",
+    "new": "cities/paris/locations/district_13/tolbiak/garazh_zhiron/m_canique_g_n_rale_garazh_zhirona_ryu_de_tolbiak.png",
+    "kind": "location"
+  },
+  {
+    "old": "locations/Толбиак_13/Гараж_Жирон_13/Гараж_Жирон_13.md",
+    "new": "cities/paris/locations/district_13/tolbiak/garazh_zhiron/garazh_zhiron.md",
+    "kind": "location"
+  },
+  {
+    "old": "rules/npcs_city.md",
+    "new": "system/rules/npcs_city.md",
+    "kind": "static"
+  },
+  {
+    "old": "rules/module_rules.md",
+    "new": "system/rules/module_rules.md",
+    "kind": "static"
+  },
+  {
+    "old": "rules/diary_rules.md",
+    "new": "system/rules/diary_rules.md",
+    "kind": "static"
+  },
+  {
+    "old": "rules/chronicle_paris.md",
+    "new": "system/rules/chronicle.md",
+    "kind": "static"
+  },
+  {
+    "old": "rules/character_sheet_v20.md",
+    "new": "system/rules/character_sheet_v20.md",
+    "kind": "static"
+  },
+  {
+    "old": "rules/portret.md",
+    "new": "system/rules/portret.md",
+    "kind": "static"
+  },
+  {
+    "old": "rules/CHECKLIST.md",
+    "new": "system/rules/CHECKLIST.md",
+    "kind": "static"
+  },
+  {
+    "old": "rules/reference_wod.md",
+    "new": "system/rules/reference_wod.md",
+    "kind": "static"
+  },
+  {
+    "old": "rules/timeline_paris.md",
+    "new": "cities/paris/archive/timeline.md",
+    "kind": "static"
+  },
+  {
+    "old": "rules/open_threads.md",
+    "new": "cities/paris/archive/open_threads.md",
+    "kind": "static"
+  },
+  {
+    "old": "rules/npc_image_mapping.md",
+    "new": null,
+    "kind": "delete"
+  },
+  {
+    "old": "factions_paris.md",
+    "new": "cities/paris/archive/political_state.md",
+    "kind": "static"
+  },
+  {
+    "old": "rumors_elysium.md",
+    "new": "cities/paris/archive/rumors_elysium.md",
+    "kind": "static"
+  },
+  {
+    "old": "rumors_dreaming.md",
+    "new": "cities/paris/archive/rumors_dreaming.md",
+    "kind": "static"
+  },
+  {
+    "old": "characters/characters_ALL.md",
+    "new": "cities/paris/archive/characters_index.md",
+    "kind": "static"
+  },
+  {
+    "old": "Stories_of_Paris.md",
+    "new": "cities/paris/archive/events.md",
+    "kind": "static"
+  }
+]
