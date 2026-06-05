@@ -58,6 +58,17 @@ for (const e of slugmap) {
   const newDir = `cities/paris/characters/${e.lineage}/${e.slug}`;
   for (const f of walk(e.old_path)) moves.push({ old: f, new: charFile(newDir, name, e.slug, f.slice(e.old_path.length + 1)), kind: 'character' });
 }
+// .gitkeep пустых линеек + бесхозные файлы прямо в корне линейки
+for (const lin of ['vampires', 'fairies', 'mortals', 'werewolves', 'mages', 'hunters']) {
+  const d = path.join(ROOT, 'characters', lin);
+  if (!isDir(d)) continue;
+  for (const n of fs.readdirSync(d)) {
+    if (isDir(path.join(d, n))) continue;
+    const old = `characters/${lin}/${n}`;
+    if (n === '.gitkeep') moves.push({ old, new: `cities/paris/characters/${lin}/.gitkeep`, kind: 'static' });
+    else moves.push({ old, new: `cities/paris/_unsorted_art/${slugFile(n, false)}`, kind: 'stray' });
+  }
+}
 
 // ── Модули → хроники ────────────────────────────────────────────────────
 const DATE_RE = /^(январь|февраль|март|апрель|май|июнь|июль|август|сентябрь|октябрь|ноябрь|декабрь)_\d{4}_/;

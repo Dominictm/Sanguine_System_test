@@ -42,6 +42,14 @@
   {
     "type": "character",
     "lineage": "vampires",
+    "old_path": "characters/vampires/Герсон",
+    "new_path": "cities/paris/characters/vampires/gerson",
+    "slug": "gerson",
+    "display_name": "Герсон"
+  },
+  {
+    "type": "character",
+    "lineage": "vampires",
     "old_path": "characters/vampires/Госпожа Бубенчик",
     "new_path": "cities/paris/characters/vampires/gospozha_bubenchik",
     "slug": "gospozha_bubenchik",
