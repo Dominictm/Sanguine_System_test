@@ -1068,10 +1068,17 @@ function diaryToneFor(c) {
   return 'Меланхоличный';
 }
 
-// folder "январь_2011_опера_крови" → main file base "опера_крови"
-function moduleMainBase(folder) {
-  const m = folder.match(/^[A-Za-zА-Яа-яЁё]+_\d{4}_(.+)$/);
-  return m ? m[1] : folder;
+// RU→ASCII slug for new module/chronicle folder names
+const _SLUG_TR = { а:'a',б:'b',в:'v',г:'g',д:'d',е:'e',ё:'e',ж:'zh',з:'z',и:'i',й:'y',к:'k',л:'l',м:'m',н:'n',о:'o',п:'p',р:'r',с:'s',т:'t',у:'u',ф:'f',х:'h',ц:'ts',ч:'ch',ш:'sh',щ:'sch',ъ:'',ы:'y',ь:'',э:'e',ю:'yu',я:'ya' };
+function slugify(s) {
+  return String(s).toLowerCase().split('').map(c => _SLUG_TR[c] !== undefined ? _SLUG_TR[c] : c).join('')
+    .replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').replace(/_+/g, '_');
+}
+function renderChronicleEventsSkeleton(displayName) {
+  return `# 📖 ${displayName} — События\n\n> Хроника города · сводка города — [events.md](../../archive/events.md)\n> Протокол записей — [chronicle.md](../../../../system/rules/chronicle.md)\n\n---\n\n`;
+}
+function renderOpenThreadsSkeleton(displayName) {
+  return `# 🧵 Открытые нити — ${displayName}\n\n| # | Нить | Источник | Статус | Приоритет |\n|---|---|---|---|---|\n\n## 🗂️ Архив закрытых\n\n*(пусто)*\n`;
 }
 
 // Project URL convention: encode spaces/parens only, keep Cyrillic as-is
@@ -1080,7 +1087,7 @@ function encUrl(s) { return String(s).replace(/ /g, '%20').replace(/\(/g, '%28')
 // Drop placeholder field values (⚠️, «неизвестно», «—») from display
 function cleanMeta(v) { return (v && !/⚠️|неизвест|уточнен|^\s*—\s*$/i.test(v)) ? v : ''; }
 
-function renderChronicleEntry(p, parts, folder, mainBase, hasFinale) {
+function renderChronicleEntry(p, parts, modslug, hasFinale) {
   const L = [];
   L.push(`### 📅 ${p.event.dateLabel} — ${p.event.title}.`);
   if (p.event.parallel) L.push(`> ⚡ *${p.event.parallel}*`);
@@ -1111,20 +1118,20 @@ function renderChronicleEntry(p, parts, folder, mainBase, hasFinale) {
     p.event.worldChanges.forEach(c => L.push(`  - ${c}`));
   }
   L.push('');
-  const finaleLink = hasFinale ? ` | [Литературный финал](modules/${folder}/финал.md)` : '';
-  L.push(`> 🔗 [Модуль](modules/${folder}/${mainBase}.md)${finaleLink}`);
+  const finaleLink = hasFinale ? ` | [Литературный финал](modules/${modslug}/finale.md)` : '';
+  L.push(`> 🔗 [Модуль](modules/${modslug}/${modslug}.md)${finaleLink}`);
   return L.join('\n');
 }
 
-function renderModuleMain(p, folder, mainBase, parts) {
+function renderModuleMain(p, modslug, parts) {
   const diaryLinks = parts.filter(pt => pt.diary).map(pt =>
-    `[${pt.name}](../../characters/${pt.lineageFolder}/${encUrl(pt.name)}/Journal_${encUrl(pt.firstName)}/${p.diaryPeriod}.md)`
+    `[${pt.name}](../../../../characters/${pt.lineageFolder}/${pt.slug}/journal/${p.diaryPeriod}.md)`
   ).join(' | ');
   return [
     `# ${p.event.dateLabel} — ${p.event.title}`,
     '> Хроника | Vampire: The Masquerade V20 / Changeling: The Dreaming',
     '',
-    `> 🔗 [Хроника](../../${p.chronicleName})`,
+    '> 🔗 [Хроника](../../events.md)',
     '',
     '---',
     '',
@@ -1145,15 +1152,15 @@ function renderModuleMain(p, folder, mainBase, parts) {
   ].filter((l, i, a) => !(l === '' && a[i - 1] === '')).join('\n');
 }
 
-function renderNpcMd(p, folder, parts) {
+function renderNpcMd(p, modslug, parts) {
   const pcs = parts.filter(pt => /игрок|пк|персонаж игрока/i.test(pt.role || '') || pt.isPC);
   const canon = parts.filter(pt => !pcs.includes(pt));
-  const line = pt => `- ${pt.name} — ${pt.role || 'роль'} → 🔗 [Карточка](../../characters/${pt.lineageFolder}/${encUrl(pt.name)}/${encUrl(pt.name)}.md)`;
+  const line = pt => `- ${pt.name} — ${pt.role || 'роль'} → 🔗 [Карточка](../../../../characters/${pt.lineageFolder}/${pt.slug}/${pt.slug}.md)`;
   return [
     `# НПС модуля: ${p.event.dateLabel} — ${p.event.title}`,
     '',
-    `> 🔗 [Модуль](${moduleMainBase(folder)}.md)`,
-    '> ℹ️ Каноничные НПС → ссылка на карточку в `characters/`. Модульные → карточки в `нпс/`.',
+    `> 🔗 [Модуль](${modslug}.md)`,
+    '> ℹ️ Каноничные НПС → ссылка на карточку в `characters/`. Модульные → карточки в `npc/`.',
     '',
     '---',
     '',
@@ -1171,7 +1178,7 @@ function renderNpcMd(p, folder, parts) {
     '',
     '## 🆕 Модульные НПС (неканоничные)',
     '',
-    '> Карточки в `нпс/`. Условия продвижения — `rules/module_rules.md`.',
+    '> Карточки в `npc/`. Условия продвижения — `system/rules/module_rules.md`.',
     '',
     '- —',
     ''
@@ -1190,19 +1197,19 @@ function renderDiaryStub(p, author, parts) {
     '- **📖 Текст записи:**',
     '  ⏳ ОЖИДАЕТ ГЕНЕРАЦИИ — Claude напишет прозу по фактам события и стилю клана.',
     note ? `  <!-- 📝 КОММЕНТАРИЙ МАСТЕРА (учесть при генерации, затем удалить): ${note} -->` : '',
-    `  <!-- ФАКТЫ (источник истины): ${p.chronicleName} → «${p.event.title}» -->`,
+    `  <!-- ФАКТЫ (источник истины): хроника ${p.chronicle} → «${p.event.title}» -->`,
     '- **🔗 Зеркальная ссылка:**',
     others.length ? others.map(o => `  ${o} → ⏳`).join('\n') : '  —',
     ''
   ].filter(Boolean).join('\n');
 }
 
-function renderFinaleStub(p, parts) {
+function renderFinaleStub(p, modslug, parts) {
   const note = (p.finale && p.finale.comment || '').trim();
   return [
     `# ${p.event.dateLabel} — Литературный финал`,
     '',
-    `> 🔗 [Модуль](${p.module.mainBase}.md) | [Хроника](../../${p.chronicleName})`,
+    `> 🔗 [Модуль](${modslug}.md) | [Хроника](../../events.md)`,
     '',
     '---',
     '',
@@ -1234,7 +1241,10 @@ function addThreadRows(raw, newThreads, source) {
     const m = lines[i].match(/^\|\s*(\d+)\s*\|/);
     if (m) { lastIdx = i; maxNum = Math.max(maxNum, parseInt(m[1])); }
   }
-  if (lastIdx === -1) return raw;
+  if (lastIdx === -1) {                       // empty table → insert after header separator
+    lastIdx = lines.findIndex(l => /^\|\s*-{2,}/.test(l));
+    if (lastIdx === -1) return raw;
+  }
   const rows = newThreads.map((t, i) => {
     const n = maxNum + i + 1;
     const status = /высок/i.test(t.priority) ? '🔴 Активна' : '🟡 Фоновая';
@@ -1284,26 +1294,54 @@ async function buildSessionPlan(payload) {
   p.threads = p.threads || {};
   p.finale  = p.finale  || {};
 
-  // chronicle file
-  const chronicleFile = await findChronicleFile();
-  if (!chronicleFile) { errors.push('Файл хроники Stories_of_*.md не найден.'); return { errors, warnings, notes, changes: [] }; }
-  p.chronicleName = path.basename(chronicleFile);
-  const chronicleRaw = await fs.readFile(chronicleFile, 'utf-8');
+  const city = p.city = (/^[a-z0-9_]+$/.test(p.city || '') ? p.city : DEFAULT_CITY);
 
   // basic validation
   if (!p.event.dateLabel) errors.push('Не указана дата (dateLabel).');
   if (!p.event.title)     errors.push('Не указан заголовок события (title).');
   if (!p.event.month || !/^\d{4}-\d{2}$/.test(p.event.month)) errors.push('Месяц должен быть в формате YYYY-MM.');
 
-  // chronological conflict
-  const parsed = parseChronicle(chronicleRaw);
-  if (p.event.title && parsed.events.some(e => (e.title || '').trim() === p.event.title.trim()
-        && (eventMonthKey(e.date) || {}).key === p.event.month)) {
-    errors.push(`Запись «${p.event.title}» за ${p.event.month} уже существует (хронологический конфликт).`);
+  // resolve chronicle + module
+  let chr, modslug, moduleNew = false, chronicleNew = false, chrDisplay = '';
+  const allMods = await listModules(city);
+  if (p.module.mode === 'existing') {
+    const it = allMods.find(m => m.name === p.module.folder);
+    if (!it) errors.push(`Модуль «${p.module.folder}» не найден.`);
+    else { chr = it.chronicle; modslug = it.name; }
+  } else {
+    modslug = slugify(p.module.newName || '');
+    moduleNew = true;
+    if (!modslug) errors.push('Укажите название нового модуля.');
+    const cspec = p.chronicle || {};
+    if (cspec.mode === 'new') {
+      chr = slugify(cspec.newName || '');
+      chrDisplay = (cspec.newName || chr).trim();
+      chronicleNew = true;
+      if (!chr) errors.push('Укажите название новой хроники.');
+    } else {
+      chr = cspec.slug;
+      if (!chr) errors.push('Выберите хронику для нового модуля.');
+      else if (!(await fs.access(path.join(chroniclesDir(city), chr)).then(() => true).catch(() => false)))
+        errors.push(`Хроника «${chr}» не найдена.`);
+    }
   }
+  if (errors.length) return { errors, warnings, notes, changes: [] };
+  p.chronicle = chr;
+
+  // chronicle events file (existing or fresh skeleton)
+  const chrEventsRel = `cities/${city}/chronicles/${chr}/events.md`;
+  let chronicleRaw = await fs.readFile(path.join(ROOT, chrEventsRel), 'utf-8').catch(() => null);
+  const chrEventsExisted = chronicleRaw != null;
+  chronicleRaw = chrEventsExisted ? chronicleRaw.replace(/^﻿/, '') : renderChronicleEventsSkeleton(chrDisplay || chr);
+
+  // chronological conflict (across the whole city)
+  const evs = await aggregateEvents(city);
+  if (p.event.title && evs.some(e => (e.title || '').trim() === p.event.title.trim()
+        && (eventMonthKey(e.date) || {}).key === p.event.month))
+    errors.push(`Запись «${p.event.title}» за ${p.event.month} уже существует (хронологический конфликт).`);
 
   // resolve participants
-  const chars = await getAllCharacters();
+  const chars = await getAllCharacters(city);
   const resolve = makeNameResolver(chars.map(c => c.name));
   const byName = Object.fromEntries(chars.map(c => [c.name, c]));
   const parts = [];
@@ -1312,9 +1350,8 @@ async function buildSessionPlan(payload) {
     if (!rid) { errors.push(`Участник «${inp.name}» не сопоставлен с карточкой — создайте НПС сначала.`); continue; }
     const c = byName[rid];
     parts.push({
-      name: c.name, clan: c.clan || '', gen: c.generation || '',
+      name: c.name, slug: c.slug, clan: c.clan || '', gen: c.generation || '',
       lineage: c.lineage, lineageFolder: c.lineageFolder,
-      firstName: c.name.split(' ')[0],
       role: inp.role || '', diary: !!inp.diary, isPC: !!inp.isPC,
       diaryComment: inp.diaryComment || '',
       statusChange: inp.statusChange || null, statusDetails: inp.statusDetails || ''
@@ -1322,107 +1359,81 @@ async function buildSessionPlan(payload) {
   }
   if (errors.length) return { errors, warnings, notes, changes: [] };
 
-  // module
-  const preNov2010 = /^(2009|20(0[0-9]|10-0[1-9]|10-10))/.test(p.event.month) || p.event.month < '2010-11';
+  const preNov2010 = p.event.month < '2010-11';
   p.diaryPeriod = preNov2010 ? 'retrospective' : p.event.month;
-  let folder, mainBase, moduleNew = false;
-  if (p.module.mode === 'existing') {
-    folder = p.module.folder;
-    const dir = path.join(ROOT, 'modules', folder);
-    const names = (await fs.readdir(dir).catch(() => [])).filter(n => n.endsWith('.md'));
-    const isAux = n => ['нпс.md', 'сценарий.md', 'финал.md'].includes(n) || n.endsWith('-лист.md');
-    mainBase = (names.find(n => !isAux(n)) || `${moduleMainBase(folder)}.md`).replace(/\.md$/, '');
-    if (!names.length) warnings.push(`Папка модуля ${folder} пуста или не найдена.`);
-  } else {
-    folder = (p.module.newName || '').trim();
-    if (!/^[A-Za-zА-Яа-яЁё]+_\d{4}_.+/.test(folder)) errors.push('Имя нового модуля: формат месяц_ГГГГ_описание.');
-    mainBase = moduleMainBase(folder);
-    moduleNew = true;
-  }
-  p.module.mainBase = mainBase; p.module.folderResolved = folder;
-  if (errors.length) return { errors, warnings, notes, changes: [] };
 
   const hasFinale = !!(p.finale && p.finale.create);
   const changes = [];
   const add = (rel, action, after, preview) => changes.push({ rel, action, after, preview });
 
-  // 1. Chronicle entry (append)
-  const entry = renderChronicleEntry(p, parts, folder, mainBase, hasFinale);
-  add(p.chronicleName, 'modify', appendChronicleEntry(chronicleRaw, entry),
-    `append-запись: ### 📅 ${p.event.dateLabel} — ${p.event.title} (${entry.split('\n').length} строк)`);
+  // 1. Chronicle entry → append to chronicles/<chr>/events.md
+  const entry = renderChronicleEntry(p, parts, modslug, hasFinale);
+  add(chrEventsRel, chrEventsExisted ? 'modify' : 'create', appendChronicleEntry(chronicleRaw, entry),
+    `${chrEventsExisted ? 'append' : 'new'} запись: ### 📅 ${p.event.dateLabel} — ${p.event.title}`);
 
-  // 1b. World-state stamp bump + flag
+  // 1b. World-state stamp in archive/events.md
   const monthLabel = p.event.dateLabel.split(',')[0];
-  if (/Последнее обновление:/.test(chronicleRaw)) {
-    // applied on top of the same file → recompute from the appended version
-    const last = changes[0].after;
-    changes[0].after = bumpWorldStateStamp(last, monthLabel);
-  }
+  const archiveRel = `cities/${city}/archive/events.md`;
+  const archiveRaw = await fs.readFile(path.join(ROOT, archiveRel), 'utf-8')
+    .then(s => s.replace(/^﻿/, '')).catch(() => null);
+  if (archiveRaw && /Последнее обновление:/.test(archiveRaw))
+    add(archiveRel, 'modify', bumpWorldStateStamp(archiveRaw, monthLabel), `штамп «Состояние мира» → ${monthLabel}`);
   if ((p.event.worldChanges || []).length)
-    notes.push(`Раздел «🌍 Состояние мира»: проверьте таблицы вручную — ${p.event.worldChanges.length} изменений внесены в запись события, сводные таблицы не правятся автоматически.`);
+    notes.push(`Сводные таблицы «🌍 Состояние мира» не правятся автоматически — проверьте вручную (${p.event.worldChanges.length} изменений).`);
+  notes.push('Индекс «Сводная хроника» (archive/events.md) перегенерируется после записи.');
 
   // 2. Module files
-  const modRel = `modules/${folder}`;
+  const modRel = `cities/${city}/chronicles/${chr}/modules/${modslug}`;
   if (moduleNew) {
-    add(`${modRel}/${mainBase}.md`, 'create', renderModuleMain(p, folder, mainBase, parts), 'новый главный файл модуля');
-    add(`${modRel}/нпс.md`, 'create', renderNpcMd(p, folder, parts), 'нпс.md (ПК / каноничные / модульные)');
+    add(`${modRel}/${modslug}.md`, 'create', renderModuleMain(p, modslug, parts), 'новый главный файл модуля');
+    add(`${modRel}/npc.md`,        'create', renderNpcMd(p, modslug, parts),       'npc.md (ПК / каноничные / модульные)');
   } else {
-    notes.push(`Модуль существующий — главный файл и нпс.md не перезаписываются; проверьте их вручную.`);
+    notes.push('Существующий модуль — главный файл и npc.md не перезаписываются.');
   }
   if (hasFinale) {
-    const finalePath = `${modRel}/финал.md`;
-    const exists = await fs.readFile(path.join(ROOT, finalePath), 'utf-8').then(() => true).catch(() => false);
-    if (!exists) add(finalePath, 'create', renderFinaleStub(p, parts), 'stub финала (ОЖИДАЕТ ГЕНЕРАЦИИ)');
-    else warnings.push('финал.md уже существует — не трогаем.');
+    const finaleRel = `${modRel}/finale.md`;
+    const exists = await fs.readFile(path.join(ROOT, finaleRel), 'utf-8').then(() => true).catch(() => false);
+    if (!exists) add(finaleRel, 'create', renderFinaleStub(p, modslug, parts), 'stub финала (ОЖИДАЕТ ГЕНЕРАЦИИ)');
+    else warnings.push('finale.md уже существует — не трогаем.');
   }
 
-  // 3. Diary seed-stubs
+  // 3. Diary seed-stubs → characters/<lin>/<slug>/journal/<period>.md
   const stubs = [];
   for (const pt of parts.filter(x => x.diary)) {
-    const charDir = path.join(ROOT, 'characters', pt.lineageFolder, pt.name);
-    const sub = await fs.readdir(charDir, { withFileTypes: true }).catch(() => []);
-    let jdir = sub.find(d => d.isDirectory() && d.name.startsWith('Journal_'));
-    const jname = jdir ? jdir.name : `Journal_${pt.firstName}`;
-    const rel = `characters/${pt.lineageFolder}/${pt.name}/${jname}/${p.diaryPeriod}.md`;
-    const abs = path.join(ROOT, 'characters', pt.lineageFolder, pt.name, jname, `${p.diaryPeriod}.md`);
-    const existing = await fs.readFile(abs, 'utf-8').catch(() => null);
+    const rel = `cities/${city}/characters/${pt.lineageFolder}/${pt.slug}/journal/${p.diaryPeriod}.md`;
+    const existing = await fs.readFile(path.join(ROOT, rel), 'utf-8').catch(() => null);
     const stub = renderDiaryStub(p, pt, parts);
     if (existing == null) {
-      const header = `# 📖 Дневник — ${pt.name}\n\n> 🔗 [Карточка](../${encUrl(pt.name)}.md)\n\n---\n\n`;
+      const header = `# 📖 Дневник — ${pt.name}\n\n> 🔗 [Карточка](../${pt.slug}.md)\n\n---\n\n`;
       add(rel, 'create', header + stub + '\n', `дневник-stub ${pt.name} (${p.diaryPeriod})`);
     } else {
-      add(rel, 'modify', existing.replace(/\s+$/, '') + '\n\n---\n\n' + stub + '\n', `+сцена в дневник ${pt.name} (${p.diaryPeriod})`);
+      add(rel, 'modify', existing.replace(/^﻿/, '').replace(/\s+$/, '') + '\n\n---\n\n' + stub + '\n', `+сцена в дневник ${pt.name} (${p.diaryPeriod})`);
     }
     stubs.push(rel);
   }
-  if (hasFinale) stubs.push(`${modRel}/финал.md`);
+  if (hasFinale) stubs.push(`${modRel}/finale.md`);
 
-  // 4. Threads
-  if ((p.threads.new || []).length) {
-    const otRaw = await fs.readFile(path.join(ROOT, 'rules', 'open_threads.md'), 'utf-8');
-    const src = `«${p.event.title}», ${monthLabel}`;
-    add('rules/open_threads.md', 'modify', addThreadRows(otRaw, p.threads.new, src), `+${p.threads.new.length} новых нитей`);
-  }
-  if ((p.threads.close || []).length) {
-    // chain on top of the possibly-already-modified open_threads change
-    const otChange = changes.find(c => c.rel === 'rules/open_threads.md');
-    const base = otChange ? otChange.after : await fs.readFile(path.join(ROOT, 'rules', 'open_threads.md'), 'utf-8');
-    const closed = closeThreadRows(base, p.threads.close);
-    if (otChange) otChange.after = closed;
-    else add('rules/open_threads.md', 'modify', closed, `закрыто нитей: ${p.threads.close.length}`);
-  }
+  // 4. Threads → chronicles/<chr>/open_threads.md
+  const otRel = `cities/${city}/chronicles/${chr}/open_threads.md`;
+  let otRaw = await fs.readFile(path.join(ROOT, otRel), 'utf-8').then(s => s.replace(/^﻿/, '')).catch(() => null);
+  const otExisted = otRaw != null;
+  if (!otExisted) otRaw = renderOpenThreadsSkeleton(chrDisplay || chr);
+  if ((p.threads.new || []).length) otRaw = addThreadRows(otRaw, p.threads.new, `«${p.event.title}», ${monthLabel}`);
+  if ((p.threads.close || []).length) otRaw = closeThreadRows(otRaw, p.threads.close);
+  if ((p.threads.new || []).length || (p.threads.close || []).length)
+    add(otRel, otExisted ? 'modify' : 'create', otRaw, `нити: +${(p.threads.new || []).length} / закрыто ${(p.threads.close || []).length}`);
 
   // 5. Character status patches
   for (const pt of parts.filter(x => x.statusChange)) {
-    const rel = `characters/${pt.lineageFolder}/${pt.name}/${pt.name}.md`;
+    const rel = `cities/${city}/characters/${pt.lineageFolder}/${pt.slug}/${pt.slug}.md`;
     const cardRaw = await fs.readFile(path.join(ROOT, rel), 'utf-8').catch(() => null);
     if (cardRaw == null) { warnings.push(`Карточка ${pt.name} не найдена для смены статуса.`); continue; }
-    add(rel, 'modify', patchCardStatus(cardRaw, pt.statusChange, pt.statusDetails),
+    add(rel, 'modify', patchCardStatus(cardRaw.replace(/^﻿/, ''), pt.statusChange, pt.statusDetails),
       `Статус → ${pt.statusChange}${pt.statusDetails ? ' (' + pt.statusDetails + ')' : ''}`);
   }
 
   return { errors, warnings, notes, changes, stubs, summary: {
-    module: folder, moduleNew, chronicle: p.chronicleName, diaryPeriod: p.diaryPeriod,
+    city, chronicle: chr, chronicleNew, module: modslug, moduleNew, diaryPeriod: p.diaryPeriod,
     participants: parts.length, diaries: parts.filter(x => x.diary).length, finale: hasFinale
   } };
 }
@@ -1433,15 +1444,9 @@ function planHash(changes) {
 }
 
 app.post('/api/log-session', async (req, res) => {
-  // Фаза 7b: генератор записи сессии ещё не переведён на структуру cities/<city>/
-  // (модули→chronicles/<chr>/modules, journal/, split событий по хроникам). Заглушка,
-  // чтобы не писать в исчезнувшую старую плоскую структуру.
-  return res.status(501).json({ ok: false, errors: [
-    'Логирование сессии временно недоступно: генератор переводится на новую структуру cities/ (Фаза 7b).'
-  ] });
-  /* eslint-disable no-unreachable */
   try {
     const payload = req.body || {};
+    if (!payload.city) payload.city = reqCity(req);   // from ?city= (fetch wrapper)
     const plan = await buildSessionPlan(payload);
     if (plan.errors.length)
       return res.status(400).json({ ok: false, errors: plan.errors, warnings: plan.warnings });
@@ -1463,13 +1468,19 @@ app.post('/api/log-session', async (req, res) => {
     for (const c of plan.changes) {
       const abs = path.join(ROOT, c.rel);
       await fs.mkdir(path.dirname(abs), { recursive: true });
-      // module нпс/ dir for new modules
-      if (c.rel.endsWith('/нпс.md')) await fs.mkdir(path.join(path.dirname(abs), 'нпс'), { recursive: true }).catch(() => {});
-      const text = c.after.replace(/\r\n/g, '\n').replace(/\n/g, '\r\n');
+      // npc/ dir for new modules (modular NPC cards)
+      if (c.rel.endsWith('/npc.md')) await fs.mkdir(path.join(path.dirname(abs), 'npc'), { recursive: true }).catch(() => {});
+      const text = c.after.replace(/\r\n/g, '\n');     // LF, matches migrated files
       await fs.writeFile(abs, text, 'utf-8');
       written.push({ rel: c.rel, action: c.action });
     }
-    _cache = { chars: null, ts: 0 };
+    delete _cache[plan.summary.city];
+
+    // Regenerate the city's aggregate event index, then revalidate links.
+    await new Promise(resolve => {
+      const ps = spawn('node', [path.join(ROOT, 'tools', 'build_city_events.js'), plan.summary.city], { cwd: ROOT });
+      ps.on('close', () => resolve()); ps.on('error', () => resolve());
+    });
     runValidationBackground();
 
     res.json({ ok: true, dryRun: false, written, stubs: plan.stubs, warnings: plan.warnings,
@@ -1547,9 +1558,9 @@ app.post('/api/claude/generate-prose', async (req, res) => {
       ...valid.map(s => '- ' + s),
       '',
       'Правила:',
-      '1. Дневники — строго по rules/diary_rules.md: глубокий POV, клановый стиль автора (сверяйся с карточкой в characters/), Маскарад через метафоры, 150–400 слов. Заполни поля «📖 Текст записи» и «🔗 Зеркальная ссылка».',
-      '2. Файл финал.md — литературный текст финальной сцены сессии.',
-      '3. Факты бери ТОЛЬКО из записи хроники, указанной в комментарии «ФАКТЫ» внутри файла (Stories_of_*.md). Не выдумывай события и участников.',
+      '1. Дневники — строго по system/rules/diary_rules.md: глубокий POV, клановый стиль автора (сверяйся с карточкой в cities/<город>/characters/), Маскарад через метафоры, 150–400 слов. Заполни поля «📖 Текст записи» и «🔗 Зеркальная ссылка».',
+      '2. Файл finale.md — литературный текст финальной сцены сессии.',
+      '3. Факты бери ТОЛЬКО из записи хроники, указанной в комментарии «ФАКТЫ» внутри файла (chronicles/<хроника>/events.md). Не выдумывай события и участников.',
       '4. Учти «КОММЕНТАРИЙ МАСТЕРА» (HTML-комментарий) при генерации, затем УДАЛИ все служебные комментарии <!-- ... --> и метки «⏳ ОЖИДАЕТ ГЕНЕРАЦИИ».',
       '5. Меняй ТОЛЬКО перечисленные выше файлы. Больше ничего не трогай.',
       '',
@@ -1565,7 +1576,7 @@ app.post('/api/claude/generate-prose', async (req, res) => {
       const txt = await fs.readFile(path.resolve(ROOT, rel), 'utf-8').catch(() => '');
       (/ОЖИДАЕТ ГЕНЕРАЦИИ/.test(txt) ? pending : written).push(rel);
     }
-    _cache = { chars: null, ts: 0 };
+    _cache = {};
 
     res.json({
       ok: !result.is_error && written.length > 0,
