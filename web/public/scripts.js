@@ -1,4 +1,29 @@
 // ═══════════════════════════════════════════════════════════════
+// City (multi-city) — transparent ?city= on every /api/ call
+// ═══════════════════════════════════════════════════════════════
+let CITY = new URLSearchParams(location.search).get('city') || 'paris';
+(function () {
+  const _fetch = window.fetch.bind(window);
+  window.fetch = (url, opts) => {
+    if (typeof url === 'string' && url.startsWith('/api/') && !/[?&]city=/.test(url)) {
+      url += (url.includes('?') ? '&' : '?') + 'city=' + encodeURIComponent(CITY);
+    }
+    return _fetch(url, opts);
+  };
+})();
+async function initCitySwitch() {
+  const sel = document.getElementById('city-select');
+  if (!sel) return;
+  try {
+    const { cities = [], default: def } = await fetch('/api/cities').then(r => r.json());
+    const list = cities.length ? cities : [def || 'paris'];
+    sel.innerHTML = list.map(c => `<option value="${c}"${c === CITY ? ' selected' : ''}>${c}</option>`).join('');
+    sel.onchange = () => { location.search = 'city=' + encodeURIComponent(sel.value); };
+  } catch {}
+}
+document.addEventListener('DOMContentLoaded', initCitySwitch);
+
+// ═══════════════════════════════════════════════════════════════
 // Constants
 // ═══════════════════════════════════════════════════════════════
 

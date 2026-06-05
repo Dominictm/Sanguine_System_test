@@ -2355,3 +2355,10 @@ button.chron-chip { cursor: pointer; transition: all .15s var(--ease); }
 .ls-prose-controls { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 12px; }
 .ls-prose-controls .btn-genprose { margin-top: 0; }
 .ls-prose-model { width: auto; min-width: 230px; margin-bottom: 0; }
+
+/* City switcher (multi-city) */
+.city-switch { padding: 0 20px 16px; margin-bottom: 6px; border-bottom: 1px solid var(--border); }
+.city-switch label { display: block; font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--gold); opacity: 0.8; margin-bottom: 6px; }
+.city-switch select { width: 100%; background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 7px 9px; font-size: 13px; font-family: var(--f-body); cursor: pointer; text-transform: capitalize; }
+.city-switch select:hover { border-color: var(--crimson); }
+.city-switch select:focus { outline: none; border-color: var(--accent); box-shadow: var(--glow); }

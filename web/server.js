@@ -8,7 +8,26 @@ const app  = express();
 const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3000;
 const ROOT = path.join(__dirname, '..');
 
-let _cache = { chars: null, ts: 0 };
+// ── City layer (cities/<city>/…) ───────────────────────────────────────────────
+const CITIES_DIR   = path.join(ROOT, 'cities');
+const DEFAULT_CITY = process.env.CITY || 'paris';
+const cityDir       = c => path.join(CITIES_DIR, c || DEFAULT_CITY);
+const charsDir      = c => path.join(cityDir(c), 'characters');
+const locsDir       = c => path.join(cityDir(c), 'locations');
+const chroniclesDir = c => path.join(cityDir(c), 'chronicles');
+const archiveDir    = c => path.join(cityDir(c), 'archive');
+const reqCity = req => {
+  const c = (req.query && req.query.city) || DEFAULT_CITY;
+  return /^[a-z0-9_]+$/.test(c) ? c : DEFAULT_CITY;
+};
+async function listCities() {
+  try {
+    const es = await fs.readdir(CITIES_DIR, { withFileTypes: true });
+    return es.filter(e => e.isDirectory() && !e.name.startsWith('.')).map(e => e.name);
+  } catch { return []; }
+}
+
+let _cache = {};            // city → { chars, ts }
 const CHARS_TTL = 15_000;
 
 // Last known broken-link count from validate_links.ps1.
@@ -17,8 +36,8 @@ let _brokenLinks = null;
 
 app.use(express.json({ limit: '20mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
-app.use('/char-img', express.static(path.join(ROOT, 'characters')));
-app.use('/loc-img',  express.static(path.join(ROOT, 'locations')));
+// Serve images straight out of cities/<city>/… (characters/<lin>/<slug>/art/, locations/…)
+app.use('/city-img', express.static(CITIES_DIR));
 
 // ── Markdown parser ───────────────────────────────────────────────────────────
 
@@ -36,7 +55,7 @@ function categorizeRel(desc) {
 }
 
 function parseCharacter(rawContent, folderName, lineage) {
-  const content = rawContent.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  const content = rawContent.replace(/^﻿/, '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
   const c = { name: folderName, lineage, relationships: [] };
 
   // Name from # header (strip leading emoji / whitespace)
@@ -140,11 +159,12 @@ const LINEAGE_MAP = {
   werewolves: 'werewolf', mages: 'mage', hunters: 'hunter'
 };
 
-async function getAllCharacters() {
-  if (_cache.chars && Date.now() - _cache.ts < CHARS_TTL) return _cache.chars;
+async function getAllCharacters(city = DEFAULT_CITY) {
+  const cc = _cache[city];
+  if (cc && Date.now() - cc.ts < CHARS_TTL) return cc.chars;
   const result = [];
   for (const [folder, lineage] of Object.entries(LINEAGE_MAP)) {
-    const dir = path.join(ROOT, 'characters', folder);
+    const dir = path.join(charsDir(city), folder);
     let entries;
     try { entries = await fs.readdir(dir); } catch { continue; }
 
@@ -156,21 +176,23 @@ async function getAllCharacters() {
         const content = await fs.readFile(mdPath, 'utf-8');
         const char = parseCharacter(content, entry, lineage);
         char.lineageFolder = folder;
+        char.slug = entry;
+        char.city = city;
 
-        // Prefer portrait.* files (uploaded via web); fall back to first image found
-        const files = await fs.readdir(charDir).catch(() => []);
+        // Images live in <slug>/art/. Prefer portrait.* (web upload), else first image.
+        const artFiles = await fs.readdir(path.join(charDir, 'art')).catch(() => []);
         const PORTRAIT = ['portrait.jpg','portrait.jpeg','portrait.png','portrait.webp','portrait.gif'];
-        const imgFile  = PORTRAIT.find(p => files.includes(p))
-          || files.find(f => /\.(jpg|jpeg|png|webp|gif)$/i.test(f));
+        const imgFile  = PORTRAIT.find(p => artFiles.includes(p))
+          || artFiles.find(f => /\.(jpg|jpeg|png|webp|gif)$/i.test(f));
         if (imgFile) {
-          char.imageUrl = `/char-img/${folder}/${encodeURIComponent(entry)}/${encodeURIComponent(imgFile)}`;
+          char.imageUrl = `/city-img/${city}/characters/${folder}/${encodeURIComponent(entry)}/art/${encodeURIComponent(imgFile)}`;
         }
 
         result.push(char);
       } catch { /* skip */ }
     }
   }
-  _cache = { chars: result, ts: Date.now() };
+  _cache[city] = { chars: result, ts: Date.now() };
   return result;
 }
 
@@ -188,7 +210,7 @@ async function countMdFiles(dir) {
 // ── Diary parser ──────────────────────────────────────────────────────────────
 
 function parseDiary(rawContent) {
-  const content = rawContent.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  const content = rawContent.replace(/^﻿/, '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
   const d = {};
 
   const hm = content.match(/^#\s+(.+)$/m);
@@ -239,7 +261,7 @@ function parseDiary(rawContent) {
 // ── Location parser ───────────────────────────────────────────────────────────
 
 function parseLocation(rawContent, folderName) {
-  const content = rawContent.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  const content = rawContent.replace(/^﻿/, '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
   const loc = { slug: folderName };
 
   const hm = content.match(/^#\s+(.+)$/m);
@@ -325,8 +347,8 @@ function parseLocation(rawContent, folderName) {
   return loc;
 }
 
-async function getAllLocations() {
-  const locRoot = path.join(ROOT, 'locations');
+async function getAllLocations(city = DEFAULT_CITY) {
+  const locRoot = locsDir(city);
   const result  = [];
 
   async function walk(dir) {
@@ -346,7 +368,7 @@ async function getAllLocations() {
           const imgFile   = files.find(f => /\.(jpg|jpeg|png|webp|gif)$/i.test(f));
           if (imgFile) {
             const relParts = path.relative(locRoot, locFolder).split(path.sep);
-            loc.imageUrl = '/loc-img/' + relParts.map(p => encodeURIComponent(p)).join('/') + '/' + encodeURIComponent(imgFile);
+            loc.imageUrl = `/city-img/${city}/locations/` + relParts.map(p => encodeURIComponent(p)).join('/') + '/' + encodeURIComponent(imgFile);
           }
           result.push(loc);
         } catch {}
@@ -360,12 +382,56 @@ async function getAllLocations() {
 
 // ── Chronicle parser (Stories_of_*.md) ────────────────────────────────────────
 
-// Chronicle filename is generic: master = Stories_of_Paris.md, but new_city.ps1
-// renames it to Stories_of_<City>.md. Find whichever exists.
-async function findChronicleFile() {
-  const entries = await fs.readdir(ROOT).catch(() => []);
-  const f = entries.find(e => /^Stories_of_.*\.md$/.test(e));
-  return f ? path.join(ROOT, f) : null;
+// City chronicle file = cities/<city>/archive/events.md (World State + aggregate index).
+// Full per-event entries live in cities/<city>/chronicles/<chr>/events.md.
+async function findChronicleFile(city = DEFAULT_CITY) {
+  const f = path.join(archiveDir(city), 'events.md');
+  return fs.access(f).then(() => f).catch(() => null);
+}
+
+// Aggregate all ### 📅 events from chronicles/<chr>/events.md (the real per-event detail).
+async function aggregateEvents(city = DEFAULT_CITY) {
+  const out = [];
+  let chrs;
+  try { chrs = await fs.readdir(chroniclesDir(city), { withFileTypes: true }); } catch { return out; }
+  for (const ch of chrs) {
+    if (!ch.isDirectory()) continue;
+    const raw = await fs.readFile(path.join(chroniclesDir(city), ch.name, 'events.md'), 'utf-8').catch(() => null);
+    if (!raw) continue;
+    const content = raw.replace(/^﻿/, '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+    content.split(/\n(?=###\s*📅)/).filter(c => /^###\s*📅/.test(c.trim()))
+      .forEach(c => { const ev = parseEvent(c.trim(), out.length); ev.chronicle = ch.name; out.push(ev); });
+  }
+  return out;
+}
+
+// Modules now live under chronicles/<chr>/modules/<mod>/ — flatten them with their chronicle.
+async function listModules(city = DEFAULT_CITY) {
+  const out = [];
+  let chrs;
+  try { chrs = await fs.readdir(chroniclesDir(city), { withFileTypes: true }); } catch { return out; }
+  for (const ch of chrs) {
+    if (!ch.isDirectory()) continue;
+    const mdir = path.join(chroniclesDir(city), ch.name, 'modules');
+    let mods; try { mods = await fs.readdir(mdir, { withFileTypes: true }); } catch { continue; }
+    for (const m of mods)
+      if (m.isDirectory() && !m.name.startsWith('.'))
+        out.push({ name: m.name, chronicle: ch.name, dir: path.join(mdir, m.name) });
+  }
+  return out;
+}
+const MOD_AUX = n => ['npc.md', 'scenario.md', 'finale.md'].includes(n) || n.endsWith('-sheet.md');
+
+// Open threads are now per-chronicle (chronicles/<chr>/open_threads.md); aggregate them.
+async function readOpenThreadsRaw(city = DEFAULT_CITY) {
+  let chrs; try { chrs = await fs.readdir(chroniclesDir(city), { withFileTypes: true }); } catch { return ''; }
+  let all = '';
+  for (const ch of chrs) {
+    if (!ch.isDirectory()) continue;
+    const raw = await fs.readFile(path.join(chroniclesDir(city), ch.name, 'open_threads.md'), 'utf-8').catch(() => null);
+    if (raw) all += '\n' + raw;
+  }
+  return all;
 }
 
 function mdExtractLinks(s) {
@@ -486,7 +552,7 @@ function parseEvent(chunk, id) {
 }
 
 function parseChronicle(raw) {
-  const content = raw.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  const content = raw.replace(/^﻿/, '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
 
   const hm = content.match(/^#\s+(.+)$/m);
   const title = hm ? hm[1].replace(/[*#]/g, '').trim() : 'Хроника';
@@ -526,15 +592,12 @@ function makeNameResolver(names) {
 }
 
 // charName → { has: bool, files: Set } describing the character's Journal_ folder
-async function getDiaryIndex(chars) {
+async function getDiaryIndex(city, chars) {
   const idx = {};
   for (const c of chars) {
-    const charDir = path.join(ROOT, 'characters', c.lineageFolder, c.name);
-    const sub = await fs.readdir(charDir, { withFileTypes: true }).catch(() => []);
-    const jdir = sub.find(d => d.isDirectory() && d.name.startsWith('Journal_'));
-    if (!jdir) { idx[c.name] = { has: false, files: new Set() }; continue; }
-    const files = await fs.readdir(path.join(charDir, jdir.name)).catch(() => []);
-    idx[c.name] = { has: true, files: new Set(files) };
+    const jdir  = path.join(charsDir(city), c.lineageFolder, c.slug, 'journal');
+    const files = await fs.readdir(jdir).catch(() => null);
+    idx[c.name] = files ? { has: true, files: new Set(files) } : { has: false, files: new Set() };
   }
   return idx;
 }
@@ -577,41 +640,32 @@ function runValidationBackground() {
 
 app.get('/api/status', async (req, res) => {
   try {
-    const chars = await getAllCharacters();
+    const city  = reqCity(req);
+    const chars = await getAllCharacters(city);
 
     let modules = 0;
-    try {
-      const mods = await fs.readdir(path.join(ROOT, 'modules'));
-      modules = mods.filter(m => m !== '.gitkeep' && !m.startsWith('.')).length;
-    } catch {}
+    try { modules = (await listModules(city)).length; } catch {}
 
     let locations = 0;
-    try { locations = await countMdFiles(path.join(ROOT, 'locations')); } catch {}
+    try { locations = await countMdFiles(locsDir(city)); } catch {}
 
     let openThreads = 0;
-    try {
-      const ot = await fs.readFile(path.join(ROOT, 'rules', 'open_threads.md'), 'utf-8');
-      openThreads = (ot.match(/^\| \d+\s*\|/gm) || []).length;
-    } catch {}
+    try { openThreads = ((await readOpenThreadsRaw(city)).match(/^\| \d+\s*\|/gm) || []).length; } catch {}
 
     let events = 0;
-    try {
-      const cf = await findChronicleFile();
-      if (cf) {
-        const craw = await fs.readFile(cf, 'utf-8');
-        events = (craw.match(/^###\s*📅/gm) || []).length;
-      }
-    } catch {}
+    try { events = (await aggregateEvents(city)).length; } catch {}
 
     let domain = 'Домен не настроен';
     try {
-      const cl = await fs.readFile(path.join(ROOT, 'CLAUDE.md'), 'utf-8');
-      const dm = cl.match(/# Рассказчик: Vampire: The Masquerade — ([^,\n]+),\s*([^\n]+)/);
-      if (dm) domain = `${dm[1].trim()}, ${dm[2].trim()}`;
+      const cm = await fs.readFile(path.join(cityDir(city), 'city.md'), 'utf-8');
+      const dm = cm.match(/^#\s+(.+?)\s*$/m);
+      if (dm) domain = dm[1].replace(/\s*—\s*сеттинг города/i, '').trim();
     } catch {}
 
     res.json({
       domain,
+      city,
+      cities: await listCities(),
       characters: chars.length,
       vampires:   chars.filter(c => c.lineage === 'vampire').length,
       fairies:    chars.filter(c => c.lineage === 'fairy').length,
@@ -631,13 +685,18 @@ app.get('/api/status', async (req, res) => {
 });
 
 app.get('/api/characters', async (req, res) => {
-  try { res.json(await getAllCharacters()); }
+  try { res.json(await getAllCharacters(reqCity(req))); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/cities', async (req, res) => {
+  try { res.json({ cities: await listCities(), default: DEFAULT_CITY }); }
   catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 app.get('/api/graph', async (req, res) => {
   try {
-    const chars = await getAllCharacters();
+    const chars = await getAllCharacters(reqCity(req));
     const nodes = chars.map(c => ({
       id: c.name, lineage: c.lineage,
       clan: c.clan || '', status: c.statusType, generation: c.generation || null
@@ -675,23 +734,20 @@ app.get('/api/graph', async (req, res) => {
 
 app.get('/api/modules', async (req, res) => {
   try {
-    const modsDir = path.join(ROOT, 'modules');
-    const entries = await fs.readdir(modsDir, { withFileTypes: true });
+    const city = reqCity(req);
     const mods = [];
-    for (const e of entries) {
-      if (!e.isDirectory() || e.name.startsWith('.')) continue;
-      const mod = { name: e.name, title: e.name };
+    for (const it of await listModules(city)) {
+      const mod = { name: it.name, title: it.name, chronicle: it.chronicle };
       try {
-        // Main module file is not named after the folder — find it among root .md files
-        const allFiles = await fs.readdir(path.join(modsDir, e.name), { withFileTypes: true });
-        const names    = allFiles.filter(f => f.isFile()).map(f => f.name);
-        const isAux    = n => ['нпс.md', 'сценарий.md', 'финал.md'].includes(n) || n.endsWith('-лист.md');
-        const mainFile = names.find(n => n.endsWith('.md') && !isAux(n));
-        mod.hasScenario = names.includes('сценарий.md');
-        mod.hasFinale   = names.includes('финал.md');
-        mod.hasNpc      = names.includes('нпс.md');
+        const names = (await fs.readdir(it.dir, { withFileTypes: true })).filter(f => f.isFile()).map(f => f.name);
+        mod.hasScenario = names.includes('scenario.md');
+        mod.hasFinale   = names.includes('finale.md');
+        mod.hasNpc      = names.includes('npc.md');
+        // Main file is named after the folder (<slug>.md); fall back to first non-aux .md
+        const mainFile = names.includes(`${it.name}.md`) ? `${it.name}.md`
+          : names.find(n => n.endsWith('.md') && !MOD_AUX(n));
         if (mainFile) {
-          const content = await fs.readFile(path.join(modsDir, e.name, mainFile), 'utf-8');
+          const content = await fs.readFile(path.join(it.dir, mainFile), 'utf-8');
           const hm = content.match(/^#\s+(.+)$/m);
           if (hm) mod.title = hm[1].replace(/[*[\]]/g, '').trim();
           for (const [label, key] of [['Тип','type'],['Формат','format'],['Время','time'],['Тон','tone']]) {
@@ -708,40 +764,33 @@ app.get('/api/modules', async (req, res) => {
 
 app.get('/api/modules/:name', async (req, res) => {
   try {
+    const city = reqCity(req);
     const name = decodeURIComponent(req.params.name);
-    const modsRoot = path.resolve(ROOT, 'modules');
-    const dir = path.resolve(modsRoot, name);
-    if (dir !== modsRoot && !dir.startsWith(modsRoot + path.sep))
-      return res.status(403).json({ error: 'Forbidden' });
+    if (!/^[^/\\]+$/.test(name)) return res.status(400).json({ error: 'bad name' });
+    const it = (await listModules(city)).find(m => m.name === name);
+    if (!it) return res.status(404).json({ error: 'Модуль не найден' });
 
-    const entries = await fs.readdir(dir, { withFileTypes: true });
-    const names   = entries.filter(f => f.isFile() && f.name.endsWith('.md')).map(f => f.name);
-    const read    = async fn => (fn ? fs.readFile(path.join(dir, fn), 'utf-8').catch(() => null) : null);
+    const names = (await fs.readdir(it.dir, { withFileTypes: true })).filter(f => f.isFile() && f.name.endsWith('.md')).map(f => f.name);
+    const read  = async fn => (fn && names.includes(fn) ? fs.readFile(path.join(it.dir, fn), 'utf-8').catch(() => null) : null);
+    const mainName = names.includes(`${name}.md`) ? `${name}.md` : (names.find(n => !MOD_AUX(n)) || null);
 
-    const isAux    = n => ['нпс.md', 'сценарий.md', 'финал.md'].includes(n) || n.endsWith('-лист.md');
-    const mainName = names.find(n => !isAux(n)) || null;
-
-    const out = { name, title: name };
+    const out = { name, title: name, chronicle: it.chronicle };
     out.main     = await read(mainName);
-    out.scenario = names.includes('сценарий.md') ? await read('сценарий.md') : null;
-    out.finale   = names.includes('финал.md')   ? await read('финал.md')   : null;
-    out.npc      = names.includes('нпс.md')      ? await read('нпс.md')      : null;
+    out.scenario = await read('scenario.md');
+    out.finale   = await read('finale.md');
+    out.npc      = await read('npc.md');
 
     if (out.main) {
       const hm = out.main.match(/^#\s+(.+)$/m);
       if (hm) out.title = hm[1].replace(/[*[\]]/g, '').trim();
     }
     res.json(out);
-  } catch (e) {
-    if (e.code === 'ENOENT') return res.status(404).json({ error: 'Модуль не найден' });
-    res.status(500).json({ error: e.message });
-  }
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 app.get('/api/threads', async (req, res) => {
   try {
-    const content = await fs.readFile(
-      path.join(ROOT, 'rules', 'open_threads.md'), 'utf-8');
+    const content = await readOpenThreadsRaw(reqCity(req));
     const threads = [];
     for (const line of content.split('\n')) {
       const m = line.match(/^\|\s*(\d+)\s*\|\s*\*\*([^*]+)\*\*(.*?)\|\s*([^|]+)\|\s*([^|]+)\|\s*([^|]+)\|/);
@@ -766,11 +815,12 @@ app.get('/api/characters/:name/diary', async (req, res) => {
     const file = req.query.file;
     if (!file) return res.status(400).json({ error: 'file param required' });
 
-    const chars = await getAllCharacters();
+    const city  = reqCity(req);
+    const chars = await getAllCharacters(city);
     const char  = chars.find(c => c.name === name);
     if (!char) return res.status(404).json({ error: 'Персонаж не найден' });
 
-    const charDir  = path.resolve(ROOT, 'characters', char.lineageFolder, name);
+    const charDir  = path.resolve(charsDir(city), char.lineageFolder, char.slug);
     const filePath = path.resolve(charDir, file);
     if (!filePath.startsWith(charDir + path.sep) && filePath !== charDir)
       return res.status(403).json({ error: 'Forbidden' });
@@ -781,22 +831,26 @@ app.get('/api/characters/:name/diary', async (req, res) => {
 });
 
 app.get('/api/locations', async (req, res) => {
-  try { res.json(await getAllLocations()); }
+  try { res.json(await getAllLocations(reqCity(req))); }
   catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 app.get('/api/chronicle', async (req, res) => {
   try {
-    const file = await findChronicleFile();
+    const city = reqCity(req);
+    const file = await findChronicleFile(city);
     if (!file) return res.json({ exists: false, title: null, worldState: null, events: [] });
-    const raw = await fs.readFile(file, 'utf-8');
-    res.json({ exists: true, ...parseChronicle(raw) });
+    const raw    = await fs.readFile(file, 'utf-8');
+    const parsed = parseChronicle(raw);          // title + World State from archive/events.md
+    parsed.events = await aggregateEvents(city); // full events from chronicles/<chr>/events.md
+    res.json({ exists: true, ...parsed });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 app.get('/api/integrity', async (req, res) => {
   try {
-    const chars   = await getAllCharacters();
+    const city    = reqCity(req);
+    const chars   = await getAllCharacters(city);
     const names   = chars.map(c => c.name);
     const byName  = Object.fromEntries(chars.map(c => [c.name, c]));
     const resolve = makeNameResolver(names);
@@ -826,11 +880,9 @@ app.get('/api/integrity', async (req, res) => {
     //    (only flagged for characters who already keep a journal → low noise)
     const diaryGap = [];
     const gapSeen  = new Set();
-    const cf = await findChronicleFile();
-    if (cf) {
-      const craw = await fs.readFile(cf, 'utf-8');
-      const { events } = parseChronicle(craw);
-      const diaryIdx = await getDiaryIndex(chars);
+    {
+      const events   = await aggregateEvents(city);
+      const diaryIdx = await getDiaryIndex(city, chars);
       for (const ev of (events || [])) {
         const mk = eventMonthKey(ev.date);
         for (const p of (ev.participants || [])) {
@@ -851,10 +903,10 @@ app.get('/api/integrity', async (req, res) => {
     }
 
     // 4. Registry drift between disk folders and characters_ALL.md
-    const actual     = new Set(chars.map(c => `${c.lineageFolder}/${c.name}`));
+    const actual     = new Set(chars.map(c => `${c.lineageFolder}/${c.slug}`));
     const referenced = new Set();
     try {
-      const all = await fs.readFile(path.join(ROOT, 'characters', 'characters_ALL.md'), 'utf-8');
+      const all = await fs.readFile(path.join(archiveDir(city), 'characters_index.md'), 'utf-8');
       // Only real markdown hrefs with an actual folder segment: ](lineage/Folder/…)
       const re = /\]\((?:characters\/)?(vampires|fairies|mortals|werewolves|mages|hunters)\/([^/)]+)\/[^)]*\)/g;
       let m;
@@ -930,7 +982,7 @@ app.post('/api/run-tool', async (req, res) => {
   ps.on('close', code => {
     clearTimeout(timer);
     if (code === 0) {
-      _cache = { chars: null, ts: 0 };
+      _cache = {};
       if (FILE_MUTATING_TOOLS.has(tool)) runValidationBackground();
     }
     // For validate_links the exit code IS the broken link count
@@ -950,28 +1002,30 @@ app.post('/api/characters/:name/upload-image', express.json({ limit: '20mb' }), 
     const { base64, ext = 'jpg' } = req.body;
     const name = decodeURIComponent(req.params.name);
 
-    const chars = await getAllCharacters();
+    const city  = reqCity(req);
+    const chars = await getAllCharacters(city);
     const char  = chars.find(c => c.name === name);
     if (!char) return res.status(404).json({ error: 'Персонаж не найден' });
 
-    const charDir  = path.join(ROOT, 'characters', char.lineageFolder, name);
+    const artDir   = path.join(charsDir(city), char.lineageFolder, char.slug, 'art');
+    await fs.mkdir(artDir, { recursive: true });
     const safeExt  = (ext || 'jpg').toLowerCase().replace(/[^a-z]/g, '') || 'jpg';
     const filename = `portrait.${safeExt}`;
 
     // Remove previous portrait.* files to avoid stale copies
-    const existing = await fs.readdir(charDir).catch(() => []);
+    const existing = await fs.readdir(artDir).catch(() => []);
     for (const f of existing) {
       if (/^portrait\.(jpg|jpeg|png|webp|gif)$/i.test(f)) {
-        await fs.unlink(path.join(charDir, f)).catch(() => {});
+        await fs.unlink(path.join(artDir, f)).catch(() => {});
       }
     }
 
-    await fs.writeFile(path.join(charDir, filename), Buffer.from(base64, 'base64'));
-    _cache = { chars: null, ts: 0 };
+    await fs.writeFile(path.join(artDir, filename), Buffer.from(base64, 'base64'));
+    delete _cache[city];
 
     res.json({
       success: true,
-      url: `/char-img/${char.lineageFolder}/${encodeURIComponent(name)}/${filename}`
+      url: `/city-img/${city}/characters/${char.lineageFolder}/${encodeURIComponent(char.slug)}/art/${filename}`
     });
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -1379,6 +1433,13 @@ function planHash(changes) {
 }
 
 app.post('/api/log-session', async (req, res) => {
+  // Фаза 7b: генератор записи сессии ещё не переведён на структуру cities/<city>/
+  // (модули→chronicles/<chr>/modules, journal/, split событий по хроникам). Заглушка,
+  // чтобы не писать в исчезнувшую старую плоскую структуру.
+  return res.status(501).json({ ok: false, errors: [
+    'Логирование сессии временно недоступно: генератор переводится на новую структуру cities/ (Фаза 7b).'
+  ] });
+  /* eslint-disable no-unreachable */
   try {
     const payload = req.body || {};
     const plan = await buildSessionPlan(payload);
