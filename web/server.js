@@ -1216,9 +1216,15 @@ app.post('/api/characters/:name/generate-appearance', express.json(), async (req
 - Формат: один абзац, без списков и заголовков.
 - Упомяни всё необычное, характерное, запоминающееся.`;
 
+    const model = req.body?.model || 'claude-opus-4-8';
+    const validModels = ['claude-opus-4-8', 'claude-sonnet-4-6', 'claude-haiku-4-5-20251001'];
+    if (!validModels.includes(model)) {
+      return res.status(400).json({ error: `Неверная модель: ${model}. Используй одну из: ${validModels.join(', ')}` });
+    }
+
     const client = new Anthropic({ apiKey });
     const message = await client.messages.create({
-      model: 'claude-opus-4-8',
+      model,
       max_tokens: 400,
       messages: [{
         role: 'user',

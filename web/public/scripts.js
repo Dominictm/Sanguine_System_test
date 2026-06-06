@@ -194,7 +194,17 @@ function renderDashboard(s, container) {
       </div>`)
     .join('');
 
+  const savedModel = localStorage.getItem('ai-model') || 'claude-opus-4-8';
+
   container.innerHTML = `
+    <div class="ai-model-selector">
+      <label>🤖 Модель для генерации:</label>
+      <select id="ai-model-select" class="ai-model-select">
+        <option value="claude-opus-4-8" ${savedModel === 'claude-opus-4-8' ? 'selected' : ''}>Claude Opus 4.8 (лучше всего)</option>
+        <option value="claude-sonnet-4-6" ${savedModel === 'claude-sonnet-4-6' ? 'selected' : ''}>Claude Sonnet 4.6 (сбалансированно)</option>
+        <option value="claude-haiku-4-5-20251001" ${savedModel === 'claude-haiku-4-5-20251001' ? 'selected' : ''}>Claude Haiku 4.5 (быстро)</option>
+      </select>
+    </div>
     <div class="stats-grid">
       <div class="stat-card">
         <div class="stat-label">Персонажи</div>
@@ -247,6 +257,14 @@ function renderDashboard(s, container) {
   animateValue(document.getElementById('sv-locations'), s.locations || 0);
   animateValue(document.getElementById('sv-events'), s.events || 0, 1100);
   animateValue(document.getElementById('sv-threads'), s.openThreads || 0, 1200);
+
+  // Model selector handler
+  const modelSelect = document.getElementById('ai-model-select');
+  if (modelSelect) {
+    modelSelect.addEventListener('change', (e) => {
+      localStorage.setItem('ai-model', e.target.value);
+    });
+  }
 }
 
 // ── Integrity panel ────────────────────────────────────────────
@@ -2064,9 +2082,11 @@ async function _generateAppearance(charName) {
   if (btn) { btn.disabled = true; btn.textContent = '⏳ Анализ арта...'; }
 
   try {
+    const model = localStorage.getItem('ai-model') || 'claude-opus-4-8';
     const resp = await fetch(
       `/api/characters/${encodeURIComponent(charName)}/generate-appearance${window.location.search}`,
-      { method: 'POST', headers: { 'Content-Type': 'application/json' } }
+      { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model }) }
     );
     const d = await resp.json();
 
