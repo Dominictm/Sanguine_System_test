@@ -1,7 +1,13 @@
 {
-  "name": "vtm-ui-tests",
+  "name": "vtm-tests",
   "private": true,
-  "description": "Selenium UI tests for VTM Chronicle Manager",
+  "description": "Автотесты VTM Chronicle Manager: E2E (API+ФС) и UI (Selenium/Chrome)",
+  "scripts": {
+    "test": "node e2e.js && node ui_selenium.js",
+    "e2e": "node e2e.js",
+    "ui": "node ui_selenium.js",
+    "ui:headless": "set HEADLESS=1&& node ui_selenium.js"
+  },
   "dependencies": {
     "selenium-webdriver": "^4.22.0"
   }

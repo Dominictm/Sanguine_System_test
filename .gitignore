@@ -1,4 +1,6 @@
 web/node_modules/
+node_modules/
+tests/report_*.html
 *.jpg
 *.jpeg
 *.png
