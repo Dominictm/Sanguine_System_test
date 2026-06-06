@@ -1815,7 +1815,6 @@ function _carouselGoTo(targetIdx, resetTimer = false) {
 }
 
 function _carouselAdvance() { _carouselGoTo(_carouselIdx + 1); }
-}
 
 // Stop carousel when modal closes
 document.getElementById('char-detail-close')?.addEventListener('click', () => {
