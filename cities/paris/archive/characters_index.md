@@ -263,3 +263,4 @@
 - **🐺 Оборотни** → [werewolves/](../characters/werewolves)
 - **🔮 Маги** → [mages/](../characters/mages)
 - **🏹 Охотники** → [hunters/](../characters/hunters)
+- [Фелиция](../characters/vampires/felitsiya/felitsiya.md) — Вампир, Носферату
