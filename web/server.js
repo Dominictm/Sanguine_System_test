@@ -1055,6 +1055,63 @@ app.get('/api/characters/all-images', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ── Update editable fields in a character card ────────────────────────────────
+
+const EDITABLE_FIELD_MAP = {
+  clan:         'Клан',
+  sect:         'Секта',
+  generation:   'Поколение',
+  birthYear:    'Год рождения',
+  embraceYear:  'Год обращения',
+  sire:         'Сир',
+  childe:       'Дитя',
+  location:     'Домен / Локация',
+  hierarchy:    'Иерархия в городе',
+  derangements: 'Деранжементы / Особенности',
+  disciplines:  'Дисциплины',
+  profession:   'Профессия',
+  role:         'Роль',
+};
+
+app.put('/api/characters/:name/fields', express.json(), async (req, res) => {
+  try {
+    const name   = decodeURIComponent(req.params.name);
+    const city   = reqCity(req);
+    const fields = req.body.fields || {};
+
+    const chars = await getAllCharacters(city);
+    const char  = chars.find(c => c.name === name);
+    if (!char) return res.status(404).json({ error: 'Персонаж не найден' });
+
+    const cardPath = path.join(charsDir(city), char.lineageFolder, char.slug, `${char.slug}.md`);
+    let card = await fs.readFile(cardPath, 'utf-8');
+
+    for (const [key, value] of Object.entries(fields)) {
+      const mdKey = EDITABLE_FIELD_MAP[key];
+      if (!mdKey) continue;
+      const escaped = mdKey.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const lineRe  = new RegExp(`^(- \\*\\*${escaped}[^*]*:\\*\\*).*$`, 'm');
+      const newLine = `- **${mdKey}:** ${value}`;
+      if (lineRe.test(card)) {
+        card = card.replace(lineRe, newLine);
+      } else {
+        // Append after the last bullet key-value field
+        const lastM = [...card.matchAll(/^- \*\*[^*:\n]+[^*]*:\*\*\s*.+$/gm)].at(-1);
+        if (lastM) {
+          const pos = lastM.index + lastM[0].length;
+          card = card.slice(0, pos) + '\n' + newLine + card.slice(pos);
+        }
+      }
+    }
+
+    await fs.writeFile(cardPath, card, 'utf-8');
+    delete _cache[city];
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ── List all art images for a character ───────────────────────────────────────
 
 app.get('/api/characters/:name/images', async (req, res) => {

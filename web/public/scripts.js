@@ -1677,8 +1677,13 @@ function openCharDetail(name) {
   const stLbl  = statusLabel(c);
 
   const infoFields = INFO_FIELDS
-    .filter(([k]) => c[k] && c[k] !== '—' && !String(c[k]).includes('⚠️'))
-    .map(([k, lbl]) => `<div class="cdet-key">${lbl}</div><div class="cdet-val">${escHtml(c[k])}</div>`)
+    .map(([k, lbl]) => {
+      const raw = c[k];
+      const empty = !raw || raw === '—' || String(raw).includes('⚠️');
+      const display = empty ? 'Неизвестно' : escHtml(raw);
+      const cls = empty ? 'cdet-val unknown' : 'cdet-val';
+      return `<div class="cdet-key">${lbl}</div><div class="${cls}" data-field="${k}">${display}</div>`;
+    })
     .join('');
 
   const relsHtml = (c.relationships || []).map(r => `
@@ -1734,9 +1739,15 @@ function openCharDetail(name) {
       </div>
       <div class="cdet-panels">
         <div class="cdet-panel active" data-panel="info">
-          ${infoFields
-            ? `<div class="cdet-fields">${infoFields}</div>`
-            : '<div class="cdet-empty">Нет данных</div>'}
+          <div style="position:relative">
+            <button class="cdet-edit-btn" id="cdet-edit-btn" data-char="${escHtml(c.name)}">✏ Редактировать</button>
+          </div>
+          <div class="cdet-fields" id="cdet-info-fields">${infoFields}</div>
+          <div class="cdet-edit-bar" id="cdet-edit-bar">
+            <button class="cdet-save-btn" id="cdet-save-btn">Сохранить</button>
+            <button class="cdet-cancel-btn" id="cdet-cancel-btn">Отмена</button>
+            <span class="cdet-save-msg" id="cdet-save-msg">✓ Сохранено</span>
+          </div>
         </div>
         <div class="cdet-panel" data-panel="bio">
           ${c.biography && !c.biography.includes('⚠️')
@@ -1788,6 +1799,9 @@ document.getElementById('char-detail-content').addEventListener('click', e => {
   }
   if (e.target.closest('#cdet-carousel-prev')) { _carouselGoTo(_carouselIdx - 1, true); return; }
   if (e.target.closest('#cdet-carousel-next')) { _carouselGoTo(_carouselIdx + 1, true); return; }
+  if (e.target.closest('#cdet-edit-btn'))    { _enterInfoEdit(e.target.closest('#cdet-edit-btn').dataset.char); return; }
+  if (e.target.closest('#cdet-cancel-btn'))  { _exitInfoEdit(false); return; }
+  if (e.target.closest('#cdet-save-btn'))    { _saveInfoFields(); return; }
 
   const uploadBtn = e.target.closest('.cdet-upload-btn');
   if (uploadBtn) { triggerImageUpload(uploadBtn.dataset.char); return; }
@@ -1885,6 +1899,108 @@ function _carouselAdvance() { _carouselGoTo(_carouselIdx + 1); }
 document.getElementById('char-detail-close')?.addEventListener('click', () => {
   if (_carouselTimer) { clearInterval(_carouselTimer); _carouselTimer = null; }
 }, { capture: true });
+
+// ── Info field editing ────────────────────────────────────────────────────────
+let _editCharName   = null;
+let _editOrigValues = {};
+
+function _enterInfoEdit(charName) {
+  _editCharName = charName;
+  _editOrigValues = {};
+
+  const grid = document.getElementById('cdet-info-fields');
+  const btn  = document.getElementById('cdet-edit-btn');
+  const bar  = document.getElementById('cdet-edit-bar');
+  if (!grid || !btn || !bar) return;
+
+  // Replace each .cdet-val with an input
+  grid.querySelectorAll('.cdet-val').forEach(cell => {
+    const key = cell.dataset.field;
+    const isUnknown = cell.classList.contains('unknown');
+    const current = isUnknown ? '' : cell.textContent;
+    _editOrigValues[key] = current;
+
+    const input = document.createElement('input');
+    input.className = 'cdet-field-input';
+    input.dataset.field = key;
+    input.value = current;
+    input.placeholder = 'Неизвестно';
+    cell.replaceWith(input);
+  });
+
+  btn.classList.add('active');
+  btn.textContent = '✏ Режим редактирования';
+  bar.classList.add('show');
+
+  // Focus first input
+  grid.querySelector('.cdet-field-input')?.focus();
+}
+
+function _exitInfoEdit(saved) {
+  const grid = document.getElementById('cdet-info-fields');
+  const btn  = document.getElementById('cdet-edit-btn');
+  const bar  = document.getElementById('cdet-edit-bar');
+  if (!grid || !btn || !bar) return;
+
+  // Restore value cells
+  grid.querySelectorAll('.cdet-field-input').forEach(input => {
+    const key   = input.dataset.field;
+    const value = saved ? input.value.trim() : (_editOrigValues[key] || '');
+    const empty = !value;
+    const div = document.createElement('div');
+    div.className = empty ? 'cdet-val unknown' : 'cdet-val';
+    div.dataset.field = key;
+    div.textContent   = empty ? 'Неизвестно' : value;
+    input.replaceWith(div);
+  });
+
+  btn.classList.remove('active');
+  btn.textContent = '✏ Редактировать';
+  bar.classList.remove('show');
+  _editCharName = null;
+}
+
+async function _saveInfoFields() {
+  const grid    = document.getElementById('cdet-info-fields');
+  const saveBtn = document.getElementById('cdet-save-btn');
+  const msg     = document.getElementById('cdet-save-msg');
+  if (!grid || !_editCharName) return;
+
+  const fields = {};
+  grid.querySelectorAll('.cdet-field-input').forEach(inp => {
+    const v = inp.value.trim();
+    if (v) fields[inp.dataset.field] = v;
+  });
+
+  saveBtn.disabled = true;
+  saveBtn.textContent = '⏳ Сохранение...';
+
+  try {
+    const resp = await fetch(
+      `/api/characters/${encodeURIComponent(_editCharName)}/fields${window.location.search}`,
+      { method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fields }) }
+    );
+    const d = await resp.json();
+    if (d.ok) {
+      // Update STATE cache
+      const ch = STATE.characters.find(c => c.name === _editCharName);
+      if (ch) Object.assign(ch, Object.fromEntries(
+        Object.entries(fields).map(([k, v]) => [k, v])
+      ));
+      _exitInfoEdit(true);
+      msg.classList.add('show');
+      setTimeout(() => msg.classList.remove('show'), 2500);
+    } else {
+      alert('Ошибка: ' + (d.error || 'не удалось сохранить'));
+    }
+  } catch(e) {
+    alert('Ошибка соединения: ' + e.message);
+  } finally {
+    saveBtn.disabled = false;
+    saveBtn.textContent = 'Сохранить';
+  }
+}
 
 async function triggerImageUpload(charName) {
   const input = document.createElement('input');
