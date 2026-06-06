@@ -73,4 +73,3 @@ photorealistic photography, digital art, anime, cartoon, illustration, watermark
 
 ## 🖼️ Изображения
 
-- [Образ 1 — Цирк.png](tsirk.png)

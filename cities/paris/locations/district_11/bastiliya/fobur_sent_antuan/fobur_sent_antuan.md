@@ -80,4 +80,3 @@ daytime, sunlight, crowds of people, faces in foreground, modern post-2010 eleme
 
 ## 🖼️ Изображения
 
-- [Образ 1 — подвальный этаж  временный схрон.png](podvalnyy_etazh_vremennyy_shron.png)

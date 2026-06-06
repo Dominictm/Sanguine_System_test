@@ -81,5 +81,3 @@ daytime, sunlight, crowds of people, faces in foreground, modern post-2010 eleme
 
 ## 🖼️ Изображения
 
-- [Образ 1 — Порт-де-ла-Шапель-1.png](port_de_la_shapel_1.png)
-- [Образ 2 — Порт-де-ла-Шапель-2.png](port_de_la_shapel_2.png)

@@ -46,7 +46,6 @@
 ---
 
 ## 🖼️ Изображения
-- [Образ 1 — Mécanique Générale» (Гараж Жирона) — Рю де Толбиак.png](m_canique_g_n_rale_garazh_zhirona_ryu_de_tolbiak.png)
 
 ## 🎨 Промт для генерации изображения
 
