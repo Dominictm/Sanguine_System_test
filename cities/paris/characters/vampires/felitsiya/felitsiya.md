@@ -100,5 +100,5 @@ photorealistic, photo, 3D render, CGI, anime style, chibi, watermark, signature,
 
 ## 🖼️ Изображения
 
-- [felitsiya_01.png](art/felitsiya_01.png) — портрет, предоставлен игроком
+-  — портрет, предоставлен игроком
 <!-- фон: чистый чёрный -->

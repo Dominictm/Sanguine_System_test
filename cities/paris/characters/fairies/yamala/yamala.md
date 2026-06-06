@@ -30,8 +30,3 @@
 ---
 
 ## 🖼️ Изображения
-- [Образ 1 — Фея-Ямала-2.jpg](art/feya_yamala_2.jpg)
-- [Образ 2 — Фея-Ямала.jpg](art/feya_yamala.jpg)
-- [Образ 3 (улица) — Ямала на улице.png](art/yamala_na_ulitse.png)
-- [Образ 4 (фригольд) — Ямала-Фригольд.png](art/yamala_frigold.png)
-- [Образ 5 — portrait.png](art/portrait.png)

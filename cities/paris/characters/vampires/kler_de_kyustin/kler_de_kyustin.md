@@ -24,7 +24,12 @@
 - **Дисциплины:** Auspex, Celerity, Presence (клановые Тореадор); Potence (Могущество), Fortitude (боевые — предположительно, оружие: молот)
 - **Деранжементы:** Созависимость с Вереней де Кюстин.
 - **Голос:** Спокойный, ровный — и именно это пугает. Постоянные отсылки к Верене: «она бы сказала», «как Верене». Каждая фраза содержит подразумеваемую угрозу, оформленную как беспокойство. «Если она упадёт — я упаду вместе. Я всегда падаю вместе.»
-- **Отношения:** Верене (младшая сестра), Кетрин/Анет (сводные сёстры), Филиппа (сир/мать).
+- **Отношения:**
+  - [Верене де Кюстин](../verene_de_kyustin/verene_de_kyustin.md) — младшая сестра; созависимость; «если она упадёт — я упаду вместе»
+  - [Анет](../anet/anet.md) — сводная сестра по свите (обращена только Герсоном; повод для зависти)
+  - [Кетрин](../ketrin/ketrin.md) — сводная сестра по свите
+  - [Филиппа де Россет](../filippa_de_rosset/filippa_de_rosset.md) — сир/мать; обращена совместно с Вийоном
+  - [Франсуа Вийон](../fransua_viyon/fransua_viyon.md) — со-сир; Князь Парижа
 - **🎨 Промт для генерации изображения:**
   [Блок 1] Cinematic dark fantasy portrait, tall female Toreador vampire, three-quarter view, long silver-white hair loose and untouched, vivid red eyes, bright crimson lips, dark burgundy-black layered gothic dress beneath a heavy structured black leather jacket with wide lapels — medieval formality wearing modern armor, teardrop-shaped garnet pendant on a silver chain from the XIV century visible at the collar, dark leather combat boots with buckle straps, war hammer resting against her side, constant appraising gaze with a cold edge — not arrogance, the reflex of someone who reads threats before they form words
   [Блок 2] Cold silver light from above, crimson rim-light from the right, ancient deep shadows, dark red-black painterly background with abstract swirling brushstroke textures, stone and old blood in the air
@@ -35,6 +40,4 @@
 ---
 
 ## 🖼️ Изображения
-- [Образ 1 — Клер-1.png](art/kler_1.png)
-- [Образ 3 — Клер-2.png](art/kler_2.png)
 

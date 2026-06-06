@@ -36,7 +36,13 @@
 - **Внешность:** Медно-рыжие волосы, убраны назад. Голубые глаза. Тонкие черты лица — красота средневековой аристократки, не кричащая. Белая рубашка в историческом стиле с широкими рукавами. На шее — кулон в форме звезды (серебро). Взгляд направлен вверх и чуть в сторону — привычка человека, привыкшего искать выход там, где его нет. После Embrace внешность заморожена именно в этом образе: молодая, живая, с лёгкой растерянностью, которую семь веков так и не убрали.
 - **Дисциплины:** Auspex, Celerity, Presence (клановые Тореадор; предположительно); Auspex подтверждено — пророческие видения с детства
 - **Голос:** Теплее Вийона, более личная. Говорит с заботой — даже когда отдаёт приказы. Средневековые обороты иногда проскакивают, особенно в моменты усталости или нежности. «Мои девочки» — не фигура речи, а мироощущение.
-- **Отношения:** К свите (Верене, Клер, Кетрин, Анет) относится как к дочерям. Часто использует фразу *"Мои девочки"*. Герсон — неофициальный советник в 1315–1316, участвовал во взятии замка.
+- **Отношения:**
+  - [Франсуа Вийон](../fransua_viyon/fransua_viyon.md) — сир; Князь Парижа
+  - [Клер де Кюстин](../kler_de_kyustin/kler_de_kyustin.md) — дитя; «Мои девочки»; воин-охранница свиты
+  - [Анет](../anet/anet.md) — дитя Герсона, принята в свиту; «Мои девочки»; охранница
+  - [Верене де Кюстин](../verene_de_kyustin/verene_de_kyustin.md) — «Мои девочки»; дочь по духу
+  - [Кетрин](../ketrin/ketrin.md) — «Мои девочки»
+  - [Герсон](../gerson/gerson.md) — неофициальный советник в 1315–1316; участвовал во взятии замка
 - **🎨 Промт для генерации изображения:**
   [Блок 1] Cinematic dark fantasy portrait, young medieval noblewoman vampire, three-quarter view, copper-auburn curly hair loosely braided and pinned back, pale skin with freckles, clear blue eyes, cream-white medieval dress with wide flowing sleeves in historical fabric, small silver star-shaped pendant necklace, head tilted slightly upward and aside — seven centuries-old habit of seeking exits, expression of lived-through grace
   [Блок 2] Warm golden candlelight from below and the right, cold stone rim-light from the left, medieval shadows, warm gold-black painterly background with abstract swirling brushstroke textures, candlelight and dust
@@ -48,5 +54,3 @@
 
 ## 🖼️ Изображения
 
-- [Образ 2 — Филиппа де Россет.png](art/filippa_de_rosset.png)
-- [Образ 3 — Филиппа де Россет-3.png](art/filippa_de_rosset_3.png)

@@ -33,5 +33,4 @@
 ---
 
 ## 🖼️ Изображения
-- [Кристофер-1.png](art/kristofer_1.png) · [Кристофер-2.png](art/kristofer_2.png)
-- [Образ 1 — Кристофер-2.png](art/kristofer_2.png)
+-  · 

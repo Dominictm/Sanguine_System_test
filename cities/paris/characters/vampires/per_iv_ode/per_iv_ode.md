@@ -25,6 +25,7 @@
   - Агата — подруга, живёт в убежище на 38 Rue de la Clef
   - Мэриам Дэвис — поселилась в убежище с ноября 2010 (по итогам «Приглашения домой»)
   - Эмбер — дочь Агаты и Мэриам, живёт в убежище
+  - [Муса Шимадзу](../musa_shimadzu/musa_shimadzu.md) — Шериф Парижа; пользуется укрытием; характер связи не раскрыт
 - **🎨 Промт для генерации изображения:**
   [Блок 1] Cinematic dark fantasy portrait, young male vampire archon, three-quarter view, long loose dark hair falling across the face, angular face with lean build, multiple rings and layered metal chains, dark sleeveless band shirt, cigarette held loosely between fingers, battered electric guitar leaning nearby, careless stance of someone eight hundred years old pretending not to care
   [Блок 2] Warm amber side-lighting from a lamp, deep red-black rim-light from behind, thick shadows, deep red-black painterly background with abstract swirling brushstroke textures, smoke and haze
@@ -36,4 +37,3 @@
 
 ## 🖼️ Изображения
 
-- [Пьер-Ив Оде-2.png](art/per_iv_ode_2.png)

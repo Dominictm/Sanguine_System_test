@@ -24,7 +24,12 @@
 - **Дисциплины:** Auspex, Fortitude, Mortis (клановые Каппадокийцы; предположительно); Celerity (Стремительность), Potence (Могущество) (боевые — предположительно)
 - **Деранжементы:** Кровавое безумие, кровожадность. Аналогично Кетрин: робкая при Филиппе, жестокая "безумная медсестра" вне контроля.
 - **Голос:** Отстранённая, философская. Говорит о теле и смерти как о нейтральных фактах. Темп медленный, слова тяжёлые. При Филиппе становится чуть живее — не намного.
-- **Отношения:** Герсон (Сир; обратил в 1316, наставлял до 1609; редкий человек, которому она позволяла называть себя «Люси»), Верене (младшая сестра), Кетрин (сестра), Клер (старшая сводная сестра — зависть: Клер обращена Филиппой и Вийоном, Анет — лишь Герсоном; в спорах звучит «Ну и что что ты пряность с вином»), Филиппа (мать/госпожа/объект вожделения).
+- **Отношения:**
+  - [Герсон](../gerson/gerson.md) — Сир; обратил в 1316, наставлял до 1609; редкий человек, которому она позволяла называть себя «Люси»
+  - [Верене де Кюстин](../verene_de_kyustin/verene_de_kyustin.md) — младшая сестра (по крови Кюстинов)
+  - [Кетрин](../ketrin/ketrin.md) — сестра по свите
+  - [Клер де Кюстин](../kler_de_kyustin/kler_de_kyustin.md) — старшая сводная сестра; зависть: Клер обращена Филиппой и Вийоном, Анет — лишь Герсоном; в спорах звучит «Ну и что что ты пряность с вином»
+  - [Филиппа де Россет](../filippa_de_rosset/filippa_de_rosset.md) — мать/госпожа/объект вожделения
 - **🎨 Промт для генерации изображения:**
   [Блок 1] Cinematic dark fantasy portrait, cloaked female Cappadocian vampire, full figure standing, long black hooded cloak with the hood drawn forward concealing the face in deep shadow, black fitted bodice visible beneath, black roses and thorny vines growing through and around the cloak fabric as if alive, the figure absolutely still and waiting — death in a cloak, patient and absolute
   [Блок 2] Cold moonlight from above, deep midnight blue rim-light, shadows consuming everything below the chin, deep blue-black painterly background with abstract swirling brushstroke textures, midnight blue smoke and ghostly black roses
@@ -55,7 +60,3 @@
 ---
 
 ## 🖼️ Изображения
-- [Образ 2 — Анет.png](art/anet.png)
-- [Образ 3 — portrait.png](art/portrait.png)
-- [Образ 4 — Анет-3.png](art/anet_3.png)
-- [Образ 5 — Анет-4.png](art/anet_4.png)

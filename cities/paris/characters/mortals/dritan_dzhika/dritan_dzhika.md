@@ -23,6 +23,7 @@
 - **Отношения:**
   - Его группа — восемь человек на встрече; не все имена известны
   - Карлос — информатор, называл его «одним из клиентов»; Джика его не знает лично
+  - [Руслан Агаев](../ruslan_agaev/ruslan_agaev.md) — конкурент; противник на январской встрече у склада
 
 - **🎨 Промт для генерации изображения:**
   [Блок 1] Cinematic dark fantasy portrait, mortal man early thirties, Albanian criminal veteran of the Yugoslav Wars, three-quarter view, massive stocky powerful build formed by war and physical labour — not a gym body, a soldier's body, long dark hair slicked straight back from the face, hard angular Mediterranean features with an intense unsmiling gaze, heavy tattoos covering neck and upper chest visible through open collar of a black shirt, no jewellery, no ornaments — the body is the statement, expression of absolute territorial authority and zero patience
@@ -34,4 +35,3 @@
 ---
 
 ## 🖼️ Изображения
-- [Образ 1 — Дритан Джика.png](art/dritan_dzhika.png)

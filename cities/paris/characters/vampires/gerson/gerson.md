@@ -69,5 +69,3 @@
 
 ## 🖼️ Изображения
 
-- [Образ 1 — Человеческий облик](art/gerson_chelovek.png)
-- [Образ 2 — Иссушённый проклятием](art/gerson_izsuschenyy.png)

@@ -24,7 +24,11 @@
 - **Дисциплины:** Animalism, Auspex, Vicissitude (клановые Цимисхи; предположительно); Celerity (Стремительность), Potence (Могущество) (боевые — предположительно)
 - **Деранжементы:** Кровавое безумие, кровожадность. При Филиппе: робкая и покорная. Вне контроля: "Безумная медсестра" (насилие, излишняя жестокость).
 - **Голос:** При Филиппе — тихая, отвечает минимально, почти не инициирует. Вне контроля — те же слова, другая интонация: пустая и клиническая, как у человека, которому неинтересно, что ты чувствуешь.
-- **Отношения:** Верене (младшая сестра), Клер (старшая сводная сестра), Анет (сестра), Филиппа (мать/госпожа/объект вожделения).
+- **Отношения:**
+  - [Верене де Кюстин](../verene_de_kyustin/verene_de_kyustin.md) — младшая сестра; в торпоре вместе 1609–2010; пробудились одновременно
+  - [Клер де Кюстин](../kler_de_kyustin/kler_de_kyustin.md) — старшая сводная сестра по свите
+  - [Анет](../anet/anet.md) — сестра по свите
+  - [Филиппа де Россет](../filippa_de_rosset/filippa_de_rosset.md) — госпожа/мать/объект вожделения
 - **🎨 Промт для генерации изображения:**
   [Блок 1] Cinematic dark fantasy portrait, female Tzimisce vampire, three-quarter view, long dark hair loose to the waist, red leather jacket with high structured collar, black leather gloves, signature red narrow rectangular glasses, body angled slightly, watching the viewer from behind the lenses, expression of clinical empty calm — nothing to read, nothing given away, nothing human left behind the lenses
   [Блок 2] Harsh red light from the right, deep red-black rim-light from behind, cold shadows, red-black painterly background with abstract swirling brushstroke textures, blood-crimson smoke and cold air
@@ -55,6 +59,3 @@
 ---
 
 ## 🖼️ Изображения
-- [Образ 2 — Кетрин.png](art/ketrin.png)
-- [Образ 3 — Кетрин-3.png](art/ketrin_3.png)
-- [Образ 4 — Кетрин-4.png](art/ketrin_4.png)

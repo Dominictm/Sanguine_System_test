@@ -21,6 +21,8 @@
   - Аня (личный гуль; сестра Джека)
   - [Джек](../dzhek/dzhek.md) (неонат берлинской капеллы, переведён в Париж — должен несколько одолжений; брат Ани)
   - [Эмилия Индра-Ландорг](../emiliya_indra_landorg/emiliya_indra_landorg.md) (неофит, прислана на обучение в 2010; жена Ганеша; единственный известный контакт в домене)
+  - [Ева](../eva/eva.md) (Малкавиан-неонат; связана с расследованием гибели руководства «Иль-де-Франс», которым владеет Жонсьер)
+  - [Ганеш](../ganesh/ganesh.md) (Тремер; наводил справки через жену — Эмилию; официальной связи не признаёт)
 
 - **🎨 Промт для генерации изображения:**
   [Блок 1] Cinematic dark fantasy portrait, female vampire primogen of clan Tremere, three-quarter view, wild voluminous blue-violet hair exploding untamed around the face, pale skin, long black opera gloves with decorative claw extensions, multi-tiered theatrical gown in deep purple with white lace ruffles and trailing hem, posture of absolute authority — she knows you have already lost, slight amused expression
@@ -33,4 +35,3 @@
 
 ## 🖼️ Изображения
 
-- [Образ 2 — Софи Жонсьер-2.png](art/sofi_zhonser_2.png)

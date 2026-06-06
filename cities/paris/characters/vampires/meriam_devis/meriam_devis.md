@@ -39,6 +39,3 @@
 
 ## 🖼️ Изображения
 
-- [Образ 1 — Мэриам Дэвис1.jpg](art/meriam_devis1.jpg)
-- [Образ 2 — Мэриам Дэвис2.jpg](art/meriam_devis2.jpg)
-- [Образ 3 — Мэриам Дэвис.png](art/meriam_devis.png)

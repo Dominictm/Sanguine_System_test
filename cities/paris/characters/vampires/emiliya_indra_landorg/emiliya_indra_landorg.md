@@ -62,4 +62,3 @@
 ---
 
 ## 🖼️ Изображения
-- [Образ 1 — portrait.png](art/portrait.png)
