@@ -387,12 +387,22 @@ document.getElementById('search-input').addEventListener('input', e => {
 });
 
 // ── Grid carousel ─────────────────────────────────────────────────────────────
+const GRID_INTERVAL = 60 * 1000;   // 1 минута
+
 let _gridImages  = {};   // name → [url, ...]
 let _gridIdxs    = {};   // name → current index
-let _gridTimer   = null;
+let _gridTimers  = {};   // name → intervalID
+let _gridInitTO  = {};   // name → initial-delay timeoutID
+
+function _clearGridTimers() {
+  for (const id of Object.values(_gridTimers)) clearInterval(id);
+  for (const id of Object.values(_gridInitTO)) clearTimeout(id);
+  _gridTimers = {};
+  _gridInitTO = {};
+}
 
 async function initGridCarousels() {
-  if (_gridTimer) { clearInterval(_gridTimer); _gridTimer = null; }
+  _clearGridTimers();
 
   const qs   = window.location.search;
   const resp = await fetch('/api/characters/all-images' + qs).catch(() => null);
@@ -402,7 +412,15 @@ async function initGridCarousels() {
   for (const name of Object.keys(_gridImages)) _gridIdxs[name] = 0;
 
   _injectGridDims();
-  _gridTimer = setInterval(_advanceGridCarousels, 2 * 60 * 1000);
+
+  // Каждая карточка стартует со случайным сдвигом 0..59 с
+  for (const name of Object.keys(_gridImages)) {
+    const delay = Math.floor(Math.random() * GRID_INTERVAL);
+    _gridInitTO[name] = setTimeout(() => {
+      _advanceCard(name);
+      _gridTimers[name] = setInterval(() => _advanceCard(name), GRID_INTERVAL);
+    }, delay);
+  }
 }
 
 function _injectGridDims() {
@@ -415,21 +433,21 @@ function _injectGridDims() {
   }
 }
 
-function _advanceGridCarousels() {
-  for (const [name, images] of Object.entries(_gridImages)) {
-    const card = document.querySelector(`.char-card[data-name="${CSS.escape(name)}"]`);
-    if (!card) continue;
-    const img = card.querySelector('.char-card-art');
-    const dim = card.querySelector('.char-card-dim');
-    if (!img || !dim) continue;
+function _advanceCard(name) {
+  const images = _gridImages[name];
+  if (!images) return;
+  const card = document.querySelector(`.char-card[data-name="${CSS.escape(name)}"]`);
+  if (!card) return;
+  const img = card.querySelector('.char-card-art');
+  const dim = card.querySelector('.char-card-dim');
+  if (!img || !dim) return;
 
-    dim.classList.add('dark');
-    setTimeout(() => {
-      _gridIdxs[name] = (_gridIdxs[name] + 1) % images.length;
-      img.src = images[_gridIdxs[name]];
-      setTimeout(() => dim.classList.remove('dark'), 200);
-    }, 800);
-  }
+  dim.classList.add('dark');
+  setTimeout(() => {
+    _gridIdxs[name] = (_gridIdxs[name] + 1) % images.length;
+    img.src = images[_gridIdxs[name]];
+    setTimeout(() => dim.classList.remove('dark'), 200);
+  }, 800);
 }
 
 document.getElementById('filter-lineage').addEventListener('change', e => {
@@ -1823,7 +1841,7 @@ async function initCarousel(charName) {
     ).join('');
   }
 
-  _carouselTimer = setInterval(() => _carouselGoTo(_carouselIdx + 1), 2 * 60 * 1000);
+  _carouselTimer = setInterval(() => _carouselGoTo(_carouselIdx + 1), 60 * 1000);
 }
 
 function _carouselGoTo(targetIdx, resetTimer = false) {
@@ -1857,7 +1875,7 @@ function _carouselGoTo(targetIdx, resetTimer = false) {
   // Reset auto-timer on manual nav
   if (resetTimer && _carouselTimer) {
     clearInterval(_carouselTimer);
-    _carouselTimer = setInterval(() => _carouselGoTo(_carouselIdx + 1), 2 * 60 * 1000);
+    _carouselTimer = setInterval(() => _carouselGoTo(_carouselIdx + 1), 60 * 1000);
   }
 }
 
