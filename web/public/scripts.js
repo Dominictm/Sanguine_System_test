@@ -446,8 +446,8 @@ function _advanceCard(name) {
   setTimeout(() => {
     _gridIdxs[name] = (_gridIdxs[name] + 1) % images.length;
     img.src = images[_gridIdxs[name]];
-    setTimeout(() => dim.classList.remove('dark'), 200);
-  }, 800);
+    setTimeout(() => dim.classList.remove('dark'), 300);
+  }, 2100);
 }
 
 document.getElementById('filter-lineage').addEventListener('change', e => {
@@ -1869,8 +1869,8 @@ function _carouselGoTo(targetIdx, resetTimer = false) {
     }
 
     // Phase 3: un-darken
-    setTimeout(() => overlay.classList.remove('dimmed'), 200);
-  }, 800);
+    setTimeout(() => overlay.classList.remove('dimmed'), 300);
+  }, 2100);
 
   // Reset auto-timer on manual nav
   if (resetTimer && _carouselTimer) {
