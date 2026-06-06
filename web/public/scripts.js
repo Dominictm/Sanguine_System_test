@@ -2387,14 +2387,21 @@ modalSubmit.addEventListener('click', async () => {
   modalOut.className = 'output-area show';
   modalOut.textContent = '';
 
+  const TYPE_TO_LINEAGE = {
+    vampire: 'vampires', mortal: 'mortals', fairy: 'fairies',
+    werewolf: 'werewolves', mage: 'mages', hunter: 'hunters'
+  };
+  const lineageFolder = TYPE_TO_LINEAGE[def.type] || 'mortals';
+  const npcArgs = [CITY, lineageFolder, params.Name, params.Clan || params.Role || ''].filter((a, i) => i < 3 || a);
+
   try {
-    const r = await fetch('/api/run-tool', {
+    const r = await fetch('/api/tool/new_npc', {
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ tool:'new_npc', params })
+      body: JSON.stringify({ args: npcArgs })
     });
     const d = await r.json();
     modalOut.textContent = d.output || '(нет вывода)';
-    if (d.success) {
+    if (d.ok) {
       modalOut.classList.add('ok');
       STATE.graph.inited = false;
 
