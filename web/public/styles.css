@@ -1348,7 +1348,8 @@ background: linear-gradient(180deg, rgb(121 4 4 / 2%) 0%, rgb(139 0 0 / 35%) 100
 }
 .cdet-upload-row { margin-top: 18px; }
 
-.cdet-gen-prompt-btn {
+.cdet-gen-prompt-btn,
+.cdet-gen-appearance-btn {
   background: rgba(184,134,11,.1);
   border: 1px solid var(--gold);
   color: var(--gold);
@@ -1361,7 +1362,9 @@ background: linear-gradient(180deg, rgb(121 4 4 / 2%) 0%, rgb(139 0 0 / 35%) 100
   cursor: pointer;
   transition: background .2s;
 }
-.cdet-gen-prompt-btn:hover { background: rgba(184,134,11,.25); }
+.cdet-gen-prompt-btn:hover,
+.cdet-gen-appearance-btn:hover { background: rgba(184,134,11,.25); }
+.cdet-gen-appearance-btn:disabled { opacity: .5; cursor: default; }
 
 .cdet-field-input {
   background: var(--bg);

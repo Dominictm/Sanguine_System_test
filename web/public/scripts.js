@@ -1789,6 +1789,7 @@ function openCharDetail(name) {
         </div>
         <div class="cdet-panel" data-panel="desc">
           <div class="cdet-info-header" style="gap:8px">
+            <button class="cdet-gen-appearance-btn" id="cdet-gen-appearance" data-char="${escHtml(c.name)}" title="Сгенерировать описание внешности по артам персонажа (Claude Vision)">👁 Внешность по арту</button>
             <button class="cdet-gen-prompt-btn" id="cdet-gen-prompt" data-char="${escHtml(c.name)}" title="Сгенерировать промт на основе внешности персонажа">🎨 Промт</button>
             <button class="cdet-edit-btn" data-editpanel="desc" data-char="${escHtml(c.name)}">✏ Редактировать</button>
           </div>
@@ -1857,6 +1858,7 @@ document.getElementById('char-detail-content').addEventListener('click', e => {
   if (cancelPanelBtn) { _togglePanelEdit(cancelPanelBtn.dataset.cancelpanel, false); return; }
   const savePanelBtn = e.target.closest('[data-savepanel]');
   if (savePanelBtn) { _savePanelEdit(savePanelBtn.dataset.savepanel, savePanelBtn.dataset.char); return; }
+  if (e.target.closest('#cdet-gen-appearance')) { _generateAppearance(e.target.closest('#cdet-gen-appearance').dataset.char); return; }
   if (e.target.closest('#cdet-gen-prompt')) { _generatePrompt(e.target.closest('#cdet-gen-prompt').dataset.char); return; }
 
   const uploadBtn = e.target.closest('.cdet-upload-btn');
@@ -2054,6 +2056,42 @@ async function _savePanelEdit(panel, charName) {
   if (ok) {
     _togglePanelEdit(panel, false);
     if (msg) { msg.classList.add('show'); setTimeout(() => msg.classList.remove('show'), 2500); }
+  }
+}
+
+async function _generateAppearance(charName) {
+  const btn = document.getElementById('cdet-gen-appearance');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Анализ арта...'; }
+
+  try {
+    const resp = await fetch(
+      `/api/characters/${encodeURIComponent(charName)}/generate-appearance${window.location.search}`,
+      { method: 'POST', headers: { 'Content-Type': 'application/json' } }
+    );
+    const d = await resp.json();
+
+    if (!d.ok) {
+      alert('Ошибка: ' + (d.error || 'не удалось сгенерировать'));
+      return;
+    }
+
+    // Открываем редактирование и вставляем результат
+    if (document.getElementById('cdet-desc-edit')?.style.display === 'none') {
+      _togglePanelEdit('desc', true);
+    }
+    const ta = document.getElementById('cdet-appearance-ta');
+    if (ta) {
+      ta.value = d.appearance;
+      ta.focus();
+      ta.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    // Показываем сколько изображений использовано
+    if (btn) btn.title = `Использовано изображений: ${d.imagesUsed}`;
+  } catch(e) {
+    alert('Ошибка соединения: ' + e.message);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '👁 Внешность по арту'; }
   }
 }
 

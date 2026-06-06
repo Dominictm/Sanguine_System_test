@@ -3,6 +3,7 @@ const path    = require('path');
 const fs      = require('fs').promises;
 const crypto  = require('crypto');
 const { spawn } = require('child_process');
+const Anthropic = require('@anthropic-ai/sdk');
 
 const app  = express();
 const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3000;
@@ -1165,6 +1166,71 @@ app.put('/api/characters/:name/relations', express.json(), async (req, res) => {
     await fs.writeFile(cardPath, card, 'utf-8');
     delete _cache[city];
     res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── Generate appearance from art images via Claude Vision ─────────────────────
+
+app.post('/api/characters/:name/generate-appearance', express.json(), async (req, res) => {
+  try {
+    const apiKey = process.env.ANTHROPIC_API_KEY;
+    if (!apiKey) return res.status(503).json({ error: 'ANTHROPIC_API_KEY не задан. Добавь в .env или start.bat: set ANTHROPIC_API_KEY=sk-...' });
+
+    const name = decodeURIComponent(req.params.name);
+    const city = reqCity(req);
+    const chars = await getAllCharacters(city);
+    const char  = chars.find(c => c.name === name);
+    if (!char) return res.status(404).json({ error: 'Персонаж не найден' });
+
+    const artDir = path.join(charsDir(city), char.lineageFolder, char.slug, 'art');
+    const files  = await fs.readdir(artDir).catch(() => []);
+    const imgs   = files.filter(f => /\.(jpg|jpeg|png|webp|gif)$/i.test(f)).sort();
+
+    if (!imgs.length) return res.status(400).json({ error: 'Нет изображений в папке art/ персонажа' });
+
+    // Load up to 4 images as base64
+    const MAX_IMGS = 4;
+    const imgContents = [];
+    for (const f of imgs.slice(0, MAX_IMGS)) {
+      const buf = await fs.readFile(path.join(artDir, f));
+      const ext = f.split('.').pop().toLowerCase();
+      const mime = ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg'
+                 : ext === 'png'  ? 'image/png'
+                 : ext === 'webp' ? 'image/webp'
+                 : 'image/gif';
+      imgContents.push({ type: 'image', source: { type: 'base64', media_type: mime, data: buf.toString('base64') } });
+    }
+
+    const lineageName = { vampires: 'вампира', fairies: 'феи / ченджлинга', mortals: 'смертного',
+      werewolves: 'оборотня', mages: 'мага', hunters: 'охотника' }[char.lineageFolder] || 'персонажа';
+
+    const prompt = `Ты — редактор персонажных карточек для настольной RPG Vampire: The Masquerade.
+Перед тобой ${imgContents.length > 1 ? `${imgContents.length} изображения` : 'изображение'} ${lineageName} по имени ${char.name}.
+
+Опиши внешность этого персонажа для карточки. Требования:
+- 3–5 конкретных визуальных маркеров (лицо, волосы, кожа, глаза, одежда, характерные детали)
+- Стиль: лаконичный, образный, готический. Без «воды».
+- Язык: русский.
+- Формат: один абзац, без списков и заголовков.
+- Упомяни всё необычное, характерное, запоминающееся.`;
+
+    const client = new Anthropic({ apiKey });
+    const message = await client.messages.create({
+      model: 'claude-opus-4-8',
+      max_tokens: 400,
+      messages: [{
+        role: 'user',
+        content: [
+          ...imgContents,
+          { type: 'text', text: prompt }
+        ]
+      }]
+    });
+
+    const appearance = message.content[0]?.text?.trim() || '';
+    res.json({ ok: true, appearance, imagesUsed: imgs.slice(0, MAX_IMGS).length });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
