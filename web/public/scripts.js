@@ -1626,6 +1626,8 @@ function openCharDetail(name) {
     ? `<div class="cdet-carousel" id="cdet-carousel">
         <img class="cdet-carousel-img" id="cdet-carousel-img" src="${c.imageUrl}" alt="${escHtml(c.name)}">
         <div class="cdet-carousel-overlay" id="cdet-carousel-overlay"></div>
+        <button class="cdet-carousel-btn prev" id="cdet-carousel-prev" title="Предыдущее">&#8249;</button>
+        <button class="cdet-carousel-btn next" id="cdet-carousel-next" title="Следующее">&#8250;</button>
         <div class="cdet-carousel-dots" id="cdet-carousel-dots"></div>
        </div>`
     : `<div class="cdet-no-portrait">${icon}</div>`;
@@ -1719,6 +1721,9 @@ document.getElementById('char-detail-content').addEventListener('click', e => {
     if (panels) panels.scrollTop = 0;
     return;
   }
+  if (e.target.closest('#cdet-carousel-prev')) { _carouselGoTo(_carouselIdx - 1, true); return; }
+  if (e.target.closest('#cdet-carousel-next')) { _carouselGoTo(_carouselIdx + 1, true); return; }
+
   const uploadBtn = e.target.closest('.cdet-upload-btn');
   if (uploadBtn) { triggerImageUpload(uploadBtn.dataset.char); return; }
 
@@ -1753,7 +1758,12 @@ async function initCarousel(charName) {
     .catch(() => null);
   if (!resp?.ok) return;
   const { images } = await resp.json().catch(() => ({}));
-  if (!images || images.length <= 1) return;  // single image — no carousel needed
+  if (!images || images.length <= 1) {
+    // Hide nav buttons for single image
+    document.getElementById('cdet-carousel-prev')?.style.setProperty('display','none');
+    document.getElementById('cdet-carousel-next')?.style.setProperty('display','none');
+    return;
+  }
 
   _carouselImages = images;
   _carouselIdx    = 0;
@@ -1766,10 +1776,10 @@ async function initCarousel(charName) {
     ).join('');
   }
 
-  _carouselTimer = setInterval(() => _carouselAdvance(), 2 * 60 * 1000);
+  _carouselTimer = setInterval(() => _carouselGoTo(_carouselIdx + 1), 2 * 60 * 1000);
 }
 
-function _carouselAdvance() {
+function _carouselGoTo(targetIdx, resetTimer = false) {
   const img     = document.getElementById('cdet-carousel-img');
   const overlay = document.getElementById('cdet-carousel-overlay');
   const dotsEl  = document.getElementById('cdet-carousel-dots');
@@ -1777,12 +1787,14 @@ function _carouselAdvance() {
     clearInterval(_carouselTimer); _carouselTimer = null; return;
   }
 
+  const next = ((targetIdx % _carouselImages.length) + _carouselImages.length) % _carouselImages.length;
+
   // Phase 1: darken
   overlay.classList.add('dimmed');
 
   setTimeout(() => {
     // Phase 2: swap image
-    _carouselIdx = (_carouselIdx + 1) % _carouselImages.length;
+    _carouselIdx = next;
     img.src = _carouselImages[_carouselIdx];
 
     // Update dots
@@ -1791,9 +1803,18 @@ function _carouselAdvance() {
         d.classList.toggle('active', i === _carouselIdx));
     }
 
-    // Phase 3: un-darken (slight delay so new image can start loading)
+    // Phase 3: un-darken
     setTimeout(() => overlay.classList.remove('dimmed'), 200);
   }, 800);
+
+  // Reset auto-timer on manual nav
+  if (resetTimer && _carouselTimer) {
+    clearInterval(_carouselTimer);
+    _carouselTimer = setInterval(() => _carouselGoTo(_carouselIdx + 1), 2 * 60 * 1000);
+  }
+}
+
+function _carouselAdvance() { _carouselGoTo(_carouselIdx + 1); }
 }
 
 // Stop carousel when modal closes
@@ -1831,6 +1852,8 @@ async function triggerImageUpload(charName) {
         if (col) col.innerHTML = `<div class="cdet-carousel" id="cdet-carousel">
           <img class="cdet-carousel-img" id="cdet-carousel-img" src="${newUrl}" alt="${escHtml(charName)}">
           <div class="cdet-carousel-overlay" id="cdet-carousel-overlay"></div>
+          <button class="cdet-carousel-btn prev" id="cdet-carousel-prev" title="Предыдущее">&#8249;</button>
+          <button class="cdet-carousel-btn next" id="cdet-carousel-next" title="Следующее">&#8250;</button>
           <div class="cdet-carousel-dots" id="cdet-carousel-dots"></div>
          </div>`;
         initCarousel(charName);
