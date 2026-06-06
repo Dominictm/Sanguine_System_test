@@ -28,7 +28,7 @@
 **Глобальное** (одно на все города) — `system/`:
 
 - `rules/` — `npcs_city.md` (протокол НПС), `module_rules.md`, `diary_rules.md`, `chronicle.md`, `character_sheet_v20.md` (V20-листы), `portret.md` (промты изображений), `CHECKLIST.md` (мастер-чеклист).
-- `schema/` — `card_schema.md` (контракт карточки), `validate_cards.js` (линтер), `restructure_runbook.md`.
+- `schema/` — `card_schema.md` (контракт карточки), `validate_cards.js` (линтер).
 
 **Инструменты** — `tools/`. **Веб-интерфейс** — `web/`.
 
