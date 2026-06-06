@@ -15,9 +15,12 @@ const LINEAGE = {
 const _TR = { а:'a',б:'b',в:'v',г:'g',д:'d',е:'e',ё:'e',ж:'zh',з:'z',и:'i',й:'y',к:'k',л:'l',м:'m',н:'n',о:'o',п:'p',р:'r',с:'s',т:'t',у:'u',ф:'f',х:'h',ц:'ts',ч:'ch',ш:'sh',щ:'sch',ъ:'',ы:'y',ь:'',э:'e',ю:'yu',я:'ya' };
 const slugify = s => s.toLowerCase().split('').map(c => _TR[c] !== undefined ? _TR[c] : c).join('').replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').replace(/_+/g, '_');
 
-const [city, lineage, name, clan] = [process.argv[2], process.argv[3], process.argv[4], process.argv[5] || ''];
+const [city, lineage, name, clan, sect, role] = [
+  process.argv[2], process.argv[3], process.argv[4],
+  process.argv[5] || '', process.argv[6] || '', process.argv[7] || ''
+];
 if (!city || !LINEAGE[lineage] || !name) {
-  console.error('Использование: node tools/new_npc.js <city> <vampires|fairies|mortals|werewolves|mages|hunters> "<Имя>" ["<Клан/Раса>"]');
+  console.error('Использование: node tools/new_npc.js <city> <vampires|fairies|mortals|werewolves|mages|hunters> "<Имя>" ["<Клан>"] ["<Секта>"] ["<Роль>"]');
   process.exit(1);
 }
 const cityDir = path.join(ROOT, 'cities', city);
@@ -47,8 +50,9 @@ const card = `# ${emoji} ${name}
 - **Родной город:** ${cityName}
 - **Линейка WoD:** ${LINEAGE[lineage]}
 - **Клан / Раса:** ${clan || '⚠️ Требуется уточнение'}
+- **Секта / Двор:** ${sect || '⚠️ Требуется уточнение'}
 - **Статус:** Жив
-- **Роль:** ⚠️ Требуется уточнение
+- **Роль:** ${role || '⚠️ Требуется уточнение'}
 - **Биография:** ⚠️ Требуется уточнение
 - **Внешность:** ⚠️ Требуется уточнение (3–5 визуальных маркеров)
 - **Голос:** ⚠️ Требуется уточнение

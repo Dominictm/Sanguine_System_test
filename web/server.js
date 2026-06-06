@@ -1071,6 +1071,9 @@ const EDITABLE_FIELD_MAP = {
   disciplines:  'Дисциплины',
   profession:   'Профессия',
   role:         'Роль',
+  biography:    'Биография',
+  appearance:   'Внешность',
+  voice:        'Голос',
 };
 
 app.put('/api/characters/:name/fields', express.json(), async (req, res) => {
@@ -1086,21 +1089,76 @@ app.put('/api/characters/:name/fields', express.json(), async (req, res) => {
     const cardPath = path.join(charsDir(city), char.lineageFolder, char.slug, `${char.slug}.md`);
     let card = await fs.readFile(cardPath, 'utf-8');
 
-    for (const [key, value] of Object.entries(fields)) {
+    for (const [key, rawValue] of Object.entries(fields)) {
+      // imagePrompt / negativePrompt — multi-line indented block
+      if (key === 'imagePrompt') {
+        const indented = rawValue.split('\n').map(l => l.trim() ? '  ' + l.trim() : '').join('\n');
+        const blockRe = /(-\s*\*\*[^*]*Промт для генерации[^*]*\*\*[^\n]*\n)((?:[ \t]+[^\n]+\n?)+)/;
+        if (blockRe.test(card)) {
+          card = card.replace(blockRe, `$1${indented}\n`);
+        }
+        continue;
+      }
+      if (key === 'negativePrompt') {
+        const indented = rawValue.split('\n').map(l => l.trim() ? '  ' + l.trim() : '').join('\n');
+        const blockRe = /(-\s*\*\*[^*]*Негативный промт[^*]*\*\*[^\n]*\n)((?:[ \t]+[^\n]+\n?)+)/;
+        if (blockRe.test(card)) {
+          card = card.replace(blockRe, `$1${indented}\n`);
+        }
+        continue;
+      }
+
       const mdKey = EDITABLE_FIELD_MAP[key];
       if (!mdKey) continue;
+      const value   = String(rawValue).replace(/\n+/g, ' ').trim(); // single-line fields
       const escaped = mdKey.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       const lineRe  = new RegExp(`^(- \\*\\*${escaped}[^*]*:\\*\\*).*$`, 'm');
       const newLine = `- **${mdKey}:** ${value}`;
       if (lineRe.test(card)) {
         card = card.replace(lineRe, newLine);
       } else {
-        // Append after the last bullet key-value field
         const lastM = [...card.matchAll(/^- \*\*[^*:\n]+[^*]*:\*\*\s*.+$/gm)].at(-1);
         if (lastM) {
           const pos = lastM.index + lastM[0].length;
           card = card.slice(0, pos) + '\n' + newLine + card.slice(pos);
         }
+      }
+    }
+
+    await fs.writeFile(cardPath, card, 'utf-8');
+    delete _cache[city];
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── Update relations block ─────────────────────────────────────────────────────
+
+app.put('/api/characters/:name/relations', express.json(), async (req, res) => {
+  try {
+    const name   = decodeURIComponent(req.params.name);
+    const city   = reqCity(req);
+    const lines  = req.body.lines || []; // array of strings "Имя — описание"
+
+    const chars = await getAllCharacters(city);
+    const char  = chars.find(c => c.name === name);
+    if (!char) return res.status(404).json({ error: 'Персонаж не найден' });
+
+    const cardPath = path.join(charsDir(city), char.lineageFolder, char.slug, `${char.slug}.md`);
+    let card = await fs.readFile(cardPath, 'utf-8');
+
+    const bullets = lines.filter(l => l.trim()).map(l => `  - ${l.trim()}`).join('\n');
+    const newBlock = `- **Отношения:**\n${bullets || '  - —'}`;
+
+    const relRe = /- \*\*Отношения:\*\*\n((?:[ \t]+- .+\n?)+)/;
+    if (relRe.test(card)) {
+      card = card.replace(relRe, newBlock + '\n');
+    } else {
+      // Append before the prompt section or at end of fields
+      const insertBefore = card.indexOf('- **🎨');
+      if (insertBefore !== -1) {
+        card = card.slice(0, insertBefore) + newBlock + '\n' + card.slice(insertBefore);
       }
     }
 

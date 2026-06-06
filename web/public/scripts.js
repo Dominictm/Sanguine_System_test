@@ -1750,22 +1750,69 @@ function openCharDetail(name) {
           </div>
         </div>
         <div class="cdet-panel" data-panel="bio">
-          ${c.biography && !c.biography.includes('⚠️')
-            ? `<div class="cdet-bio">${escHtml(c.biography)}</div>`
-            : '<div class="cdet-empty">Биография не заполнена</div>'}
+          <div class="cdet-info-header">
+            <button class="cdet-edit-btn" data-editpanel="bio" data-char="${escHtml(c.name)}">✏ Редактировать</button>
+          </div>
+          <div id="cdet-bio-view">
+            ${c.biography && !c.biography.includes('⚠️')
+              ? `<div class="cdet-bio">${escHtml(c.biography)}</div>`
+              : '<div class="cdet-empty">Биография не заполнена</div>'}
+          </div>
+          <div id="cdet-bio-edit" style="display:none">
+            <textarea class="cdet-edit-textarea" id="cdet-bio-ta" rows="10" placeholder="Биография персонажа...">${c.biography && !c.biography.includes('⚠️') ? escHtml(c.biography) : ''}</textarea>
+          </div>
+          <div class="cdet-edit-bar" id="cdet-bio-bar">
+            <button class="cdet-save-btn" data-savepanel="bio" data-char="${escHtml(c.name)}">Сохранить</button>
+            <button class="cdet-cancel-btn" data-cancelpanel="bio">Отмена</button>
+            <span class="cdet-save-msg" id="cdet-bio-msg">✓ Сохранено</span>
+          </div>
         </div>
         <div class="cdet-panel" data-panel="rels">
-          ${relsHtml
-            ? `<div class="cdet-rels-list">${relsHtml}</div>`
-            : '<div class="cdet-empty">Нет известных связей</div>'}
+          <div class="cdet-info-header">
+            <button class="cdet-edit-btn" data-editpanel="rels" data-char="${escHtml(c.name)}">✏ Редактировать</button>
+          </div>
+          <div id="cdet-rels-view">
+            ${relsHtml ? `<div class="cdet-rels-list">${relsHtml}</div>` : '<div class="cdet-empty">Нет известных связей</div>'}
+          </div>
+          <div id="cdet-rels-edit" style="display:none">
+            <div class="cdet-rels-hint">Каждая строка: <em>Имя — описание связи</em></div>
+            <textarea class="cdet-edit-textarea" id="cdet-rels-ta" rows="10" placeholder="Имя — описание связи">${(c.relationships||[]).map(r => `${r.target} — ${r.description}`).join('\n')}</textarea>
+          </div>
+          <div class="cdet-edit-bar" id="cdet-rels-bar">
+            <button class="cdet-save-btn" data-savepanel="rels" data-char="${escHtml(c.name)}">Сохранить</button>
+            <button class="cdet-cancel-btn" data-cancelpanel="rels">Отмена</button>
+            <span class="cdet-save-msg" id="cdet-rels-msg">✓ Сохранено</span>
+          </div>
         </div>
         <div class="cdet-panel" data-panel="diaries">
           ${renderDiaryList(c)}
         </div>
         <div class="cdet-panel" data-panel="desc">
-          ${descHtml || '<div class="cdet-empty">Описание не заполнено</div>'}
-          <button class="cdet-upload-btn" data-char="${escHtml(c.name)}">📷 Загрузить изображение</button>
-          ${c.imageUrl ? '<div class="cdet-upload-hint">Загрузите новое изображение чтобы заменить текущее</div>' : ''}
+          <div class="cdet-info-header" style="gap:8px">
+            <button class="cdet-gen-prompt-btn" id="cdet-gen-prompt" data-char="${escHtml(c.name)}" title="Сгенерировать промт на основе внешности персонажа">🎨 Промт</button>
+            <button class="cdet-edit-btn" data-editpanel="desc" data-char="${escHtml(c.name)}">✏ Редактировать</button>
+          </div>
+          <div id="cdet-desc-view">
+            ${descHtml || '<div class="cdet-empty">Описание не заполнено</div>'}
+          </div>
+          <div id="cdet-desc-edit" style="display:none">
+            <div class="cdet-section-title">Внешность</div>
+            <textarea class="cdet-edit-textarea" id="cdet-appearance-ta" rows="5" placeholder="Внешность персонажа...">${c.appearance && !c.appearance.includes('⚠️') ? escHtml(c.appearance) : ''}</textarea>
+            <div class="cdet-section-title" style="margin-top:12px">Голос</div>
+            <textarea class="cdet-edit-textarea" id="cdet-voice-ta" rows="3" placeholder="Голос, манера речи...">${c.voice && !c.voice.includes('⚠️') ? escHtml(c.voice) : ''}</textarea>
+            <div class="cdet-section-title" style="margin-top:12px">Промт для генерации изображения</div>
+            <textarea class="cdet-edit-textarea" id="cdet-prompt-ta" rows="6" placeholder="[Блок 1] ...\n[Блок 2] ...\n[Блок 3] ...">${c.imagePrompt ? escHtml(c.imagePrompt) : ''}</textarea>
+            <div class="cdet-section-title" style="margin-top:12px">Негативный промт</div>
+            <textarea class="cdet-edit-textarea" id="cdet-negprompt-ta" rows="3" placeholder="photorealistic, ...">${c.negativePrompt ? escHtml(c.negativePrompt) : ''}</textarea>
+          </div>
+          <div class="cdet-edit-bar" id="cdet-desc-bar">
+            <button class="cdet-save-btn" data-savepanel="desc" data-char="${escHtml(c.name)}">Сохранить</button>
+            <button class="cdet-cancel-btn" data-cancelpanel="desc">Отмена</button>
+            <span class="cdet-save-msg" id="cdet-desc-msg">✓ Сохранено</span>
+          </div>
+          <div class="cdet-upload-row">
+            <button class="cdet-upload-btn" data-char="${escHtml(c.name)}">📷 Загрузить изображение</button>
+          </div>
         </div>
       </div>
     </div>`;
@@ -1802,6 +1849,15 @@ document.getElementById('char-detail-content').addEventListener('click', e => {
   if (e.target.closest('#cdet-edit-btn'))    { _enterInfoEdit(e.target.closest('#cdet-edit-btn').dataset.char); return; }
   if (e.target.closest('#cdet-cancel-btn'))  { _exitInfoEdit(false); return; }
   if (e.target.closest('#cdet-save-btn'))    { _saveInfoFields(); return; }
+
+  // Panel edit buttons (bio / rels / desc)
+  const editPanelBtn = e.target.closest('[data-editpanel]');
+  if (editPanelBtn) { _togglePanelEdit(editPanelBtn.dataset.editpanel, true); return; }
+  const cancelPanelBtn = e.target.closest('[data-cancelpanel]');
+  if (cancelPanelBtn) { _togglePanelEdit(cancelPanelBtn.dataset.cancelpanel, false); return; }
+  const savePanelBtn = e.target.closest('[data-savepanel]');
+  if (savePanelBtn) { _savePanelEdit(savePanelBtn.dataset.savepanel, savePanelBtn.dataset.char); return; }
+  if (e.target.closest('#cdet-gen-prompt')) { _generatePrompt(e.target.closest('#cdet-gen-prompt').dataset.char); return; }
 
   const uploadBtn = e.target.closest('.cdet-upload-btn');
   if (uploadBtn) { triggerImageUpload(uploadBtn.dataset.char); return; }
@@ -1899,6 +1955,133 @@ function _carouselAdvance() { _carouselGoTo(_carouselIdx + 1); }
 document.getElementById('char-detail-close')?.addEventListener('click', () => {
   if (_carouselTimer) { clearInterval(_carouselTimer); _carouselTimer = null; }
 }, { capture: true });
+
+// ── Panel editing (bio / rels / desc) ────────────────────────────────────────
+
+function _togglePanelEdit(panel, on) {
+  const view = document.getElementById(`cdet-${panel}-view`);
+  const edit = document.getElementById(`cdet-${panel}-edit`);
+  const bar  = document.getElementById(`cdet-${panel}-bar`);
+  const btn  = document.querySelector(`[data-editpanel="${panel}"]`);
+  if (!view || !edit || !bar) return;
+  view.style.display = on ? 'none' : '';
+  edit.style.display = on ? '' : 'none';
+  bar.classList.toggle('show', on);
+  if (btn) { btn.classList.toggle('active', on); btn.textContent = on ? '✏ Режим редактирования' : '✏ Редактировать'; }
+  if (on) edit.querySelector('textarea')?.focus();
+}
+
+async function _savePanelEdit(panel, charName) {
+  const bar  = document.getElementById(`cdet-${panel}-bar`);
+  const msg  = document.getElementById(`cdet-${panel}-msg`);
+  const save = bar?.querySelector('.cdet-save-btn');
+  if (!save) return;
+
+  save.disabled = true;
+  save.textContent = '⏳ Сохранение...';
+
+  const qs = window.location.search;
+  let ok = false;
+
+  try {
+    if (panel === 'bio') {
+      const bio = document.getElementById('cdet-bio-ta')?.value.trim() || '';
+      const r = await fetch(`/api/characters/${encodeURIComponent(charName)}/fields${qs}`,
+        { method: 'PUT', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fields: { biography: bio } }) });
+      const d = await r.json();
+      ok = d.ok;
+      if (ok) {
+        const ch = STATE.characters.find(c => c.name === charName);
+        if (ch) ch.biography = bio;
+        document.getElementById('cdet-bio-view').innerHTML =
+          bio ? `<div class="cdet-bio">${escHtml(bio)}</div>` : '<div class="cdet-empty">Биография не заполнена</div>';
+      }
+    } else if (panel === 'rels') {
+      const lines = (document.getElementById('cdet-rels-ta')?.value || '').split('\n');
+      const r = await fetch(`/api/characters/${encodeURIComponent(charName)}/relations${qs}`,
+        { method: 'PUT', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ lines }) });
+      const d = await r.json();
+      ok = d.ok;
+      if (ok) {
+        // Refresh relations view
+        const rels = lines.filter(l => l.includes(' — ')).map(l => {
+          const idx = l.indexOf(' — ');
+          return { target: l.slice(0, idx).trim(), description: l.slice(idx + 3).trim() };
+        });
+        const ch = STATE.characters.find(c => c.name === charName);
+        if (ch) ch.relationships = rels;
+        const relsHtml = rels.map(r => `
+          <div class="cdet-rel">
+            <div class="cdet-rel-name">${escHtml(r.target)}</div>
+            <div class="cdet-rel-desc">${escHtml(r.description)}</div>
+          </div>`).join('');
+        document.getElementById('cdet-rels-view').innerHTML =
+          relsHtml ? `<div class="cdet-rels-list">${relsHtml}</div>` : '<div class="cdet-empty">Нет известных связей</div>';
+      }
+    } else if (panel === 'desc') {
+      const appearance   = document.getElementById('cdet-appearance-ta')?.value.trim() || '';
+      const voice        = document.getElementById('cdet-voice-ta')?.value.trim() || '';
+      const imagePrompt  = document.getElementById('cdet-prompt-ta')?.value.trim() || '';
+      const negativePrompt = document.getElementById('cdet-negprompt-ta')?.value.trim() || '';
+      const fields = {};
+      if (appearance)   fields.appearance    = appearance;
+      if (voice)        fields.voice         = voice;
+      if (imagePrompt)  fields.imagePrompt   = imagePrompt;
+      if (negativePrompt) fields.negativePrompt = negativePrompt;
+      const r = await fetch(`/api/characters/${encodeURIComponent(charName)}/fields${qs}`,
+        { method: 'PUT', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fields }) });
+      const d = await r.json();
+      ok = d.ok;
+      if (ok) {
+        const ch = STATE.characters.find(c => c.name === charName);
+        if (ch) Object.assign(ch, { appearance, voice, imagePrompt, negativePrompt });
+        // Refresh desc view
+        const descHtml = [
+          appearance ? `<div class="cdet-section-title">Внешность</div><div class="cdet-bio">${escHtml(appearance)}</div><div class="cdet-divider"></div>` : '',
+          voice ? `<div class="cdet-section-title">Голос</div><div class="cdet-voice">${escHtml(voice)}</div><div class="cdet-divider"></div>` : '',
+          imagePrompt ? `<div class="cdet-section-title">Промт для генерации</div><textarea class="cdet-prompt-box" readonly>${escHtml(imagePrompt)}</textarea>${negativePrompt ? `<div class="cdet-section-title" style="margin-top:14px">Негативный промт</div><textarea class="cdet-prompt-box cdet-prompt-neg" readonly>${escHtml(negativePrompt)}</textarea>` : ''}` : '',
+        ].filter(Boolean).join('');
+        document.getElementById('cdet-desc-view').innerHTML = descHtml || '<div class="cdet-empty">Описание не заполнено</div>';
+      }
+    }
+  } catch(e) { alert('Ошибка: ' + e.message); }
+
+  save.disabled = false;
+  save.textContent = 'Сохранить';
+  if (ok) {
+    _togglePanelEdit(panel, false);
+    if (msg) { msg.classList.add('show'); setTimeout(() => msg.classList.remove('show'), 2500); }
+  }
+}
+
+function _generatePrompt(charName) {
+  const c = STATE.characters.find(ch => ch.name === charName);
+  if (!c) return;
+
+  const lineageLbl = LINEAGE_LABELS[c.lineage] || c.lineage || 'персонаж';
+  const clan  = c.clan && !c.clan.includes('⚠️') ? `${c.clan}, ` : '';
+  const app   = c.appearance && !c.appearance.includes('⚠️') ? c.appearance : '';
+
+  const prompt = [
+    `[Блок 1] Cinematic dark fantasy portrait, ${clan}${lineageLbl}, three-quarter view, ${app || 'описание внешности не заполнено'}`,
+    `[Блок 2] Dim cold atmospheric light from above, deep crimson rim-light from behind, heavy shadows, pure black painterly background with abstract swirling brushstroke textures`,
+    `[Блок 3] Dark fantasy digital painting, visible painterly brushstrokes, textured oil-paint effect, cinematic composition, moody gothic atmosphere, Vampire the Masquerade aesthetic, concept art quality, painterly realism, artstation quality, masterpiece`,
+  ].join('\n');
+
+  const ta = document.getElementById('cdet-prompt-ta');
+  if (ta) {
+    ta.value = prompt;
+    // Открываем редактирование если ещё не открыто
+    if (document.getElementById('cdet-desc-edit')?.style.display === 'none') {
+      _togglePanelEdit('desc', true);
+    }
+    ta.focus();
+    ta.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+}
 
 // ── Info field editing ────────────────────────────────────────────────────────
 let _editCharName   = null;
@@ -2508,7 +2691,7 @@ modalSubmit.addEventListener('click', async () => {
     werewolf: 'werewolves', mage: 'mages', hunter: 'hunters'
   };
   const lineageFolder = TYPE_TO_LINEAGE[def.type] || 'mortals';
-  const npcArgs = [CITY, lineageFolder, params.Name, params.Clan || params.Role || ''].filter((a, i) => i < 3 || a);
+  const npcArgs = [CITY, lineageFolder, params.Name, params.Clan || '', params.Sect || '', params.Role || ''];
 
   try {
     const r = await fetch('/api/tool/new_npc', {
