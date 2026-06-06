@@ -78,14 +78,22 @@
 
 **GPT/DALL-E:**
 ```
-Cinematic dark fantasy portrait, Nosferatu vampire woman, three-quarter view, half-obscured by her own right hand. Completely bald head with sharp dark brows and dark lashes. Smooth gray-toned skin. Deep dark eye makeup, black obsidian lipstick. Golden irises with dark limbal ring. Elongated bat-like pointed ears. Torn gaping wounds on both cheeks with neatly cut edges and stitch-like sutures through which teeth are visible. Two prominent front bat-fang incisors. Wearing black long-sleeved shirt with wide structured dark collar, tight black corset, floor-length black skirt, tall black women's boots. Left index finger bears a silver ankh ring — Camarilla symbol. Slightly elongated sharp nails. Décolletage shows partial edge of a glowing magical seal tattoo. Hands folded over chest, right palm raised covering right side of face. Expression: tender, gentle, uncertain half-smile — as if unsure what to say next.
-Dim cool underlighting from below, deep crimson rim-light from left, heavy shadows pooling in eye sockets and collar, pure black painterly background with subtle swirling brushstroke textures, wisps of darkness around shoulders.
-Dark fantasy digital painting, visible painterly brushstrokes, textured oil-paint effect, cinematic composition, moody gothic atmosphere, Vampire the Masquerade aesthetic, concept art quality, artstation quality, masterpiece.
+Upper body portrait of a tall slender vampire woman, Nosferatu, dark fantasy illustration style.
+
+HEAD AND FACE: Completely bald, smooth scalp. Uniform flat gray skin tone with slight purple undertones. Dark eye makeup — heavy shadow. Small neat nose. Long elongated pointed ears like bat wings, pale and semi-translucent. Golden irises with a sharp black limbal ring. Dark lashes, defined dark brows — no other facial hair. Black obsidian lipstick. Two prominent front incisors protruding downward like bat fangs, clearly visible. Torn ragged wounds on both cheeks — edges neatly cut as if with a blade, held open by small metal staples and sutures, teeth visible through the gaps. A single dark tear-like streak under one eye.
+
+EXPRESSION: Gentle, tender, soft. An uncertain shy half-smile — as if she wants to say something but does not know how to begin. The gaze is calm, almost meek, incongruously warm for her monstrous face.
+
+BODY AND CLOTHING: Black long-sleeved shirt in soft matte fabric with a wide structured collar trimmed with dark feather-like texture framing the neckline. Tight black corset over the shirt, cinching the waist. Floor-length black skirt. Tall fitted black women's boots. At the décolletage, partially visible beneath the collar edge, a fragment of an intricate magical seal tattoo — arcane linework, dark ink.
+
+HANDS AND POSE: Both hands raised toward the chest and face. Right hand — palm open, pressing gently against the right cheek, slender fingers with slightly elongated sharp nails. Left hand — fingers loosely crossed lower on the chest; left index finger wears a round silver ring bearing an ankh — Camarilla symbol, clearly visible.
+
+STYLE: Flat dark digital illustration with clean linework and limited cel-shading. Muted desaturated palette: grays, near-blacks, muted purples. Pure black background. No background details. Slight painterly texture on the figure. Vampire the Masquerade tabletop RPG character art.
 ```
 
 **🚫 Негативный промт:**
 ```
-photorealistic photography, anime, cartoon, watermark, text overlay, blurry, low quality, deformed anatomy, extra limbs, oversaturated colors, bright background, 3D render, CGI, hair on head, human teeth, normal ears, happy smile.
+photorealistic, photo, 3D render, CGI, anime, chibi, watermark, signature, text, logo, blurry, extra limbs, deformed hands, six fingers, hair on scalp, human-shaped ears, round ears, small ears, normal teeth, fangs on canines only, bright background, white background, colorful background, oversaturated colors, gore excessive, cheerful expression, aggressive expression.
 ```
 
 ---
