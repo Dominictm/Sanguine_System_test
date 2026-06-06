@@ -1739,7 +1739,7 @@ function openCharDetail(name) {
       </div>
       <div class="cdet-panels">
         <div class="cdet-panel active" data-panel="info">
-          <div style="position:relative">
+          <div class="cdet-info-header">
             <button class="cdet-edit-btn" id="cdet-edit-btn" data-char="${escHtml(c.name)}">✏ Редактировать</button>
           </div>
           <div class="cdet-fields" id="cdet-info-fields">${infoFields}</div>

@@ -1301,15 +1301,16 @@ background: linear-gradient(180deg, rgb(121 4 4 / 2%) 0%, rgb(139 0 0 / 35%) 100
 .cdet-val.unknown { color: var(--text3); font-style: italic; opacity: .55; }
 
 /* ── Edit mode ── */
+.cdet-info-header {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 14px;
+}
 .cdet-edit-btn {
-  position: absolute;
-  right: 14px;
-  top: 50%;
-  transform: translateY(-50%);
   background: transparent;
   border: 1px solid var(--border);
   color: var(--text3);
-  padding: 3px 11px;
+  padding: 4px 13px;
   font-family: var(--f-heading);
   font-size: 11px;
   letter-spacing: .12em;
