@@ -180,10 +180,10 @@ async function getAllCharacters(city = DEFAULT_CITY) {
         char.slug = entry;
         char.city = city;
 
-        // Images live in <slug>/art/. Prefer portrait.* (web upload), else first image.
+        // Images live in <slug>/art/. Prefer slug_NN.* (web upload), else first image.
         const artFiles = await fs.readdir(path.join(charDir, 'art')).catch(() => []);
-        const PORTRAIT = ['portrait.jpg','portrait.jpeg','portrait.png','portrait.webp','portrait.gif'];
-        const imgFile  = PORTRAIT.find(p => artFiles.includes(p))
+        const slugRe   = new RegExp(`^${entry}_\\d+\\.[a-z]+$`, 'i');
+        const imgFile  = artFiles.filter(f => slugRe.test(f)).sort().at(-1)
           || artFiles.find(f => /\.(jpg|jpeg|png|webp|gif)$/i.test(f));
         if (imgFile) {
           char.imageUrl = `/city-img/${city}/characters/${folder}/${encodeURIComponent(entry)}/art/${encodeURIComponent(imgFile)}`;
@@ -1047,25 +1047,41 @@ app.post('/api/characters/:name/upload-image', express.json({ limit: '20mb' }), 
     const char  = chars.find(c => c.name === name);
     if (!char) return res.status(404).json({ error: 'Персонаж не найден' });
 
-    const artDir   = path.join(charsDir(city), char.lineageFolder, char.slug, 'art');
+    const artDir  = path.join(charsDir(city), char.lineageFolder, char.slug, 'art');
     await fs.mkdir(artDir, { recursive: true });
-    const safeExt  = (ext || 'jpg').toLowerCase().replace(/[^a-z]/g, '') || 'jpg';
-    const filename = `portrait.${safeExt}`;
+    const safeExt = (ext || 'jpg').toLowerCase().replace(/[^a-z]/g, '') || 'jpg';
 
-    // Remove previous portrait.* files to avoid stale copies
+    // Find next sequential number: slug_01, slug_02, …
     const existing = await fs.readdir(artDir).catch(() => []);
-    for (const f of existing) {
-      if (/^portrait\.(jpg|jpeg|png|webp|gif)$/i.test(f)) {
-        await fs.unlink(path.join(artDir, f)).catch(() => {});
-      }
-    }
+    const slugRe   = new RegExp(`^${char.slug}_(\\d+)\\.[a-z]+$`, 'i');
+    const nums     = existing.map(f => { const m = slugRe.exec(f); return m ? parseInt(m[1], 10) : 0; });
+    const nextNum  = (nums.length ? Math.max(...nums) : 0) + 1;
+    const filename = `${char.slug}_${String(nextNum).padStart(2, '0')}.${safeExt}`;
 
     await fs.writeFile(path.join(artDir, filename), Buffer.from(base64, 'base64'));
-    delete _cache[city];
 
+    // Update ## 🖼️ Изображения section in the card
+    const cardPath = path.join(charsDir(city), char.lineageFolder, char.slug, `${char.slug}.md`);
+    let card = await fs.readFile(cardPath, 'utf-8').catch(() => null);
+    if (card) {
+      const newLine = `- [Образ ${nextNum}](art/${filename})`;
+      if (card.includes('⏳ Изображение не предоставлено')) {
+        card = card.replace('- ⏳ Изображение не предоставлено', newLine);
+      } else {
+        // Append inside ## 🖼️ Изображения section (before next ## or end of file)
+        card = card.replace(/(## 🖼️ Изображения\n)([\s\S]*?)(\n##|\s*$)/, (_, hdr, body, tail) => {
+          const trimmed = body.replace(/\n+$/, '');
+          return `${hdr}${trimmed}\n${newLine}\n${tail}`;
+        });
+      }
+      await fs.writeFile(cardPath, card, 'utf-8');
+    }
+
+    delete _cache[city];
     res.json({
       success: true,
-      url: `/city-img/${city}/characters/${char.lineageFolder}/${encodeURIComponent(char.slug)}/art/${filename}`
+      filename,
+      url: `/city-img/${city}/characters/${char.lineageFolder}/${encodeURIComponent(char.slug)}/art/${encodeURIComponent(filename)}`
     });
   } catch (e) {
     res.status(500).json({ error: e.message });

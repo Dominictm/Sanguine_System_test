@@ -1768,7 +1768,7 @@ async function triggerImageUpload(charName) {
         if (STATE.page === 'characters') renderChars();
         const b = document.querySelector('.cdet-upload-btn');
         if (b) {
-          b.textContent = '✓ Загружено — нажмите для замены';
+          b.textContent = `✓ Сохранено как ${result.filename} — загрузить ещё`;
           b.style.background = 'rgba(0,80,0,.25)';
           b.disabled = false;
         }
