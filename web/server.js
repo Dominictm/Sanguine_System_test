@@ -1035,6 +1035,29 @@ app.post('/api/run-tool', async (req, res) => {
   });
 });
 
+// ── List all art images for a character ───────────────────────────────────────
+
+app.get('/api/characters/:name/images', async (req, res) => {
+  try {
+    const name = decodeURIComponent(req.params.name);
+    const city = reqCity(req);
+    const chars = await getAllCharacters(city);
+    const char  = chars.find(c => c.name === name);
+    if (!char) return res.status(404).json({ error: 'not found' });
+
+    const artDir = path.join(charsDir(city), char.lineageFolder, char.slug, 'art');
+    const files  = await fs.readdir(artDir).catch(() => []);
+    const images = files
+      .filter(f => /\.(jpg|jpeg|png|webp|gif)$/i.test(f))
+      .sort()
+      .map(f => `/city-img/${city}/characters/${char.lineageFolder}/${encodeURIComponent(char.slug)}/art/${encodeURIComponent(f)}`);
+
+    res.json({ images });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ── Upload portrait image ─────────────────────────────────────────────────────
 
 app.post('/api/characters/:name/upload-image', express.json({ limit: '20mb' }), async (req, res) => {

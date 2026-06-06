@@ -1064,6 +1064,54 @@ select.form-control {
   background: linear-gradient(180deg, var(--bg3) 0%, var(--bg2) 100%);
 }
 
+/* ── Carousel ── */
+.cdet-carousel {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  overflow: hidden;
+  background: #000;
+}
+.cdet-carousel-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top center;
+  display: block;
+}
+.cdet-carousel-overlay {
+  position: absolute;
+  inset: 0;
+  background: #000;
+  opacity: 0;
+  transition: opacity 0.75s ease;
+  pointer-events: none;
+  z-index: 2;
+}
+.cdet-carousel-overlay.dimmed {
+  opacity: 1;
+}
+.cdet-carousel-dots {
+  position: absolute;
+  bottom: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 6px;
+  z-index: 3;
+  pointer-events: none;
+}
+.cdet-carousel-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.25);
+  transition: background 0.4s;
+}
+.cdet-carousel-dot.active {
+  background: rgba(255,255,255,0.75);
+}
+
 /* Right: info column */
 .cdet-info-col {
   flex: 1;

@@ -1623,7 +1623,11 @@ function openCharDetail(name) {
     </div>`).join('');
 
   const portraitCol = c.imageUrl
-    ? `<img class="cdet-portrait-full" src="${c.imageUrl}" alt="${escHtml(c.name)}">`
+    ? `<div class="cdet-carousel" id="cdet-carousel">
+        <img class="cdet-carousel-img" id="cdet-carousel-img" src="${c.imageUrl}" alt="${escHtml(c.name)}">
+        <div class="cdet-carousel-overlay" id="cdet-carousel-overlay"></div>
+        <div class="cdet-carousel-dots" id="cdet-carousel-dots"></div>
+       </div>`
     : `<div class="cdet-no-portrait">${icon}</div>`;
 
   const descHtml = [
@@ -1689,6 +1693,7 @@ function openCharDetail(name) {
     </div>`;
 
   document.getElementById('char-detail-modal').classList.add('open');
+  if (c.imageUrl) initCarousel(c.name);
 }
 
 document.getElementById('chars-grid').addEventListener('click', e => {
@@ -1733,6 +1738,69 @@ document.getElementById('char-detail-content').addEventListener('click', e => {
   }
 });
 
+// ── Carousel logic ────────────────────────────────────────────────────────────
+let _carouselTimer  = null;
+let _carouselImages = [];
+let _carouselIdx    = 0;
+
+async function initCarousel(charName) {
+  // Stop previous carousel
+  if (_carouselTimer) { clearInterval(_carouselTimer); _carouselTimer = null; }
+  _carouselImages = [];
+  _carouselIdx = 0;
+
+  const resp = await fetch(`/api/characters/${encodeURIComponent(charName)}/images${window.location.search}`)
+    .catch(() => null);
+  if (!resp?.ok) return;
+  const { images } = await resp.json().catch(() => ({}));
+  if (!images || images.length <= 1) return;  // single image — no carousel needed
+
+  _carouselImages = images;
+  _carouselIdx    = 0;
+
+  // Build dots
+  const dotsEl = document.getElementById('cdet-carousel-dots');
+  if (dotsEl) {
+    dotsEl.innerHTML = images.map((_, i) =>
+      `<div class="cdet-carousel-dot${i === 0 ? ' active' : ''}"></div>`
+    ).join('');
+  }
+
+  _carouselTimer = setInterval(() => _carouselAdvance(), 2 * 60 * 1000);
+}
+
+function _carouselAdvance() {
+  const img     = document.getElementById('cdet-carousel-img');
+  const overlay = document.getElementById('cdet-carousel-overlay');
+  const dotsEl  = document.getElementById('cdet-carousel-dots');
+  if (!img || !overlay || !_carouselImages.length) {
+    clearInterval(_carouselTimer); _carouselTimer = null; return;
+  }
+
+  // Phase 1: darken
+  overlay.classList.add('dimmed');
+
+  setTimeout(() => {
+    // Phase 2: swap image
+    _carouselIdx = (_carouselIdx + 1) % _carouselImages.length;
+    img.src = _carouselImages[_carouselIdx];
+
+    // Update dots
+    if (dotsEl) {
+      dotsEl.querySelectorAll('.cdet-carousel-dot').forEach((d, i) =>
+        d.classList.toggle('active', i === _carouselIdx));
+    }
+
+    // Phase 3: un-darken (slight delay so new image can start loading)
+    setTimeout(() => overlay.classList.remove('dimmed'), 200);
+  }, 800);
+}
+
+// Stop carousel when modal closes
+document.getElementById('char-detail-close')?.addEventListener('click', () => {
+  if (_carouselTimer) { clearInterval(_carouselTimer); _carouselTimer = null; }
+}, { capture: true });
+
 async function triggerImageUpload(charName) {
   const input = document.createElement('input');
   input.type  = 'file';
@@ -1760,7 +1828,12 @@ async function triggerImageUpload(charName) {
         const newUrl = result.url + '?t=' + Date.now();
         // Update portrait in modal immediately
         const col = document.getElementById('cdet-portrait-col');
-        if (col) col.innerHTML = `<img class="cdet-portrait-full" src="${newUrl}" alt="${escHtml(charName)}">`;
+        if (col) col.innerHTML = `<div class="cdet-carousel" id="cdet-carousel">
+          <img class="cdet-carousel-img" id="cdet-carousel-img" src="${newUrl}" alt="${escHtml(charName)}">
+          <div class="cdet-carousel-overlay" id="cdet-carousel-overlay"></div>
+          <div class="cdet-carousel-dots" id="cdet-carousel-dots"></div>
+         </div>`;
+        initCarousel(charName);
         // Patch the character in STATE so the card and modal re-open correctly
         const charInState = STATE.characters.find(ch => ch.name === charName);
         if (charInState) charInState.imageUrl = newUrl;
