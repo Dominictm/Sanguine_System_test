@@ -10,7 +10,8 @@ const ROOT = path.join(__dirname, '..');
 
 // ── City layer (cities/<city>/…) ───────────────────────────────────────────────
 const CITIES_DIR   = path.join(ROOT, 'cities');
-const DEFAULT_CITY = process.env.CITY || 'paris';
+function _firstCity() { try { return (require('fs').readdirSync(CITIES_DIR, { withFileTypes: true }).find(e => e.isDirectory() && !e.name.startsWith('.')) || {}).name || ''; } catch { return ''; } }
+const DEFAULT_CITY = process.env.CITY || _firstCity() || '';   // нейтрально: первый существующий город
 const cityDir       = c => path.join(CITIES_DIR, c || DEFAULT_CITY);
 const charsDir      = c => path.join(cityDir(c), 'characters');
 const locsDir       = c => path.join(cityDir(c), 'locations');
@@ -83,7 +84,7 @@ function parseCharacter(rawContent, folderName, lineage) {
     if (k === 'Внешность')                      c.appearance    = v;
     if (k === 'Дитя')                           c.childe        = v;
     if (k === 'Домен / Локация')                c.location      = v;
-    if (k === 'Парижская иерархия')             c.hierarchy     = v;
+    if (k === 'Иерархия в городе' || k === 'Иерархия города' || k === 'Парижская иерархия') c.hierarchy = v;
     if (k === 'Деранжементы / Особенности')     c.derangements  = v;
     if (k === 'Дисциплины')                     c.disciplines   = v;
     if (k === 'Профессия')                      c.profession    = v;
@@ -201,7 +202,7 @@ async function countMdFiles(dir) {
   try {
     for (const item of await fs.readdir(dir, { withFileTypes: true })) {
       if (item.isDirectory()) n += await countMdFiles(path.join(dir, item.name));
-      else if (item.name.endsWith('.md') && item.name !== 'characters_ALL.md') n++;
+      else if (item.name.endsWith('.md') && item.name !== 'characters_index.md') n++;
     }
   } catch {}
   return n;
@@ -921,7 +922,7 @@ app.get('/api/integrity', async (req, res) => {
       }
     }
 
-    // 4. Registry drift between disk folders and characters_ALL.md
+    // 4. Registry drift between disk folders and cities/<город>/archive/characters_index.md
     const actual     = new Set(chars.map(c => `${c.lineageFolder}/${c.slug}`));
     const referenced = new Set();
     try {
@@ -955,6 +956,26 @@ const SWITCH_PARAMS = ['Fix'];
 
 // Tools that write project files → trigger background revalidation on success.
 const FILE_MUTATING_TOOLS = new Set(['new_npc', 'new_module', 'new_city']);
+
+// ── Run a Node CLI tool (cities/-aware) ────────────────────────────────────────
+// Args are passed as an array to spawn() WITHOUT a shell → no injection risk.
+const NODE_TOOLS = new Set(['new_city', 'new_npc', 'migrate_char', 'close_chronicle', 'build_city_events']);
+app.post('/api/tool/:name', async (req, res) => {
+  const name = req.params.name;
+  if (!NODE_TOOLS.has(name)) return res.status(400).json({ ok: false, output: 'Unknown tool' });
+  const args = (Array.isArray(req.body.args) ? req.body.args : []).map(a => String(a)).filter(a => a.length);
+  const ps = spawn('node', [path.join(ROOT, 'tools', `${name}.js`), ...args], { cwd: ROOT });
+  let out = '', err = '';
+  const timer = setTimeout(() => ps.kill(), 30000);
+  ps.stdout.on('data', d => out += d.toString('utf8'));
+  ps.stderr.on('data', d => err += d.toString('utf8'));
+  ps.on('error', e => { clearTimeout(timer); res.json({ ok: false, output: e.message }); });
+  ps.on('close', code => {
+    clearTimeout(timer);
+    if (code === 0) { _cache = {}; runValidationBackground(); }
+    res.json({ ok: code === 0, output: (out + err).trim(), exitCode: code });
+  });
+});
 
 app.post('/api/run-tool', async (req, res) => {
   const { tool, params = {} } = req.body;
@@ -1054,7 +1075,7 @@ app.post('/api/characters/:name/upload-image', express.json({ limit: '20mb' }), 
 // ── Log session: orchestrated post-session write ───────────────────────────────
 //
 // Produces ALL factual artifacts of a played session in one action, following
-// CHECKLIST §2 / chronicle_paris / module_rules / diary_rules / open_threads.
+// CHECKLIST §2 / chronicle / module_rules / diary_rules / open_threads.
 // Prose (diary bodies, финал) is NOT fabricated — seeded stubs carry the facts +
 // the Master's comments, and Claude authors the prose as a follow-up step.
 //
@@ -1390,6 +1411,13 @@ async function buildSessionPlan(payload) {
   add(chrEventsRel, chrEventsExisted ? 'modify' : 'create', appendChronicleEntry(chronicleRaw, entry),
     `${chrEventsExisted ? 'append' : 'new'} запись: ### 📅 ${p.event.dateLabel} — ${p.event.title}`);
 
+  // 1a. New chronicle → seed chronicle.md (спина + статус «Активна»)
+  if (chronicleNew) {
+    add(`cities/${city}/chronicles/${chr}/chronicle.md`, 'create',
+      `# 📕 ${chrDisplay || chr}\n\n- **Статус:** 🟡 Активна\n\n> Спина хроники. События — [events.md](events.md). Нити — [open_threads.md](open_threads.md).\n> Закрыть хронику: \`node tools/close_chronicle.js ${city} ${chr} "финал"\`\n`,
+      'новая хроника: chronicle.md (статус Активна)');
+  }
+
   // 1b. World-state stamp in archive/events.md
   const monthLabel = p.event.dateLabel.split(',')[0];
   const archiveRel = `cities/${city}/archive/events.md`;
@@ -1398,7 +1426,8 @@ async function buildSessionPlan(payload) {
   if (archiveRaw && /Последнее обновление:/.test(archiveRaw))
     add(archiveRel, 'modify', bumpWorldStateStamp(archiveRaw, monthLabel), `штамп «Состояние мира» → ${monthLabel}`);
   if ((p.event.worldChanges || []).length)
-    notes.push(`Сводные таблицы «🌍 Состояние мира» не правятся автоматически — проверьте вручную (${p.event.worldChanges.length} изменений).`);
+    notes.push('Отрази вручную в сводных таблицах «🌍 Состояние мира» (правятся не автоматически):\n' +
+      p.event.worldChanges.map(c => `   • ${c}`).join('\n'));
   notes.push('Индекс «Сводная хроника» (archive/events.md) перегенерируется после записи.');
 
   // 2. Module files
@@ -1572,7 +1601,7 @@ app.post('/api/claude/generate-prose', async (req, res) => {
       return res.status(400).json({ ok: false, error: 'Нет валидных stub-файлов (метка «ОЖИДАЕТ ГЕНЕРАЦИИ» не найдена).' });
 
     const prompt = [
-      'Ты — Рассказчик Vampire: The Masquerade V20, проект «Париж 2010».',
+      'Ты — Рассказчик Vampire: The Masquerade V20, проект «твой домен».',
       'Сгенерируй литературную прозу для следующих stub-файлов (помечены «⏳ ОЖИДАЕТ ГЕНЕРАЦИИ»):',
       ...valid.map(s => '- ' + s),
       '',

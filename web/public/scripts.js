@@ -1,7 +1,7 @@
 // ═══════════════════════════════════════════════════════════════
 // City (multi-city) — transparent ?city= on every /api/ call
 // ═══════════════════════════════════════════════════════════════
-let CITY = new URLSearchParams(location.search).get('city') || 'paris';
+let CITY = new URLSearchParams(location.search).get('city') || '';
 (function () {
   const _fetch = window.fetch.bind(window);
   window.fetch = (url, opts) => {
@@ -16,11 +16,11 @@ async function initCitySwitch() {
   if (!sel) return;
   try {
     const { cities = [], default: def } = await fetch('/api/cities').then(r => r.json());
-    const list = cities.length ? cities : [def || 'paris'];
-    // If the active city isn't available (e.g. fresh template), redirect to the first one.
+    const list = cities.length ? cities : (def ? [def] : []);
+    // If the active city isn't set/available, go to the server default (or first city).
     const urlCity = new URLSearchParams(location.search).get('city');
-    if (!urlCity && cities.length && !cities.includes(CITY)) {
-      location.search = 'city=' + encodeURIComponent(cities[0]); return;
+    if (!urlCity && list.length && !list.includes(CITY)) {
+      location.search = 'city=' + encodeURIComponent(list.includes(def) ? def : list[0]); return;
     }
     sel.innerHTML = list.map(c => `<option value="${c}"${c === CITY ? ' selected' : ''}>${c}</option>`).join('');
     sel.onchange = () => { location.search = 'city=' + encodeURIComponent(sel.value); };
@@ -723,6 +723,24 @@ async function runTool(tool, params, outId, btn) {
   btn.textContent = getOrigLabel(btn.id);
 }
 
+// Run a Node CLI tool (cities/-aware) via /api/tool/:name with an args array.
+const _NTR = { а:'a',б:'b',в:'v',г:'g',д:'d',е:'e',ё:'e',ж:'zh',з:'z',и:'i',й:'y',к:'k',л:'l',м:'m',н:'n',о:'o',п:'p',р:'r',с:'s',т:'t',у:'u',ф:'f',х:'h',ц:'ts',ч:'ch',ш:'sh',щ:'sch',ъ:'',ы:'y',ь:'',э:'e',ю:'yu',я:'ya' };
+function slugifyJS(s) { return (s || '').toLowerCase().split('').map(c => _NTR[c] !== undefined ? _NTR[c] : c).join('').replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').replace(/_+/g, '_'); }
+async function runNodeTool(name, args, outId, btn) {
+  const out = document.getElementById(outId);
+  btn.disabled = true; btn.textContent = '⏳ Выполняется...';
+  out.className = 'output-area show'; out.textContent = `$ node tools/${name}.js\n\n`;
+  try {
+    const data = await fetch('/api/tool/' + name, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ args }) }).then(r => r.json());
+    const cls = data.ok ? 'ok' : 'err';
+    out.innerHTML = `$ node tools/${name}.js\n\n<span class="${cls}">${escHtml(data.output || '(нет вывода)')}</span>`;
+    if (data.ok) { STATE.characters = []; STATE.graph.inited = false; if (STATE.page === 'dashboard') loadDashboard(); }
+  } catch (e) {
+    out.innerHTML = `<span class="err">⚠ Ошибка соединения\n${e.message}</span>`;
+  }
+  btn.disabled = false; btn.textContent = getOrigLabel(btn.id) || 'Готово';
+}
+
 function escHtml(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
@@ -805,16 +823,17 @@ function getOrigLabel(id) {
 document.getElementById('btn-new-city').addEventListener('click', () => {
   const city = document.getElementById('city-name').value.trim();
   const year = document.getElementById('city-year').value.trim();
-  if (!city || !year) { alert('Укажите город и год'); return; }
-  runTool('new_city', { City: city, Year: year, Districts: document.getElementById('city-districts').value },
-    'out-new-city', document.getElementById('btn-new-city'));
+  if (!city) { alert('Укажите название города'); return; }
+  runNodeTool('new_city', [slugifyJS(city), city, year || ''], 'out-new-city', document.getElementById('btn-new-city'));
 });
 
+const NPC_LINEAGE = { vampire: 'vampires', fairy: 'fairies', mortal: 'mortals', werewolf: 'werewolves', mage: 'mages', hunter: 'hunters' };
 document.getElementById('btn-new-npc').addEventListener('click', () => {
   const name = document.getElementById('npc-name').value.trim();
   if (!name) { alert('Укажите имя НПС'); return; }
-  runTool('new_npc', { Name: name, Type: document.getElementById('npc-type').value },
-    'out-new-npc', document.getElementById('btn-new-npc'));
+  if (!CITY) { alert('Сначала выбери город в шапке'); return; }
+  const lineage = NPC_LINEAGE[document.getElementById('npc-type').value] || 'mortals';
+  runNodeTool('new_npc', [CITY, lineage, name], 'out-new-npc', document.getElementById('btn-new-npc'));
 });
 
 document.getElementById('btn-new-module').addEventListener('click', () => {
