@@ -84,7 +84,7 @@ function parseCharacter(rawContent, folderName, lineage) {
     if (k === 'Внешность')                      c.appearance    = v;
     if (k === 'Дитя')                           c.childe        = v;
     if (k === 'Домен / Локация')                c.location      = v;
-    if (k === 'Иерархия в городе' || k === 'Иерархия города' || k === 'Парижская иерархия') c.hierarchy = v;
+    if (/иерархи/i.test(k))                     c.hierarchy     = v;   // «Иерархия в городе» / устар. варианты
     if (k === 'Деранжементы / Особенности')     c.derangements  = v;
     if (k === 'Дисциплины')                     c.disciplines   = v;
     if (k === 'Профессия')                      c.profession    = v;
