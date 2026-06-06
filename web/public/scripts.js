@@ -850,6 +850,34 @@ document.getElementById('btn-validate-fix').addEventListener('click', () => {
   runTool('validate_links', { Fix: 'true' }, 'out-validate', document.getElementById('btn-validate-fix'));
 });
 
+// ── Tab «🛠 Ещё»: Node-инструменты над текущим городом ──────────────────────────
+function _moreBtn(id, name, argsFn) {
+  const el = document.getElementById(id); if (!el) return;
+  el.addEventListener('click', () => {
+    if (!CITY) { alert('Сначала выбери город в шапке'); return; }
+    const args = argsFn(); if (!args) return;
+    runNodeTool(name, args, 'out-more', el);
+  });
+}
+_moreBtn('btn-new-loc', 'new_location', () => {
+  const d = document.getElementById('loc-district').value.trim();
+  const n = document.getElementById('loc-name').value.trim();
+  if (!d || !n) { alert('Укажите округ/код и название'); return null; }
+  return [CITY, d, n, document.getElementById('loc-rayon').value.trim(), document.getElementById('loc-zone').value];
+});
+_moreBtn('btn-migrate', 'migrate_char', () => {
+  const slug = document.getElementById('mig-slug').value.trim();
+  const to   = document.getElementById('mig-to').value.trim();
+  if (!slug || !to) { alert('Укажите слаг персонажа и город назначения'); return null; }
+  return ['visit', CITY, document.getElementById('mig-lineage').value, slug, to, document.getElementById('mig-when').value.trim()];
+});
+_moreBtn('btn-close-chr', 'close_chronicle', () => {
+  const chr = document.getElementById('close-chr').value.trim();
+  if (!chr) { alert('Укажите слаг хроники'); return null; }
+  return [CITY, chr, document.getElementById('close-note').value.trim()];
+});
+_moreBtn('btn-rebuild-idx', 'build_city_events', () => [CITY]);
+
 // ═══════════════════════════════════════════════════════════════
 // Modules
 // ═══════════════════════════════════════════════════════════════
@@ -1201,6 +1229,15 @@ function lsPartRow() {
       <button class="ls-del" type="button" title="Убрать">✕</button>
     </div>
     <div class="ls-row ls-row-sub">
+      <select class="form-control ls-part-lineage" title="линейка — если это новый НПС (создастся карточка)">
+        <option value="">— существующий —</option>
+        <option value="vampires">🧛 новый: Вампир</option>
+        <option value="fairies">🧚 новый: Фея</option>
+        <option value="mortals">🧑 новый: Смертный</option>
+        <option value="werewolves">🐺 новый: Оборотень</option>
+        <option value="mages">🔮 новый: Маг</option>
+        <option value="hunters">🏹 новый: Охотник</option>
+      </select>
       <input class="form-control ls-part-status" placeholder="смена статуса (опц.)">
       <input class="form-control ls-part-statusd" placeholder="детали статуса">
       <input class="form-control ls-part-comment" placeholder="коммент к дневнику (для генерации прозы)">
@@ -1290,6 +1327,7 @@ function collectLsPayload() {
     role:          r.querySelector('.ls-part-role').value.trim(),
     diary:         r.querySelector('.ls-part-diary').checked,
     isPC:          r.querySelector('.ls-part-pc').checked,
+    lineage:       r.querySelector('.ls-part-lineage').value || undefined,
     statusChange:  r.querySelector('.ls-part-status').value.trim() || null,
     statusDetails: r.querySelector('.ls-part-statusd').value.trim(),
     diaryComment:  r.querySelector('.ls-part-comment').value.trim()

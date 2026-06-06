@@ -959,11 +959,11 @@ const FILE_MUTATING_TOOLS = new Set(['new_npc', 'new_module', 'new_city']);
 
 // ── Run a Node CLI tool (cities/-aware) ────────────────────────────────────────
 // Args are passed as an array to spawn() WITHOUT a shell → no injection risk.
-const NODE_TOOLS = new Set(['new_city', 'new_npc', 'migrate_char', 'close_chronicle', 'build_city_events']);
+const NODE_TOOLS = new Set(['new_city', 'new_npc', 'new_location', 'migrate_char', 'close_chronicle', 'build_city_events']);
 app.post('/api/tool/:name', async (req, res) => {
   const name = req.params.name;
   if (!NODE_TOOLS.has(name)) return res.status(400).json({ ok: false, output: 'Unknown tool' });
-  const args = (Array.isArray(req.body.args) ? req.body.args : []).map(a => String(a)).filter(a => a.length);
+  const args = (Array.isArray(req.body.args) ? req.body.args : []).map(a => String(a));  // keep empties (positional)
   const ps = spawn('node', [path.join(ROOT, 'tools', `${name}.js`), ...args], { cwd: ROOT });
   let out = '', err = '';
   const timer = setTimeout(() => ps.kill(), 30000);
@@ -1325,6 +1325,15 @@ function bumpWorldStateStamp(raw, monthLabel) {
   return raw.replace(/(Последнее обновление:\s*\*\*)[^*]+(\*\*)/, `$1${monthLabel}$2`);
 }
 
+// Минимальная карточка НПС (для инлайн-создания из формы сессии)
+function renderMinimalNpcCard(name, slug, lineageFolder, lineageRu, cityDisplay) {
+  const emoji = { vampires: '🧛', fairies: '🧚', mortals: '🧑', werewolves: '🐺', mages: '🔮', hunters: '🏹' }[lineageFolder] || '👤';
+  return `# ${emoji} ${name}\n\n> 🔗 [Все персонажи](../../../archive/characters_index.md)\n\n---\n\n` +
+    `- **Слаг:** ${slug}\n- **Родной город:** ${cityDisplay}\n- **Линейка WoD:** ${lineageRu}\n- **Статус:** Жив\n` +
+    `- **Роль:** ⚠️ Требуется уточнение\n- **Биография:** ⚠️ Требуется уточнение\n- **Внешность:** ⚠️ Требуется уточнение\n\n---\n\n` +
+    `## 🖼️ Изображения\n- ⏳ Изображение не предоставлено\n`;
+}
+
 // Build the full change plan (used identically for preview and write)
 async function buildSessionPlan(payload) {
   const errors = [], warnings = [], notes = [];
@@ -1380,14 +1389,35 @@ async function buildSessionPlan(payload) {
         && (eventMonthKey(e.date) || {}).key === p.event.month))
     errors.push(`Запись «${p.event.title}» за ${p.event.month} уже существует (хронологический конфликт).`);
 
-  // resolve participants
+  // resolve participants (+ инлайн-создание НПС, если имя неизвестно, но указана линейка)
   const chars = await getAllCharacters(city);
   const resolve = makeNameResolver(chars.map(c => c.name));
   const byName = Object.fromEntries(chars.map(c => [c.name, c]));
+  let cityDisplay = city;
+  try {
+    const m = (await fs.readFile(path.join(cityDir(city), 'city.md'), 'utf-8')).replace(/^﻿/, '').match(/^#\s+(.+)$/m);
+    if (m) cityDisplay = m[1].replace(/^[^\p{L}\p{N}]+/u, '').split(/[,—–-]/)[0].trim();
+  } catch {}
+  const LINEAGE_RU = { vampires: 'Вампир', fairies: 'Фея / Ченджлинг', mortals: 'Смертный', werewolves: 'Оборотень', mages: 'Маг', hunters: 'Охотник' };
+  const LINEAGE_CODE = { vampires: 'vampire', fairies: 'fairy', mortals: 'mortal', werewolves: 'werewolf', mages: 'mage', hunters: 'hunter' };
+  const newNpcCards = [];
   const parts = [];
   for (const inp of (p.participants || [])) {
     const rid = resolve(inp.name);
-    if (!rid) { errors.push(`Участник «${inp.name}» не сопоставлен с карточкой — создайте НПС сначала.`); continue; }
+    if (!rid) {
+      const lf = inp.lineage;
+      if (lf && LINEAGE_RU[lf]) {
+        const slug = slugify(inp.name);
+        if (!slug) { errors.push(`Участник «${inp.name}»: не удалось собрать slug.`); continue; }
+        newNpcCards.push({ rel: `cities/${city}/characters/${lf}/${slug}/${slug}.md`, content: renderMinimalNpcCard(inp.name, slug, lf, LINEAGE_RU[lf], cityDisplay) });
+        parts.push({ name: inp.name, slug, clan: inp.clan || '', gen: '', lineage: LINEAGE_CODE[lf], lineageFolder: lf,
+          role: inp.role || '', diary: !!inp.diary, isPC: !!inp.isPC, diaryComment: inp.diaryComment || '',
+          statusChange: inp.statusChange || null, statusDetails: inp.statusDetails || '' });
+        continue;
+      }
+      errors.push(`Участник «${inp.name}» не сопоставлен — выберите линейку, чтобы создать НПС инлайн, или создайте его заранее.`);
+      continue;
+    }
     const c = byName[rid];
     parts.push({
       name: c.name, slug: c.slug, clan: c.clan || '', gen: c.generation || '',
@@ -1405,6 +1435,10 @@ async function buildSessionPlan(payload) {
   const hasFinale = !!(p.finale && p.finale.create);
   const changes = [];
   const add = (rel, action, after, preview) => changes.push({ rel, action, after, preview });
+
+  // 0. Inline-created NPC stub cards (для неизвестных участников с указанной линейкой)
+  for (const nc of newNpcCards) add(nc.rel, 'create', nc.content, `новый НПС (stub): ${nc.rel.split('/').pop()}`);
+  if (newNpcCards.length) notes.push(`Создано НПС-заготовок: ${newNpcCards.length} — заполни поля ⚠️ по system/rules/npcs_city.md.`);
 
   // 1. Chronicle entry → append to chronicles/<chr>/events.md
   const entry = renderChronicleEntry(p, parts, modslug, hasFinale);

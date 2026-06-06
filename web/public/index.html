@@ -204,6 +204,7 @@
         <button class="tab-btn" data-tab="new-npc">Новый НПС</button>
         <button class="tab-btn" data-tab="new-module">Модуль</button>
         <button class="tab-btn" data-tab="log-session">📓 Сессия</button>
+        <button class="tab-btn" data-tab="more">🛠 Ещё</button>
         <button class="tab-btn" data-tab="validate">Проверка</button>
       </div>
 
@@ -272,6 +273,53 @@
           <button class="btn-submit btn-secondary" id="btn-validate-fix">Исправить автоматически</button>
         </div>
         <pre class="output-area" id="out-validate"></pre>
+      </div>
+
+      <!-- More (Node tools: location / cross-city / close chronicle / rebuild index) -->
+      <div class="tab-panel" id="tab-more">
+        <p class="form-hint" style="margin-bottom:14px">Действуют над текущим выбранным городом (слева в шапке).</p>
+
+        <div class="ls-section">
+          <div class="ls-sec-title">📍 Новая локация</div>
+          <div class="form-row">
+            <div class="form-group"><label class="form-label">Округ/код *</label><input class="form-control" id="loc-district" placeholder="1 или district_01"></div>
+            <div class="form-group"><label class="form-label">Название *</label><input class="form-control" id="loc-name" placeholder="Театр Лицей"></div>
+            <div class="form-group"><label class="form-label">Зона</label>
+              <select class="form-control" id="loc-zone"><option value="neutral">🟡 Нейтральная</option><option value="safe">🟢 Безопасная</option><option value="dangerous">🔴 Опасная</option></select>
+            </div>
+          </div>
+          <div class="form-group"><label class="form-label">Район (опц.)</label><input class="form-control" id="loc-rayon" placeholder="Вест-Энд"></div>
+          <button class="btn-submit" id="btn-new-loc">Создать локацию</button>
+        </div>
+
+        <div class="ls-section">
+          <div class="ls-sec-title">🌍 Кросс-город — присутствие персонажа</div>
+          <div class="form-row">
+            <div class="form-group"><label class="form-label">Линейка</label>
+              <select class="form-control" id="mig-lineage"><option value="vampires">Вампир</option><option value="fairies">Фея</option><option value="mortals">Смертный</option><option value="werewolves">Оборотень</option><option value="mages">Маг</option><option value="hunters">Охотник</option></select>
+            </div>
+            <div class="form-group"><label class="form-label">Слаг персонажа *</label><input class="form-control" id="mig-slug" placeholder="edvard_grey"></div>
+            <div class="form-group"><label class="form-label">Город назначения *</label><input class="form-control" id="mig-to" placeholder="london"></div>
+          </div>
+          <div class="form-group"><label class="form-label">Когда / контекст</label><input class="form-control" id="mig-when" placeholder="зима 2011, сессия"></div>
+          <button class="btn-submit" id="btn-migrate">Зафиксировать присутствие</button>
+        </div>
+
+        <div class="ls-section">
+          <div class="ls-sec-title">📕 Закрыть хронику</div>
+          <div class="form-row">
+            <div class="form-group"><label class="form-label">Слаг хроники *</label><input class="form-control" id="close-chr" placeholder="winter_2011"></div>
+            <div class="form-group"><label class="form-label">Финальная заметка</label><input class="form-control" id="close-note" placeholder="итог арки"></div>
+          </div>
+          <button class="btn-submit" id="btn-close-chr">Закрыть хронику</button>
+        </div>
+
+        <div class="ls-section">
+          <div class="ls-sec-title">🔄 Индекс событий</div>
+          <button class="btn-submit btn-secondary" id="btn-rebuild-idx">Пересобрать индекс города</button>
+        </div>
+
+        <pre class="output-area" id="out-more"></pre>
       </div>
 
       <!-- Log Session -->
