@@ -394,9 +394,22 @@ body {
   object-fit: cover;
   object-position: top center;
   display: block;
+  z-index: 0;
 }
 
+.char-card-dim {
+  position: absolute;
+  inset: 0;
+  background: #000;
+  opacity: 0;
+  transition: opacity 0.75s ease;
+  pointer-events: none;
+  z-index: 1;
+}
+.char-card-dim.dark { opacity: 1; }
+
 .char-card-overlay {
+  z-index: 2;
   position: absolute;
   bottom: 0; left: 0; right: 0;
   padding: 60px 16px 16px;
@@ -1084,7 +1097,7 @@ select.form-control {
   inset: 0;
   background: #000;
   opacity: 0;
-  transition: opacity 0.75s ease;
+  transition: opacity 1.75s ease;
   pointer-events: none;
   z-index: 2;
 }
@@ -1118,10 +1131,10 @@ select.form-control {
   z-index: 4;
   background: rgba(0,0,0,0.45);
   border: none;
-  color: rgba(255,255,255,0.75);
+  color: rgba(255,255,255,0.15);
   font-size: 20px;
-  width: 36px;
-  height: 56px;
+  width: 35px;
+  height: 40px;
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -1131,7 +1144,7 @@ select.form-control {
   line-height: 1;
 }
 .cdet-carousel-btn:hover {
-  background: rgba(139,0,0,0.7);
+  background: rgba(139, 0, 0, 0.452);
   color: #fff;
 }
 .cdet-carousel-btn.prev { left: 6px; }

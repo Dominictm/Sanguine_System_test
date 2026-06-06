@@ -1035,6 +1035,26 @@ app.post('/api/run-tool', async (req, res) => {
   });
 });
 
+// ── All images for all characters (for grid carousels) ────────────────────────
+
+app.get('/api/characters/all-images', async (req, res) => {
+  try {
+    const city  = reqCity(req);
+    const chars = await getAllCharacters(city);
+    const result = {};
+    await Promise.all(chars.map(async char => {
+      const artDir = path.join(charsDir(city), char.lineageFolder, char.slug, 'art');
+      const files  = await fs.readdir(artDir).catch(() => []);
+      const images = files
+        .filter(f => /\.(jpg|jpeg|png|webp|gif)$/i.test(f))
+        .sort()
+        .map(f => `/city-img/${city}/characters/${char.lineageFolder}/${encodeURIComponent(char.slug)}/art/${encodeURIComponent(f)}`);
+      if (images.length > 1) result[char.name] = images;
+    }));
+    res.json(result);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // ── List all art images for a character ───────────────────────────────────────
 
 app.get('/api/characters/:name/images', async (req, res) => {

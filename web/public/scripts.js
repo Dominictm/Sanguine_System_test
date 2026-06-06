@@ -327,13 +327,14 @@ document.getElementById('dash-content').addEventListener('click', e => {
 // ═══════════════════════════════════════════════════════════════
 
 async function loadCharacters() {
-  if (STATE.characters.length) { renderChars(); return; }
+  if (STATE.characters.length) { renderChars(); _injectGridDims(); return; }
   document.getElementById('chars-grid').innerHTML =
     '<div class="loading-state"><div class="spinner"></div>Загрузка...</div>';
   try {
     const data = await fetch('/api/characters').then(r => r.json());
     STATE.characters = Array.isArray(data) ? data : [];
     renderChars();
+    initGridCarousels();
   } catch {
     document.getElementById('chars-grid').innerHTML =
       '<div class="loading-state" style="color:var(--accent3)">⚠ Не удалось загрузить персонажей</div>';
@@ -382,17 +383,63 @@ function renderChars() {
 
 document.getElementById('search-input').addEventListener('input', e => {
   STATE.filter.search = e.target.value;
-  if (STATE.characters.length) renderChars();
+  if (STATE.characters.length) { renderChars(); _injectGridDims(); }
 });
+
+// ── Grid carousel ─────────────────────────────────────────────────────────────
+let _gridImages  = {};   // name → [url, ...]
+let _gridIdxs    = {};   // name → current index
+let _gridTimer   = null;
+
+async function initGridCarousels() {
+  if (_gridTimer) { clearInterval(_gridTimer); _gridTimer = null; }
+
+  const qs   = window.location.search;
+  const resp = await fetch('/api/characters/all-images' + qs).catch(() => null);
+  if (!resp?.ok) return;
+  _gridImages = await resp.json().catch(() => ({}));
+
+  for (const name of Object.keys(_gridImages)) _gridIdxs[name] = 0;
+
+  _injectGridDims();
+  _gridTimer = setInterval(_advanceGridCarousels, 2 * 60 * 1000);
+}
+
+function _injectGridDims() {
+  for (const name of Object.keys(_gridImages)) {
+    const card = document.querySelector(`.char-card[data-name="${CSS.escape(name)}"]`);
+    if (!card || card.querySelector('.char-card-dim')) continue;
+    const dim = document.createElement('div');
+    dim.className = 'char-card-dim';
+    card.insertBefore(dim, card.firstChild);
+  }
+}
+
+function _advanceGridCarousels() {
+  for (const [name, images] of Object.entries(_gridImages)) {
+    const card = document.querySelector(`.char-card[data-name="${CSS.escape(name)}"]`);
+    if (!card) continue;
+    const img = card.querySelector('.char-card-art');
+    const dim = card.querySelector('.char-card-dim');
+    if (!img || !dim) continue;
+
+    dim.classList.add('dark');
+    setTimeout(() => {
+      _gridIdxs[name] = (_gridIdxs[name] + 1) % images.length;
+      img.src = images[_gridIdxs[name]];
+      setTimeout(() => dim.classList.remove('dark'), 200);
+    }, 800);
+  }
+}
 
 document.getElementById('filter-lineage').addEventListener('change', e => {
   STATE.filter.lineage = e.target.value;
-  if (STATE.characters.length) renderChars();
+  if (STATE.characters.length) { renderChars(); _injectGridDims(); }
 });
 
 document.getElementById('filter-status').addEventListener('change', e => {
   STATE.filter.status = e.target.value;
-  if (STATE.characters.length) renderChars();
+  if (STATE.characters.length) { renderChars(); _injectGridDims(); }
 });
 
 // ═══════════════════════════════════════════════════════════════
