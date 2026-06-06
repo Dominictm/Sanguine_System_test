@@ -36,3 +36,5 @@
 
 ## 🖼️ Изображения
 
+- [Образ 1](art/gospozha_bubenchik_01.png)
+

@@ -54,3 +54,6 @@
 
 ## 🖼️ Изображения
 
+- [Образ 1](art/filippa_de_rosset_01.png)
+- [Образ 2](art/filippa_de_rosset_02.png)
+

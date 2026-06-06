@@ -34,3 +34,6 @@
 
 ## 🖼️ Изображения
 -  · 
+- [Образ 1](art/kristofer_01.png)
+- [Образ 2](art/kristofer_02.png)
+

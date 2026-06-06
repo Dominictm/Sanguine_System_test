@@ -52,3 +52,6 @@
 ---
 
 ## 🖼️ Изображения
+
+- [Образ 1](art/verene_de_kyustin_01.png)
+- [Образ 2](art/verene_de_kyustin_02.png)

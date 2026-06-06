@@ -54,6 +54,9 @@
 
 ## 🖼️ Изображения
 
+- [Образ 1](art/sklad_kanal_yurk_01.png)
+- [Образ 2](art/sklad_kanal_yurk_02.png)
+
 ## 🎨 Промт для генерации изображения
 
 **GPT / DALL-E 3:**

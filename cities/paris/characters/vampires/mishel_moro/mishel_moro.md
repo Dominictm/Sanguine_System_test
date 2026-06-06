@@ -37,3 +37,6 @@
 
 ## 🖼️ Изображения
 
+- [Образ 1](art/mishel_moro_01.jpg)
+- [Образ 2](art/mishel_moro_02.png)
+

@@ -73,3 +73,5 @@ photorealistic photography, digital art, anime, cartoon, illustration, watermark
 
 ## 🖼️ Изображения
 
+- [Образ 1](art/tsirk_vensen_01.png)
+

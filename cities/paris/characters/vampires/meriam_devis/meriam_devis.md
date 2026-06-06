@@ -39,3 +39,7 @@
 
 ## 🖼️ Изображения
 
+- [Образ 1](art/meriam_devis_01.png)
+- [Образ 2](art/meriam_devis_02.jpg)
+- [Образ 3](art/meriam_devis_03.jpg)
+
