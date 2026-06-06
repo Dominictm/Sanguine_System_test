@@ -78,22 +78,22 @@
 
 **GPT/DALL-E:**
 ```
-Upper body portrait of a tall slender vampire woman, Nosferatu, dark fantasy illustration style.
+Upper body portrait of a tall slender supernatural woman, dark fantasy character illustration style.
 
-HEAD AND FACE: Completely bald, smooth scalp. Uniform flat gray skin tone with slight purple undertones. Dark eye makeup — heavy shadow. Small neat nose. Long elongated pointed ears like bat wings, pale and semi-translucent. Golden irises with a sharp black limbal ring. Dark lashes, defined dark brows — no other facial hair. Black obsidian lipstick. Two prominent front incisors protruding downward like bat fangs, clearly visible. Torn ragged wounds on both cheeks — edges neatly cut as if with a blade, held open by small metal staples and sutures, teeth visible through the gaps. A single dark tear-like streak under one eye.
+HEAD AND FACE: Completely bald, smooth scalp. Uniform flat gray skin tone with soft purple undertones. Dark dramatic eye makeup. Small neat nose. Very long elongated pointed ears, pale and delicate. Golden irises with a sharp black limbal ring. Dark lashes, defined dark brows. Black obsidian lipstick. Two prominent front incisors extending downward like bat fangs. On both cheeks — ancient clan ritual scarification markings: clean symmetrical openings held with small decorative metal clasps and ornamental piercings, a signature Nosferatu clan feature, supernatural in origin, not traumatic. A faint dark streak beneath one eye like a shadow.
 
-EXPRESSION: Gentle, tender, soft. An uncertain shy half-smile — as if she wants to say something but does not know how to begin. The gaze is calm, almost meek, incongruously warm for her monstrous face.
+EXPRESSION: Gentle, tender, soft. An uncertain shy half-smile — as if she wants to speak but does not know how to begin. Calm, almost meek gaze, incongruously warm.
 
-BODY AND CLOTHING: Black long-sleeved shirt in soft matte fabric with a wide structured collar trimmed with dark feather-like texture framing the neckline. Tight black corset over the shirt, cinching the waist. Floor-length black skirt. Tall fitted black women's boots. At the décolletage, partially visible beneath the collar edge, a fragment of an intricate magical seal tattoo — arcane linework, dark ink.
+BODY AND CLOTHING: Black long-sleeved shirt in soft matte fabric with a wide structured dark collar trimmed with feather-like texture. Tight black corset over the shirt. Floor-length black skirt. Tall fitted black women's boots. At the décolletage, partially visible beneath the collar edge, a fragment of an intricate arcane tattoo — fine ornamental linework.
 
-HANDS AND POSE: Both hands raised toward the chest and face. Right hand — palm open, pressing gently against the right cheek, slender fingers with slightly elongated sharp nails. Left hand — fingers loosely crossed lower on the chest; left index finger wears a round silver ring bearing an ankh — Camarilla symbol, clearly visible.
+HANDS AND POSE: Both hands raised toward chest and face. Right hand — open palm resting gently against the right cheek, slender fingers with slightly elongated pointed nails. Left hand — loosely crossed lower on the chest; left index finger wears a round silver ring with an ankh symbol, clearly visible.
 
-STYLE: Flat dark digital illustration with clean linework and limited cel-shading. Muted desaturated palette: grays, near-blacks, muted purples. Pure black background. No background details. Slight painterly texture on the figure. Vampire the Masquerade tabletop RPG character art.
+STYLE: Flat dark digital illustration, clean confident linework, limited cel-shading. Muted desaturated palette — grays, near-blacks, muted purples. Pure black background, no background elements. Vampire the Masquerade tabletop RPG character art.
 ```
 
 **🚫 Негативный промт:**
 ```
-photorealistic, photo, 3D render, CGI, anime, chibi, watermark, signature, text, logo, blurry, extra limbs, deformed hands, six fingers, hair on scalp, human-shaped ears, round ears, small ears, normal teeth, fangs on canines only, bright background, white background, colorful background, oversaturated colors, gore excessive, cheerful expression, aggressive expression.
+photorealistic, photo, 3D render, CGI, anime style, chibi, watermark, signature, text, logo, blurry, deformed hands, six fingers, hair on scalp, human-shaped ears, small ears, round ears, normal human teeth, bright background, white background, colorful background, oversaturated, cheerful expression, aggressive expression, scary expression, horror aesthetic.
 ```
 
 ---
