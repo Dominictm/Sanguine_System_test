@@ -1374,6 +1374,7 @@ let _slugEdited = false;
 document.getElementById('btn-create-chronicle').addEventListener('click', () => {
   document.getElementById('chr-create-name').value  = '';
   document.getElementById('chr-create-slug').value  = '';
+  document.getElementById('chr-create-mood').value  = '';
   document.getElementById('chr-create-error').style.display = 'none';
   _slugEdited = false;
   document.getElementById('chr-create-modal').style.display = 'flex';
@@ -1396,6 +1397,7 @@ document.getElementById('chr-create-modal').addEventListener('click', e => {
 document.getElementById('chr-create-submit').addEventListener('click', async () => {
   const name  = document.getElementById('chr-create-name').value.trim();
   const slug  = document.getElementById('chr-create-slug').value.trim() || slugifyChr(name);
+  const mood  = document.getElementById('chr-create-mood').value.trim();
   const errEl = document.getElementById('chr-create-error');
   const btn   = document.getElementById('chr-create-submit');
 
@@ -1407,7 +1409,7 @@ document.getElementById('chr-create-submit').addEventListener('click', async () 
     const qs = window.location.search;
     const d  = await fetch(`/api/chronicles${qs}`,
       { method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, slug }) }).then(r => r.json());
+        body: JSON.stringify({ name, slug, mood }) }).then(r => r.json());
 
     if (!d.ok) { errEl.textContent = d.error || 'Ошибка'; errEl.style.display = ''; return; }
 

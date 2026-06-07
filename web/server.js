@@ -911,10 +911,65 @@ app.get('/api/chronicles', async (req, res) => {
 
 // ── Chronicle create ──────────────────────────────────────────────────────────
 
+function renderChronicleMd(display, slug, city, mood, moduleLinks) {
+  const moodLine   = mood ? `- **Настроение:** ${mood}\n` : '';
+  const modsSection = moduleLinks?.length
+    ? `\n## 🔗 Модули\n\n${moduleLinks.map(m => `- [${m.title}](modules/${m.slug}/${m.slug}.md)`).join('\n')}\n`
+    : '';
+  return [
+    `# 📕 ${display}`,
+    '',
+    `- **Статус:** 🟡 Активна`,
+    moodLine ? moodLine.trimEnd() : null,
+    '',
+    `> Спина хроники. События — [events.md](events.md). Нити — [open_threads.md](open_threads.md).`,
+    `> Закрыть хронику: \`node tools/close_chronicle.js ${city} ${slug} "финал"\``,
+    modsSection,
+  ].filter(l => l !== null).join('\n');
+}
+
+// Rebuild modules section in chronicle.md from current modules/ dir
+async function syncChronicleModuleLinks(city, chr) {
+  const chrDir = path.join(chroniclesDir(city), chr);
+  const chrMdPath = path.join(chrDir, 'chronicle.md');
+  const raw = await fs.readFile(chrMdPath, 'utf-8').catch(() => null);
+  if (!raw) return; // no chronicle.md (older chronicle)
+
+  // Read current modules
+  let mEntries; try { mEntries = await fs.readdir(path.join(chrDir, 'modules'), { withFileTypes: true }); } catch { mEntries = []; }
+  const mods = mEntries
+    .filter(e => e.isDirectory() && !e.name.startsWith('.'))
+    .map(e => {
+      // Try to read title from main md file
+      let title = e.name;
+      try {
+        const mainTxt = require('fs').readFileSync(path.join(chrDir, 'modules', e.name, `${e.name}.md`), 'utf-8');
+        const hm = mainTxt.match(/^#\s+(.+)$/m);
+        if (hm) title = hm[1].replace(/[*[\]]/g, '').trim();
+      } catch {}
+      return { slug: e.name, title };
+    });
+
+  // Replace or add ## 🔗 Модули section
+  const modsSection = mods.length
+    ? `\n## 🔗 Модули\n\n${mods.map(m => `- [${m.title}](modules/${m.slug}/${m.slug}.md)`).join('\n')}\n`
+    : '';
+
+  let updated;
+  if (/^## 🔗 Модули/m.test(raw)) {
+    // Replace existing section
+    updated = raw.replace(/\n## 🔗 Модули[\s\S]*?(?=\n## |\n---|\s*$)/, modsSection);
+  } else {
+    updated = raw.trimEnd() + '\n' + modsSection;
+  }
+
+  if (updated !== raw) await fs.writeFile(chrMdPath, updated, 'utf-8');
+}
+
 app.post('/api/chronicles', express.json(), async (req, res) => {
   try {
     const city    = reqCity(req);
-    const { name } = req.body || {};
+    const { name, mood } = req.body || {};
     if (!name || !name.trim()) return res.status(400).json({ error: 'Укажи название хроники' });
 
     const display  = name.trim();
@@ -926,7 +981,6 @@ app.post('/api/chronicles', express.json(), async (req, res) => {
       return res.status(409).json({ error: `Хроника «${slug}» уже существует` });
     }
 
-    // Get city display name for templates
     let cityDisplay = city;
     try {
       const cm = await fs.readFile(path.join(cityDir(city), 'city.md'), 'utf-8');
@@ -939,8 +993,7 @@ app.post('/api/chronicles', express.json(), async (req, res) => {
     await fs.mkdir(path.join(chrDir, 'modules'), { recursive: true });
 
     await fs.writeFile(path.join(chrDir, 'chronicle.md'),
-      `# 📕 ${display}\n\n- **Статус:** 🟡 Активна\n\n> Спина хроники. События — [events.md](events.md). Нити — [open_threads.md](open_threads.md).\n> Закрыть хронику: \`node tools/close_chronicle.js ${city} ${slug} "финал"\`\n`,
-      'utf-8');
+      renderChronicleMd(display, slug, city, mood?.trim() || '', []), 'utf-8');
 
     await fs.writeFile(path.join(chrDir, 'events.md'),
       renderChronicleEventsSkeleton(fullDisplay), 'utf-8');
@@ -1288,6 +1341,7 @@ app.post('/api/chronicles/:slug/modules', express.json(), async (req, res) => {
     ].join('\n');
 
     await fs.writeFile(path.join(modDir, `${modSlug}.md`), mainContent, 'utf-8');
+    await syncChronicleModuleLinks(city, chr);
     console.log(`[create-module] ${city}/${chr}/modules/${modSlug}`);
     res.json({ ok: true, slug: modSlug, title: name.trim() });
   } catch (e) {
@@ -1348,6 +1402,7 @@ app.delete('/api/chronicles/:chr/modules/:mod', express.json(), async (req, res)
 
     // 5. Delete module directory
     await rmdir(modDir);
+    await syncChronicleModuleLinks(city, chr);
     console.log(`[delete-module] ${city}/${chr}/modules/${mod} | cleaned: ${cleanedChars.join(', ') || '—'}`);
 
     delete _cache[city];
