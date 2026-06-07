@@ -1191,11 +1191,7 @@ async function makeAnthropicClient() {
         throw new Error('Claude.ai OAuth токен истёк. Выполни любую команду в Claude Code — он обновится автоматически.');
       }
       return {
-        client: new Anthropic({
-          authToken:   oauth.accessToken,
-          baseURL:     'https://api.claude.ai/api',
-          defaultHeaders: { 'anthropic-version': '2023-06-01' },
-        }),
+        client: new Anthropic({ authToken: oauth.accessToken }),
         source: 'claude-login',
       };
     }
