@@ -1485,7 +1485,8 @@ document.addEventListener('click', e => {
 
 // Click on module card inside chronicle modal → open module detail
 document.getElementById('chr-detail-body').addEventListener('click', e => {
-  if (e.target.closest('.chd-mod-del-btn')) return;
+  if (e.target.closest('.chd-mod-del-btn'))  return;
+  if (e.target.closest('.chd-mod-fill-btn')) return;
   // chip links (events tab)
   const chipMod = e.target.closest('.chip-mod');
   if (chipMod) { openModuleDetail(chipMod.dataset.mod, chipMod.dataset.tab); return; }
@@ -1616,9 +1617,6 @@ async function openFillModal(chr, mod, title) {
 
   document.getElementById('mod-fill-pc-list').innerHTML  = pcs.map(c  => `<option value="${escHtml(c.name)}">`).join('');
   document.getElementById('mod-fill-npc-list').innerHTML = chars.map(c => `<option value="${escHtml(c.name)}">`).join('');
-
-  // Pre-fill PCs
-  pcs.forEach(c => _fillChip(c.name, _fillPCs, 'mod-fill-pcs'));
 }
 
 document.addEventListener('click', e => {
