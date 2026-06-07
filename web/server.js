@@ -1260,7 +1260,8 @@ app.post('/api/characters/:name/generate-appearance', express.json(), async (req
     const imgs   = files.filter(f => /\.(jpg|jpeg|png|webp|gif)$/i.test(f)).sort();
     if (!imgs.length) return res.status(400).json({ error: 'Нет изображений в папке art/ персонажа' });
 
-    const MAX_IMGS = 4;
+    // OAuth tier (claude.ai Pro) has lower token limits — send only 1 image
+    const MAX_IMGS = source === 'claude-login' ? 1 : 4;
     const imgContents = [];
     for (const f of imgs.slice(0, MAX_IMGS)) {
       const buf  = await fs.readFile(path.join(artDir, f));
@@ -1281,7 +1282,7 @@ app.post('/api/characters/:name/generate-appearance', express.json(), async (req
 
     const message = await client.messages.create({
       model,
-      max_tokens: 400,
+      max_tokens: 300,
       system: systemPrompt,
       messages: [{ role: 'user', content: [...imgContents, { type: 'text', text: userPrompt }] }],
     });
