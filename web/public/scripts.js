@@ -1001,8 +1001,9 @@ function renderChronicleCard(c) {
   const statusLbl = STATUS_LABEL[c.status] || c.status;
   const statusCls = STATUS_CLS[c.status]   || '';
   const meta = [
-    c.events  ? `<span class="chp-meta-item">📅 ${c.events} событий</span>` : '',
-    c.modules ? `<span class="chp-meta-item">📖 ${c.modules} модулей</span>` : '',
+    c.startDate ? `<span class="chp-meta-item">🗓 ${escHtml(c.startDate)}</span>` : '',
+    c.events    ? `<span class="chp-meta-item">📅 ${c.events} событий</span>` : '',
+    c.modules   ? `<span class="chp-meta-item">📖 ${c.modules} модулей</span>` : '',
   ].filter(Boolean).join('');
   return `
     <div class="chp-card" data-slug="${escHtml(c.slug)}">
@@ -1010,7 +1011,6 @@ function renderChronicleCard(c) {
         <div class="chp-card-name">${escHtml(c.display)}</div>
         <span class="chp-status ${statusCls}">${statusLbl}</span>
       </div>
-      <div class="chp-card-slug">${escHtml(c.slug)}</div>
       ${meta ? `<div class="chp-card-meta">${meta}</div>` : ''}
       <div class="chp-card-actions">
         <button class="chr-delete-btn" data-slug="${escHtml(c.slug)}">🗑 Удалить</button>
