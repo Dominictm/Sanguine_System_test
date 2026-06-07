@@ -1198,8 +1198,9 @@ document.getElementById('btn-new-npc').addEventListener('click', () => {
   const name = document.getElementById('npc-name').value.trim();
   if (!name) { alert('Укажите имя НПС'); return; }
   if (!CITY) { alert('Сначала выбери город в шапке'); return; }
-  const lineage = NPC_LINEAGE[document.getElementById('npc-type').value] || 'mortals';
-  runNodeTool('new_npc', [CITY, lineage, name], 'out-new-npc', document.getElementById('btn-new-npc'));
+  const lineage   = NPC_LINEAGE[document.getElementById('npc-type').value] || 'mortals';
+  const belonging = document.getElementById('npc-belonging')?.value || 'Создатель НПС';
+  runNodeTool('new_npc', [CITY, lineage, name, '', '', '', belonging], 'out-new-npc', document.getElementById('btn-new-npc'));
 });
 
 document.getElementById('btn-new-module').addEventListener('click', () => {
@@ -1326,6 +1327,7 @@ function renderModuleCardInChr(m, chrSlug) {
         </div>
         ${files ? `<div class="chd-mod-files">${files}</div>` : ''}
         <div class="chd-mod-slug">${escHtml(m.name)}</div>
+        <button class="chd-mod-fill-btn" data-chr="${escHtml(chrSlug)}" data-mod="${escHtml(m.name)}" data-title="${escHtml(m.title)}">⚡ Наполнить</button>
       </div>
       <button class="chd-mod-del-btn" data-chr="${escHtml(chrSlug)}" data-mod="${escHtml(m.name)}" title="Удалить модуль">🗑</button>
     </div>`;
@@ -1568,6 +1570,123 @@ document.getElementById('mod-create-submit').addEventListener('click', async () 
 document.getElementById('mod-create-modal').addEventListener('keydown', e => {
   if (e.key === 'Enter') document.getElementById('mod-create-submit').click();
   if (e.key === 'Escape') document.getElementById('mod-create-modal').style.display = 'none';
+});
+
+// ── Fill module modal ─────────────────────────────────────────────────────────
+
+let _fillModTarget = null; // { chr, mod, title }
+let _fillPCs  = [];
+let _fillNPCs = [];
+
+function _fillChip(name, arr, containerId) {
+  if (arr.includes(name)) return;
+  arr.push(name);
+  const wrap = document.getElementById(containerId);
+  const chip = document.createElement('span');
+  chip.className = 'mod-fill-chip';
+  chip.textContent = name;
+  const rm = document.createElement('button');
+  rm.textContent = '×'; rm.className = 'mod-fill-chip-rm';
+  rm.addEventListener('click', () => {
+    arr.splice(arr.indexOf(name), 1);
+    chip.remove();
+  });
+  chip.appendChild(rm);
+  wrap.appendChild(chip);
+}
+
+async function openFillModal(chr, mod, title) {
+  _fillModTarget = { chr, mod };
+  _fillPCs  = [];
+  _fillNPCs = [];
+  document.getElementById('mod-fill-pcs').innerHTML  = '';
+  document.getElementById('mod-fill-npcs').innerHTML = '';
+  document.getElementById('mod-fill-pc-input').value  = '';
+  document.getElementById('mod-fill-npc-input').value = '';
+  document.getElementById('mod-fill-content').value   = '';
+  document.getElementById('mod-fill-error').style.display = 'none';
+  document.getElementById('mod-fill-title').textContent = `⚡ Наполнить: ${title}`;
+  document.getElementById('mod-fill-modal').style.display = 'flex';
+
+  // Populate datalists
+  await ensureCharsLoaded();
+  const chars = STATE.characters || [];
+  const pcs   = chars.filter(c => /персонаж игрока/i.test(c.belonging || '') || /персонаж игрока|пк/i.test(c.role || ''));
+  const npcs  = chars.filter(c => !/персонаж игрока/i.test(c.belonging || '') || /создатель нпс|эпизодич/i.test(c.belonging || ''));
+
+  document.getElementById('mod-fill-pc-list').innerHTML  = pcs.map(c  => `<option value="${escHtml(c.name)}">`).join('');
+  document.getElementById('mod-fill-npc-list').innerHTML = chars.map(c => `<option value="${escHtml(c.name)}">`).join('');
+
+  // Pre-fill PCs
+  pcs.forEach(c => _fillChip(c.name, _fillPCs, 'mod-fill-pcs'));
+}
+
+document.addEventListener('click', e => {
+  const fillBtn = e.target.closest('.chd-mod-fill-btn');
+  if (!fillBtn || e.target.closest('.chd-mod-del-btn')) return;
+  openFillModal(fillBtn.dataset.chr, fillBtn.dataset.mod, fillBtn.dataset.title);
+});
+
+document.getElementById('mod-fill-add-pc').addEventListener('click', () => {
+  const v = document.getElementById('mod-fill-pc-input').value.trim();
+  if (v) { _fillChip(v, _fillPCs, 'mod-fill-pcs'); document.getElementById('mod-fill-pc-input').value = ''; }
+});
+document.getElementById('mod-fill-add-npc').addEventListener('click', () => {
+  const v = document.getElementById('mod-fill-npc-input').value.trim();
+  if (v) { _fillChip(v, _fillNPCs, 'mod-fill-npcs'); document.getElementById('mod-fill-npc-input').value = ''; }
+});
+['mod-fill-pc-input','mod-fill-npc-input'].forEach(id => {
+  document.getElementById(id).addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); document.getElementById(id.replace('input','').replace('fill-pc','fill-add-pc').replace('fill-npc','fill-add-npc')).click(); }
+  });
+});
+document.getElementById('mod-fill-pc-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') { e.preventDefault(); document.getElementById('mod-fill-add-pc').click(); }
+});
+document.getElementById('mod-fill-npc-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') { e.preventDefault(); document.getElementById('mod-fill-add-npc').click(); }
+});
+
+document.getElementById('mod-fill-cancel').addEventListener('click', () => {
+  document.getElementById('mod-fill-modal').style.display = 'none';
+  _fillModTarget = null;
+});
+document.getElementById('mod-fill-modal').addEventListener('click', e => {
+  if (e.target === document.getElementById('mod-fill-modal')) {
+    document.getElementById('mod-fill-modal').style.display = 'none';
+    _fillModTarget = null;
+  }
+});
+
+document.getElementById('mod-fill-generate').addEventListener('click', async () => {
+  if (!_fillModTarget) return;
+  const content = document.getElementById('mod-fill-content').value.trim();
+  const errEl   = document.getElementById('mod-fill-error');
+  const btn     = document.getElementById('mod-fill-generate');
+  if (!content) { errEl.textContent = 'Заполни поле «Содержание модуля»'; errEl.style.display = ''; return; }
+  errEl.style.display = 'none';
+  btn.disabled = true; btn.textContent = '⏳ Генерация сценария...';
+
+  try {
+    const qs = window.location.search;
+    const d  = await fetch(
+      `/api/chronicles/${encodeURIComponent(_fillModTarget.chr)}/modules/${encodeURIComponent(_fillModTarget.mod)}/fill${qs}`,
+      { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pcs: _fillPCs, npcs: _fillNPCs, content }) }
+    ).then(r => r.json());
+
+    if (!d.ok) { errEl.textContent = d.error || 'Ошибка генерации'; errEl.style.display = ''; return; }
+
+    document.getElementById('mod-fill-modal').style.display = 'none';
+    _fillModTarget = null;
+    // Refresh chronicle modules
+    if (_chrDetailSlug) openChrDetail(_chrDetailSlug, _chrDetailDisplay, 'modules');
+    alert(`✓ Сценарий сгенерирован: ${d.file}`);
+  } catch (e) {
+    errEl.textContent = 'Ошибка: ' + e.message; errEl.style.display = '';
+  } finally {
+    btn.disabled = false; btn.textContent = '⚡ Сгенерировать сценарий';
+  }
 });
 
 // ── Delete module ─────────────────────────────────────────────────────────────
@@ -2443,6 +2562,7 @@ const INFO_FIELDS = [
   ['derangements', 'Деранжементы'],
   ['profession',   'Профессия'],
   ['role',         'Роль'],
+  ['belonging',    'Принадлежность'],
 ];
 
 function renderDiaryList(c) {
@@ -3009,11 +3129,24 @@ function _enterInfoEdit(charName) {
     const current = isUnknown ? '' : cell.textContent;
     _editOrigValues[key] = current;
 
-    const input = document.createElement('input');
-    input.className = 'cdet-field-input';
-    input.dataset.field = key;
-    input.value = current;
-    input.placeholder = 'Неизвестно';
+    let input;
+    if (key === 'belonging') {
+      input = document.createElement('select');
+      input.className = 'cdet-field-input';
+      input.dataset.field = key;
+      ['Создатель НПС', 'Персонаж игрока', 'Эпизодический персонаж'].forEach(opt => {
+        const o = document.createElement('option');
+        o.value = opt; o.textContent = opt;
+        if (current === opt) o.selected = true;
+        input.appendChild(o);
+      });
+    } else {
+      input = document.createElement('input');
+      input.className = 'cdet-field-input';
+      input.dataset.field = key;
+      input.value = current;
+      input.placeholder = 'Неизвестно';
+    }
     cell.replaceWith(input);
   });
 

@@ -195,6 +195,7 @@ function parseCharacter(rawContent, folderName, lineage) {
     if (k === 'Род' && !c.clan)                 c.clan          = v;
     if (k === 'Секта / Двор' && !c.sect)        c.sect          = v;
     if (k === 'Фригольд / Локация' && !c.location) c.location  = v;
+    if (k === 'Принадлежность')                 c.belonging     = v;
   }
 
   // Diary links: - **📖 Дневники:** [Title](path.md)
@@ -1350,6 +1351,122 @@ app.post('/api/chronicles/:slug/modules', express.json(), async (req, res) => {
   }
 });
 
+// ── Fill module: generate scenario.md ────────────────────────────────────────
+
+app.post('/api/chronicles/:chr/modules/:mod/fill', express.json(), async (req, res) => {
+  try {
+    const city    = reqCity(req);
+    const { chr, mod } = req.params;
+    const { pcs = [], npcs = [], content = '' } = req.body || {};
+    if (!content.trim()) return res.status(400).json({ ok: false, error: 'Не заполнено поле «Содержание модуля».' });
+
+    // Read module rules
+    const moduleRules = await fs.readFile(
+      path.join(ROOT, 'system', 'rules', 'module_rules.md'), 'utf-8').catch(() => '');
+    const cityMd = await fs.readFile(path.join(cityDir(city), 'city.md'), 'utf-8').catch(() => '');
+
+    // Read character cards for participants
+    const chars = await getAllCharacters(city);
+    const charCards = [];
+    for (const name of [...pcs, ...npcs]) {
+      const ch = chars.find(c => c.name === name || c.name.toLowerCase() === name.toLowerCase());
+      if (!ch) continue;
+      const cardPath = path.join(charsDir(city), ch.lineageFolder, ch.slug, `${ch.slug}.md`);
+      const card = await fs.readFile(cardPath, 'utf-8').catch(() => null);
+      if (card) charCards.push(`### ${ch.name} (${pcs.includes(name) ? 'ПК' : 'НПС'})\n${card.slice(0, 2000)}`);
+    }
+
+    // Read module title from main file
+    const modDir  = path.join(chroniclesDir(city), chr, 'modules', mod);
+    const mainTxt = await fs.readFile(path.join(modDir, `${mod}.md`), 'utf-8').catch(() => '');
+    const titleM  = mainTxt.match(/^#\s+(.+)$/m);
+    const modTitle = titleM ? titleM[1].replace(/[*[\]]/g, '').trim() : mod;
+
+    const systemPrompt = `Ты — Мастер (Рассказчик) в Vampire: The Masquerade V20. Создаёшь сценарий модуля по правилам игры.
+
+# ПРАВИЛА МОДУЛЕЙ
+${moduleRules.slice(0, 3000)}
+
+# СЕТТИНГ ГОРОДА
+${cityMd.slice(0, 2000)}
+
+# УЧАСТНИКИ МОДУЛЯ
+${charCards.join('\n\n') || '(не указаны)'}`;
+
+    const userPrompt = `Создай полный сценарий (scenario.md) для модуля «${modTitle}» по следующей идее:
+
+${content}
+
+Персонажи игроков: ${pcs.length ? pcs.join(', ') : '(не указаны)'}
+НПС: ${npcs.length ? npcs.join(', ') : '(не указаны)'}
+
+Структура сценария (строго по правилам module_rules.md):
+1. Предпосылки — что привело к этой ситуации
+2. Локации — 2-3 ключевых места с атмосферой
+3. НПС — мотивации, секреты, роли
+4. Завязка — как ПК втягиваются в события
+5. Сцены (3–5) — каждая с конфликтом и вариантами развития
+6. Кульминация — пиковый момент напряжения
+7. Варианты финала — 2-3 возможных исхода
+8. Открытые нити — что останется неразрешённым
+9. Парижский колорит — 2-3 детали, делающие сцену именно Парижем 2010
+
+Язык: русский. Стиль: готический нуар, VtM атмосфера.`;
+
+    // Use makeGenerationClient (respects OpenRouter/Claude preference)
+    const gen = await makeGenerationClient().catch(() => null);
+    let scenarioText = '';
+
+    if (gen?.source === 'openrouter') {
+      const orResp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
+          'Content-Type': 'application/json',
+          'HTTP-Referer': 'http://localhost:3000',
+          'X-Title': 'VTM Chronicle Manager',
+        },
+        body: JSON.stringify({
+          model: gen.model,
+          max_tokens: 4000,
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user',   content: userPrompt },
+          ],
+        }),
+      });
+      if (!orResp.ok) {
+        const err = await orResp.text();
+        return res.status(orResp.status).json({ ok: false, error: err });
+      }
+      const data = await orResp.json();
+      scenarioText = data.choices?.[0]?.message?.content?.trim() || '';
+    } else if (gen?.client) {
+      const msg = await gen.client.messages.create({
+        model: 'claude-opus-4-8', max_tokens: 4000,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: userPrompt }],
+      });
+      scenarioText = msg.content[0]?.text?.trim() || '';
+    } else {
+      return res.status(503).json({ ok: false, error: 'Нет доступного AI-провайдера. Настрой в Инструменты → Модели AI.' });
+    }
+
+    if (!scenarioText) return res.status(500).json({ ok: false, error: 'AI вернул пустой ответ.' });
+
+    // Save as scenario.md
+    const scenarioPath = path.join(modDir, 'scenario.md');
+    const header = `# Сценарий: ${modTitle}\n\n> 🔗 [Модуль](${mod}.md) | [Хроника](../../events.md)\n\n---\n\n`;
+    await fs.writeFile(scenarioPath, header + scenarioText + '\n', 'utf-8');
+
+    console.log(`[fill-module] ${city}/${chr}/${mod}/scenario.md written`);
+    res.json({ ok: true, file: `chronicles/${chr}/modules/${mod}/scenario.md` });
+  } catch (e) {
+    console.error('[fill-module]', e.message);
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
 // ── Delete module ─────────────────────────────────────────────────────────────
 
 app.delete('/api/chronicles/:chr/modules/:mod', express.json(), async (req, res) => {
@@ -1702,6 +1819,7 @@ const EDITABLE_FIELD_MAP = {
   disciplines:  'Дисциплины',
   profession:   'Профессия',
   role:         'Роль',
+  belonging:    'Принадлежность',
   biography:    'Биография',
   appearance:   'Внешность',
   voice:        'Голос',
@@ -2360,7 +2478,7 @@ function renderMinimalNpcCard(name, slug, lineageFolder, lineageRu, cityDisplay)
   const emoji = { vampires: '🧛', fairies: '🧚', mortals: '🧑', werewolves: '🐺', mages: '🔮', hunters: '🏹' }[lineageFolder] || '👤';
   return `# ${emoji} ${name}\n\n> 🔗 [Все персонажи](../../../archive/characters_index.md)\n\n---\n\n` +
     `- **Слаг:** ${slug}\n- **Родной город:** ${cityDisplay}\n- **Линейка WoD:** ${lineageRu}\n- **Статус:** Жив\n` +
-    `- **Роль:** ⚠️ Требуется уточнение\n- **Биография:** ⚠️ Требуется уточнение\n- **Внешность:** ⚠️ Требуется уточнение\n\n---\n\n` +
+    `- **Роль:** ⚠️ Требуется уточнение\n- **Принадлежность:** Создатель НПС\n- **Биография:** ⚠️ Требуется уточнение\n- **Внешность:** ⚠️ Требуется уточнение\n\n---\n\n` +
     `## 🖼️ Изображения\n- ⏳ Изображение не предоставлено\n`;
 }
 

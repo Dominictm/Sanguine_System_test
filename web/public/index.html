@@ -247,6 +247,47 @@
       </div>
     </div>
 
+    <!-- Module fill modal -->
+    <div id="mod-fill-modal" class="chr-modal-backdrop" style="display:none">
+      <div class="chr-modal mod-fill-modal">
+        <div class="chr-modal-title" id="mod-fill-title">⚡ Наполнить модуль</div>
+        <div class="chr-modal-body mod-fill-body">
+
+          <div class="chr-form-group">
+            <label class="chr-form-label">Персонажи игроков (ПК)</label>
+            <div class="mod-fill-chips" id="mod-fill-pcs"></div>
+            <div class="mod-fill-add-row">
+              <input class="chr-form-input" id="mod-fill-pc-input" list="mod-fill-pc-list" placeholder="Введи имя или выбери из списка...">
+              <datalist id="mod-fill-pc-list"></datalist>
+              <button class="mod-fill-add-btn" id="mod-fill-add-pc">+ Добавить</button>
+            </div>
+          </div>
+
+          <div class="chr-form-group">
+            <label class="chr-form-label">Персонажи НПС</label>
+            <div class="mod-fill-chips" id="mod-fill-npcs"></div>
+            <div class="mod-fill-add-row">
+              <input class="chr-form-input" id="mod-fill-npc-input" list="mod-fill-npc-list" placeholder="Введи имя или выбери из списка...">
+              <datalist id="mod-fill-npc-list"></datalist>
+              <button class="mod-fill-add-btn" id="mod-fill-add-npc">+ Добавить</button>
+            </div>
+          </div>
+
+          <div class="chr-form-group">
+            <label class="chr-form-label">Содержание модуля <span class="chr-modal-dim">(идея, завязка, ключевые сцены)</span></label>
+            <textarea class="chr-form-input chr-form-textarea" id="mod-fill-content" rows="6"
+              placeholder="Опиши идею модуля — завязку, ключевые сцены, конфликт, НПС, локации, желаемый исход..."></textarea>
+          </div>
+
+          <div id="mod-fill-error" class="chr-form-error" style="display:none"></div>
+        </div>
+        <div class="chr-modal-actions">
+          <button id="mod-fill-cancel" class="chr-modal-btn cancel">Отмена</button>
+          <button id="mod-fill-generate" class="chr-modal-btn create">⚡ Сгенерировать сценарий</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Module delete confirm modal -->
     <div id="mod-delete-modal" class="chr-modal-backdrop" style="display:none">
       <div class="chr-modal">
@@ -366,6 +407,14 @@
               <option value="werewolf">Оборотень</option>
               <option value="mage">Маг</option>
               <option value="hunter">Охотник</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Принадлежность</label>
+            <select class="form-control" id="npc-belonging">
+              <option value="Создатель НПС">Создатель НПС</option>
+              <option value="Персонаж игрока">Персонаж игрока</option>
+              <option value="Эпизодический персонаж">Эпизодический персонаж</option>
             </select>
           </div>
         </div>

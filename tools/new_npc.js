@@ -15,9 +15,10 @@ const LINEAGE = {
 const _TR = { а:'a',б:'b',в:'v',г:'g',д:'d',е:'e',ё:'e',ж:'zh',з:'z',и:'i',й:'y',к:'k',л:'l',м:'m',н:'n',о:'o',п:'p',р:'r',с:'s',т:'t',у:'u',ф:'f',х:'h',ц:'ts',ч:'ch',ш:'sh',щ:'sch',ъ:'',ы:'y',ь:'',э:'e',ю:'yu',я:'ya' };
 const slugify = s => s.toLowerCase().split('').map(c => _TR[c] !== undefined ? _TR[c] : c).join('').replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').replace(/_+/g, '_');
 
-const [city, lineage, name, clan, sect, role] = [
+const [city, lineage, name, clan, sect, role, belonging] = [
   process.argv[2], process.argv[3], process.argv[4],
-  process.argv[5] || '', process.argv[6] || '', process.argv[7] || ''
+  process.argv[5] || '', process.argv[6] || '', process.argv[7] || '',
+  process.argv[8] || 'Создатель НПС'
 ];
 if (!city || !LINEAGE[lineage] || !name) {
   console.error('Использование: node tools/new_npc.js <city> <vampires|fairies|mortals|werewolves|mages|hunters> "<Имя>" ["<Клан>"] ["<Секта>"] ["<Роль>"]');
@@ -53,6 +54,7 @@ const card = `# ${emoji} ${name}
 - **Секта / Двор:** ${sect || '⚠️ Требуется уточнение'}
 - **Статус:** Жив
 - **Роль:** ${role || '⚠️ Требуется уточнение'}
+- **Принадлежность:** ${belonging}
 - **Биография:** ⚠️ Требуется уточнение
 - **Внешность:** ⚠️ Требуется уточнение (3–5 визуальных маркеров)
 - **Голос:** ⚠️ Требуется уточнение
