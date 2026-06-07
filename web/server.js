@@ -41,6 +41,99 @@ app.use(express.static(path.join(__dirname, 'public')));
 // Serve images straight out of cities/<city>/… (characters/<lin>/<slug>/art/, locations/…)
 app.use('/city-img', express.static(CITIES_DIR));
 
+// ── Request logger ────────────────────────────────────────────────────────────
+const C = {
+  reset:  '\x1b[0m',
+  dim:    '\x1b[2m',
+  bold:   '\x1b[1m',
+  red:    '\x1b[31m',
+  green:  '\x1b[32m',
+  yellow: '\x1b[33m',
+  cyan:   '\x1b[36m',
+  magenta:'\x1b[35m',
+  gray:   '\x1b[90m',
+};
+
+// Human-readable action descriptions for API routes
+const ACTION_MAP = {
+  'GET /api/status':                          () => 'Дашборд — загрузка статистики',
+  'GET /api/characters':                      req => `Персонажи — загрузка (город: ${reqCity(req)})`,
+  'GET /api/characters/all-images':           req => `Карусель — загрузка всех артов (${reqCity(req)})`,
+  'GET /api/characters/:name/images':         req => `Арты персонажа: ${decodeURIComponent(req.params.name)}`,
+  'GET /api/characters/:name/diary':          req => `Дневник: ${decodeURIComponent(req.params.name)} → ${req.query.file || '?'}`,
+  'PUT /api/characters/:name/fields':         req => `✏  Редактирование полей: ${decodeURIComponent(req.params.name)}`,
+  'PUT /api/characters/:name/relations':      req => `✏  Редактирование отношений: ${decodeURIComponent(req.params.name)}`,
+  'POST /api/characters/:name/upload-image':  req => `📷 Загрузка изображения → ${decodeURIComponent(req.params.name)}`,
+  'POST /api/characters/:name/generate-appearance': req => `🤖 Генерация внешности: ${decodeURIComponent(req.params.name)}`,
+  'GET /api/locations':                       req => `Локации — загрузка (${reqCity(req)})`,
+  'GET /api/graph':                           req => `Граф связей (${reqCity(req)})`,
+  'GET /api/modules':                         req => `Модули — загрузка (${reqCity(req)})`,
+  'GET /api/modules/:name':                   req => `Модуль: ${decodeURIComponent(req.params.name)}`,
+  'GET /api/chronicle':                       req => `Хроника (${reqCity(req)})`,
+  'GET /api/threads':                         req => `Открытые нити (${reqCity(req)})`,
+  'GET /api/integrity':                       req => `Проверка целостности (${reqCity(req)})`,
+  'GET /api/auth-status':                     () => 'Статус авторизации Claude',
+  'POST /api/tool/:name':                     req => `🔧 Инструмент: ${req.params.name} [args: ${(req.body?.args||[]).join(', ')}]`,
+  'POST /api/run-tool':                       req => `🔧 PS-инструмент: ${req.body?.tool}`,
+  'POST /api/log-session':                    () => 'Запись сессии',
+  'POST /api/claude/generate-prose':          req => `🤖 Генерация текста (${req.body?.type || '?'})`,
+  'GET /api/claude/health':                   () => 'Claude API — проверка',
+};
+
+function matchRoute(method, url) {
+  const pathname = url.split('?')[0];
+  const parts = pathname.split('/');
+  for (const [key, fn] of Object.entries(ACTION_MAP)) {
+    const [km, kp] = key.split(' ');
+    if (km !== method) continue;
+    const kparts = kp.split('/');
+    if (kparts.length !== parts.length) continue;
+    const params = {};
+    let ok = true;
+    for (let i = 0; i < kparts.length; i++) {
+      if (kparts[i].startsWith(':')) { params[kparts[i].slice(1)] = parts[i]; }
+      else if (kparts[i] !== parts[i]) { ok = false; break; }
+    }
+    if (ok) return { fn, params };
+  }
+  return null;
+}
+
+app.use((req, res, next) => {
+  // Skip static files and image serving
+  if (!req.path.startsWith('/api/')) return next();
+
+  const start = Date.now();
+  const match = matchRoute(req.method, req.path);
+
+  res.on('finish', () => {
+    const ms   = Date.now() - start;
+    const code = res.statusCode;
+    const codeColor = code < 300 ? C.green : code < 400 ? C.cyan : code < 500 ? C.yellow : C.red;
+    const codeStr = `${codeColor}${code}${C.reset}`;
+    const timeStr = ms > 500 ? `${C.yellow}${ms}ms${C.reset}` : `${C.gray}${ms}ms${C.reset}`;
+
+    let action = '';
+    if (match) {
+      // inject params into req for the action function
+      const fakeReq = Object.assign(Object.create(req), { params: match.params });
+      try { action = match.fn(fakeReq); } catch { action = req.path; }
+    }
+
+    const methodColor = { GET: C.cyan, POST: C.green, PUT: C.yellow, DELETE: C.red }[req.method] || C.reset;
+    const methodStr = `${methodColor}${req.method.padEnd(4)}${C.reset}`;
+
+    if (action) {
+      console.log(`${C.dim}[web]${C.reset} ${methodStr} ${codeStr} ${timeStr}  ${action}`);
+    } else if (code >= 400) {
+      console.log(`${C.dim}[web]${C.reset} ${methodStr} ${codeStr} ${timeStr}  ${C.dim}${req.path}${C.reset}`);
+    }
+    // 2xx for unknown routes — skip (noise)
+  });
+
+  next();
+});
+
 // ── Markdown parser ───────────────────────────────────────────────────────────
 
 function categorizeRel(desc) {
