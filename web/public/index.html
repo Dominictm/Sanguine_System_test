@@ -197,11 +197,15 @@
             <div class="chr-detail-meta" id="chr-detail-meta"></div>
           </div>
           <div class="chr-detail-header-btns">
-            <button class="chp-create-btn" id="btn-create-module-in-chr">+ Модуль</button>
+            <button class="chp-create-btn" id="btn-create-module-in-chr" style="display:none">+ Модуль</button>
             <button class="chr-detail-close" id="chr-detail-close">✕</button>
           </div>
         </div>
-        <div id="chr-detail-modules" class="chr-detail-modules">
+        <div class="chr-detail-tabbar">
+          <button class="chr-detail-tab active" data-chd-tab="modules">📖 Модули</button>
+          <button class="chr-detail-tab" data-chd-tab="events">📅 События</button>
+        </div>
+        <div id="chr-detail-body" class="chr-detail-body">
           <div class="loading-state"><div class="spinner"></div>Загрузка...</div>
         </div>
       </div>

@@ -1069,37 +1069,66 @@ function renderModuleCardInChr(m, chrSlug) {
     </div>`;
 }
 
-async function openChrDetail(slug, display) {
+let _chrDetailTab = 'modules';
+
+async function openChrDetail(slug, display, tab) {
   _chrDetailSlug    = slug;
   _chrDetailDisplay = display;
+  _chrDetailTab     = tab || 'modules';
 
   const modal   = document.getElementById('chr-detail-modal');
   const title   = document.getElementById('chr-detail-title');
   const metaEl  = document.getElementById('chr-detail-meta');
-  const modsEl  = document.getElementById('chr-detail-modules');
+  const body    = document.getElementById('chr-detail-body');
+  const createBtn = document.getElementById('btn-create-module-in-chr');
 
-  title.textContent = display;
-  metaEl.textContent = '';
-  modsEl.innerHTML   = SPINNER;
+  title.textContent   = display;
+  metaEl.textContent  = '';
+  body.innerHTML      = SPINNER;
   modal.style.display = 'flex';
 
-  try {
-    const qs   = window.location.search;
-    const mods = await fetch(`/api/chronicles/${encodeURIComponent(slug)}/modules${qs}`).then(r => r.json());
+  // Sync tab buttons
+  document.querySelectorAll('.chr-detail-tab').forEach(b =>
+    b.classList.toggle('active', b.dataset.chdTab === _chrDetailTab));
+  createBtn.style.display = _chrDetailTab === 'modules' ? '' : 'none';
 
-    // Also show startDate from chronicle list cache
-    const cachedChr = (STATE.chronicles || []).find(c => c.slug === slug);
-    if (cachedChr?.startDate) metaEl.textContent = `Начало: ${cachedChr.startDate}`;
+  // startDate from cache
+  const cachedChr = (STATE.chronicles || []).find(c => c.slug === slug);
+  if (cachedChr?.startDate) metaEl.textContent = `Начало: ${cachedChr.startDate}`;
 
-    if (!mods.length) {
-      modsEl.innerHTML = '<div class="loading-state" style="height:100px">Модули не найдены — создай первый</div>';
-      return;
+  const qs = window.location.search;
+
+  if (_chrDetailTab === 'modules') {
+    try {
+      const mods = await fetch(`/api/chronicles/${encodeURIComponent(slug)}/modules${qs}`).then(r => r.json());
+      if (!mods.length) {
+        body.innerHTML = '<div class="loading-state" style="height:100px">Модули не найдены — создай первый</div>';
+        return;
+      }
+      body.innerHTML = `<div class="chd-mod-grid">${mods.map(m => renderModuleCardInChr(m, slug)).join('')}</div>`;
+    } catch {
+      body.innerHTML = '<div class="loading-state" style="color:var(--accent3)">⚠ Не удалось загрузить</div>';
     }
-    modsEl.innerHTML = `<div class="chd-mod-grid">${mods.map(m => renderModuleCardInChr(m, slug)).join('')}</div>`;
-  } catch {
-    modsEl.innerHTML = '<div class="loading-state" style="color:var(--accent3)">⚠ Не удалось загрузить</div>';
+  } else {
+    // Events tab
+    try {
+      await Promise.all([ensureCharsLoaded(), ensureLocsLoaded()]);
+      const events = await fetch(`/api/chronicles/${encodeURIComponent(slug)}/events${qs}`).then(r => r.json());
+      body.innerHTML = events.length
+        ? `<div class="chd-events-wrap">${renderTimeline(events)}</div>`
+        : '<div class="loading-state" style="height:100px">Событий пока нет</div>';
+    } catch {
+      body.innerHTML = '<div class="loading-state" style="color:var(--accent3)">⚠ Не удалось загрузить события</div>';
+    }
   }
 }
+
+// Tab switching inside chronicle modal
+document.querySelectorAll('.chr-detail-tab').forEach(btn => {
+  btn.addEventListener('click', () => {
+    if (_chrDetailSlug) openChrDetail(_chrDetailSlug, _chrDetailDisplay, btn.dataset.chdTab);
+  });
+});
 
 // Open detail on chronicle card click (but not on delete button)
 document.addEventListener('click', e => {
@@ -1108,7 +1137,29 @@ document.addEventListener('click', e => {
   if (!card) return;
   const slug    = card.dataset.slug;
   const display = card.querySelector('.chp-card-name')?.textContent || slug;
-  openChrDetail(slug, display);
+  openChrDetail(slug, display, 'modules');
+});
+
+// Click on module card inside chronicle modal → open module detail
+document.getElementById('chr-detail-body').addEventListener('click', e => {
+  if (e.target.closest('.chd-mod-del-btn')) return;
+  // chip links (events tab)
+  const chipMod = e.target.closest('.chip-mod');
+  if (chipMod) { openModuleDetail(chipMod.dataset.mod, chipMod.dataset.tab); return; }
+  const chipChar = e.target.closest('.chip-char');
+  if (chipChar) { /* open char detail if needed */ return; }
+  const toggle = e.target.closest('.chron-toggle');
+  if (toggle) {
+    const id = toggle.dataset.id;
+    const bodyEl = document.querySelector(`[data-body="${id}"]`);
+    if (bodyEl) { bodyEl.hidden = !bodyEl.hidden; toggle.textContent = bodyEl.hidden ? 'Подробнее ▾' : 'Свернуть ▴'; }
+    return;
+  }
+  const modCard = e.target.closest('.chd-mod-card');
+  if (modCard) {
+    const mod = modCard.querySelector('.chd-mod-del-btn')?.dataset.mod;
+    if (mod) openModuleDetail(mod);
+  }
 });
 
 // Close detail modal
@@ -1223,7 +1274,7 @@ document.getElementById('mod-delete-confirm').addEventListener('click', async ()
       document.getElementById('mod-delete-modal').style.display = 'none';
       _modDeleteTarget = null;
       confirm.textContent = 'Удалить';
-      openChrDetail(chr, _chrDetailDisplay);
+      openChrDetail(chr, _chrDetailDisplay, 'modules');
     }, 1500);
   } catch (err) {
     body.innerHTML = `<div style="color:var(--accent2)">Ошибка: ${escHtml(err.message)}</div>`;

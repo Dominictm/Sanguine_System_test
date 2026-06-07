@@ -1644,7 +1644,32 @@ background: linear-gradient(180deg, rgb(121 4 4 / 2%) 0%, rgb(139 0 0 / 35%) 100
   border-radius: 2px; cursor: pointer;
 }
 .chr-detail-close:hover { border-color: var(--text-dim); color: var(--text); }
-.chr-detail-modules { overflow-y: auto; flex: 1; padding-right: 4px; }
+
+.chr-detail-tabbar {
+  display: flex;
+  gap: 2px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 16px;
+  flex-shrink: 0;
+}
+.chr-detail-tab {
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text-dim);
+  font-family: var(--f-head);
+  font-size: 13px;
+  letter-spacing: .07em;
+  padding: 8px 16px;
+  cursor: pointer;
+  transition: color .15s, border-color .15s;
+  margin-bottom: -1px;
+}
+.chr-detail-tab:hover  { color: var(--text); }
+.chr-detail-tab.active { color: var(--gold); border-bottom-color: var(--gold); }
+
+.chr-detail-body { overflow-y: auto; flex: 1; padding-right: 4px; }
+.chd-events-wrap { display: flex; flex-direction: column; gap: 12px; }
 
 /* Module cards inside chronicle detail */
 .chd-mod-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 10px; }

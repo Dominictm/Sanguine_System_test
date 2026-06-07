@@ -1190,6 +1190,27 @@ app.get('/api/modules', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ── Events for one chronicle ──────────────────────────────────────────────────
+
+app.get('/api/chronicles/:slug/events', async (req, res) => {
+  try {
+    const city   = reqCity(req);
+    const slug   = req.params.slug;
+    const chrDir = path.join(chroniclesDir(city), slug);
+    const raw    = await fs.readFile(path.join(chrDir, 'events.md'), 'utf-8').catch(() => null);
+    if (!raw) return res.json([]);
+
+    const content = raw.replace(/^﻿/, '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+    const events  = [];
+    content.split(/\n(?=###\s*📅)/).filter(c => /^###\s*📅/.test(c.trim()))
+      .forEach(c => { const ev = parseEvent(c.trim(), events.length); ev.chronicle = slug; events.push(ev); });
+
+    events.sort((a, b) => eventDateScore(b.date) - eventDateScore(a.date));
+    events.forEach((ev, i) => { ev.id = i; });
+    res.json(events);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // ── Modules by chronicle ──────────────────────────────────────────────────────
 
 app.get('/api/chronicles/:slug/modules', async (req, res) => {
