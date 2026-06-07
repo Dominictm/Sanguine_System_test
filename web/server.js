@@ -1171,12 +1171,87 @@ app.put('/api/characters/:name/relations', express.json(), async (req, res) => {
   }
 });
 
+// ── Claude client factory: Claude.ai OAuth → ANTHROPIC_API_KEY fallback ───────
+
+const CLAUDE_CREDS_PATH = path.join(
+  process.env.HOME || process.env.USERPROFILE || '',
+  '.claude', '.credentials.json'
+);
+const VALID_MODELS = ['claude-opus-4-8', 'claude-sonnet-4-6', 'claude-haiku-4-5-20251001'];
+
+async function makeAnthropicClient() {
+  // 1. Try Claude Code OAuth credentials
+  try {
+    const raw   = await fs.readFile(CLAUDE_CREDS_PATH, 'utf-8');
+    const creds = JSON.parse(raw);
+    const oauth = creds?.claudeAiOauth;
+    if (oauth?.accessToken) {
+      const now = Date.now();
+      if (oauth.expiresAt && now >= oauth.expiresAt) {
+        throw new Error('Claude.ai OAuth токен истёк. Выполни любую команду в Claude Code — он обновится автоматически.');
+      }
+      return {
+        client: new Anthropic({
+          authToken:   oauth.accessToken,
+          baseURL:     'https://api.claude.ai/api',
+          defaultHeaders: { 'anthropic-version': '2023-06-01' },
+        }),
+        source: 'claude-login',
+      };
+    }
+  } catch (e) {
+    if (e.message.includes('истёк')) throw e;
+    // credentials file missing or malformed — fall through
+  }
+
+  // 2. Fallback: ANTHROPIC_API_KEY env variable
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (apiKey) {
+    return { client: new Anthropic({ apiKey }), source: 'api-key' };
+  }
+
+  throw new Error(
+    'Нет доступа к Claude API. Варианты:\n' +
+    '• Запусти Claude Code хотя бы раз (авторизация через claude.ai)\n' +
+    '• Или задай ANTHROPIC_API_KEY в переменных окружения'
+  );
+}
+
+// ── Auth status endpoint ──────────────────────────────────────────────────────
+
+app.get('/api/auth-status', async (req, res) => {
+  try {
+    const raw   = await fs.readFile(CLAUDE_CREDS_PATH, 'utf-8').catch(() => null);
+    const creds = raw ? JSON.parse(raw) : null;
+    const oauth = creds?.claudeAiOauth;
+
+    if (oauth?.accessToken) {
+      const expired   = Date.now() >= (oauth.expiresAt || 0);
+      const expiresIn = Math.round((oauth.expiresAt - Date.now()) / 60000);
+      return res.json({
+        source:       'claude-login',
+        ok:           !expired,
+        subscription: oauth.subscriptionType || 'unknown',
+        expiresIn:    expired ? 0 : expiresIn,
+        expired,
+      });
+    }
+
+    if (process.env.ANTHROPIC_API_KEY) {
+      return res.json({ source: 'api-key', ok: true });
+    }
+
+    res.json({ source: 'none', ok: false });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ── Generate appearance from art images via Claude Vision ─────────────────────
 
 app.post('/api/characters/:name/generate-appearance', express.json(), async (req, res) => {
   try {
-    const apiKey = process.env.ANTHROPIC_API_KEY;
-    if (!apiKey) return res.status(503).json({ error: 'ANTHROPIC_API_KEY не задан. Добавь в .env или start.bat: set ANTHROPIC_API_KEY=sk-...' });
+    const { client, source } = await makeAnthropicClient();
 
     const name = decodeURIComponent(req.params.name);
     const city = reqCity(req);
@@ -1187,56 +1262,36 @@ app.post('/api/characters/:name/generate-appearance', express.json(), async (req
     const artDir = path.join(charsDir(city), char.lineageFolder, char.slug, 'art');
     const files  = await fs.readdir(artDir).catch(() => []);
     const imgs   = files.filter(f => /\.(jpg|jpeg|png|webp|gif)$/i.test(f)).sort();
-
     if (!imgs.length) return res.status(400).json({ error: 'Нет изображений в папке art/ персонажа' });
 
-    // Load up to 4 images as base64
     const MAX_IMGS = 4;
     const imgContents = [];
     for (const f of imgs.slice(0, MAX_IMGS)) {
-      const buf = await fs.readFile(path.join(artDir, f));
-      const ext = f.split('.').pop().toLowerCase();
+      const buf  = await fs.readFile(path.join(artDir, f));
+      const ext  = f.split('.').pop().toLowerCase();
       const mime = ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg'
                  : ext === 'png'  ? 'image/png'
-                 : ext === 'webp' ? 'image/webp'
-                 : 'image/gif';
+                 : ext === 'webp' ? 'image/webp' : 'image/gif';
       imgContents.push({ type: 'image', source: { type: 'base64', media_type: mime, data: buf.toString('base64') } });
     }
 
     const lineageName = { vampires: 'вампира', fairies: 'феи / ченджлинга', mortals: 'смертного',
       werewolves: 'оборотня', mages: 'мага', hunters: 'охотника' }[char.lineageFolder] || 'персонажа';
 
-    const prompt = `Ты — редактор персонажных карточек для настольной RPG Vampire: The Masquerade.
-Перед тобой ${imgContents.length > 1 ? `${imgContents.length} изображения` : 'изображение'} ${lineageName} по имени ${char.name}.
+    const systemPrompt = 'Ты — редактор персонажных карточек для настольной RPG Vampire: The Masquerade.';
+    const userPrompt   = `Перед тобой ${imgContents.length > 1 ? `${imgContents.length} изображения` : 'изображение'} ${lineageName} по имени ${char.name}.\n\nОпиши внешность для карточки. Требования:\n- 3–5 конкретных визуальных маркеров (лицо, волосы, кожа, глаза, одежда, характерные детали)\n- Стиль: лаконичный, образный, готический. Без «воды».\n- Язык: русский.\n- Формат: один абзац, без списков и заголовков.\n- Упомяни всё необычное, характерное, запоминающееся.`;
 
-Опиши внешность этого персонажа для карточки. Требования:
-- 3–5 конкретных визуальных маркеров (лицо, волосы, кожа, глаза, одежда, характерные детали)
-- Стиль: лаконичный, образный, готический. Без «воды».
-- Язык: русский.
-- Формат: один абзац, без списков и заголовков.
-- Упомяни всё необычное, характерное, запоминающееся.`;
+    const model = VALID_MODELS.includes(req.body?.model) ? req.body.model : 'claude-opus-4-8';
 
-    const model = req.body?.model || 'claude-opus-4-8';
-    const validModels = ['claude-opus-4-8', 'claude-sonnet-4-6', 'claude-haiku-4-5-20251001'];
-    if (!validModels.includes(model)) {
-      return res.status(400).json({ error: `Неверная модель: ${model}. Используй одну из: ${validModels.join(', ')}` });
-    }
-
-    const client = new Anthropic({ apiKey });
     const message = await client.messages.create({
       model,
       max_tokens: 400,
-      messages: [{
-        role: 'user',
-        content: [
-          ...imgContents,
-          { type: 'text', text: prompt }
-        ]
-      }]
+      system: systemPrompt,
+      messages: [{ role: 'user', content: [...imgContents, { type: 'text', text: userPrompt }] }],
     });
 
     const appearance = message.content[0]?.text?.trim() || '';
-    res.json({ ok: true, appearance, imagesUsed: imgs.slice(0, MAX_IMGS).length });
+    res.json({ ok: true, appearance, imagesUsed: imgs.slice(0, MAX_IMGS).length, source });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }

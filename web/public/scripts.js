@@ -142,10 +142,12 @@ async function loadDashboard() {
   const el = document.getElementById('dash-content');
   el.innerHTML = '<div class="loading-state"><div class="spinner"></div>Загрузка...</div>';
   try {
-    const stats = await fetch('/api/status').then(r => r.json());
-    document.getElementById('domain-label').innerHTML =
-      `<span>${stats.domain || 'Домен'}</span>`;
-    renderDashboard(stats, el);
+    const [stats, auth] = await Promise.all([
+      fetch('/api/status').then(r => r.json()),
+      fetch('/api/auth-status').then(r => r.json()).catch(() => ({ source: 'none', ok: false })),
+    ]);
+    document.getElementById('domain-label').innerHTML = `<span>${stats.domain || 'Домен'}</span>`;
+    renderDashboard(stats, el, auth);
     loadIntegrity();
   } catch {
     el.innerHTML = '<div class="loading-state" style="color:var(--accent3)">⚠ Сервер недоступен</div>';
@@ -163,7 +165,7 @@ function animateValue(el, target, dur = 900) {
   requestAnimationFrame(step);
 }
 
-function renderDashboard(s, container) {
+function renderDashboard(s, container, auth = {}) {
   // Broken links badge
   const blCount = s.brokenLinks;
   const blBadge = blCount === null || blCount === undefined
@@ -196,6 +198,20 @@ function renderDashboard(s, container) {
 
   const savedModel = localStorage.getItem('ai-model') || 'claude-opus-4-8';
 
+  // Auth status badge
+  const authBadge = (() => {
+    if (auth.source === 'claude-login' && auth.ok) {
+      return `<span class="ai-auth-badge ok">✓ Claude.ai (${auth.subscription || 'pro'}) · истекает через ${auth.expiresIn} мин</span>`;
+    }
+    if (auth.source === 'claude-login' && auth.expired) {
+      return `<span class="ai-auth-badge warn">⚠ Токен истёк — выполни команду в Claude Code</span>`;
+    }
+    if (auth.source === 'api-key') {
+      return `<span class="ai-auth-badge ok">✓ ANTHROPIC_API_KEY</span>`;
+    }
+    return `<span class="ai-auth-badge err">✗ Нет авторизации — запусти Claude Code</span>`;
+  })();
+
   container.innerHTML = `
     <div class="ai-model-selector">
       <label>🤖 Модель для генерации:</label>
@@ -204,6 +220,7 @@ function renderDashboard(s, container) {
         <option value="claude-sonnet-4-6" ${savedModel === 'claude-sonnet-4-6' ? 'selected' : ''}>Claude Sonnet 4.6 (сбалансированно)</option>
         <option value="claude-haiku-4-5-20251001" ${savedModel === 'claude-haiku-4-5-20251001' ? 'selected' : ''}>Claude Haiku 4.5 (быстро)</option>
       </select>
+      ${authBadge}
     </div>
     <div class="stats-grid">
       <div class="stat-card">
