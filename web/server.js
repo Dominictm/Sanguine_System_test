@@ -1332,7 +1332,7 @@ async function callOpenRouter(model, systemPrompt, userPrompt, imageBuffers) {
 
   const body = JSON.stringify({
     model,
-    max_tokens: 400,
+    max_tokens: 1500,
     messages: [
       { role: 'system', content: systemPrompt },
       { role: 'user',   content },
@@ -1355,8 +1355,10 @@ async function callOpenRouter(model, systemPrompt, userPrompt, imageBuffers) {
     throw Object.assign(new Error(errText || resp.statusText), { status: resp.status });
   }
 
-  const data = await resp.json();
-  const text = data.choices?.[0]?.message?.content?.trim() || '';
+  const data  = await resp.json();
+  const msg   = data.choices?.[0]?.message;
+  // Some reasoning models return content: null — fall back to reasoning text
+  const text  = (msg?.content || msg?.reasoning || '').trim();
   if (!text) throw new Error('OpenRouter вернул пустой ответ: ' + JSON.stringify(data));
   return text;
 }
