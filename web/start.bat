@@ -52,7 +52,7 @@ set CITY=paris
 echo   Default city: %CITY%
 echo.
 
-node server.js
+node wrapper.js
 
 echo.
 echo   Server stopped (code: %errorlevel%).

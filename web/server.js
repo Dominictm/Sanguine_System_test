@@ -2742,19 +2742,16 @@ app.post('/api/settings', express.json(), async (req, res) => {
   }
 });
 
-function scheduleRestart(tag = '[restart]', delayMs = 400) {
-  console.log(`${tag} Перезапуск через ${delayMs}ms...`);
-  setTimeout(() => {
-    spawn(process.execPath, process.argv.slice(1), {
-      detached: true, stdio: 'inherit', env: process.env, cwd: process.cwd()
-    }).unref();
-    process.exit(0);
-  }, delayMs);
+const RESTART_CODE = 75; // wrapper.js watches for this exit code to restart
+
+function scheduleRestart(tag = '[restart]', delayMs = 300) {
+  console.log(`${tag} Перезапуск (exit ${RESTART_CODE})...`);
+  setTimeout(() => process.exit(RESTART_CODE), delayMs);
 }
 
 app.post('/api/restart', (req, res) => {
   res.json({ ok: true, message: 'Перезапуск...' });
-  scheduleRestart('[restart]', 300);
+  scheduleRestart('[restart]');
 });
 
 app.listen(PORT, () => {
