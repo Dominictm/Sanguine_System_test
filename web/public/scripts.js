@@ -928,20 +928,23 @@ async function loadAiSettings() {
                   ${appearSrc === 'claude' ? 'checked' : ''}>
               </td>
             </tr>
-            <tr class="ais-feat-row ais-feat-row-disabled">
+            <tr class="ais-feat-row">
               <td class="ais-feat-name">
                 <span class="ais-feat-icon">🪄</span>
                 <div>
                   <div class="ais-feat-label">Генерация прозы</div>
-                  <div class="ais-feat-desc">Дневники и финалы через Claude CLI</div>
+                  <div class="ais-feat-desc">Дневники и финалы сессии</div>
                 </div>
               </td>
               <td class="ais-feat-radio-cell">
-                <span class="ais-feat-na" title="Не поддерживается для прозы">—</span>
+                <input type="radio" name="feat-prose" value="openrouter"
+                  class="ais-feat-radio" id="feat-prose-or"
+                  ${(featPrefs.prose || 'claude') === 'openrouter' ? 'checked' : ''}>
               </td>
               <td class="ais-feat-radio-cell">
                 <input type="radio" name="feat-prose" value="claude"
-                  class="ais-feat-radio" checked disabled>
+                  class="ais-feat-radio" id="feat-prose-cl"
+                  ${(featPrefs.prose || 'claude') === 'claude' ? 'checked' : ''}>
               </td>
             </tr>
           </tbody>
@@ -1034,8 +1037,10 @@ async function loadAiSettings() {
     const status = document.getElementById('ais-feat-status');
     const appearSel = document.querySelector('input[name="feat-appearance"]:checked');
     if (!appearSel) { status.textContent = 'Выбери провайдер'; status.className = 'ais-status err'; return; }
+    const proseSel = document.querySelector('input[name="feat-prose"]:checked');
     const prefs = JSON.parse(localStorage.getItem('ai-feature-prefs') || '{}');
     prefs.appearance = appearSel.value;
+    if (proseSel) prefs.prose = proseSel.value;
     localStorage.setItem('ai-feature-prefs', JSON.stringify(prefs));
     status.textContent = '✓ Сохранено';
     status.className = 'ais-status ok';
@@ -2338,49 +2343,66 @@ async function lsRunWrite() {
 async function lsSetupProseZone(stubs) {
   const zone = document.getElementById('ls-prose-zone');
   if (!zone || !stubs.length) return;
-  let avail = false;
-  try { avail = (await fetch('/api/claude/health').then(r => r.json())).available; } catch {}
-  if (!avail) {
-    zone.innerHTML = `<div class="ls-claude-msg">CLI «claude» не найден на сервере. Попросите Claude в терминале: «сгенерируй прозу для stub'ов этой сессии».</div>`;
-    return;
-  }
+
+  const featPrefs   = JSON.parse(localStorage.getItem('ai-feature-prefs') || '{}');
+  const proseSrc    = featPrefs.prose || 'claude';
+  const useOR       = proseSrc === 'openrouter';
+
+  let claudeAvail = false;
+  try { claudeAvail = (await fetch('/api/claude/health').then(r => r.json())).available; } catch {}
+
+  const claudeNote = claudeAvail
+    ? `Дешевле — Sonnet/Haiku, качественнее — Opus.`
+    : `<span style="color:var(--accent2)">Claude CLI не найден.</span>`;
+
   zone.innerHTML = `
     <div class="ls-prose-controls">
-      <select class="form-control ls-prose-model" id="ls-prose-model">
+      ${useOR ? '' : `<select class="form-control ls-prose-model" id="ls-prose-model">
         <option value="">Модель: по умолчанию</option>
-        <option value="opus">Opus — лучшее качество, дороже</option>
-        <option value="sonnet">Sonnet — баланс, дешевле</option>
-        <option value="haiku">Haiku — быстро и дёшево</option>
-      </select>
-      <button class="btn-submit btn-genprose" id="ls-genprose" type="button">🪄 Сгенерировать прозу (Claude)</button>
+        <option value="opus">Opus — лучшее качество</option>
+        <option value="sonnet">Sonnet — баланс</option>
+        <option value="haiku">Haiku — быстро</option>
+      </select>`}
+      ${useOR
+        ? `<button class="btn-submit btn-genprose btn-genprose-or" id="ls-genprose" type="button">🌐 Сгенерировать прозу (OpenRouter)</button>`
+        : `<button class="btn-submit btn-genprose" id="ls-genprose" type="button" ${claudeAvail ? '' : 'disabled'}>🪄 Сгенерировать прозу (Claude)</button>`
+      }
     </div>
-    <div class="ls-prose-note">Claude напишет дневники и финал по фактам события и комментариям Мастера. Дешевле — Sonnet/Haiku, качественнее — Opus. Тратит токены.</div>
+    <div class="ls-prose-note">${useOR
+      ? `OpenRouter читает правила дневников, карточки персонажей и события хроники автоматически. Модель: <b>${(process?.env?.OPENROUTER_MODEL || '').split('/').pop() || 'из настроек'}</b>.`
+      : claudeNote
+    } Настроить: <a class="dash-ai-link" data-nav="tools" data-tab="ai-settings">Модели AI ↗</a></div>
     <div class="ls-prose-result" id="ls-prose-result"></div>`;
-  document.getElementById('ls-genprose').addEventListener('click', () => lsGenProse(stubs));
+  document.getElementById('ls-genprose').addEventListener('click', () => lsGenProse(stubs, proseSrc));
 }
 
-async function lsGenProse(stubs) {
-  const btn = document.getElementById('ls-genprose');
-  const out = document.getElementById('ls-prose-result');
+async function lsGenProse(stubs, source = 'claude') {
+  const btn   = document.getElementById('ls-genprose');
+  const out   = document.getElementById('ls-prose-result');
   const model = (document.getElementById('ls-prose-model') || {}).value || '';
-  btn.disabled = true; btn.textContent = '⏳ Claude пишет прозу…';
-  out.innerHTML = `<div class="ls-note">Идёт генерация${model ? ` (${model})` : ''} — не закрывайте вкладку…</div>`;
+  const useOR = source === 'openrouter';
+  const qs    = window.location.search;
+
+  btn.disabled = true;
+  btn.textContent = useOR ? '⏳ OpenRouter пишет прозу…' : '⏳ Claude пишет прозу…';
+  out.innerHTML = `<div class="ls-note">Идёт генерация — не закрывайте вкладку…</div>`;
 
   let j;
   try {
-    j = await fetch('/api/claude/generate-prose', {
+    const endpoint = useOR ? '/api/openrouter/generate-prose' : '/api/claude/generate-prose';
+    j = await fetch(endpoint + qs, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ stubs, model })
     }).then(r => r.json());
   } catch (e) {
     out.innerHTML = `<div class="ls-err">⚠ ${escHtml(e.message)}</div>`;
-    btn.disabled = false; btn.textContent = '🪄 Сгенерировать прозу (Claude)';
+    btn.disabled = false; btn.textContent = useOR ? '🌐 Сгенерировать прозу (OpenRouter)' : '🪄 Сгенерировать прозу (Claude)';
     return;
   }
 
   if (!j.ok && !(j.written || []).length) {
     out.innerHTML = `<div class="ls-err">⚠ ${escHtml(j.error || 'Не удалось сгенерировать прозу')}</div>`;
-    btn.disabled = false; btn.textContent = '🪄 Сгенерировать прозу (Claude)';
+    btn.disabled = false; btn.textContent = useOR ? '🌐 Сгенерировать прозу (OpenRouter)' : '🪄 Сгенерировать прозу (Claude)';
     return;
   }
 

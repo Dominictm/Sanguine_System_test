@@ -2648,6 +2648,176 @@ app.get('/api/claude/health', (req, res) => {
   ps.on('close', code => { clearTimeout(timer); done({ available: code === 0, version: out.trim(), defaultModel: DEFAULT_CLAUDE_MODEL || null }); });
 });
 
+// ── OpenRouter prose generation ───────────────────────────────────────────────
+
+async function buildProseContext(city, valid) {
+  // 1. diary_rules.md
+  const diaryRules = await fs.readFile(
+    path.join(ROOT, 'system', 'rules', 'diary_rules.md'), 'utf-8').catch(() => '');
+
+  // 2. Read each stub file + extract referenced characters and chronicle facts
+  const stubContents = [];
+  const charSlugsNeeded = new Set();
+  const eventsFilesNeeded = new Set();
+
+  for (const rel of valid) {
+    const txt  = await fs.readFile(path.resolve(ROOT, rel), 'utf-8').catch(() => '');
+    stubContents.push({ rel, txt });
+
+    // Extract character slug from path: characters/<lineage>/<slug>/journal/...
+    const slugMatch = rel.match(/characters\/[^/]+\/([^/]+)\//);
+    if (slugMatch) charSlugsNeeded.add(slugMatch[1]);
+
+    // Extract FACTS references (chronicle events.md links in comments)
+    const factsMatch = txt.match(/ФАКТЫ[:\s]+([^\n>]+events\.md[^\n]*)/gi);
+    if (factsMatch) {
+      for (const fm of factsMatch) {
+        const pathMatch = fm.match(/(cities\/[^)\s]+events\.md)/);
+        if (pathMatch) eventsFilesNeeded.add(pathMatch[1]);
+      }
+    }
+    // Also try to find chronicle from path
+    const chrMatch = rel.match(/chronicles\/([^/]+)\//);
+    if (chrMatch) {
+      eventsFilesNeeded.add(`cities/${city}/chronicles/${chrMatch[1]}/events.md`);
+    }
+  }
+
+  // 3. Read character cards
+  const chars = await getAllCharacters(city);
+  const charCards = [];
+  for (const slug of charSlugsNeeded) {
+    const ch = chars.find(c => c.slug === slug);
+    if (!ch) continue;
+    const cardPath = path.join(charsDir(city), ch.lineageFolder, ch.slug, `${ch.slug}.md`);
+    const card = await fs.readFile(cardPath, 'utf-8').catch(() => null);
+    if (card) charCards.push(`### Карточка: ${ch.name}\n${card.slice(0, 3000)}`);
+  }
+
+  // 4. Read chronicle events
+  const eventsChunks = [];
+  for (const evRel of eventsFilesNeeded) {
+    const evTxt = await fs.readFile(path.join(ROOT, evRel), 'utf-8').catch(() => null);
+    if (evTxt) eventsChunks.push(`### ${evRel}\n${evTxt.slice(0, 6000)}`);
+  }
+
+  return { diaryRules, stubContents, charCards, eventsChunks };
+}
+
+app.post('/api/openrouter/generate-prose', express.json(), async (req, res) => {
+  try {
+    const stubs = Array.isArray(req.body.stubs) ? req.body.stubs : [];
+    if (!stubs.length) return res.status(400).json({ ok: false, error: 'Не переданы stub-файлы.' });
+
+    const city  = reqCity(req);
+    const valid = [];
+    for (const rel of stubs) {
+      const abs = path.resolve(ROOT, rel);
+      if (!abs.startsWith(ROOT + path.sep)) continue;
+      const txt = await fs.readFile(abs, 'utf-8').catch(() => null);
+      if (txt && /ОЖИДАЕТ ГЕНЕРАЦИИ/.test(txt)) valid.push(rel);
+    }
+    if (!valid.length) return res.status(400).json({ ok: false, error: 'Нет stub-файлов с меткой «ОЖИДАЕТ ГЕНЕРАЦИИ».' });
+
+    const { diaryRules, stubContents, charCards, eventsChunks } = await buildProseContext(city, valid);
+
+    const systemPrompt = `Ты — Рассказчик Vampire: The Masquerade V20. Пишешь литературные дневниковые записи персонажей строго по правилам ниже.
+
+# ПРАВИЛА ДНЕВНИКОВ
+${diaryRules.slice(0, 4000)}
+
+# КАРТОЧКИ ПЕРСОНАЖЕЙ
+${charCards.join('\n\n') || '(не найдены)'}
+
+# СОБЫТИЯ ХРОНИКИ (ИСТОЧНИК ФАКТОВ)
+${eventsChunks.join('\n\n') || '(не найдены)'}`;
+
+    const userPrompt = `Заполни следующие stub-файлы дневниковой прозой. Строго следуй правилам diary_rules.md.
+
+Для КАЖДОГО файла выведи ТОЧНО в таком формате (без отклонений):
+===FILE: <путь к файлу>===
+<полное содержимое файла — убери маркер «ОЖИДАЕТ ГЕНЕРАЦИИ» и служебные комментарии>
+===ENDFILE===
+
+STUB-ФАЙЛЫ:
+${stubContents.map(s => `\n---\n## ${s.rel}\n${s.txt}`).join('\n')}`;
+
+    // Use makeGenerationClient for OpenRouter
+    if (!process.env.OPENROUTER_API_KEY) {
+      return res.status(503).json({ ok: false, error: 'OPENROUTER_API_KEY не задан. Настрой в Инструменты → Модели AI.' });
+    }
+
+    const model = process.env.OPENROUTER_MODEL || 'google/gemma-4-26b-a4b-it:free';
+
+    const orResp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
+        'Content-Type':  'application/json',
+        'HTTP-Referer':  'http://localhost:3000',
+        'X-Title':       'VTM Chronicle Manager',
+      },
+      body: JSON.stringify({
+        model,
+        max_tokens: 4000,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user',   content: userPrompt },
+        ],
+      }),
+    });
+
+    if (!orResp.ok) {
+      const err = await orResp.text().catch(() => '');
+      return res.status(orResp.status).json({ ok: false, error: err || orResp.statusText });
+    }
+
+    const orData = await orResp.json();
+    const text   = orData.choices?.[0]?.message?.content?.trim() || '';
+    if (!text) return res.status(500).json({ ok: false, error: 'OpenRouter вернул пустой ответ.' });
+
+    // Parse ===FILE: ...=== blocks
+    const fileBlockRe = /===FILE:\s*(.+?)===\n([\s\S]*?)===ENDFILE===/g;
+    let match;
+    const written = [], failed = [];
+
+    while ((match = fileBlockRe.exec(text)) !== null) {
+      const relPath = match[1].trim();
+      const content = match[2].trim();
+      const abs     = path.resolve(ROOT, relPath);
+      if (!abs.startsWith(ROOT + path.sep)) { failed.push(relPath); continue; }
+      try {
+        await fs.mkdir(path.dirname(abs), { recursive: true });
+        await fs.writeFile(abs, content + '\n', 'utf-8');
+        written.push(relPath);
+      } catch (e) {
+        failed.push(relPath);
+      }
+    }
+
+    // Check stubs still have marker (= not written)
+    const pending = [];
+    for (const rel of valid) {
+      if (!written.includes(rel)) {
+        const txt = await fs.readFile(path.resolve(ROOT, rel), 'utf-8').catch(() => '');
+        if (/ОЖИДАЕТ ГЕНЕРАЦИИ/.test(txt)) pending.push(rel);
+      }
+    }
+
+    if (!written.length) {
+      console.error('[openrouter-prose] Parse failed. Raw response:\n', text.slice(0, 500));
+      return res.status(500).json({ ok: false, error: 'Не удалось разобрать ответ. Проверь формат.', raw: text.slice(0, 800) });
+    }
+
+    _cache = {};
+    console.log(`[openrouter-prose] written: ${written.join(', ')}`);
+    res.json({ ok: true, written, pending, failed, model });
+  } catch (e) {
+    console.error('[openrouter-prose]', e.message);
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
 app.post('/api/claude/generate-prose', async (req, res) => {
   try {
     const stubs = Array.isArray(req.body.stubs) ? req.body.stubs : [];

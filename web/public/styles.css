@@ -2935,6 +2935,15 @@ button.chron-chip { cursor: pointer; transition: all .15s var(--ease); }
   box-shadow: 0 0 16px rgba(184,134,11,.3);
 }
 .btn-genprose:disabled { opacity: .7; cursor: default; }
+.btn-genprose-or {
+  background: linear-gradient(180deg, rgba(60,120,200,.18), rgba(30,80,160,.22)) !important;
+  border-color: #6aa0f0 !important;
+  color: #8ab4f8 !important;
+}
+.btn-genprose-or:hover:not(:disabled) {
+  background: linear-gradient(180deg, rgba(60,120,200,.3), rgba(30,80,160,.3)) !important;
+  box-shadow: 0 0 16px rgba(100,160,240,.3) !important;
+}
 .ls-prose-note {
   margin-top: 8px;
   font-size: 15px;
