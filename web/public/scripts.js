@@ -197,35 +197,17 @@ function renderDashboard(s, container, auth = {}) {
       </div>`)
     .join('');
 
-  const savedModel = localStorage.getItem('ai-model') || 'claude-opus-4-8';
-
-  // Auth status badge
+  // Auth status badge (compact, for Dashboard)
   const authBadge = (() => {
-    if (auth.source === 'openrouter') {
-      return `<span class="ai-auth-badge ok">✓ OpenRouter · ${auth.model || 'free'}</span>`;
-    }
-    if (auth.source === 'api-key') {
-      return `<span class="ai-auth-badge ok">✓ ANTHROPIC_API_KEY</span>`;
-    }
-    if (auth.source === 'claude-login' && auth.ok) {
-      return `<span class="ai-auth-badge ok">✓ Claude.ai (${auth.subscription || 'pro'}) · истекает через ${auth.expiresIn} мин</span>`;
-    }
-    if (auth.source === 'claude-login' && auth.expired) {
-      return `<span class="ai-auth-badge warn">⚠ Токен истёк — выполни команду в Claude Code</span>`;
-    }
-    return `<span class="ai-auth-badge err">✗ Нет авторизации — запусти Claude Code</span>`;
+    if (auth.source === 'openrouter') return `<span class="ai-auth-badge ok">✓ OpenRouter · ${auth.model || 'free'}</span>`;
+    if (auth.source === 'api-key')    return `<span class="ai-auth-badge ok">✓ ANTHROPIC_API_KEY</span>`;
+    if (auth.source === 'claude-login' && auth.ok) return `<span class="ai-auth-badge ok">✓ Claude.ai (${auth.subscription || 'pro'}) · ${auth.expiresIn} мин</span>`;
+    if (auth.source === 'claude-login' && auth.expired) return `<span class="ai-auth-badge warn">⚠ Токен истёк</span>`;
+    return `<span class="ai-auth-badge err">✗ Нет авторизации AI</span>`;
   })();
 
   container.innerHTML = `
-    <div class="ai-model-selector">
-      <label>🤖 Модель для генерации:</label>
-      <select id="ai-model-select" class="ai-model-select">
-        <option value="claude-opus-4-8" ${savedModel === 'claude-opus-4-8' ? 'selected' : ''}>Claude Opus 4.8 (лучше всего)</option>
-        <option value="claude-sonnet-4-6" ${savedModel === 'claude-sonnet-4-6' ? 'selected' : ''}>Claude Sonnet 4.6 (сбалансированно)</option>
-        <option value="claude-haiku-4-5-20251001" ${savedModel === 'claude-haiku-4-5-20251001' ? 'selected' : ''}>Claude Haiku 4.5 (быстро)</option>
-      </select>
-      ${authBadge}
-    </div>
+    <div class="dash-ai-status">${authBadge} <a class="dash-ai-link" data-nav="tools" data-tab="ai-settings">⚙ Настройки моделей</a></div>
     <div class="stats-grid">
       <div class="stat-card">
         <div class="stat-label">Персонажи</div>
@@ -279,14 +261,29 @@ function renderDashboard(s, container, auth = {}) {
   animateValue(document.getElementById('sv-events'), s.events || 0, 1100);
   animateValue(document.getElementById('sv-threads'), s.openThreads || 0, 1200);
 
-  // Model selector handler
-  const modelSelect = document.getElementById('ai-model-select');
-  if (modelSelect) {
-    modelSelect.addEventListener('change', (e) => {
-      localStorage.setItem('ai-model', e.target.value);
-    });
-  }
 }
+
+// Click on "Настройки моделей" link in dashboard → go to AI tab
+document.addEventListener('click', e => {
+  const link = e.target.closest('[data-nav][data-tab]');
+  if (!link) return;
+  const page = link.dataset.nav;
+  const tab  = link.dataset.tab;
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  const navBtn = document.querySelector(`.nav-item[data-page="${page}"]`);
+  if (navBtn) navBtn.classList.add('active');
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  const pageEl = document.getElementById(`page-${page}`);
+  if (pageEl) pageEl.classList.add('active');
+  // Activate the sub-tab
+  if (tab) {
+    document.querySelectorAll(`#page-${page} .tab-btn`).forEach(b =>
+      b.classList.toggle('active', b.dataset.tab === tab));
+    document.querySelectorAll(`#page-${page} .tab-panel`).forEach(p =>
+      p.classList.toggle('active', p.id === `tab-${tab}`));
+    if (tab === 'ai-settings') loadAiSettings();
+  }
+});
 
 // ── Integrity panel ────────────────────────────────────────────
 async function loadIntegrity() {
@@ -795,8 +792,139 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     const tab = btn.dataset.tab;
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
     document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.id === `tab-${tab}`));
+    if (tab === 'ai-settings') loadAiSettings();
   });
 });
+
+// ═══════════════════════════════════════════════════════════════
+// AI Models Settings tab
+// ═══════════════════════════════════════════════════════════════
+
+const OR_FREE_MODELS = [
+  { id: 'google/gemma-4-26b-a4b-it:free',                   label: 'Google Gemma 4 26B (Vision)' },
+  { id: 'nvidia/nemotron-nano-12b-v2-vl:free',              label: 'Nvidia Nemotron Nano 12B VL' },
+  { id: 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free', label: 'Nvidia Nemotron Omni 30B (Reasoning)' },
+  { id: 'moonshotai/kimi-k2.6:free',                        label: 'Moonshot Kimi K2.6' },
+];
+const CLAUDE_MODELS = [
+  { id: 'claude-opus-4-8',           label: 'Claude Opus 4.8 — лучшее качество' },
+  { id: 'claude-sonnet-4-6',         label: 'Claude Sonnet 4.6 — сбалансированно' },
+  { id: 'claude-haiku-4-5-20251001', label: 'Claude Haiku 4.5 — быстро' },
+];
+
+let _aiSettingsLoaded = false;
+
+async function loadAiSettings() {
+  if (_aiSettingsLoaded) return;
+  _aiSettingsLoaded = true;
+  const el = document.getElementById('ai-settings-content');
+  const savedClaudeModel = localStorage.getItem('ai-model') || 'claude-opus-4-8';
+
+  let orSettings = { OPENROUTER_MODEL: '', hasKey: false };
+  try { orSettings = await fetch('/api/settings').then(r => r.json()); } catch {}
+
+  el.innerHTML = `
+    <div class="ais-wrap">
+
+      <!-- OpenRouter section -->
+      <div class="ais-section">
+        <div class="ais-section-title">🌐 OpenRouter — внешние модели</div>
+        <div class="ais-section-hint">Используется для генерации внешности по арту (Vision API). Бесплатные модели — без расходов.</div>
+
+        <div class="ais-field">
+          <label class="ais-label">API Key</label>
+          <input class="ais-input" id="ais-or-key" type="password"
+            placeholder="${orSettings.hasKey ? '•••••• (задан)' : 'sk-or-v1-...'}"
+            autocomplete="new-password">
+          <div class="ais-field-hint">Оставь пустым — ключ не изменится. Очисти и подтверди — удалить ключ.</div>
+        </div>
+
+        <div class="ais-field">
+          <label class="ais-label">Модель</label>
+          <div class="ais-combo-row">
+            <select class="ais-select" id="ais-or-model-select">
+              <option value="">— выбрать из списка —</option>
+              ${OR_FREE_MODELS.map(m => `<option value="${m.id}" ${orSettings.OPENROUTER_MODEL === m.id ? 'selected' : ''}>${m.label}</option>`).join('')}
+              <option value="__custom__" ${!OR_FREE_MODELS.some(m => m.id === orSettings.OPENROUTER_MODEL) && orSettings.OPENROUTER_MODEL ? 'selected' : ''}>Другая модель...</option>
+            </select>
+            <input class="ais-input ais-mono" id="ais-or-model-custom"
+              placeholder="provider/model-name:free"
+              value="${!OR_FREE_MODELS.some(m => m.id === orSettings.OPENROUTER_MODEL) ? orSettings.OPENROUTER_MODEL : ''}"
+              style="display:${!OR_FREE_MODELS.some(m => m.id === orSettings.OPENROUTER_MODEL) && orSettings.OPENROUTER_MODEL ? '' : 'none'}">
+          </div>
+        </div>
+
+        <button class="ais-confirm-btn" id="ais-or-save">✓ Подтвердить OpenRouter</button>
+        <div class="ais-status" id="ais-or-status"></div>
+      </div>
+
+      <!-- Claude section -->
+      <div class="ais-section">
+        <div class="ais-section-title">🧠 Claude — модель для генерации прозы</div>
+        <div class="ais-section-hint">Используется для генерации дневников и текстов через Claude Code (без API-ключа). Хранится в браузере.</div>
+
+        <div class="ais-field">
+          <label class="ais-label">Модель</label>
+          <div class="ais-models-list">
+            ${CLAUDE_MODELS.map(m => `
+              <label class="ais-model-radio">
+                <input type="radio" name="claude-model" value="${m.id}" ${savedClaudeModel === m.id ? 'checked' : ''}>
+                <span class="ais-model-label">${m.label}</span>
+              </label>`).join('')}
+          </div>
+        </div>
+
+        <button class="ais-confirm-btn" id="ais-claude-save">✓ Подтвердить Claude</button>
+        <div class="ais-status" id="ais-claude-status"></div>
+      </div>
+
+    </div>`;
+
+  // OpenRouter: custom model toggle
+  document.getElementById('ais-or-model-select').addEventListener('change', e => {
+    const custom = document.getElementById('ais-or-model-custom');
+    if (e.target.value === '__custom__') { custom.style.display = ''; custom.focus(); }
+    else { custom.style.display = 'none'; custom.value = ''; }
+  });
+
+  // OpenRouter: confirm
+  document.getElementById('ais-or-save').addEventListener('click', async () => {
+    const btn    = document.getElementById('ais-or-save');
+    const status = document.getElementById('ais-or-status');
+    const key    = document.getElementById('ais-or-key').value;
+    const sel    = document.getElementById('ais-or-model-select').value;
+    const custom = document.getElementById('ais-or-model-custom').value.trim();
+    const model  = sel === '__custom__' ? custom : (sel || orSettings.OPENROUTER_MODEL);
+
+    btn.disabled = true; btn.textContent = '⏳ Сохранение...';
+    status.className = 'ais-status';
+    try {
+      const d = await fetch('/api/settings', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ OPENROUTER_API_KEY: key, OPENROUTER_MODEL: model })
+      }).then(r => r.json());
+      if (!d.ok) throw new Error(d.error);
+      status.textContent = d.needsRestart ? '✓ Сохранено — сервер перезапускается...' : '✓ Сохранено';
+      status.classList.add('ok');
+      _aiSettingsLoaded = false;
+      if (d.needsRestart) setTimeout(() => { _aiSettingsLoaded = false; loadAiSettings(); }, 2500);
+    } catch (e) {
+      status.textContent = '✗ Ошибка: ' + e.message; status.classList.add('err');
+    } finally { btn.disabled = false; btn.textContent = '✓ Подтвердить OpenRouter'; }
+  });
+
+  // Claude: confirm (localStorage only, no restart needed)
+  document.getElementById('ais-claude-save').addEventListener('click', () => {
+    const btn    = document.getElementById('ais-claude-save');
+    const status = document.getElementById('ais-claude-status');
+    const sel    = document.querySelector('input[name="claude-model"]:checked');
+    if (!sel) { status.textContent = 'Выбери модель'; status.className = 'ais-status err'; return; }
+    localStorage.setItem('ai-model', sel.value);
+    status.textContent = '✓ Сохранено в браузере';
+    status.className = 'ais-status ok';
+    btn.textContent = '✓ Подтвердить Claude';
+  });
+}
 
 async function runTool(tool, params, outId, btn) {
   const out = document.getElementById(outId);

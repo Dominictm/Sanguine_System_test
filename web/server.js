@@ -2690,6 +2690,68 @@ app.post('/api/claude/generate-prose', async (req, res) => {
   }
 });
 
+// ── Settings (save .env + optional restart) ───────────────────────────────────
+
+const ENV_PATH = path.join(__dirname, '.env');
+
+app.get('/api/settings', async (req, res) => {
+  try {
+    const raw = await fs.readFile(ENV_PATH, 'utf-8').catch(() => '');
+    const env = {};
+    for (const line of raw.split('\n')) {
+      const m = line.match(/^([A-Z_][A-Z0-9_]*)\s*=\s*(.*)$/);
+      if (m) env[m[1]] = m[2].trim();
+    }
+    res.json({
+      OPENROUTER_API_KEY: env.OPENROUTER_API_KEY ? '***' : '',
+      OPENROUTER_MODEL:   env.OPENROUTER_MODEL   || '',
+      hasKey:             !!env.OPENROUTER_API_KEY,
+    });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/settings', express.json(), async (req, res) => {
+  try {
+    const { OPENROUTER_API_KEY, OPENROUTER_MODEL } = req.body || {};
+
+    // Read current .env
+    const raw = await fs.readFile(ENV_PATH, 'utf-8').catch(() => '');
+    const lines = raw.split('\n').filter(l => l.trim() !== '');
+    const env = {};
+    for (const l of lines) { const m = l.match(/^([A-Z_][A-Z0-9_]*)\s*=\s*(.*)$/); if (m) env[m[1]] = m[2].trim(); }
+
+    // Update only provided fields (empty string = remove)
+    if (OPENROUTER_API_KEY !== undefined && OPENROUTER_API_KEY !== '***') {
+      if (OPENROUTER_API_KEY.trim()) env.OPENROUTER_API_KEY = OPENROUTER_API_KEY.trim();
+      else delete env.OPENROUTER_API_KEY;
+    }
+    if (OPENROUTER_MODEL !== undefined) {
+      if (OPENROUTER_MODEL.trim()) env.OPENROUTER_MODEL = OPENROUTER_MODEL.trim();
+      else delete env.OPENROUTER_MODEL;
+    }
+
+    const newContent = Object.entries(env).map(([k, v]) => `${k}=${v}`).join('\n') + '\n';
+    await fs.writeFile(ENV_PATH, newContent, 'utf-8');
+
+    const needsRestart = req.body?.restart !== false;
+    res.json({ ok: true, needsRestart });
+
+    if (needsRestart) {
+      console.log('[settings] Перезапуск сервера через 400ms...');
+      setTimeout(() => {
+        const { spawn } = require('child_process');
+        spawn(process.execPath, process.argv.slice(1), {
+          detached: true, stdio: 'inherit', env: process.env, cwd: process.cwd()
+        }).unref();
+        process.exit(0);
+      }, 400);
+    }
+  } catch (e) {
+    console.error('[settings]', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`\n  \u{1F9DB} VTM Chronicle Manager`);
   console.log(`  ───────────────────────`);
