@@ -2735,21 +2735,26 @@ app.post('/api/settings', express.json(), async (req, res) => {
 
     const needsRestart = req.body?.restart !== false;
     res.json({ ok: true, needsRestart });
-
-    if (needsRestart) {
-      console.log('[settings] Перезапуск сервера через 400ms...');
-      setTimeout(() => {
-        const { spawn } = require('child_process');
-        spawn(process.execPath, process.argv.slice(1), {
-          detached: true, stdio: 'inherit', env: process.env, cwd: process.cwd()
-        }).unref();
-        process.exit(0);
-      }, 400);
-    }
+    if (needsRestart) scheduleRestart('[settings]');
   } catch (e) {
     console.error('[settings]', e.message);
     res.status(500).json({ error: e.message });
   }
+});
+
+function scheduleRestart(tag = '[restart]', delayMs = 400) {
+  console.log(`${tag} Перезапуск через ${delayMs}ms...`);
+  setTimeout(() => {
+    spawn(process.execPath, process.argv.slice(1), {
+      detached: true, stdio: 'inherit', env: process.env, cwd: process.cwd()
+    }).unref();
+    process.exit(0);
+  }, delayMs);
+}
+
+app.post('/api/restart', (req, res) => {
+  res.json({ ok: true, message: 'Перезапуск...' });
+  scheduleRestart('[restart]', 300);
 });
 
 app.listen(PORT, () => {

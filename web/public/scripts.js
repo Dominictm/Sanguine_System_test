@@ -826,6 +826,14 @@ async function loadAiSettings() {
   el.innerHTML = `
     <div class="ais-wrap">
 
+      <!-- Restart section -->
+      <div class="ais-section ais-restart-section">
+        <div class="ais-section-title">🔄 Управление сервером</div>
+        <div class="ais-section-hint">Перезапускает сервер без открытия нового окна браузера. Страница восстановит соединение автоматически.</div>
+        <button class="ais-restart-btn" id="ais-restart-btn">⟳ Перезапустить сервер</button>
+        <div class="ais-status" id="ais-restart-status"></div>
+      </div>
+
       <!-- OpenRouter section -->
       <div class="ais-section">
         <div class="ais-section-title">🌐 OpenRouter — внешние модели</div>
@@ -879,6 +887,47 @@ async function loadAiSettings() {
       </div>
 
     </div>`;
+
+  // Restart server
+  document.getElementById('ais-restart-btn').addEventListener('click', async () => {
+    const btn    = document.getElementById('ais-restart-btn');
+    const status = document.getElementById('ais-restart-status');
+    btn.disabled = true;
+    status.className = 'ais-status';
+    status.textContent = '⏳ Останавливаем сервер...';
+
+    try {
+      await fetch('/api/restart', { method: 'POST' }).catch(() => {}); // may fail if server dies mid-request
+
+      status.textContent = '⟳ Ждём перезапуска...';
+
+      // Poll until server responds again (max 20s)
+      const start = Date.now();
+      let up = false;
+      while (Date.now() - start < 20000) {
+        await new Promise(r => setTimeout(r, 800));
+        try {
+          const r = await fetch('/api/auth-status', { cache: 'no-store' });
+          if (r.ok) { up = true; break; }
+        } catch {}
+      }
+
+      if (up) {
+        status.textContent = '✓ Сервер запущен';
+        status.classList.add('ok');
+        _aiSettingsLoaded = false;
+        // Reload settings to reflect fresh .env
+        setTimeout(loadAiSettings, 300);
+      } else {
+        status.textContent = '✗ Сервер не отвечает — проверь консоль';
+        status.classList.add('err');
+      }
+    } catch (e) {
+      status.textContent = '✗ ' + e.message; status.classList.add('err');
+    } finally {
+      btn.disabled = false;
+    }
+  });
 
   // OpenRouter: custom model toggle
   document.getElementById('ais-or-model-select').addEventListener('change', e => {

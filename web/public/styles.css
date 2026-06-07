@@ -295,6 +295,22 @@ body {
 .ais-status.ok  { color: #7dce82; }
 .ais-status.err { color: var(--accent2); }
 
+.ais-restart-section { border-top-color: rgba(100,140,200,.6); }
+.ais-restart-btn {
+  background: rgba(60,100,180,.12);
+  border: 1px solid rgba(60,100,180,.4);
+  color: #8ab4f8;
+  font-family: var(--f-head);
+  font-size: 13px;
+  letter-spacing: .07em;
+  padding: 9px 22px;
+  border-radius: 2px;
+  cursor: pointer;
+  transition: background .15s, border-color .15s;
+}
+.ais-restart-btn:hover:not(:disabled) { background: rgba(60,100,180,.25); border-color: #8ab4f8; }
+.ais-restart-btn:disabled { opacity: .5; cursor: not-allowed; }
+
 /* ── Stat cards ── */
 .stats-grid {
   display: grid;
