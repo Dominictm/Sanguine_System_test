@@ -200,14 +200,17 @@ function renderDashboard(s, container, auth = {}) {
 
   // Auth status badge
   const authBadge = (() => {
+    if (auth.source === 'openrouter') {
+      return `<span class="ai-auth-badge ok">✓ OpenRouter · ${auth.model || 'free'}</span>`;
+    }
+    if (auth.source === 'api-key') {
+      return `<span class="ai-auth-badge ok">✓ ANTHROPIC_API_KEY</span>`;
+    }
     if (auth.source === 'claude-login' && auth.ok) {
       return `<span class="ai-auth-badge ok">✓ Claude.ai (${auth.subscription || 'pro'}) · истекает через ${auth.expiresIn} мин</span>`;
     }
     if (auth.source === 'claude-login' && auth.expired) {
       return `<span class="ai-auth-badge warn">⚠ Токен истёк — выполни команду в Claude Code</span>`;
-    }
-    if (auth.source === 'api-key') {
-      return `<span class="ai-auth-badge ok">✓ ANTHROPIC_API_KEY</span>`;
     }
     return `<span class="ai-auth-badge err">✗ Нет авторизации — запусти Claude Code</span>`;
   })();

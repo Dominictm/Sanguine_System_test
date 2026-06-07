@@ -5,6 +5,15 @@ const crypto  = require('crypto');
 const { spawn } = require('child_process');
 const Anthropic = require('@anthropic-ai/sdk');
 
+// Load .env file (secrets not committed to git)
+try {
+  const envRaw = require('fs').readFileSync(path.join(__dirname, '.env'), 'utf-8');
+  for (const line of envRaw.split('\n')) {
+    const m = line.match(/^([A-Z_][A-Z0-9_]*)\s*=\s*(.+)$/);
+    if (m && !process.env[m[1]]) process.env[m[1]] = m[2].trim();
+  }
+} catch {}
+
 const app  = express();
 const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3000;
 const ROOT = path.join(__dirname, '..');
@@ -1264,7 +1273,8 @@ app.put('/api/characters/:name/relations', express.json(), async (req, res) => {
   }
 });
 
-// ── Claude client factory: Claude.ai OAuth → ANTHROPIC_API_KEY fallback ───────
+// ── Generation client factory ─────────────────────────────────────────────────
+// Priority: OpenRouter (.env) → ANTHROPIC_API_KEY → Claude.ai OAuth
 
 const CLAUDE_CREDS_PATH = path.join(
   process.env.HOME || process.env.USERPROFILE || '',
@@ -1272,62 +1282,115 @@ const CLAUDE_CREDS_PATH = path.join(
 );
 const VALID_MODELS = ['claude-opus-4-8', 'claude-sonnet-4-6', 'claude-haiku-4-5-20251001'];
 
-async function makeAnthropicClient() {
-  // 1. Try Claude Code OAuth credentials
+async function makeGenerationClient() {
+  // 1. OpenRouter (web/.env → OPENROUTER_API_KEY)
+  if (process.env.OPENROUTER_API_KEY) {
+    return {
+      source: 'openrouter',
+      model:  process.env.OPENROUTER_MODEL || 'openrouter/auto:free',
+    };
+  }
+
+  // 2. Anthropic API key
+  if (process.env.ANTHROPIC_API_KEY) {
+    return { source: 'api-key', client: new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY }) };
+  }
+
+  // 3. Claude.ai OAuth (Claude Code login)
   try {
     const raw   = await fs.readFile(CLAUDE_CREDS_PATH, 'utf-8');
     const creds = JSON.parse(raw);
     const oauth = creds?.claudeAiOauth;
     if (oauth?.accessToken) {
-      const now = Date.now();
-      if (oauth.expiresAt && now >= oauth.expiresAt) {
-        throw new Error('Claude.ai OAuth токен истёк. Выполни любую команду в Claude Code — он обновится автоматически.');
+      if (oauth.expiresAt && Date.now() >= oauth.expiresAt) {
+        throw new Error('Claude.ai OAuth токен истёк. Выполни любую команду в Claude Code.');
       }
-      return {
-        client: new Anthropic({ authToken: oauth.accessToken }),
-        source: 'claude-login',
-      };
+      return { source: 'claude-login', client: new Anthropic({ authToken: oauth.accessToken }) };
     }
   } catch (e) {
     if (e.message.includes('истёк')) throw e;
-    // credentials file missing or malformed — fall through
-  }
-
-  // 2. Fallback: ANTHROPIC_API_KEY env variable
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (apiKey) {
-    return { client: new Anthropic({ apiKey }), source: 'api-key' };
   }
 
   throw new Error(
-    'Нет доступа к Claude API. Варианты:\n' +
-    '• Запусти Claude Code хотя бы раз (авторизация через claude.ai)\n' +
-    '• Или задай ANTHROPIC_API_KEY в переменных окружения'
+    'Нет источника для генерации. Варианты:\n' +
+    '• web/.env: OPENROUTER_API_KEY=sk-or-...\n' +
+    '• ANTHROPIC_API_KEY в переменных окружения\n' +
+    '• Запусти Claude Code для OAuth-авторизации'
   );
+}
+
+// ── OpenRouter vision call (OpenAI-compatible) ────────────────────────────────
+
+async function callOpenRouter(model, systemPrompt, userPrompt, imageBuffers) {
+  const content = [
+    ...imageBuffers.map(({ buf, mime }) => ({
+      type: 'image_url',
+      image_url: { url: `data:${mime};base64,${buf.toString('base64')}` },
+    })),
+    { type: 'text', text: userPrompt },
+  ];
+
+  const body = JSON.stringify({
+    model,
+    max_tokens: 400,
+    messages: [
+      { role: 'system', content: systemPrompt },
+      { role: 'user',   content },
+    ],
+  });
+
+  const resp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    method:  'POST',
+    headers: {
+      'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
+      'Content-Type':  'application/json',
+      'HTTP-Referer':  'http://localhost:3000',
+      'X-Title':       'VTM Chronicle Manager',
+    },
+    body,
+  });
+
+  if (!resp.ok) {
+    const errText = await resp.text().catch(() => '');
+    throw Object.assign(new Error(errText || resp.statusText), { status: resp.status });
+  }
+
+  const data = await resp.json();
+  const text = data.choices?.[0]?.message?.content?.trim() || '';
+  if (!text) throw new Error('OpenRouter вернул пустой ответ: ' + JSON.stringify(data));
+  return text;
 }
 
 // ── Auth status endpoint ──────────────────────────────────────────────────────
 
 app.get('/api/auth-status', async (req, res) => {
   try {
+    // OpenRouter
+    if (process.env.OPENROUTER_API_KEY) {
+      return res.json({
+        source: 'openrouter',
+        ok:     true,
+        model:  process.env.OPENROUTER_MODEL || 'openrouter/auto:free',
+      });
+    }
+
+    // Anthropic API key
+    if (process.env.ANTHROPIC_API_KEY) {
+      return res.json({ source: 'api-key', ok: true });
+    }
+
+    // Claude.ai OAuth
     const raw   = await fs.readFile(CLAUDE_CREDS_PATH, 'utf-8').catch(() => null);
     const creds = raw ? JSON.parse(raw) : null;
     const oauth = creds?.claudeAiOauth;
-
     if (oauth?.accessToken) {
       const expired   = Date.now() >= (oauth.expiresAt || 0);
       const expiresIn = Math.round((oauth.expiresAt - Date.now()) / 60000);
       return res.json({
-        source:       'claude-login',
-        ok:           !expired,
+        source: 'claude-login', ok: !expired,
         subscription: oauth.subscriptionType || 'unknown',
-        expiresIn:    expired ? 0 : expiresIn,
-        expired,
+        expiresIn: expired ? 0 : expiresIn, expired,
       });
-    }
-
-    if (process.env.ANTHROPIC_API_KEY) {
-      return res.json({ source: 'api-key', ok: true });
     }
 
     res.json({ source: 'none', ok: false });
@@ -1336,11 +1399,11 @@ app.get('/api/auth-status', async (req, res) => {
   }
 });
 
-// ── Generate appearance from art images via Claude Vision ─────────────────────
+// ── Generate appearance from art images via Vision API ────────────────────────
 
 app.post('/api/characters/:name/generate-appearance', express.json(), async (req, res) => {
   try {
-    const { client, source } = await makeAnthropicClient();
+    const gen = await makeGenerationClient();
 
     const name = decodeURIComponent(req.params.name);
     const city = reqCity(req);
@@ -1353,35 +1416,43 @@ app.post('/api/characters/:name/generate-appearance', express.json(), async (req
     const imgs   = files.filter(f => /\.(jpg|jpeg|png|webp|gif)$/i.test(f)).sort();
     if (!imgs.length) return res.status(400).json({ error: 'Нет изображений в папке art/ персонажа' });
 
-    // OAuth tier (claude.ai Pro) has lower token limits — send only 1 image
-    const MAX_IMGS = source === 'claude-login' ? 1 : 4;
-    const imgContents = [];
+    // OAuth tier has tighter limits — cap at 1 image; OpenRouter/API-key can use more
+    const MAX_IMGS = gen.source === 'claude-login' ? 1 : 4;
+
+    const imageBuffers = [];
     for (const f of imgs.slice(0, MAX_IMGS)) {
       const buf  = await fs.readFile(path.join(artDir, f));
       const ext  = f.split('.').pop().toLowerCase();
       const mime = ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg'
                  : ext === 'png'  ? 'image/png'
                  : ext === 'webp' ? 'image/webp' : 'image/gif';
-      imgContents.push({ type: 'image', source: { type: 'base64', media_type: mime, data: buf.toString('base64') } });
+      imageBuffers.push({ buf, mime });
     }
 
     const lineageName = { vampires: 'вампира', fairies: 'феи / ченджлинга', mortals: 'смертного',
       werewolves: 'оборотня', mages: 'мага', hunters: 'охотника' }[char.lineageFolder] || 'персонажа';
 
     const systemPrompt = 'Ты — редактор персонажных карточек для настольной RPG Vampire: The Masquerade.';
-    const userPrompt   = `Перед тобой ${imgContents.length > 1 ? `${imgContents.length} изображения` : 'изображение'} ${lineageName} по имени ${char.name}.\n\nОпиши внешность для карточки. Требования:\n- 3–5 конкретных визуальных маркеров (лицо, волосы, кожа, глаза, одежда, характерные детали)\n- Стиль: лаконичный, образный, готический. Без «воды».\n- Язык: русский.\n- Формат: один абзац, без списков и заголовков.\n- Упомяни всё необычное, характерное, запоминающееся.`;
+    const userPrompt   = `Перед тобой ${imageBuffers.length > 1 ? `${imageBuffers.length} изображения` : 'изображение'} ${lineageName} по имени ${char.name}.\n\nОпиши внешность для карточки. Требования:\n- 3–5 конкретных визуальных маркеров (лицо, волосы, кожа, глаза, одежда, характерные детали)\n- Стиль: лаконичный, образный, готический. Без «воды».\n- Язык: русский.\n- Формат: один абзац, без списков и заголовков.\n- Упомяни всё необычное, характерное, запоминающееся.`;
 
-    const model = VALID_MODELS.includes(req.body?.model) ? req.body.model : 'claude-opus-4-8';
+    let appearance = '';
 
-    const message = await client.messages.create({
-      model,
-      max_tokens: 300,
-      system: systemPrompt,
-      messages: [{ role: 'user', content: [...imgContents, { type: 'text', text: userPrompt }] }],
-    });
+    if (gen.source === 'openrouter') {
+      appearance = await callOpenRouter(gen.model, systemPrompt, userPrompt, imageBuffers);
+    } else {
+      // Anthropic SDK format
+      const imgContents = imageBuffers.map(({ buf, mime }) => ({
+        type: 'image', source: { type: 'base64', media_type: mime, data: buf.toString('base64') },
+      }));
+      const model = VALID_MODELS.includes(req.body?.model) ? req.body.model : 'claude-opus-4-8';
+      const message = await gen.client.messages.create({
+        model, max_tokens: 300, system: systemPrompt,
+        messages: [{ role: 'user', content: [...imgContents, { type: 'text', text: userPrompt }] }],
+      });
+      appearance = message.content[0]?.text?.trim() || '';
+    }
 
-    const appearance = message.content[0]?.text?.trim() || '';
-    res.json({ ok: true, appearance, imagesUsed: imgs.slice(0, MAX_IMGS).length, source });
+    res.json({ ok: true, appearance, imagesUsed: imageBuffers.length, source: gen.source });
   } catch (e) {
     const status = e.status ?? 500;
     const msg    = e.error?.error?.message ?? e.message ?? String(e);

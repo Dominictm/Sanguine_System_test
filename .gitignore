@@ -9,3 +9,6 @@ tests/report_*.html
 .claude/settings.local.json
 Thumbs.db
 desktop.ini
+
+# Local secrets
+web/.env
