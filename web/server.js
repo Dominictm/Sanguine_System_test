@@ -1289,7 +1289,8 @@ app.post('/api/characters/:name/generate-appearance', express.json(), async (req
     const appearance = message.content[0]?.text?.trim() || '';
     res.json({ ok: true, appearance, imagesUsed: imgs.slice(0, MAX_IMGS).length, source });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    console.error('[generate-appearance]', e.message, e.status ?? '');
+    res.status(500).json({ error: e.message, detail: e.error ?? null });
   }
 });
 
