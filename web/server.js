@@ -1321,12 +1321,11 @@ async function makeGenerationClient() {
 
 // ── OpenRouter vision call (OpenAI-compatible) ────────────────────────────────
 
-// Free vision models tried in order when primary fails with 404
+// Free vision models — verified live 2026-06
 const OR_FALLBACK_MODELS = [
-  'meta-llama/llama-3.2-11b-vision-instruct:free',
-  'qwen/qwen2.5-vl-7b-instruct:free',
-  'google/gemma-3-12b-it:free',
-  'mistralai/mistral-small-3.1-24b-instruct:free',
+  'google/gemma-4-26b-a4b-it:free',
+  'nvidia/nemotron-nano-12b-v2-vl:free',
+  'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free',
 ];
 
 async function callOpenRouter(model, systemPrompt, userPrompt, imageBuffers) {
@@ -1458,7 +1457,8 @@ app.post('/api/characters/:name/generate-appearance', express.json(), async (req
           break;
         } catch (e) {
           lastErr = e;
-          if (e.status !== 404) throw e; // only retry on 404
+          const retryable = e.status === 404 || (e.status === 400 && /not a valid model|No endpoints/i.test(e.message));
+          if (!retryable) throw e;
           console.warn(`[generate-appearance] model ${m} unavailable, trying next...`);
         }
       }
