@@ -1458,9 +1458,120 @@ ${content}
     const scenarioPath = path.join(modDir, 'scenario.md');
     const header = `# Сценарий: ${modTitle}\n\n> 🔗 [Модуль](${mod}.md) | [Хроника](../../events.md)\n\n---\n\n`;
     await fs.writeFile(scenarioPath, header + scenarioText + '\n', 'utf-8');
-
     console.log(`[fill-module] ${city}/${chr}/${mod}/scenario.md written`);
-    res.json({ ok: true, file: `chronicles/${chr}/modules/${mod}/scenario.md` });
+
+    // ── Generate location cards ───────────────────────────────────────────
+    const locSource = req.body?.locSource || null;
+    const createdLocations = [];
+    try {
+      const locPrompt = `Проанализируй сценарий ниже и выведи список новых локаций (мест действия), для которых нужны карточки.
+Ответ строго в формате JSON-массива строк с именами локаций на русском языке. Только те, которые фигурируют как значимые места действия.
+Пример: ["Заброшенный особняк в Пасси", "Ночной клуб «Ла Шимер»", "Канализация под 5-м арр."]
+
+СЦЕНАРИЙ:
+${scenarioText.slice(0, 3000)}`;
+
+      let locNamesRaw = '';
+      const locGen = await makeGenerationClient(locSource).catch(() => null);
+      if (locGen?.source === 'openrouter') {
+        const r = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`, 'Content-Type': 'application/json', 'HTTP-Referer': 'http://localhost:3000' },
+          body: JSON.stringify({ model: locGen.model, max_tokens: 300, messages: [{ role: 'user', content: locPrompt }] }),
+        });
+        const d = await r.json();
+        locNamesRaw = d.choices?.[0]?.message?.content || '';
+      } else if (locGen?.client) {
+        const m = await locGen.client.messages.create({ model: 'claude-haiku-4-5-20251001', max_tokens: 300, messages: [{ role: 'user', content: locPrompt }] });
+        locNamesRaw = m.content[0]?.text || '';
+      }
+
+      const locNames = JSON.parse(locNamesRaw.match(/\[[\s\S]*\]/)?.[0] || '[]').slice(0, 5);
+
+      // Read location card template rules
+      const portretRules = await fs.readFile(path.join(ROOT, 'system', 'rules', 'portret.md'), 'utf-8').catch(() => '');
+
+      for (const locName of locNames) {
+        const locSlug = slugify(locName);
+        if (!locSlug) continue;
+        const locDir  = path.join(locsDir(city), 'Другие', slugify(modTitle), locSlug);
+        const locFile = path.join(locDir, `${locSlug}.md`);
+        if (await fs.stat(locFile).catch(() => null)) continue; // already exists
+
+        const locCardPrompt = `Создай карточку локации для Vampire: The Masquerade V20, Париж 2010.
+
+Правила оформления:
+${portretRules.slice(0, 1500)}
+
+Локация: «${locName}»
+Контекст модуля: ${modTitle}
+Краткое содержание сценария: ${scenarioText.slice(0, 500)}
+
+Структура карточки:
+# ${locName}
+
+> **Название:** ${locName} | **Округ:** [округ] | **Район:** [район] | **Адрес:** [адрес] | **Зона:** [🟢/🟡/🔴] | **Контроль:** [фракция]
+
+---
+
+## 🎭 Атмосфера
+[2–3 предложения, готический нуар]
+
+## 👁️ Сенсорная палитра
+| Канал | |
+|---|---|
+| **Свет** | |
+| **Звук** | |
+| **Запах** | |
+| **Тактильное** | |
+
+---
+
+## 🩸 Контекст Камарильи / Масок
+| | |
+|---|---|
+| **Статус** | |
+| **Фракция** | |
+| **Постоянные фигуры** | |
+| **Угрозы** | |
+| **Маскарад** | 🔴/🟡/🟢 |
+
+---
+
+## 🔗 Связанные модули
+- [${modTitle}](../../../../chronicles/${chr}/modules/${mod}/${mod}.md)
+
+## 🖼️ Изображения
+- ⏳ Изображение не предоставлено
+
+Язык: русский. Стиль: готический нуар VtM.`;
+
+        let locCardText = '';
+        if (locGen?.source === 'openrouter') {
+          const r = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`, 'Content-Type': 'application/json', 'HTTP-Referer': 'http://localhost:3000' },
+            body: JSON.stringify({ model: locGen.model, max_tokens: 1500, messages: [{ role: 'user', content: locCardPrompt }] }),
+          });
+          const d = await r.json();
+          locCardText = d.choices?.[0]?.message?.content?.trim() || '';
+        } else if (locGen?.client) {
+          const m = await locGen.client.messages.create({ model: 'claude-haiku-4-5-20251001', max_tokens: 1500, messages: [{ role: 'user', content: locCardPrompt }] });
+          locCardText = m.content[0]?.text?.trim() || '';
+        }
+
+        if (locCardText) {
+          await fs.mkdir(locDir, { recursive: true });
+          await fs.writeFile(locFile, locCardText + '\n', 'utf-8');
+          createdLocations.push(locName);
+          console.log(`[fill-module] location created: ${locName}`);
+        }
+      }
+    } catch (locErr) {
+      console.warn('[fill-module] location generation failed:', locErr.message);
+    }
+
+    res.json({ ok: true, file: `chronicles/${chr}/modules/${mod}/scenario.md`, locations: createdLocations });
   } catch (e) {
     console.error('[fill-module]', e.message);
     res.status(500).json({ ok: false, error: e.message });

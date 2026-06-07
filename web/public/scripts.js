@@ -823,8 +823,9 @@ async function loadAiSettings() {
   let orSettings = { OPENROUTER_MODEL: '', hasKey: false };
   try { orSettings = await fetch('/api/settings').then(r => r.json()); } catch {}
 
-  const featPrefs = JSON.parse(localStorage.getItem('ai-feature-prefs') || '{}');
-  const appearSrc = featPrefs.appearance || 'openrouter';
+  const featPrefs  = JSON.parse(localStorage.getItem('ai-feature-prefs') || '{}');
+  const appearSrc  = featPrefs.appearance || 'openrouter';
+  const locSrc     = featPrefs.locations  || 'openrouter';
 
   el.innerHTML = `
     <div class="ais-layout">
@@ -926,6 +927,25 @@ async function loadAiSettings() {
                 <input type="radio" name="feat-appearance" value="claude"
                   class="ais-feat-radio" id="feat-appearance-cl"
                   ${appearSrc === 'claude' ? 'checked' : ''}>
+              </td>
+            </tr>
+            <tr class="ais-feat-row">
+              <td class="ais-feat-name">
+                <span class="ais-feat-icon">📍</span>
+                <div>
+                  <div class="ais-feat-label">Генерация локаций</div>
+                  <div class="ais-feat-desc">Карточки мест при наполнении модуля</div>
+                </div>
+              </td>
+              <td class="ais-feat-radio-cell">
+                <input type="radio" name="feat-locations" value="openrouter"
+                  class="ais-feat-radio" id="feat-loc-or"
+                  ${locSrc === 'openrouter' ? 'checked' : ''}>
+              </td>
+              <td class="ais-feat-radio-cell">
+                <input type="radio" name="feat-locations" value="claude"
+                  class="ais-feat-radio" id="feat-loc-cl"
+                  ${locSrc === 'claude' ? 'checked' : ''}>
               </td>
             </tr>
             <tr class="ais-feat-row">
@@ -1038,9 +1058,11 @@ async function loadAiSettings() {
     const appearSel = document.querySelector('input[name="feat-appearance"]:checked');
     if (!appearSel) { status.textContent = 'Выбери провайдер'; status.className = 'ais-status err'; return; }
     const proseSel = document.querySelector('input[name="feat-prose"]:checked');
+    const locSel   = document.querySelector('input[name="feat-locations"]:checked');
     const prefs = JSON.parse(localStorage.getItem('ai-feature-prefs') || '{}');
     prefs.appearance = appearSel.value;
-    if (proseSel) prefs.prose = proseSel.value;
+    if (proseSel) prefs.prose     = proseSel.value;
+    if (locSel)   prefs.locations = locSel.value;
     localStorage.setItem('ai-feature-prefs', JSON.stringify(prefs));
     status.textContent = '✓ Сохранено';
     status.className = 'ais-status ok';
@@ -1666,20 +1688,25 @@ document.getElementById('mod-fill-generate').addEventListener('click', async () 
   btn.disabled = true; btn.textContent = '⏳ Генерация сценария...';
 
   try {
-    const qs = window.location.search;
+    const qs      = window.location.search;
+    const prefs   = JSON.parse(localStorage.getItem('ai-feature-prefs') || '{}');
+    const locSource = prefs.locations || 'openrouter';
     const d  = await fetch(
       `/api/chronicles/${encodeURIComponent(_fillModTarget.chr)}/modules/${encodeURIComponent(_fillModTarget.mod)}/fill${qs}`,
       { method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pcs: _fillPCs, npcs: _fillNPCs, content }) }
+        body: JSON.stringify({ pcs: _fillPCs, npcs: _fillNPCs, content, locSource }) }
     ).then(r => r.json());
 
     if (!d.ok) { errEl.textContent = d.error || 'Ошибка генерации'; errEl.style.display = ''; return; }
 
     document.getElementById('mod-fill-modal').style.display = 'none';
     _fillModTarget = null;
-    // Refresh chronicle modules
     if (_chrDetailSlug) openChrDetail(_chrDetailSlug, _chrDetailDisplay, 'modules');
-    alert(`✓ Сценарий сгенерирован: ${d.file}`);
+
+    const locMsg = d.locations?.length
+      ? `\n📍 Создано локаций: ${d.locations.length} (${d.locations.join(', ')})`
+      : '';
+    alert(`✓ Сценарий сгенерирован: ${d.file}${locMsg}`);
   } catch (e) {
     errEl.textContent = 'Ошибка: ' + e.message; errEl.style.display = '';
   } finally {
