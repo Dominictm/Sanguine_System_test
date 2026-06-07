@@ -1810,33 +1810,44 @@ const CLAUDE_CREDS_PATH = path.join(
 );
 const VALID_MODELS = ['claude-opus-4-8', 'claude-sonnet-4-6', 'claude-haiku-4-5-20251001'];
 
-async function makeGenerationClient() {
-  // 1. OpenRouter (web/.env → OPENROUTER_API_KEY)
-  if (process.env.OPENROUTER_API_KEY) {
+// preferSource: 'openrouter' | 'claude' | null (auto)
+async function makeGenerationClient(preferSource = null) {
+  const wantOR     = preferSource === 'openrouter';
+  const wantClaude = preferSource === 'claude';
+
+  // ── OpenRouter ────────────────────────────────────────────────
+  if ((wantOR || (!wantClaude && !preferSource)) && process.env.OPENROUTER_API_KEY) {
     return {
       source: 'openrouter',
       model:  process.env.OPENROUTER_MODEL || 'openrouter/auto:free',
     };
   }
 
-  // 2. Anthropic API key
-  if (process.env.ANTHROPIC_API_KEY) {
+  // ── Anthropic API key ─────────────────────────────────────────
+  if (!wantOR && process.env.ANTHROPIC_API_KEY) {
     return { source: 'api-key', client: new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY }) };
   }
 
-  // 3. Claude.ai OAuth (Claude Code login)
-  try {
-    const raw   = await fs.readFile(CLAUDE_CREDS_PATH, 'utf-8');
-    const creds = JSON.parse(raw);
-    const oauth = creds?.claudeAiOauth;
-    if (oauth?.accessToken) {
-      if (oauth.expiresAt && Date.now() >= oauth.expiresAt) {
-        throw new Error('Claude.ai OAuth токен истёк. Выполни любую команду в Claude Code.');
+  // ── Claude.ai OAuth (Claude Code login) ──────────────────────
+  if (!wantOR) {
+    try {
+      const raw   = await fs.readFile(CLAUDE_CREDS_PATH, 'utf-8');
+      const creds = JSON.parse(raw);
+      const oauth = creds?.claudeAiOauth;
+      if (oauth?.accessToken) {
+        if (oauth.expiresAt && Date.now() >= oauth.expiresAt) {
+          throw new Error('Claude.ai OAuth токен истёк. Выполни любую команду в Claude Code.');
+        }
+        return { source: 'claude-login', client: new Anthropic({ authToken: oauth.accessToken }) };
       }
-      return { source: 'claude-login', client: new Anthropic({ authToken: oauth.accessToken }) };
+    } catch (e) {
+      if (e.message.includes('истёк')) throw e;
     }
-  } catch (e) {
-    if (e.message.includes('истёк')) throw e;
+  }
+
+  // ── Fallback: try OpenRouter even if prefer=claude but nothing else works ──
+  if (!wantClaude && process.env.OPENROUTER_API_KEY) {
+    return { source: 'openrouter', model: process.env.OPENROUTER_MODEL || 'openrouter/auto:free' };
   }
 
   throw new Error(
@@ -1940,7 +1951,8 @@ app.get('/api/auth-status', async (req, res) => {
 
 app.post('/api/characters/:name/generate-appearance', express.json(), async (req, res) => {
   try {
-    const gen = await makeGenerationClient();
+    const preferSource = req.body?.preferSource || null;
+    const gen = await makeGenerationClient(preferSource);
 
     const name = decodeURIComponent(req.params.name);
     const city = reqCity(req);

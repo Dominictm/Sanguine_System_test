@@ -237,7 +237,10 @@ body {
 .ai-auth-badge.err  { color: var(--accent2); border-color: var(--border); background: rgba(139,0,0,.07); }
 
 /* ── AI Settings tab ──────────────────────────────────────── */
-.ais-wrap { display: flex; flex-direction: column; gap: 28px; max-width: 640px; }
+.ais-wrap { display: flex; flex-direction: column; gap: 28px; max-width: 640px; } /* legacy */
+.ais-layout { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; align-items: start; }
+.ais-left  { display: flex; flex-direction: column; gap: 20px; }
+.ais-right { display: flex; flex-direction: column; gap: 20px; }
 .ais-section {
   background: var(--bg3);
   border: 1px solid var(--border);
@@ -295,7 +298,42 @@ body {
 .ais-status.ok  { color: #7dce82; }
 .ais-status.err { color: var(--accent2); }
 
-.ais-restart-section { border-top-color: rgba(100,140,200,.6); }
+.ais-restart-section  { border-top-color: rgba(100,140,200,.6); }
+.ais-features-section { border-top-color: rgba(139,0,0,.6); }
+
+/* Features table */
+.ais-feat-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 4px;
+}
+.ais-feat-table thead th {
+  font-family: var(--f-head);
+  font-size: 11px;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+  text-align: center;
+}
+.ais-feat-col-name { text-align: left !important; }
+.ais-feat-col-prov { width: 72px; }
+.ais-feat-row { border-bottom: 1px solid rgba(255,255,255,.04); }
+.ais-feat-row:last-child { border-bottom: none; }
+.ais-feat-row-disabled { opacity: .55; }
+.ais-feat-name {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 8px 12px 0;
+}
+.ais-feat-icon { font-size: 18px; flex-shrink: 0; }
+.ais-feat-label { font-size: 13px; color: var(--text); font-weight: 600; }
+.ais-feat-desc  { font-size: 11px; color: var(--text-dim); margin-top: 2px; }
+.ais-feat-radio-cell { text-align: center; vertical-align: middle; padding: 8px; }
+.ais-feat-radio { width: 16px; height: 16px; accent-color: var(--gold); cursor: pointer; }
+.ais-feat-na { font-size: 16px; color: var(--text-dim); }
 .ais-restart-btn {
   background: rgba(60,100,180,.12);
   border: 1px solid rgba(60,100,180,.4);

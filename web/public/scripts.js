@@ -823,8 +823,14 @@ async function loadAiSettings() {
   let orSettings = { OPENROUTER_MODEL: '', hasKey: false };
   try { orSettings = await fetch('/api/settings').then(r => r.json()); } catch {}
 
+  const featPrefs = JSON.parse(localStorage.getItem('ai-feature-prefs') || '{}');
+  const appearSrc = featPrefs.appearance || 'openrouter';
+
   el.innerHTML = `
-    <div class="ais-wrap">
+    <div class="ais-layout">
+
+    <!-- LEFT COLUMN -->
+    <div class="ais-left">
 
       <!-- Restart section -->
       <div class="ais-section ais-restart-section">
@@ -886,7 +892,67 @@ async function loadAiSettings() {
         <div class="ais-status" id="ais-claude-status"></div>
       </div>
 
-    </div>`;
+    </div><!-- /ais-left -->
+
+    <!-- RIGHT COLUMN: Features table -->
+    <div class="ais-right">
+      <div class="ais-section ais-features-section">
+        <div class="ais-section-title">⚡ Назначение провайдеров</div>
+        <div class="ais-section-hint">Выбери, какой сервис используется для каждой функции.</div>
+
+        <table class="ais-feat-table">
+          <thead>
+            <tr>
+              <th class="ais-feat-col-name">Функция</th>
+              <th class="ais-feat-col-prov">OpenRouter</th>
+              <th class="ais-feat-col-prov">Claude</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="ais-feat-row">
+              <td class="ais-feat-name">
+                <span class="ais-feat-icon">👁</span>
+                <div>
+                  <div class="ais-feat-label">Внешность по арту</div>
+                  <div class="ais-feat-desc">Vision-анализ изображений персонажа</div>
+                </div>
+              </td>
+              <td class="ais-feat-radio-cell">
+                <input type="radio" name="feat-appearance" value="openrouter"
+                  class="ais-feat-radio" id="feat-appearance-or"
+                  ${appearSrc === 'openrouter' ? 'checked' : ''}>
+              </td>
+              <td class="ais-feat-radio-cell">
+                <input type="radio" name="feat-appearance" value="claude"
+                  class="ais-feat-radio" id="feat-appearance-cl"
+                  ${appearSrc === 'claude' ? 'checked' : ''}>
+              </td>
+            </tr>
+            <tr class="ais-feat-row ais-feat-row-disabled">
+              <td class="ais-feat-name">
+                <span class="ais-feat-icon">🪄</span>
+                <div>
+                  <div class="ais-feat-label">Генерация прозы</div>
+                  <div class="ais-feat-desc">Дневники и финалы через Claude CLI</div>
+                </div>
+              </td>
+              <td class="ais-feat-radio-cell">
+                <span class="ais-feat-na" title="Не поддерживается для прозы">—</span>
+              </td>
+              <td class="ais-feat-radio-cell">
+                <input type="radio" name="feat-prose" value="claude"
+                  class="ais-feat-radio" checked disabled>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+
+        <button class="ais-confirm-btn" id="ais-feat-save" style="margin-top:16px">✓ Применить</button>
+        <div class="ais-status" id="ais-feat-status"></div>
+      </div>
+    </div><!-- /ais-right -->
+
+    </div><!-- /ais-layout -->`;
 
   // Restart server
   document.getElementById('ais-restart-btn').addEventListener('click', async () => {
@@ -960,6 +1026,20 @@ async function loadAiSettings() {
     } catch (e) {
       status.textContent = '✗ Ошибка: ' + e.message; status.classList.add('err');
     } finally { btn.disabled = false; btn.textContent = '✓ Подтвердить OpenRouter'; }
+  });
+
+  // Features table: save provider preferences
+  document.getElementById('ais-feat-save').addEventListener('click', () => {
+    const btn    = document.getElementById('ais-feat-save');
+    const status = document.getElementById('ais-feat-status');
+    const appearSel = document.querySelector('input[name="feat-appearance"]:checked');
+    if (!appearSel) { status.textContent = 'Выбери провайдер'; status.className = 'ais-status err'; return; }
+    const prefs = JSON.parse(localStorage.getItem('ai-feature-prefs') || '{}');
+    prefs.appearance = appearSel.value;
+    localStorage.setItem('ai-feature-prefs', JSON.stringify(prefs));
+    status.textContent = '✓ Сохранено';
+    status.className = 'ais-status ok';
+    setTimeout(() => { status.textContent = ''; status.className = 'ais-status'; }, 2000);
   });
 
   // Claude: confirm (localStorage only, no restart needed)
@@ -2803,14 +2883,16 @@ async function _generateAppearance(charName) {
   if (btn) { btn.disabled = true; btn.textContent = '⏳ Анализ арта...'; }
 
   try {
-    const model = localStorage.getItem('ai-model') || 'claude-opus-4-8';
-    const qs    = window.location.search;
+    const model        = localStorage.getItem('ai-model') || 'claude-opus-4-8';
+    const featPrefs    = JSON.parse(localStorage.getItem('ai-feature-prefs') || '{}');
+    const preferSource = featPrefs.appearance || null; // 'openrouter' | 'claude' | null
+    const qs           = window.location.search;
 
     // 1. Генерируем внешность через Vision API
     const resp = await fetch(
       `/api/characters/${encodeURIComponent(charName)}/generate-appearance${qs}`,
       { method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model }) }
+        body: JSON.stringify({ model, preferSource }) }
     );
     const d = await resp.json();
     if (!d.ok) { alert('Ошибка генерации: ' + (d.error || 'неизвестная ошибка')); return; }
