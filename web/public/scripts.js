@@ -2100,31 +2100,54 @@ async function _generateAppearance(charName) {
 
   try {
     const model = localStorage.getItem('ai-model') || 'claude-opus-4-8';
+    const qs    = window.location.search;
+
+    // 1. Генерируем внешность через Vision API
     const resp = await fetch(
-      `/api/characters/${encodeURIComponent(charName)}/generate-appearance${window.location.search}`,
+      `/api/characters/${encodeURIComponent(charName)}/generate-appearance${qs}`,
       { method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ model }) }
     );
     const d = await resp.json();
+    if (!d.ok) { alert('Ошибка генерации: ' + (d.error || 'неизвестная ошибка')); return; }
 
-    if (!d.ok) {
-      alert('Ошибка: ' + (d.error || 'не удалось сгенерировать'));
-      return;
+    // 2. Автосохраняем в карточку персонажа
+    if (btn) btn.textContent = '💾 Сохранение...';
+    const saveResp = await fetch(
+      `/api/characters/${encodeURIComponent(charName)}/fields${qs}`,
+      { method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fields: { appearance: d.appearance } }) }
+    );
+    const saveData = await saveResp.json();
+    if (!saveData.ok) { alert('Ошибка сохранения: ' + (saveData.error || '')); return; }
+
+    // 3. Обновляем STATE
+    const ch = STATE.characters.find(c => c.name === charName);
+    if (ch) ch.appearance = d.appearance;
+
+    // 4. Обновляем вкладку Описание (view-режим)
+    const view = document.getElementById('cdet-desc-view');
+    if (view) {
+      const cur = ch || {};
+      const voice       = cur.voice       || '';
+      const imagePrompt = cur.imagePrompt || '';
+      const negPrompt   = cur.negativePrompt || '';
+      view.innerHTML = [
+        d.appearance  ? `<div class="cdet-section-title">Внешность</div><div class="cdet-bio">${escHtml(d.appearance)}</div><div class="cdet-divider"></div>` : '',
+        voice         ? `<div class="cdet-section-title">Голос</div><div class="cdet-voice">${escHtml(voice)}</div><div class="cdet-divider"></div>` : '',
+        imagePrompt   ? `<div class="cdet-section-title">Промт для генерации</div><textarea class="cdet-prompt-box" readonly>${escHtml(imagePrompt)}</textarea>${negPrompt ? `<div class="cdet-section-title" style="margin-top:14px">Негативный промт</div><textarea class="cdet-prompt-box cdet-prompt-neg" readonly>${escHtml(negPrompt)}</textarea>` : ''}` : '',
+      ].filter(Boolean).join('') || '<div class="cdet-empty">Описание не заполнено</div>';
     }
 
-    // Открываем редактирование и вставляем результат
-    if (document.getElementById('cdet-desc-edit')?.style.display === 'none') {
-      _togglePanelEdit('desc', true);
-    }
+    // 5. Также обновляем textarea если вкладка открыта в режиме редактирования
     const ta = document.getElementById('cdet-appearance-ta');
-    if (ta) {
-      ta.value = d.appearance;
-      ta.focus();
-      ta.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    }
+    if (ta) ta.value = d.appearance;
 
-    // Показываем сколько изображений использовано
-    if (btn) btn.title = `Использовано изображений: ${d.imagesUsed}`;
+    // 6. Мигаем сообщением об успехе
+    const msg = document.getElementById('cdet-desc-save-msg');
+    if (msg) { msg.classList.add('show'); setTimeout(() => msg.classList.remove('show'), 2500); }
+
+    if (btn) btn.title = `Изображений проанализировано: ${d.imagesUsed} | ${d.source}`;
   } catch(e) {
     alert('Ошибка соединения: ' + e.message);
   } finally {
