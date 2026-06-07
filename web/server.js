@@ -1321,6 +1321,14 @@ async function makeGenerationClient() {
 
 // ── OpenRouter vision call (OpenAI-compatible) ────────────────────────────────
 
+// Free vision models tried in order when primary fails with 404
+const OR_FALLBACK_MODELS = [
+  'meta-llama/llama-3.2-11b-vision-instruct:free',
+  'qwen/qwen2.5-vl-7b-instruct:free',
+  'google/gemma-3-12b-it:free',
+  'mistralai/mistral-small-3.1-24b-instruct:free',
+];
+
 async function callOpenRouter(model, systemPrompt, userPrompt, imageBuffers) {
   const content = [
     ...imageBuffers.map(({ buf, mime }) => ({
@@ -1440,7 +1448,21 @@ app.post('/api/characters/:name/generate-appearance', express.json(), async (req
     let appearance = '';
 
     if (gen.source === 'openrouter') {
-      appearance = await callOpenRouter(gen.model, systemPrompt, userPrompt, imageBuffers);
+      // Try primary model, then fallbacks if endpoint not found
+      const modelsToTry = [gen.model, ...OR_FALLBACK_MODELS.filter(m => m !== gen.model)];
+      let lastErr;
+      for (const m of modelsToTry) {
+        try {
+          appearance = await callOpenRouter(m, systemPrompt, userPrompt, imageBuffers);
+          if (m !== gen.model) console.log(`[generate-appearance] fallback model used: ${m}`);
+          break;
+        } catch (e) {
+          lastErr = e;
+          if (e.status !== 404) throw e; // only retry on 404
+          console.warn(`[generate-appearance] model ${m} unavailable, trying next...`);
+        }
+      }
+      if (!appearance) throw lastErr;
     } else {
       // Anthropic SDK format
       const imgContents = imageBuffers.map(({ buf, mime }) => ({
