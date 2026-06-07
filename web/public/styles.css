@@ -1617,10 +1617,11 @@ background: linear-gradient(180deg, rgb(121 4 4 / 2%) 0%, rgb(139 0 0 / 35%) 100
 
 /* ── Chronicle detail modal ─────────────────────────────── */
 .chr-detail-modal {
-  min-width: 900px;
-  max-width: 1400px;
-  width: 95%;
-  max-height: 92vh;
+  width: min(1000px, 96vw);
+  height: min(82vh, 754px);
+  max-width: unset;
+  min-width: unset;
+  max-height: unset;
   display: flex;
   flex-direction: column;
 }
