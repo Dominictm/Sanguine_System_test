@@ -1460,6 +1460,43 @@ ${content}
     await fs.writeFile(scenarioPath, header + scenarioText + '\n', 'utf-8');
     console.log(`[fill-module] ${city}/${chr}/${mod}/scenario.md written`);
 
+    // ── Update main module file (.md) ─────────────────────────────────────
+    // Extract first location from scenario (line containing "📍 Локация:")
+    const locLineMatch = scenarioText.match(/(?:локация|место действия)[^\n:]*[:]\s*([^\n]+)/i);
+    const firstLoc = locLineMatch ? locLineMatch[1].replace(/\*\*/g, '').trim() : '';
+
+    // Short summary from the user's idea (first 200 chars)
+    const shortSummary = content.trim().split('\n')[0].slice(0, 200);
+
+    // Participants block
+    const pcLines  = pcs.map(n  => `- [${n}](../../../../characters/${(chars.find(c => c.name === n)?.lineageFolder || 'characters')}/${(chars.find(c => c.name === n)?.slug || slugify(n))}/${(chars.find(c => c.name === n)?.slug || slugify(n))}.md) — Персонаж игрока`).join('\n');
+    const npcLines = npcs.map(n => `- ${n} — НПС`).join('\n');
+    const partBlock = [pcLines, npcLines].filter(Boolean).join('\n');
+
+    const mainContent = [
+      `# ${mainTxt.match(/^#\s+(.+)$/m)?.[1] || modTitle}`,
+      '> Хроника | Vampire: The Masquerade V20 / Changeling: The Dreaming',
+      '',
+      '> 🔗 [Хроника](../../events.md) | [Сценарий](scenario.md)',
+      '',
+      '---',
+      '',
+      '| Параметр | Значение |',
+      '|---|---|',
+      `| **Тип** | Игровая сессия |`,
+      `| **Время** | ${mainTxt.match(/\|\s*\*\*Время\*\*\s*\|\s*([^|]+)\|/)?.[1]?.trim() || ''} |`,
+      `| **Локация** | ${firstLoc} |`,
+      '',
+      '---',
+      '',
+      shortSummary ? shortSummary : '*Краткое содержание — см. запись хроники.*',
+      '',
+      ...(partBlock ? ['---', '', '## 👥 Участники', '', partBlock, ''] : []),
+    ].join('\n');
+
+    await fs.writeFile(path.join(modDir, `${mod}.md`), mainContent, 'utf-8');
+    console.log(`[fill-module] ${mod}.md updated`);
+
     // ── Generate location cards ───────────────────────────────────────────
     const locSource = req.body?.locSource || null;
     const createdLocations = [];
