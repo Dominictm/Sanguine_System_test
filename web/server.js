@@ -1457,7 +1457,8 @@ app.post('/api/characters/:name/generate-appearance', express.json(), async (req
           break;
         } catch (e) {
           lastErr = e;
-          const retryable = e.status === 404 || (e.status === 400 && /not a valid model|No endpoints/i.test(e.message));
+          const retryable = e.status === 404 || e.status === 429
+            || (e.status === 400 && /not a valid model|No endpoints/i.test(e.message));
           if (!retryable) throw e;
           console.warn(`[generate-appearance] model ${m} unavailable, trying next...`);
         }
