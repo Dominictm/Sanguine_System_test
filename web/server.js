@@ -851,15 +851,50 @@ app.get('/api/cities', async (req, res) => {
 app.get('/api/chronicles', async (req, res) => {
   try {
     const city = reqCity(req);
-    const out = [];
-    let chrs; try { chrs = await fs.readdir(chroniclesDir(city), { withFileTypes: true }); } catch { chrs = []; }
+    const out  = [];
+    let chrs;   try { chrs = await fs.readdir(chroniclesDir(city), { withFileTypes: true }); } catch { chrs = []; }
+
     for (const ch of chrs) {
       if (!ch.isDirectory()) continue;
+      const chrDir = path.join(chroniclesDir(city), ch.name);
+
+      // Display name from events.md H1
       let display = ch.name;
-      const raw = await fs.readFile(path.join(chroniclesDir(city), ch.name, 'events.md'), 'utf-8').catch(() => null);
-      if (raw) { const m = raw.replace(/^﻿/, '').match(/^#\s+(.+?)\s+—\s+События/m); if (m) display = m[1].replace(/^[^\p{L}\p{N}]+/u, '').trim(); }
-      out.push({ slug: ch.name, display });
+      const evRaw = await fs.readFile(path.join(chrDir, 'events.md'), 'utf-8').catch(() => null);
+      if (evRaw) {
+        const m = evRaw.replace(/^﻿/, '').match(/^#\s+(.+?)\s+—\s+События/m);
+        if (m) display = m[1].replace(/^[^\p{L}\p{N}]+/u, '').trim();
+      }
+
+      // Event count
+      const events = evRaw
+        ? (evRaw.match(/^###\s*📅/gm) || []).length
+        : 0;
+
+      // Module count
+      let modules = 0;
+      try {
+        const mods = await fs.readdir(path.join(chrDir, 'modules'), { withFileTypes: true });
+        modules = mods.filter(e => e.isDirectory() && !e.name.startsWith('.')).length;
+      } catch {}
+
+      // Status from chronicle.md
+      let status = 'active';
+      const chrMd = await fs.readFile(path.join(chrDir, 'chronicle.md'), 'utf-8').catch(() => null);
+      if (chrMd) {
+        if (/Закрыта|Завершена|closed/i.test(chrMd)) status = 'closed';
+        else if (/Приостановлена|paused/i.test(chrMd)) status = 'paused';
+      }
+
+      out.push({ slug: ch.name, display, events, modules, status });
     }
+
+    // Sort: active first, then by name
+    out.sort((a, b) => {
+      if (a.status !== b.status) return a.status === 'active' ? -1 : 1;
+      return a.display.localeCompare(b.display, 'ru');
+    });
+
     res.json(out);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });

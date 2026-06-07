@@ -126,7 +126,8 @@ function navigate(page) {
   if (page === 'chronicle')  loadChronicle();
   if (page === 'characters') loadCharacters();
   if (page === 'graph')      loadGraph();
-  if (page === 'modules')    { loadChroniclesList(); loadModules(); }
+  if (page === 'chronicles-page') loadChroniclesPage();
+  if (page === 'modules')         loadModules();
   if (page === 'threads')    loadThreads();
   if (page === 'locations')  loadLocations();
 }
@@ -989,23 +990,54 @@ _moreBtn('btn-rebuild-idx', 'build_city_events', () => [CITY]);
 // Chronicles list (with delete)
 // ═══════════════════════════════════════════════════════════════
 
-async function loadChroniclesList() {
-  const el = document.getElementById('chronicles-list');
-  if (!el) return;
-  try {
-    const chrs = await fetch(`/api/chronicles${window.location.search}`).then(r => r.json());
-    if (!chrs.length) { el.innerHTML = ''; return; }
-    el.innerHTML = `
-      <div class="chr-list-header">Хроники</div>
-      <div class="chr-cards">${chrs.map(c => `
-        <div class="chr-card" data-slug="${escHtml(c.slug)}">
-          <div class="chr-card-name">${escHtml(c.display)}</div>
-          <div class="chr-card-slug">${escHtml(c.slug)}</div>
-          <button class="chr-delete-btn" data-slug="${escHtml(c.slug)}" title="Удалить хронику">🗑 Удалить</button>
-        </div>`).join('')}
-      </div>`;
-  } catch { el.innerHTML = ''; }
+// ═══════════════════════════════════════════════════════════════
+// Chronicles page
+// ═══════════════════════════════════════════════════════════════
+
+const STATUS_LABEL = { active: '🟢 Активна', closed: '🔴 Закрыта', paused: '🟡 Приостановлена' };
+const STATUS_CLS   = { active: 'chr-status-active', closed: 'chr-status-closed', paused: 'chr-status-paused' };
+
+function renderChronicleCard(c) {
+  const statusLbl = STATUS_LABEL[c.status] || c.status;
+  const statusCls = STATUS_CLS[c.status]   || '';
+  const meta = [
+    c.events  ? `<span class="chp-meta-item">📅 ${c.events} событий</span>` : '',
+    c.modules ? `<span class="chp-meta-item">📖 ${c.modules} модулей</span>` : '',
+  ].filter(Boolean).join('');
+  return `
+    <div class="chp-card" data-slug="${escHtml(c.slug)}">
+      <div class="chp-card-header">
+        <div class="chp-card-name">${escHtml(c.display)}</div>
+        <span class="chp-status ${statusCls}">${statusLbl}</span>
+      </div>
+      <div class="chp-card-slug">${escHtml(c.slug)}</div>
+      ${meta ? `<div class="chp-card-meta">${meta}</div>` : ''}
+      <div class="chp-card-actions">
+        <button class="chr-delete-btn" data-slug="${escHtml(c.slug)}">🗑 Удалить</button>
+      </div>
+    </div>`;
 }
+
+async function loadChroniclesPage() {
+  const el  = document.getElementById('chronicles-cards-list');
+  const sub = document.getElementById('chronicles-page-sub');
+  if (!el) return;
+  el.innerHTML = SPINNER;
+  try {
+    const qs  = window.location.search;
+    const chrs = await fetch(`/api/chronicles${qs}`).then(r => r.json());
+    if (sub) sub.textContent = chrs.length ? `${chrs.length} хроник` : 'Нет хроник';
+    if (!chrs.length) {
+      el.innerHTML = '<div class="loading-state" style="height:120px">Хроники не найдены</div>';
+      return;
+    }
+    el.innerHTML = `<div class="chp-grid">${chrs.map(renderChronicleCard).join('')}</div>`;
+  } catch {
+    el.innerHTML = '<div class="loading-state" style="color:var(--accent3)">⚠ Не удалось загрузить</div>';
+  }
+}
+
+// ── Delete modal logic ────────────────────────────────────────────────────────
 
 let _chrDeleteSlug = null;
 
@@ -1077,8 +1109,7 @@ document.getElementById('chr-delete-confirm').addEventListener('click', async ()
       document.getElementById('chr-delete-modal').style.display = 'none';
       _chrDeleteSlug = null;
       confirm.textContent = 'Удалить';
-      loadChroniclesList();
-      loadModules();
+      loadChroniclesPage();
     }, 1800);
   } catch (err) {
     body.innerHTML = `<div style="color:var(--accent2)">Ошибка: ${escHtml(err.message)}</div>`;

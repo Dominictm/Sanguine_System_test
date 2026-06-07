@@ -1532,43 +1532,54 @@ background: linear-gradient(180deg, rgb(121 4 4 / 2%) 0%, rgb(139 0 0 / 35%) 100
   gap: 16px;
 }
 
-/* ── Chronicles section ────────────────────────────────── */
-.chronicles-list-section { margin-bottom: 32px; }
-.chr-list-header {
-  font-family: var(--f-head);
-  font-size: 13px;
-  letter-spacing: .12em;
-  text-transform: uppercase;
-  color: var(--gold);
-  margin-bottom: 12px;
-  padding-bottom: 6px;
-  border-bottom: 1px solid var(--border);
+/* ── Chronicles page ───────────────────────────────────── */
+.chp-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
 }
-.chr-cards { display: flex; flex-wrap: wrap; gap: 10px; }
-.chr-card {
+.chp-card {
   background: var(--bg3);
   border: 1px solid var(--border);
-  border-left: 3px solid #8B0000;
+  border-top: 2px solid #8B0000;
   border-radius: 2px;
-  padding: 10px 14px;
-  min-width: 200px;
+  padding: 16px 18px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  position: relative;
+  gap: 8px;
 }
-.chr-card-name { font-size: 13px; color: var(--text); font-weight: 600; }
-.chr-card-slug { font-size: 11px; color: var(--text-dim); font-family: var(--f-mono); }
+.chp-card-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+.chp-card-name {
+  font-family: var(--f-head);
+  font-size: 14px;
+  letter-spacing: .04em;
+  color: var(--text);
+  line-height: 1.3;
+}
+.chp-card-slug { font-size: 11px; color: var(--text-dim); font-family: var(--f-mono); }
+.chp-card-meta { display: flex; gap: 12px; flex-wrap: wrap; }
+.chp-meta-item { font-size: 12px; color: var(--text-dim); }
+.chp-card-actions { margin-top: 4px; }
+.chp-status {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 2px;
+  border: 1px solid;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.chp-status-active  { color: #7dce82; border-color: rgba(125,206,130,.35); background: rgba(125,206,130,.07); }
+.chp-status-closed  { color: var(--accent2); border-color: rgba(139,0,0,.35); background: rgba(139,0,0,.07); }
+.chp-status-paused  { color: var(--gold); border-color: rgba(184,134,11,.35); background: rgba(184,134,11,.07); }
+
 .chr-delete-btn {
-  margin-top: 8px;
   background: transparent;
   border: 1px solid rgba(139,0,0,.4);
   color: var(--accent2);
   font-size: 11px;
-  padding: 3px 10px;
+  padding: 4px 12px;
   border-radius: 2px;
   cursor: pointer;
-  align-self: flex-start;
   transition: background .15s, border-color .15s;
 }
 .chr-delete-btn:hover { background: rgba(139,0,0,.15); border-color: var(--accent2); }

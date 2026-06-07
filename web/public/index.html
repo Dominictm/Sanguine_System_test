@@ -32,13 +32,16 @@
         <span class="nav-icon">⚔️</span><span>Панель</span>
       </a>
       <a class="nav-item" data-page="chronicle">
-        <span class="nav-icon">📜</span><span>Хроника</span>
+        <span class="nav-icon">📜</span><span>Хронология</span>
       </a>
       <a class="nav-item" data-page="characters">
         <span class="nav-icon">🎭</span><span>Персонажи</span>
       </a>
       <a class="nav-item" data-page="graph">
         <span class="nav-icon">🕸</span><span>Связи</span>
+      </a>
+      <a class="nav-item" data-page="chronicles-page">
+        <span class="nav-icon">📕</span><span>Хроники</span>
       </a>
       <a class="nav-item" data-page="modules">
         <span class="nav-icon">📖</span><span>Модули</span>
@@ -140,13 +143,23 @@
       </div>
     </section>
 
+    <!-- Chronicles page -->
+    <section id="page-chronicles-page" class="page">
+      <div class="page-header">
+        <h1 class="page-title">Хроники</h1>
+        <span class="page-sub" id="chronicles-page-sub">Все хроники</span>
+      </div>
+      <div id="chronicles-cards-list">
+        <div class="loading-state"><div class="spinner"></div>Загрузка...</div>
+      </div>
+    </section>
+
     <!-- Modules -->
     <section id="page-modules" class="page">
       <div class="page-header">
         <h1 class="page-title">Модули</h1>
         <span class="page-sub" id="modules-sub">Хроника</span>
       </div>
-      <div id="chronicles-list" class="chronicles-list-section"></div>
       <div id="modules-list">
         <div class="loading-state"><div class="spinner"></div>Загрузка...</div>
       </div>
