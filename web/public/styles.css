@@ -1706,6 +1706,26 @@ background: linear-gradient(180deg, rgb(121 4 4 / 2%) 0%, rgb(139 0 0 / 35%) 100
 }
 .chd-mod-del-btn:hover { background: rgba(139,0,0,.15); }
 
+.chd-period-wrap {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  padding-bottom: 4px;
+}
+.chd-period-input {
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  color: var(--text);
+  font-size: 13px;
+  padding: 4px 10px;
+  width: 200px;
+  outline: none;
+  transition: border-color .15s;
+}
+.chd-period-input:focus { border-color: var(--gold); }
+.chd-period-input::placeholder { color: var(--text-dim); }
+
 /* ── Chronicle delete modal ─────────────────────────────── */
 .chr-modal-backdrop {
   position: fixed; inset: 0;
@@ -1724,8 +1744,8 @@ background: linear-gradient(180deg, rgb(121 4 4 / 2%) 0%, rgb(139 0 0 / 35%) 100
   width: 90%;
 }
 .chr-modal-title {
-  font-family: var(--f-head);
-  font-size: 16px;
+  font-family: Inkulinati-Regular;
+  font-size: 35px;
   letter-spacing: .08em;
   color: var(--accent2);
   margin-bottom: 18px;

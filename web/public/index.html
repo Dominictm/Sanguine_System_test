@@ -204,6 +204,11 @@
         <div class="chr-detail-tabbar">
           <button class="chr-detail-tab active" data-chd-tab="modules">📖 Модули</button>
           <button class="chr-detail-tab" data-chd-tab="events">📅 События</button>
+          <div class="chd-period-wrap" id="chd-period-wrap" style="display:none">
+            <input class="chd-period-input" id="chd-period-input"
+              list="chd-period-list" placeholder="Все периоды" autocomplete="off">
+            <datalist id="chd-period-list"></datalist>
+          </div>
         </div>
         <div id="chr-detail-body" class="chr-detail-body">
           <div class="loading-state"><div class="spinner"></div>Загрузка...</div>

@@ -1096,9 +1096,15 @@ async function openChrDetail(slug, display, tab) {
   const cachedChr = (STATE.chronicles || []).find(c => c.slug === slug);
   if (cachedChr?.startDate) metaEl.textContent = `Начало: ${cachedChr.startDate}`;
 
-  const qs = window.location.search;
+  const qs          = window.location.search;
+  const periodWrap  = document.getElementById('chd-period-wrap');
+  const periodInput = document.getElementById('chd-period-input');
+  const periodList  = document.getElementById('chd-period-list');
+
+  periodWrap.style.display = _chrDetailTab === 'events' ? '' : 'none';
 
   if (_chrDetailTab === 'modules') {
+    periodInput.value = '';
     try {
       const mods = await fetch(`/api/chronicles/${encodeURIComponent(slug)}/modules${qs}`).then(r => r.json());
       if (!mods.length) {
@@ -1110,18 +1116,91 @@ async function openChrDetail(slug, display, tab) {
       body.innerHTML = '<div class="loading-state" style="color:var(--accent3)">⚠ Не удалось загрузить</div>';
     }
   } else {
-    // Events tab
+    // Events tab — load once, cache on STATE
     try {
       await Promise.all([ensureCharsLoaded(), ensureLocsLoaded()]);
       const events = await fetch(`/api/chronicles/${encodeURIComponent(slug)}/events${qs}`).then(r => r.json());
-      body.innerHTML = events.length
-        ? `<div class="chd-events-wrap">${renderTimeline(events)}</div>`
-        : '<div class="loading-state" style="height:100px">Событий пока нет</div>';
+      STATE._chrEvents = STATE._chrEvents || {};
+      STATE._chrEvents[slug] = events;
+
+      // Build datalist from event dates (unique year+month combos)
+      _buildPeriodDatalist(events, periodList);
+
+      _renderChrEvents(events, periodInput.value.trim());
     } catch {
       body.innerHTML = '<div class="loading-state" style="color:var(--accent3)">⚠ Не удалось загрузить события</div>';
     }
   }
 }
+
+// ── Period datalist & filter ──────────────────────────────────────────────────
+
+const RU_MONTHS_GEN = ['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
+const RU_MONTHS_NOM = ['январь','февраль','март','апрель','май','июнь','июль','август','сентябрь','октябрь','ноябрь','декабрь'];
+const RU_MONTH_MAP  = {
+  'янв':1,'фев':2,'мар':3,'апр':4,'май':5,'мая':5,'июн':6,'июл':7,'авг':8,'сен':9,'окт':10,'ноя':11,'дек':12
+};
+
+function _buildPeriodDatalist(events, datalist) {
+  const seen = new Set();
+  const opts = [];
+
+  for (const ev of events) {
+    const s = (ev.date || '').toLowerCase();
+    const ym = s.match(/(\d{4})/);
+    if (!ym) continue;
+    const year = ym[1];
+    let month = 0;
+    for (const [stem, n] of Object.entries(RU_MONTH_MAP)) { if (s.includes(stem)) { month = n; break; } }
+    if (!month) continue;
+    const key = `${year}-${String(month).padStart(2,'0')}`;
+    if (!seen.has(key)) {
+      seen.add(key);
+      opts.push({ key, label: `${RU_MONTHS_NOM[month-1].charAt(0).toUpperCase()}${RU_MONTHS_NOM[month-1].slice(1)} ${year}` });
+    }
+  }
+
+  // Sort newest first
+  opts.sort((a, b) => b.key.localeCompare(a.key));
+  datalist.innerHTML = opts.map(o => `<option value="${o.label}">`).join('');
+}
+
+function _periodMatchesEvent(ev, period) {
+  if (!period) return true;
+  const p = period.toLowerCase().trim();
+  const s = (ev.date || '').toLowerCase();
+  // Match year
+  const yearM = p.match(/\d{4}/);
+  if (yearM && !s.includes(yearM[0])) return false;
+  // Match month (first 3 chars)
+  const monthStem = p.replace(/\d{4}/g, '').trim().slice(0, 3);
+  if (monthStem.length >= 3) {
+    const monthNum = RU_MONTH_MAP[monthStem] || 0;
+    if (monthNum) {
+      let found = false;
+      for (const [stem, n] of Object.entries(RU_MONTH_MAP)) { if (n === monthNum && s.includes(stem)) { found = true; break; } }
+      if (!found) return false;
+    }
+  }
+  return true;
+}
+
+function _renderChrEvents(events, period) {
+  const body = document.getElementById('chr-detail-body');
+  const filtered = events.filter(ev => _periodMatchesEvent(ev, period));
+  body.innerHTML = filtered.length
+    ? `<div class="chd-events-wrap">${renderTimeline(filtered)}</div>`
+    : '<div class="loading-state" style="height:80px">Нет событий за выбранный период</div>';
+}
+
+// Period input — filter on change (with 3-char autocomplete threshold)
+document.getElementById('chd-period-input').addEventListener('input', e => {
+  const val = e.target.value.trim();
+  if (!_chrDetailSlug) return;
+  const events = STATE._chrEvents?.[_chrDetailSlug] || [];
+  // Apply filter immediately if value matches a full suggestion or ≥3 chars
+  if (val.length === 0 || val.length >= 3) _renderChrEvents(events, val);
+});
 
 // Tab switching inside chronicle modal
 document.querySelectorAll('.chr-detail-tab').forEach(btn => {
