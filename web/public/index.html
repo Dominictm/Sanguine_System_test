@@ -148,11 +148,34 @@
       <div class="page-header">
         <h1 class="page-title">Хроники</h1>
         <span class="page-sub" id="chronicles-page-sub">Все хроники</span>
+        <button class="chp-create-btn" id="btn-create-chronicle">+ Новая хроника</button>
       </div>
       <div id="chronicles-cards-list">
         <div class="loading-state"><div class="spinner"></div>Загрузка...</div>
       </div>
     </section>
+
+    <!-- Chronicle create modal -->
+    <div id="chr-create-modal" class="chr-modal-backdrop" style="display:none">
+      <div class="chr-modal">
+        <div class="chr-modal-title">📕 Новая хроника</div>
+        <div class="chr-modal-body">
+          <div class="chr-form-group">
+            <label class="chr-form-label">Название *</label>
+            <input class="chr-form-input" id="chr-create-name" placeholder="Зимний Париж 2010" autocomplete="off">
+          </div>
+          <div class="chr-form-group">
+            <label class="chr-form-label">Slug <span class="chr-modal-dim">(авто)</span></label>
+            <input class="chr-form-input chr-form-mono" id="chr-create-slug" placeholder="zimny_parizh_2010" autocomplete="off">
+          </div>
+          <div id="chr-create-error" class="chr-form-error" style="display:none"></div>
+        </div>
+        <div class="chr-modal-actions">
+          <button id="chr-create-cancel" class="chr-modal-btn cancel">Отмена</button>
+          <button id="chr-create-submit" class="chr-modal-btn create">Создать</button>
+        </div>
+      </div>
+    </div>
 
     <!-- Modules -->
     <section id="page-modules" class="page">

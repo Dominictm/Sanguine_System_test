@@ -899,6 +899,54 @@ app.get('/api/chronicles', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ── Chronicle create ──────────────────────────────────────────────────────────
+
+app.post('/api/chronicles', express.json(), async (req, res) => {
+  try {
+    const city    = reqCity(req);
+    const { name } = req.body || {};
+    if (!name || !name.trim()) return res.status(400).json({ error: 'Укажи название хроники' });
+
+    const display  = name.trim();
+    const slug     = req.body.slug?.trim() || slugify(display);
+    if (!slug) return res.status(400).json({ error: 'Не удалось сформировать slug' });
+
+    const chrDir = path.join(chroniclesDir(city), slug);
+    if (await fs.stat(chrDir).catch(() => null)) {
+      return res.status(409).json({ error: `Хроника «${slug}» уже существует` });
+    }
+
+    // Get city display name for templates
+    let cityDisplay = city;
+    try {
+      const cm = await fs.readFile(path.join(cityDir(city), 'city.md'), 'utf-8');
+      const dm = cm.match(/^#\s+(.+?)(?:\s*—|\s*$)/m);
+      if (dm) cityDisplay = dm[1].replace(/^[^\p{L}\p{N}]+/u, '').trim();
+    } catch {}
+
+    const fullDisplay = `${cityDisplay} — ${display}`;
+
+    await fs.mkdir(path.join(chrDir, 'modules'), { recursive: true });
+
+    await fs.writeFile(path.join(chrDir, 'chronicle.md'),
+      `# 📕 ${display}\n\n- **Статус:** 🟡 Активна\n\n> Спина хроники. События — [events.md](events.md). Нити — [open_threads.md](open_threads.md).\n> Закрыть хронику: \`node tools/close_chronicle.js ${city} ${slug} "финал"\`\n`,
+      'utf-8');
+
+    await fs.writeFile(path.join(chrDir, 'events.md'),
+      renderChronicleEventsSkeleton(fullDisplay), 'utf-8');
+
+    await fs.writeFile(path.join(chrDir, 'open_threads.md'),
+      renderOpenThreadsSkeleton(fullDisplay), 'utf-8');
+
+    console.log(`[create-chronicle] ${city}/${slug}: «${display}»`);
+    delete _cache[city];
+    res.json({ ok: true, slug, display });
+  } catch (e) {
+    console.error('[create-chronicle]', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ── Chronicle delete helpers ──────────────────────────────────────────────────
 
 // Parse participant names from events.md (lines under 👥 Участники:)

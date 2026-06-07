@@ -1037,6 +1037,71 @@ async function loadChroniclesPage() {
   }
 }
 
+// ── Create chronicle modal ────────────────────────────────────────────────────
+
+const _TR_SLUG = {а:'a',б:'b',в:'v',г:'g',д:'d',е:'e',ё:'e',ж:'zh',з:'z',и:'i',й:'y',к:'k',л:'l',м:'m',н:'n',о:'o',п:'p',р:'r',с:'s',т:'t',у:'u',ф:'f',х:'h',ц:'ts',ч:'ch',ш:'sh',щ:'sch',ъ:'',ы:'y',ь:'',э:'e',ю:'yu',я:'ya'};
+function slugifyChr(s) {
+  return s.toLowerCase().split('').map(c => _TR_SLUG[c] !== undefined ? _TR_SLUG[c] : c).join('')
+    .replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').replace(/_+/g, '_');
+}
+
+let _slugEdited = false;
+
+document.getElementById('btn-create-chronicle').addEventListener('click', () => {
+  document.getElementById('chr-create-name').value  = '';
+  document.getElementById('chr-create-slug').value  = '';
+  document.getElementById('chr-create-error').style.display = 'none';
+  _slugEdited = false;
+  document.getElementById('chr-create-modal').style.display = 'flex';
+  setTimeout(() => document.getElementById('chr-create-name').focus(), 50);
+});
+
+document.getElementById('chr-create-name').addEventListener('input', e => {
+  if (!_slugEdited) document.getElementById('chr-create-slug').value = slugifyChr(e.target.value);
+});
+document.getElementById('chr-create-slug').addEventListener('input', () => { _slugEdited = true; });
+
+document.getElementById('chr-create-cancel').addEventListener('click', () => {
+  document.getElementById('chr-create-modal').style.display = 'none';
+});
+document.getElementById('chr-create-modal').addEventListener('click', e => {
+  if (e.target === document.getElementById('chr-create-modal'))
+    document.getElementById('chr-create-modal').style.display = 'none';
+});
+
+document.getElementById('chr-create-submit').addEventListener('click', async () => {
+  const name  = document.getElementById('chr-create-name').value.trim();
+  const slug  = document.getElementById('chr-create-slug').value.trim() || slugifyChr(name);
+  const errEl = document.getElementById('chr-create-error');
+  const btn   = document.getElementById('chr-create-submit');
+
+  if (!name) { errEl.textContent = 'Введи название хроники'; errEl.style.display = ''; return; }
+  errEl.style.display = 'none';
+  btn.disabled = true; btn.textContent = '⏳ Создание...';
+
+  try {
+    const qs = window.location.search;
+    const d  = await fetch(`/api/chronicles${qs}`,
+      { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, slug }) }).then(r => r.json());
+
+    if (!d.ok) { errEl.textContent = d.error || 'Ошибка'; errEl.style.display = ''; return; }
+
+    document.getElementById('chr-create-modal').style.display = 'none';
+    loadChroniclesPage();
+  } catch (e) {
+    errEl.textContent = 'Ошибка соединения: ' + e.message; errEl.style.display = '';
+  } finally {
+    btn.disabled = false; btn.textContent = 'Создать';
+  }
+});
+
+// Enter submits form
+document.getElementById('chr-create-modal').addEventListener('keydown', e => {
+  if (e.key === 'Enter') document.getElementById('chr-create-submit').click();
+  if (e.key === 'Escape') document.getElementById('chr-create-modal').style.display = 'none';
+});
+
 // ── Delete modal logic ────────────────────────────────────────────────────────
 
 let _chrDeleteSlug = null;
