@@ -886,7 +886,17 @@ app.get('/api/chronicles', async (req, res) => {
         else if (/Приостановлена|paused/i.test(chrMd)) status = 'paused';
       }
 
-      out.push({ slug: ch.name, display, events, modules, status });
+      // First event date (oldest = last after desc sort, so min score)
+      let startDate = '';
+      if (evRaw) {
+        const dateMatches = [...evRaw.matchAll(/^###\s*📅\s+(.+?)(?:\s+—|\n)/gm)].map(m => m[1].trim());
+        if (dateMatches.length) {
+          // Take the date with lowest score = oldest
+          startDate = dateMatches.reduce((a, b) => eventDateScore(a) < eventDateScore(b) ? a : b);
+        }
+      }
+
+      out.push({ slug: ch.name, display, events, modules, status, startDate });
     }
 
     // Sort: active first, then by name
@@ -1178,6 +1188,153 @@ app.get('/api/modules', async (req, res) => {
     }
     res.json(mods);
   } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Modules by chronicle ──────────────────────────────────────────────────────
+
+app.get('/api/chronicles/:slug/modules', async (req, res) => {
+  try {
+    const city = reqCity(req);
+    const slug = req.params.slug;
+    const chrDir = path.join(chroniclesDir(city), slug);
+    if (!await fs.stat(chrDir).catch(() => null)) return res.status(404).json({ error: 'Хроника не найдена' });
+
+    const mods = [];
+    let mEntries; try { mEntries = await fs.readdir(path.join(chrDir, 'modules'), { withFileTypes: true }); } catch { mEntries = []; }
+
+    for (const e of mEntries) {
+      if (!e.isDirectory() || e.name.startsWith('.')) continue;
+      const dir   = path.join(chrDir, 'modules', e.name);
+      const mod   = { name: e.name, title: e.name, chronicle: slug };
+      try {
+        const names = (await fs.readdir(dir, { withFileTypes: true })).filter(f => f.isFile()).map(f => f.name);
+        mod.hasScenario = names.includes('scenario.md');
+        mod.hasFinale   = names.includes('finale.md');
+        mod.hasNpc      = names.includes('npc.md');
+        const mainFile  = names.includes(`${e.name}.md`) ? `${e.name}.md` : names.find(n => n.endsWith('.md') && !MOD_AUX(n));
+        if (mainFile) {
+          const content = await fs.readFile(path.join(dir, mainFile), 'utf-8');
+          const hm = content.match(/^#\s+(.+)$/m);
+          if (hm) mod.title = hm[1].replace(/[*[\]]/g, '').trim();
+          for (const [label, key] of [['Тип','type'],['Формат','format'],['Время','time'],['Тон','tone']]) {
+            const fm = content.match(new RegExp(`\\|\\s*\\*\\*${label}\\*\\*\\s*\\|\\s*([^|\\n]+)\\|`));
+            if (fm) mod[key] = fm[1].trim();
+          }
+        }
+      } catch {}
+      mods.push(mod);
+    }
+    res.json(mods);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Create module in chronicle ────────────────────────────────────────────────
+
+app.post('/api/chronicles/:slug/modules', express.json(), async (req, res) => {
+  try {
+    const city   = reqCity(req);
+    const chr    = req.params.slug;
+    const { name, time } = req.body || {};
+    if (!name?.trim()) return res.status(400).json({ error: 'Укажи название модуля' });
+
+    const modSlug = req.body.slug?.trim() || slugify(name.trim());
+    if (!modSlug) return res.status(400).json({ error: 'Не удалось сформировать slug' });
+
+    const modDir = path.join(chroniclesDir(city), chr, 'modules', modSlug);
+    if (await fs.stat(modDir).catch(() => null))
+      return res.status(409).json({ error: `Модуль «${modSlug}» уже существует` });
+
+    await fs.mkdir(modDir, { recursive: true });
+    const timeStr = (time || '').trim();
+    const mainContent = [
+      `# ${timeStr ? timeStr + ' — ' : ''}${name.trim()}`,
+      '> Хроника | Vampire: The Masquerade V20 / Changeling: The Dreaming',
+      '',
+      '> 🔗 [Хроника](../../events.md)',
+      '',
+      '---',
+      '',
+      '| Параметр | Значение |',
+      '|---|---|',
+      `| **Тип** | Игровая сессия |`,
+      `| **Время** | ${timeStr || '⚠️ Уточнить'} |`,
+      '| **Локация** |  |',
+      '',
+      '---',
+      '',
+      '*Краткое содержание — см. запись хроники.*',
+      '',
+    ].join('\n');
+
+    await fs.writeFile(path.join(modDir, `${modSlug}.md`), mainContent, 'utf-8');
+    console.log(`[create-module] ${city}/${chr}/modules/${modSlug}`);
+    res.json({ ok: true, slug: modSlug, title: name.trim() });
+  } catch (e) {
+    console.error('[create-module]', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── Delete module ─────────────────────────────────────────────────────────────
+
+app.delete('/api/chronicles/:chr/modules/:mod', express.json(), async (req, res) => {
+  try {
+    const city   = reqCity(req);
+    const { chr, mod } = req.params;
+    const modDir = path.join(chroniclesDir(city), chr, 'modules', mod);
+
+    if (!await fs.stat(modDir).catch(() => null))
+      return res.status(404).json({ error: 'Модуль не найден' });
+
+    // 1. Find episodic NPCs from npc.md in module
+    const npcMd = await fs.readFile(path.join(modDir, 'npc.md'), 'utf-8').catch(() => '');
+    // Names referenced in npc/ subfolder (module-local cards)
+    let npcSubEntries = [];
+    try { npcSubEntries = await fs.readdir(path.join(modDir, 'npc'), { withFileTypes: true }); } catch {}
+    const episodicSlugs = npcSubEntries.filter(e => e.isDirectory()).map(e => e.name);
+
+    // 2. Find canonical chars referenced in module (for cleanup of module mentions)
+    const chars = await getAllCharacters(city);
+    const modLinkPat = new RegExp(`modules/${mod}/`, 'i');
+
+    // 3. Clean up diary/journal entries that mention this module in canonical chars
+    const cleanedChars = [];
+    for (const ch of chars) {
+      const journalDir = path.join(charsDir(city), ch.lineageFolder, ch.slug, 'journal');
+      let files; try { files = await fs.readdir(journalDir); } catch { continue; }
+      for (const f of files) {
+        if (!f.endsWith('.md')) continue;
+        const fp  = path.join(journalDir, f);
+        const txt = await fs.readFile(fp, 'utf-8').catch(() => null);
+        if (!txt || !modLinkPat.test(txt)) continue;
+        // Remove lines that link to this module
+        const cleaned = txt.split('\n').filter(l => !modLinkPat.test(l)).join('\n');
+        if (cleaned !== txt) {
+          await fs.writeFile(fp, cleaned, 'utf-8');
+          cleanedChars.push(`${ch.name}/${f}`);
+        }
+      }
+    }
+
+    // 4. Remove event block referencing this module from chronicle events.md
+    const evPath = path.join(chroniclesDir(city), chr, 'events.md');
+    const evTxt  = await fs.readFile(evPath, 'utf-8').catch(() => null);
+    if (evTxt) {
+      // Remove the `> 🔗 [Модуль](...mod...)` line from events
+      const cleaned = evTxt.split('\n').filter(l => !(l.includes('🔗') && l.includes(`modules/${mod}/`))).join('\n');
+      if (cleaned !== evTxt) await fs.writeFile(evPath, cleaned, 'utf-8');
+    }
+
+    // 5. Delete module directory
+    await rmdir(modDir);
+    console.log(`[delete-module] ${city}/${chr}/modules/${mod} | cleaned: ${cleanedChars.join(', ') || '—'}`);
+
+    delete _cache[city];
+    res.json({ ok: true, mod, cleanedChars, episodicSlugs });
+  } catch (e) {
+    console.error('[delete-module]', e.message);
+    res.status(500).json({ error: e.message });
+  }
 });
 
 app.get('/api/modules/:name', async (req, res) => {

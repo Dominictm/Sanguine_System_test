@@ -1615,6 +1615,67 @@ background: linear-gradient(180deg, rgb(121 4 4 / 2%) 0%, rgb(139 0 0 / 35%) 100
 .chr-modal-btn.create { background: rgba(184,134,11,.12); border-color: rgba(184,134,11,.5); color: var(--gold); }
 .chr-modal-btn.create:hover:not(:disabled) { background: rgba(184,134,11,.25); }
 
+/* ── Chronicle detail modal ─────────────────────────────── */
+.chr-detail-modal {
+  min-width: 520px;
+  max-width: 780px;
+  width: 90%;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+}
+.chr-detail-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.chr-detail-header-btns { display: flex; gap: 10px; align-items: center; flex-shrink: 0; }
+.chr-detail-meta { font-size: 12px; color: var(--text-dim); margin-top: 4px; }
+.chr-detail-close {
+  background: transparent; border: 1px solid var(--border);
+  color: var(--text-dim); font-size: 14px; padding: 4px 10px;
+  border-radius: 2px; cursor: pointer;
+}
+.chr-detail-close:hover { border-color: var(--text-dim); color: var(--text); }
+.chr-detail-modules { overflow-y: auto; flex: 1; padding-right: 4px; }
+
+/* Module cards inside chronicle detail */
+.chd-mod-grid { display: grid; grid-template-columns: 1fr; gap: 10px; }
+.chd-mod-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--gold);
+  border-radius: 2px;
+  padding: 12px 14px;
+  gap: 10px;
+}
+.chd-mod-main { flex: 1; min-width: 0; }
+.chd-mod-title { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 3px; }
+.chd-mod-time  { font-size: 11px; color: var(--gold); margin-bottom: 4px; }
+.chd-mod-meta  { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 4px; }
+.chd-mod-tag   { font-size: 11px; color: var(--text-dim); background: var(--bg2); border: 1px solid var(--border); padding: 1px 7px; border-radius: 2px; }
+.chd-mod-files { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 4px; }
+.chd-mod-file  { font-size: 11px; color: var(--text-dim); }
+.chd-file-finale { color: var(--gold); }
+.chd-mod-slug  { font-size: 10px; color: var(--text-dim); font-family: var(--f-mono); opacity: .7; }
+.chd-mod-del-btn {
+  flex-shrink: 0;
+  background: transparent;
+  border: 1px solid rgba(139,0,0,.35);
+  color: var(--accent2);
+  font-size: 13px;
+  padding: 4px 8px;
+  border-radius: 2px;
+  cursor: pointer;
+  transition: background .15s;
+}
+.chd-mod-del-btn:hover { background: rgba(139,0,0,.15); }
+
 /* ── Chronicle delete modal ─────────────────────────────── */
 .chr-modal-backdrop {
   position: fixed; inset: 0;

@@ -1024,8 +1024,9 @@ async function loadChroniclesPage() {
   if (!el) return;
   el.innerHTML = SPINNER;
   try {
-    const qs  = window.location.search;
+    const qs   = window.location.search;
     const chrs = await fetch(`/api/chronicles${qs}`).then(r => r.json());
+    STATE.chronicles = chrs; // cache for detail modal
     if (sub) sub.textContent = chrs.length ? `${chrs.length} хроник` : 'Нет хроник';
     if (!chrs.length) {
       el.innerHTML = '<div class="loading-state" style="height:120px">Хроники не найдены</div>';
@@ -1036,6 +1037,199 @@ async function loadChroniclesPage() {
     el.innerHTML = '<div class="loading-state" style="color:var(--accent3)">⚠ Не удалось загрузить</div>';
   }
 }
+
+// ═══════════════════════════════════════════════════════════════
+// Chronicle detail modal (modules list + create/delete module)
+// ═══════════════════════════════════════════════════════════════
+
+let _chrDetailSlug    = null;
+let _chrDetailDisplay = null;
+let _modDeleteTarget  = null; // { chr, mod }
+let _modSlugEdited    = false;
+
+function renderModuleCardInChr(m, chrSlug) {
+  const files = [
+    m.hasScenario ? '<span class="chd-mod-file">📝 Сценарий</span>' : '',
+    m.hasFinale   ? '<span class="chd-mod-file chd-file-finale">📜 Финал</span>' : '',
+    m.hasNpc      ? '<span class="chd-mod-file">👥 НПС</span>' : '',
+  ].filter(Boolean).join('');
+  return `
+    <div class="chd-mod-card">
+      <div class="chd-mod-main">
+        <div class="chd-mod-title">${escHtml(m.title)}</div>
+        ${m.time ? `<div class="chd-mod-time">${escHtml(m.time)}</div>` : ''}
+        <div class="chd-mod-meta">
+          ${m.type ? `<span class="chd-mod-tag">${escHtml(m.type)}</span>` : ''}
+          ${m.format ? `<span class="chd-mod-tag">${escHtml(m.format)}</span>` : ''}
+        </div>
+        ${files ? `<div class="chd-mod-files">${files}</div>` : ''}
+        <div class="chd-mod-slug">${escHtml(m.name)}</div>
+      </div>
+      <button class="chd-mod-del-btn" data-chr="${escHtml(chrSlug)}" data-mod="${escHtml(m.name)}" title="Удалить модуль">🗑</button>
+    </div>`;
+}
+
+async function openChrDetail(slug, display) {
+  _chrDetailSlug    = slug;
+  _chrDetailDisplay = display;
+
+  const modal   = document.getElementById('chr-detail-modal');
+  const title   = document.getElementById('chr-detail-title');
+  const metaEl  = document.getElementById('chr-detail-meta');
+  const modsEl  = document.getElementById('chr-detail-modules');
+
+  title.textContent = display;
+  metaEl.textContent = '';
+  modsEl.innerHTML   = SPINNER;
+  modal.style.display = 'flex';
+
+  try {
+    const qs   = window.location.search;
+    const mods = await fetch(`/api/chronicles/${encodeURIComponent(slug)}/modules${qs}`).then(r => r.json());
+
+    // Also show startDate from chronicle list cache
+    const cachedChr = (STATE.chronicles || []).find(c => c.slug === slug);
+    if (cachedChr?.startDate) metaEl.textContent = `Начало: ${cachedChr.startDate}`;
+
+    if (!mods.length) {
+      modsEl.innerHTML = '<div class="loading-state" style="height:100px">Модули не найдены — создай первый</div>';
+      return;
+    }
+    modsEl.innerHTML = `<div class="chd-mod-grid">${mods.map(m => renderModuleCardInChr(m, slug)).join('')}</div>`;
+  } catch {
+    modsEl.innerHTML = '<div class="loading-state" style="color:var(--accent3)">⚠ Не удалось загрузить</div>';
+  }
+}
+
+// Open detail on chronicle card click (but not on delete button)
+document.addEventListener('click', e => {
+  if (e.target.closest('.chr-delete-btn')) return;
+  const card = e.target.closest('.chp-card');
+  if (!card) return;
+  const slug    = card.dataset.slug;
+  const display = card.querySelector('.chp-card-name')?.textContent || slug;
+  openChrDetail(slug, display);
+});
+
+// Close detail modal
+document.getElementById('chr-detail-close').addEventListener('click', () => {
+  document.getElementById('chr-detail-modal').style.display = 'none';
+});
+document.getElementById('chr-detail-modal').addEventListener('click', e => {
+  if (e.target === document.getElementById('chr-detail-modal'))
+    document.getElementById('chr-detail-modal').style.display = 'none';
+});
+
+// ── Create module ─────────────────────────────────────────────────────────────
+
+document.getElementById('btn-create-module-in-chr').addEventListener('click', () => {
+  document.getElementById('mod-create-name').value  = '';
+  document.getElementById('mod-create-time').value  = '';
+  document.getElementById('mod-create-slug').value  = '';
+  document.getElementById('mod-create-error').style.display = 'none';
+  _modSlugEdited = false;
+  document.getElementById('mod-create-modal').style.display = 'flex';
+  setTimeout(() => document.getElementById('mod-create-name').focus(), 50);
+});
+
+document.getElementById('mod-create-name').addEventListener('input', e => {
+  if (!_modSlugEdited) document.getElementById('mod-create-slug').value = slugifyChr(e.target.value);
+});
+document.getElementById('mod-create-slug').addEventListener('input', () => { _modSlugEdited = true; });
+
+document.getElementById('mod-create-cancel').addEventListener('click', () => {
+  document.getElementById('mod-create-modal').style.display = 'none';
+});
+document.getElementById('mod-create-modal').addEventListener('click', e => {
+  if (e.target === document.getElementById('mod-create-modal'))
+    document.getElementById('mod-create-modal').style.display = 'none';
+});
+
+document.getElementById('mod-create-submit').addEventListener('click', async () => {
+  const name  = document.getElementById('mod-create-name').value.trim();
+  const time  = document.getElementById('mod-create-time').value.trim();
+  const slug  = document.getElementById('mod-create-slug').value.trim() || slugifyChr(name);
+  const errEl = document.getElementById('mod-create-error');
+  const btn   = document.getElementById('mod-create-submit');
+
+  if (!name) { errEl.textContent = 'Введи название модуля'; errEl.style.display = ''; return; }
+  errEl.style.display = 'none';
+  btn.disabled = true; btn.textContent = '⏳ Создание...';
+
+  try {
+    const qs = window.location.search;
+    const d  = await fetch(`/api/chronicles/${encodeURIComponent(_chrDetailSlug)}/modules${qs}`,
+      { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, time, slug }) }).then(r => r.json());
+
+    if (!d.ok) { errEl.textContent = d.error || 'Ошибка'; errEl.style.display = ''; return; }
+
+    document.getElementById('mod-create-modal').style.display = 'none';
+    openChrDetail(_chrDetailSlug, _chrDetailDisplay);
+  } catch (e) {
+    errEl.textContent = 'Ошибка: ' + e.message; errEl.style.display = '';
+  } finally {
+    btn.disabled = false; btn.textContent = 'Создать';
+  }
+});
+
+document.getElementById('mod-create-modal').addEventListener('keydown', e => {
+  if (e.key === 'Enter') document.getElementById('mod-create-submit').click();
+  if (e.key === 'Escape') document.getElementById('mod-create-modal').style.display = 'none';
+});
+
+// ── Delete module ─────────────────────────────────────────────────────────────
+
+document.addEventListener('click', e => {
+  const delBtn = e.target.closest('.chd-mod-del-btn');
+  if (!delBtn) return;
+  _modDeleteTarget = { chr: delBtn.dataset.chr, mod: delBtn.dataset.mod };
+  const body    = document.getElementById('mod-delete-body');
+  const confirm = document.getElementById('mod-delete-confirm');
+  confirm.disabled = false;
+  body.innerHTML = `
+    <div class="chr-modal-warn">Необратимое действие. Будет удалён модуль <b>${escHtml(_modDeleteTarget.mod)}</b>.</div>
+    <div class="chr-modal-section">Эпизодические НПС модуля будут удалены.<br>У каноничных персонажей — удалены ссылки на этот модуль в дневниках.</div>`;
+  document.getElementById('mod-delete-modal').style.display = 'flex';
+});
+
+document.getElementById('mod-delete-cancel').addEventListener('click', () => {
+  document.getElementById('mod-delete-modal').style.display = 'none';
+  _modDeleteTarget = null;
+});
+document.getElementById('mod-delete-modal').addEventListener('click', e => {
+  if (e.target === document.getElementById('mod-delete-modal')) {
+    document.getElementById('mod-delete-modal').style.display = 'none';
+    _modDeleteTarget = null;
+  }
+});
+
+document.getElementById('mod-delete-confirm').addEventListener('click', async () => {
+  if (!_modDeleteTarget) return;
+  const { chr, mod } = _modDeleteTarget;
+  const confirm = document.getElementById('mod-delete-confirm');
+  const body    = document.getElementById('mod-delete-body');
+  confirm.disabled = true; confirm.textContent = '⏳ Удаление...';
+
+  try {
+    const qs = window.location.search;
+    const d  = await fetch(`/api/chronicles/${encodeURIComponent(chr)}/modules/${encodeURIComponent(mod)}${qs}`,
+      { method: 'DELETE' }).then(r => r.json());
+
+    if (!d.ok) throw new Error(d.error || 'Ошибка');
+    const cleaned = d.cleanedChars?.length ? `<br>Очищено дневников: ${d.cleanedChars.length}` : '';
+    body.innerHTML = `<div style="color:var(--accent1)">✓ Модуль <b>${escHtml(mod)}</b> удалён.${cleaned}</div>`;
+    setTimeout(() => {
+      document.getElementById('mod-delete-modal').style.display = 'none';
+      _modDeleteTarget = null;
+      confirm.textContent = 'Удалить';
+      openChrDetail(chr, _chrDetailDisplay);
+    }, 1500);
+  } catch (err) {
+    body.innerHTML = `<div style="color:var(--accent2)">Ошибка: ${escHtml(err.message)}</div>`;
+    confirm.disabled = false; confirm.textContent = 'Удалить';
+  }
+});
 
 // ── Create chronicle modal ────────────────────────────────────────────────────
 

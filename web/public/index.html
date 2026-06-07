@@ -188,6 +188,63 @@
       </div>
     </section>
 
+    <!-- Chronicle detail modal -->
+    <div id="chr-detail-modal" class="chr-modal-backdrop" style="display:none">
+      <div class="chr-modal chr-detail-modal">
+        <div class="chr-detail-header">
+          <div>
+            <div class="chr-modal-title" id="chr-detail-title">Хроника</div>
+            <div class="chr-detail-meta" id="chr-detail-meta"></div>
+          </div>
+          <div class="chr-detail-header-btns">
+            <button class="chp-create-btn" id="btn-create-module-in-chr">+ Модуль</button>
+            <button class="chr-detail-close" id="chr-detail-close">✕</button>
+          </div>
+        </div>
+        <div id="chr-detail-modules" class="chr-detail-modules">
+          <div class="loading-state"><div class="spinner"></div>Загрузка...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Module create modal -->
+    <div id="mod-create-modal" class="chr-modal-backdrop" style="display:none">
+      <div class="chr-modal">
+        <div class="chr-modal-title">📖 Новый модуль</div>
+        <div class="chr-modal-body">
+          <div class="chr-form-group">
+            <label class="chr-form-label">Название *</label>
+            <input class="chr-form-input" id="mod-create-name" placeholder="Встреча в Элизиуме" autocomplete="off">
+          </div>
+          <div class="chr-form-group">
+            <label class="chr-form-label">Время / дата <span class="chr-modal-dim">(опц.)</span></label>
+            <input class="chr-form-input" id="mod-create-time" placeholder="Ноябрь 2010, пятница" autocomplete="off">
+          </div>
+          <div class="chr-form-group">
+            <label class="chr-form-label">Slug <span class="chr-modal-dim">(авто)</span></label>
+            <input class="chr-form-input chr-form-mono" id="mod-create-slug" placeholder="vstrecha_v_eliziume" autocomplete="off">
+          </div>
+          <div id="mod-create-error" class="chr-form-error" style="display:none"></div>
+        </div>
+        <div class="chr-modal-actions">
+          <button id="mod-create-cancel" class="chr-modal-btn cancel">Отмена</button>
+          <button id="mod-create-submit" class="chr-modal-btn create">Создать</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Module delete confirm modal -->
+    <div id="mod-delete-modal" class="chr-modal-backdrop" style="display:none">
+      <div class="chr-modal">
+        <div class="chr-modal-title">🗑 Удалить модуль</div>
+        <div id="mod-delete-body" class="chr-modal-body"></div>
+        <div class="chr-modal-actions">
+          <button id="mod-delete-cancel" class="chr-modal-btn cancel">Отмена</button>
+          <button id="mod-delete-confirm" class="chr-modal-btn danger">Удалить</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Chronicle delete confirm modal -->
     <div id="chr-delete-modal" class="chr-modal-backdrop" style="display:none">
       <div class="chr-modal">
