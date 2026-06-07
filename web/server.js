@@ -817,6 +817,171 @@ app.get('/api/chronicles', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ── Chronicle delete helpers ──────────────────────────────────────────────────
+
+// Parse participant names from events.md (lines under 👥 Участники:)
+function parseChronicleParticipants(eventsText) {
+  const names = new Set();
+  let inPart = false;
+  for (const line of eventsText.split('\n')) {
+    if (/👥\s*Участники/i.test(line)) { inPart = true; continue; }
+    if (inPart) {
+      if (/^\s*-\s+/.test(line)) {
+        // "  - Имя Фамилия (Клан, ...) — роль" — extract before first ( or —
+        const raw = line.replace(/^\s*-\s+/, '').split(/[\(—\/]/)[0].trim();
+        if (raw && !/без имён|безымянн/i.test(raw)) names.add(raw);
+      } else if (!/^\s*$/.test(line) && !/^\s{2,}/.test(line)) {
+        inPart = false;
+      }
+    }
+  }
+  return [...names];
+}
+
+// Find all .md files recursively
+async function findMdFiles(dir) {
+  const result = [];
+  const entries = await fs.readdir(dir, { withFileTypes: true }).catch(() => []);
+  for (const e of entries) {
+    const full = path.join(dir, e.name);
+    if (e.isDirectory()) result.push(...await findMdFiles(full));
+    else if (e.name.endsWith('.md')) result.push(full);
+  }
+  return result;
+}
+
+// Recursively delete directory
+async function rmdir(dir) {
+  const entries = await fs.readdir(dir, { withFileTypes: true }).catch(() => []);
+  for (const e of entries) {
+    const p = path.join(dir, e.name);
+    if (e.isDirectory()) await rmdir(p);
+    else await fs.unlink(p);
+  }
+  await fs.rmdir(dir);
+}
+
+// Build preview of what delete would do
+async function buildChronicleDeletePreview(city, slug) {
+  const chrDir  = path.join(chroniclesDir(city), slug);
+  const entries = await fs.readdir(chrDir, { withFileTypes: true }).catch(() => null);
+  if (!entries) return null;
+
+  // 1. Files to delete
+  const toDelete = await findMdFiles(chrDir);
+
+  // 2. Participants named in this chronicle
+  const evText = await fs.readFile(path.join(chrDir, 'events.md'), 'utf-8').catch(() => '');
+  const rawNames = parseChronicleParticipants(evText);
+
+  // 3. All text in OTHER chronicles (to check exclusivity)
+  const allChrs = await fs.readdir(chroniclesDir(city), { withFileTypes: true }).catch(() => []);
+  let otherText = '';
+  for (const c of allChrs) {
+    if (!c.isDirectory() || c.name === slug) continue;
+    const files = await findMdFiles(path.join(chroniclesDir(city), c.name));
+    for (const f of files) otherText += (await fs.readFile(f, 'utf-8').catch(() => '')) + '\n';
+  }
+
+  // 4. Resolve names to character folders
+  const chars = await getAllCharacters(city);
+  const tempChars = [];
+
+  for (const name of rawNames) {
+    // fuzzy match against known characters
+    const nameL = name.toLowerCase();
+    const ch = chars.find(c =>
+      c.name === name || c.name.toLowerCase() === nameL ||
+      c.name.toLowerCase().startsWith(nameL.split(' ')[0]) ||
+      nameL.startsWith(c.name.toLowerCase().split(' ')[0])
+    );
+    if (!ch) continue;
+    // Check if mentioned in other chronicles
+    const inOther = otherText.toLowerCase().includes(ch.name.toLowerCase()) ||
+                    (ch.aliases || []).some(a => otherText.toLowerCase().includes(a.toLowerCase()));
+    if (!inOther) {
+      tempChars.push({ name: ch.name, slug: ch.slug, lineageFolder: ch.lineageFolder });
+    }
+  }
+
+  return { toDelete, tempChars };
+}
+
+// ── Chronicle delete preview ──────────────────────────────────────────────────
+
+app.get('/api/chronicles/:slug/delete-preview', async (req, res) => {
+  try {
+    const city = reqCity(req);
+    const slug = req.params.slug;
+    const preview = await buildChronicleDeletePreview(city, slug);
+    if (!preview) return res.status(404).json({ error: 'Хроника не найдена' });
+    res.json({
+      slug,
+      filesToDelete: preview.toDelete.map(f => path.relative(ROOT, f)),
+      tempChars: preview.tempChars,
+    });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Chronicle delete ──────────────────────────────────────────────────────────
+
+app.delete('/api/chronicles/:slug', express.json(), async (req, res) => {
+  try {
+    const city    = reqCity(req);
+    const slug    = req.params.slug;
+    const chrDir  = path.join(chroniclesDir(city), slug);
+
+    const exists = await fs.stat(chrDir).catch(() => null);
+    if (!exists) return res.status(404).json({ error: 'Хроника не найдена' });
+
+    // Build what to move
+    const preview = await buildChronicleDeletePreview(city, slug);
+
+    // 1. Move temporary NPCs to nps_time
+    const npsTimeDir = path.join(charsDir(city), 'nps_time');
+    await fs.mkdir(npsTimeDir, { recursive: true });
+
+    const moved = [];
+    for (const ch of (preview?.tempChars || [])) {
+      const src = path.join(charsDir(city), ch.lineageFolder, ch.slug);
+      const dst = path.join(npsTimeDir, ch.slug);
+      try {
+        await fs.rename(src, dst);
+        moved.push({ name: ch.name, slug: ch.slug, from: ch.lineageFolder, to: 'nps_time' });
+        console.log(`[delete-chronicle] moved temp NPC → nps_time: ${ch.slug}`);
+      } catch (e) {
+        console.warn(`[delete-chronicle] could not move ${ch.slug}:`, e.message);
+      }
+    }
+
+    // 2. Remove from characters_index.md
+    const idxPath = path.join(archiveDir(city), 'characters_index.md');
+    try {
+      let idx = await fs.readFile(idxPath, 'utf-8');
+      for (const ch of moved) {
+        idx = idx.split('\n').filter(l => !l.includes(`/${ch.lineageFolder}/${ch.slug}/`)).join('\n');
+        // Add note at bottom
+        idx = idx.replace(/\s*$/, '') +
+          `\n- [${ch.name}](../characters/nps_time/${ch.slug}/${ch.slug}.md) — Временный НПС (из хроники ${slug})\n`;
+      }
+      await fs.writeFile(idxPath, idx, 'utf-8');
+    } catch {}
+
+    // 3. Delete chronicle directory
+    await rmdir(chrDir);
+    console.log(`[delete-chronicle] deleted: ${slug}`);
+
+    // 4. Clear cache
+    delete _cache[city];
+    runValidationBackground();
+
+    res.json({ ok: true, slug, moved });
+  } catch (e) {
+    console.error('[delete-chronicle]', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 app.get('/api/graph', async (req, res) => {
   try {
     const chars = await getAllCharacters(reqCity(req));

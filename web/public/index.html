@@ -146,10 +146,23 @@
         <h1 class="page-title">Модули</h1>
         <span class="page-sub" id="modules-sub">Хроника</span>
       </div>
+      <div id="chronicles-list" class="chronicles-list-section"></div>
       <div id="modules-list">
         <div class="loading-state"><div class="spinner"></div>Загрузка...</div>
       </div>
     </section>
+
+    <!-- Chronicle delete confirm modal -->
+    <div id="chr-delete-modal" class="chr-modal-backdrop" style="display:none">
+      <div class="chr-modal">
+        <div class="chr-modal-title">🗑 Удалить хронику</div>
+        <div id="chr-delete-body" class="chr-modal-body"></div>
+        <div class="chr-modal-actions">
+          <button id="chr-delete-cancel" class="chr-modal-btn cancel">Отмена</button>
+          <button id="chr-delete-confirm" class="chr-modal-btn danger" disabled>Удалить</button>
+        </div>
+      </div>
+    </div>
 
     <!-- Threads -->
     <section id="page-threads" class="page">

@@ -126,7 +126,7 @@ function navigate(page) {
   if (page === 'chronicle')  loadChronicle();
   if (page === 'characters') loadCharacters();
   if (page === 'graph')      loadGraph();
-  if (page === 'modules')    loadModules();
+  if (page === 'modules')    { loadChroniclesList(); loadModules(); }
   if (page === 'threads')    loadThreads();
   if (page === 'locations')  loadLocations();
 }
@@ -984,6 +984,108 @@ _moreBtn('btn-rebuild-idx', 'build_city_events', () => [CITY]);
 // ═══════════════════════════════════════════════════════════════
 // Modules
 // ═══════════════════════════════════════════════════════════════
+
+// ═══════════════════════════════════════════════════════════════
+// Chronicles list (with delete)
+// ═══════════════════════════════════════════════════════════════
+
+async function loadChroniclesList() {
+  const el = document.getElementById('chronicles-list');
+  if (!el) return;
+  try {
+    const chrs = await fetch(`/api/chronicles${window.location.search}`).then(r => r.json());
+    if (!chrs.length) { el.innerHTML = ''; return; }
+    el.innerHTML = `
+      <div class="chr-list-header">Хроники</div>
+      <div class="chr-cards">${chrs.map(c => `
+        <div class="chr-card" data-slug="${escHtml(c.slug)}">
+          <div class="chr-card-name">${escHtml(c.display)}</div>
+          <div class="chr-card-slug">${escHtml(c.slug)}</div>
+          <button class="chr-delete-btn" data-slug="${escHtml(c.slug)}" title="Удалить хронику">🗑 Удалить</button>
+        </div>`).join('')}
+      </div>`;
+  } catch { el.innerHTML = ''; }
+}
+
+let _chrDeleteSlug = null;
+
+document.addEventListener('click', async e => {
+  const delBtn = e.target.closest('.chr-delete-btn');
+  if (!delBtn) return;
+
+  const slug    = delBtn.dataset.slug;
+  const modal   = document.getElementById('chr-delete-modal');
+  const body    = document.getElementById('chr-delete-body');
+  const confirm = document.getElementById('chr-delete-confirm');
+  _chrDeleteSlug = slug;
+  confirm.disabled = true;
+  modal.style.display = 'flex';
+  body.innerHTML = '<div class="loading-state" style="height:80px"><div class="spinner"></div>Анализ...</div>';
+
+  try {
+    const qs = window.location.search;
+    const d  = await fetch(`/api/chronicles/${encodeURIComponent(slug)}/delete-preview${qs}`).then(r => r.json());
+    if (d.error) throw new Error(d.error);
+
+    const tempHtml = d.tempChars.length
+      ? `<div class="chr-modal-section">
+          <b>Временные НПС → <code>nps_time/</code>:</b>
+          <ul>${d.tempChars.map(c => `<li>${escHtml(c.name)} <span class="chr-modal-dim">(${escHtml(c.lineageFolder)}/${escHtml(c.slug)})</span></li>`).join('')}</ul>
+         </div>`
+      : '<div class="chr-modal-section chr-modal-dim">Временных НПС не обнаружено.</div>';
+
+    body.innerHTML = `
+      <div class="chr-modal-warn">Это действие необратимо. Будет удалена хроника <b>${escHtml(slug)}</b>.</div>
+      <div class="chr-modal-section"><b>Файлов к удалению:</b> ${d.filesToDelete.length}</div>
+      ${tempHtml}
+      <div class="chr-modal-section">Персонажи из основной базы <b>не затрагиваются</b>.</div>`;
+    confirm.disabled = false;
+  } catch (err) {
+    body.innerHTML = `<div style="color:var(--accent2)">Ошибка: ${escHtml(err.message)}</div>`;
+  }
+});
+
+document.getElementById('chr-delete-cancel').addEventListener('click', () => {
+  document.getElementById('chr-delete-modal').style.display = 'none';
+  _chrDeleteSlug = null;
+});
+document.getElementById('chr-delete-modal').addEventListener('click', e => {
+  if (e.target === document.getElementById('chr-delete-modal')) {
+    document.getElementById('chr-delete-modal').style.display = 'none';
+    _chrDeleteSlug = null;
+  }
+});
+
+document.getElementById('chr-delete-confirm').addEventListener('click', async () => {
+  if (!_chrDeleteSlug) return;
+  const slug    = _chrDeleteSlug;
+  const confirm = document.getElementById('chr-delete-confirm');
+  const body    = document.getElementById('chr-delete-body');
+  confirm.disabled = true;
+  confirm.textContent = '⏳ Удаление...';
+  try {
+    const qs = window.location.search;
+    const d  = await fetch(`/api/chronicles/${encodeURIComponent(slug)}${qs}`,
+      { method: 'DELETE' }).then(r => r.json());
+    if (!d.ok) throw new Error(d.error || 'Ошибка удаления');
+
+    const movedMsg = d.moved?.length
+      ? `<br>НПС перенесены в nps_time: ${d.moved.map(m => escHtml(m.name)).join(', ')}`
+      : '';
+    body.innerHTML = `<div style="color:var(--accent1)">✓ Хроника <b>${escHtml(slug)}</b> удалена.${movedMsg}</div>`;
+    setTimeout(() => {
+      document.getElementById('chr-delete-modal').style.display = 'none';
+      _chrDeleteSlug = null;
+      confirm.textContent = 'Удалить';
+      loadChroniclesList();
+      loadModules();
+    }, 1800);
+  } catch (err) {
+    body.innerHTML = `<div style="color:var(--accent2)">Ошибка: ${escHtml(err.message)}</div>`;
+    confirm.disabled = false;
+    confirm.textContent = 'Удалить';
+  }
+});
 
 async function loadModules() {
   const el = document.getElementById('modules-list');
