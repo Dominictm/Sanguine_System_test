@@ -506,6 +506,10 @@ async function aggregateEvents(city = DEFAULT_CITY) {
     content.split(/\n(?=###\s*📅)/).filter(c => /^###\s*📅/.test(c.trim()))
       .forEach(c => { const ev = parseEvent(c.trim(), out.length); ev.chronicle = ch.name; out.push(ev); });
   }
+  // Sort newest → oldest by event date
+  out.sort((a, b) => eventDateScore(b.date) - eventDateScore(a.date));
+  // Re-assign sequential IDs after sort
+  out.forEach((ev, i) => { ev.id = i; });
   return out;
 }
 
@@ -719,6 +723,44 @@ function eventMonthKey(dateStr) {
   for (const [stem, n] of RU_MONTH_STEMS) { if (s.includes(stem)) { month = n; break; } }
   if (!month) return null;
   return { year, month, key: `${year}-${String(month).padStart(2, '0')}` };
+}
+
+// Numeric sort score for event dates: larger = more recent.
+// Handles "Декабрь 2010, начало месяца", "Ноябрь 2010, суббота ~22:00",
+// ISO "2010-11-15", plain "март 2010", etc.
+function eventDateScore(dateStr) {
+  const s = (dateStr || '').toLowerCase();
+
+  // Year
+  const yearM = s.match(/(\d{4})/);
+  const year  = yearM ? parseInt(yearM[1]) : 0;
+
+  // Month
+  let month = 0;
+  for (const [stem, n] of RU_MONTH_STEMS) { if (s.includes(stem)) { month = n; break; } }
+  // ISO fallback: YYYY-MM or YYYY-MM-DD
+  if (!month) { const mm = s.match(/\d{4}-(\d{2})/); if (mm) month = parseInt(mm[1]); }
+
+  // Day within month (1-31 → position 1–31; qualifiers below)
+  let day = 15; // default: middle of month
+  const isoDay = s.match(/\d{4}-\d{2}-(\d{2})/);
+  if (isoDay) {
+    day = parseInt(isoDay[1]);
+  } else {
+    const dayM = s.match(/\b(\d{1,2})\s*(?:числ|д\.)/);
+    if (dayM) day = parseInt(dayM[1]);
+    else if (/начал|начало/.test(s)) day = 3;
+    else if (/середин/.test(s))     day = 15;
+    else if (/конец|конца|конц/.test(s)) day = 27;
+    else if (/конец\s*мес|late/i.test(s)) day = 27;
+  }
+
+  // Hour (for intra-day ordering): "~22:00", "04:00" etc.
+  let hour = 12;
+  const hrM = s.match(/(\d{1,2}):(\d{2})/);
+  if (hrM) hour = parseInt(hrM[1]);
+
+  return year * 100000000 + month * 1000000 + day * 10000 + hour * 100;
 }
 
 // ── Background validation ─────────────────────────────────────────────────────
