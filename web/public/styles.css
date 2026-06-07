@@ -1704,8 +1704,23 @@ background: linear-gradient(180deg, rgb(121 4 4 / 2%) 0%, rgb(139 0 0 / 35%) 100
 .chr-modal-btn.create { background: rgba(184,134,11,.12); border-color: rgba(184,134,11,.5); color: var(--gold); }
 .chr-modal-btn.create:hover:not(:disabled) { background: rgba(184,134,11,.25); }
 
-/* ── Module fill modal ──────────────────────────────────── */
+/* ── Module fill / create modals ────────────────────────── */
 .mod-fill-modal { max-width: 640px; width: 94%; max-height: 90vh; overflow-y: auto; }
+.mod-create-basic { display: flex; flex-direction: column; gap: 0; }
+.mod-create-row { display: flex; gap: 12px; }
+.mod-create-divider {
+  font-family: var(--f-head); font-size: 12px; letter-spacing: .1em;
+  text-transform: uppercase; color: var(--gold); opacity: .8;
+  margin: 8px 0 12px; padding-bottom: 6px; border-bottom: 1px solid rgba(184,134,11,.2);
+}
+/* module detail: slug row with generate button */
+.mod-modal-slug-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 2px; }
+.mod-gen-scenario-btn {
+  background: rgba(60,120,200,.12); border: 1px solid rgba(60,120,200,.4);
+  color: #8ab4f8; font-size: 11px; padding: 4px 12px; border-radius: 2px;
+  cursor: pointer; white-space: nowrap; flex-shrink: 0; transition: background .15s;
+}
+.mod-gen-scenario-btn:hover { background: rgba(60,120,200,.25); }
 .mod-fill-body  { padding-bottom: 4px; }
 .mod-fill-chips { display: flex; flex-wrap: wrap; gap: 6px; min-height: 28px; margin-bottom: 8px; }
 .mod-fill-chip {

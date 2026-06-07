@@ -1339,7 +1339,7 @@ function renderModuleCardInChr(m, chrSlug) {
     m.hasNpc      ? '<span class="chd-mod-file">👥 НПС</span>' : '',
   ].filter(Boolean).join('');
   return `
-    <div class="chd-mod-card">
+    <div class="chd-mod-card" data-chr="${escHtml(chrSlug)}" data-mod="${escHtml(m.name)}">
       <div class="chd-mod-main">
         <div class="chd-mod-title">${escHtml(m.title)}</div>
         ${m.time ? `<div class="chd-mod-time">${escHtml(m.time)}</div>` : ''}
@@ -1349,7 +1349,6 @@ function renderModuleCardInChr(m, chrSlug) {
         </div>
         ${files ? `<div class="chd-mod-files">${files}</div>` : ''}
         <div class="chd-mod-slug">${escHtml(m.name)}</div>
-        <button class="chd-mod-fill-btn" data-chr="${escHtml(chrSlug)}" data-mod="${escHtml(m.name)}" data-title="${escHtml(m.title)}">⚡ Наполнить</button>
       </div>
       <button class="chd-mod-del-btn" data-chr="${escHtml(chrSlug)}" data-mod="${escHtml(m.name)}" title="Удалить модуль">🗑</button>
     </div>`;
@@ -1539,20 +1538,70 @@ document.getElementById('chr-detail-modal').addEventListener('click', e => {
 
 // ── Create module ─────────────────────────────────────────────────────────────
 
-document.getElementById('btn-create-module-in-chr').addEventListener('click', () => {
-  document.getElementById('mod-create-name').value  = '';
-  document.getElementById('mod-create-time').value  = '';
-  document.getElementById('mod-create-slug').value  = '';
+// ── Shared chip helper for both create and fill modals ───────────────────────
+
+let _createPCs  = [];
+let _createNPCs = [];
+
+function _addChip(name, arr, containerId) {
+  if (!name || arr.includes(name)) return;
+  arr.push(name);
+  const wrap = document.getElementById(containerId);
+  const chip = document.createElement('span');
+  chip.className = 'mod-fill-chip';
+  chip.textContent = name;
+  const rm = document.createElement('button');
+  rm.textContent = '×'; rm.className = 'mod-fill-chip-rm';
+  rm.addEventListener('click', () => { arr.splice(arr.indexOf(name), 1); chip.remove(); });
+  chip.appendChild(rm);
+  wrap.appendChild(chip);
+}
+
+async function _populateCharDatalist(pcListId, npcListId) {
+  await ensureCharsLoaded();
+  const chars = STATE.characters || [];
+  const pcs   = chars.filter(c => /персонаж игрока/i.test(c.belonging || '') || /персонаж игрока|пк/i.test(c.role || ''));
+  document.getElementById(pcListId).innerHTML  = pcs.map(c   => `<option value="${escHtml(c.name)}">`).join('');
+  document.getElementById(npcListId).innerHTML = chars.map(c => `<option value="${escHtml(c.name)}">`).join('');
+}
+
+// ── New module modal ──────────────────────────────────────────────────────────
+
+document.getElementById('btn-create-module-in-chr').addEventListener('click', async () => {
+  _createPCs  = []; _createNPCs = [];
+  ['mod-create-name','mod-create-time','mod-create-slug','mod-create-content'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.value = '';
+  });
+  document.getElementById('mod-create-pcs').innerHTML  = '';
+  document.getElementById('mod-create-npcs').innerHTML = '';
   document.getElementById('mod-create-error').style.display = 'none';
   _modSlugEdited = false;
   document.getElementById('mod-create-modal').style.display = 'flex';
   setTimeout(() => document.getElementById('mod-create-name').focus(), 50);
+  _populateCharDatalist('mod-create-pc-list', 'mod-create-npc-list');
 });
 
 document.getElementById('mod-create-name').addEventListener('input', e => {
   if (!_modSlugEdited) document.getElementById('mod-create-slug').value = slugifyChr(e.target.value);
 });
 document.getElementById('mod-create-slug').addEventListener('input', () => { _modSlugEdited = true; });
+
+document.getElementById('mod-create-add-pc').addEventListener('click', () => {
+  const v = document.getElementById('mod-create-pc-input').value.trim();
+  _addChip(v, _createPCs, 'mod-create-pcs');
+  document.getElementById('mod-create-pc-input').value = '';
+});
+document.getElementById('mod-create-add-npc').addEventListener('click', () => {
+  const v = document.getElementById('mod-create-npc-input').value.trim();
+  _addChip(v, _createNPCs, 'mod-create-npcs');
+  document.getElementById('mod-create-npc-input').value = '';
+});
+document.getElementById('mod-create-pc-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') { e.preventDefault(); document.getElementById('mod-create-add-pc').click(); }
+});
+document.getElementById('mod-create-npc-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') { e.preventDefault(); document.getElementById('mod-create-add-npc').click(); }
+});
 
 document.getElementById('mod-create-cancel').addEventListener('click', () => {
   document.getElementById('mod-create-modal').style.display = 'none';
@@ -1563,26 +1612,56 @@ document.getElementById('mod-create-modal').addEventListener('click', e => {
 });
 
 document.getElementById('mod-create-submit').addEventListener('click', async () => {
-  const name  = document.getElementById('mod-create-name').value.trim();
-  const time  = document.getElementById('mod-create-time').value.trim();
-  const slug  = document.getElementById('mod-create-slug').value.trim() || slugifyChr(name);
-  const errEl = document.getElementById('mod-create-error');
-  const btn   = document.getElementById('mod-create-submit');
+  const name    = document.getElementById('mod-create-name').value.trim();
+  const time    = document.getElementById('mod-create-time').value.trim();
+  const slug    = document.getElementById('mod-create-slug').value.trim() || slugifyChr(name);
+  const content = document.getElementById('mod-create-content').value.trim();
+  const errEl   = document.getElementById('mod-create-error');
+  const btn     = document.getElementById('mod-create-submit');
 
   if (!name) { errEl.textContent = 'Введи название модуля'; errEl.style.display = ''; return; }
   errEl.style.display = 'none';
-  btn.disabled = true; btn.textContent = '⏳ Создание...';
+  btn.disabled = true;
+  btn.textContent = '⏳ Создание...';
 
   try {
     const qs = window.location.search;
-    const d  = await fetch(`/api/chronicles/${encodeURIComponent(_chrDetailSlug)}/modules${qs}`,
+
+    // 1. Create module structure
+    const d = await fetch(`/api/chronicles/${encodeURIComponent(_chrDetailSlug)}/modules${qs}`,
       { method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, time, slug }) }).then(r => r.json());
+    if (!d.ok) { errEl.textContent = d.error || 'Ошибка создания'; errEl.style.display = ''; return; }
 
-    if (!d.ok) { errEl.textContent = d.error || 'Ошибка'; errEl.style.display = ''; return; }
+    // 2. If content provided — generate scenario
+    if (content) {
+      btn.textContent = '⏳ Генерация сценария...';
+      const prefs     = JSON.parse(localStorage.getItem('ai-feature-prefs') || '{}');
+      const locSource = prefs.locations || 'openrouter';
+      const modSlug   = d.slug || slug;
 
-    document.getElementById('mod-create-modal').style.display = 'none';
-    openChrDetail(_chrDetailSlug, _chrDetailDisplay);
+      const f = await fetch(
+        `/api/chronicles/${encodeURIComponent(_chrDetailSlug)}/modules/${encodeURIComponent(modSlug)}/fill${qs}`,
+        { method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ pcs: _createPCs, npcs: _createNPCs, content, locSource }) }
+      ).then(r => r.json());
+
+      if (!f.ok) {
+        errEl.textContent = `Модуль создан, но генерация не удалась: ${f.error}`;
+        errEl.style.display = '';
+        document.getElementById('mod-create-modal').style.display = 'none';
+        openChrDetail(_chrDetailSlug, _chrDetailDisplay, 'modules');
+        return;
+      }
+
+      const locMsg = f.locations?.length ? ` | 📍 ${f.locations.length} локаций` : '';
+      document.getElementById('mod-create-modal').style.display = 'none';
+      openChrDetail(_chrDetailSlug, _chrDetailDisplay, 'modules');
+      alert(`✓ Модуль создан и заполнен${locMsg}`);
+    } else {
+      document.getElementById('mod-create-modal').style.display = 'none';
+      openChrDetail(_chrDetailSlug, _chrDetailDisplay, 'modules');
+    }
   } catch (e) {
     errEl.textContent = 'Ошибка: ' + e.message; errEl.style.display = '';
   } finally {
@@ -1591,74 +1670,38 @@ document.getElementById('mod-create-submit').addEventListener('click', async () 
 });
 
 document.getElementById('mod-create-modal').addEventListener('keydown', e => {
-  if (e.key === 'Enter') document.getElementById('mod-create-submit').click();
   if (e.key === 'Escape') document.getElementById('mod-create-modal').style.display = 'none';
 });
 
-// ── Fill module modal ─────────────────────────────────────────────────────────
+// ── Generate scenario modal (for existing modules) ────────────────────────────
 
-let _fillModTarget = null; // { chr, mod, title }
+let _fillModTarget = null; // { chr, mod }
 let _fillPCs  = [];
 let _fillNPCs = [];
 
-function _fillChip(name, arr, containerId) {
-  if (arr.includes(name)) return;
-  arr.push(name);
-  const wrap = document.getElementById(containerId);
-  const chip = document.createElement('span');
-  chip.className = 'mod-fill-chip';
-  chip.textContent = name;
-  const rm = document.createElement('button');
-  rm.textContent = '×'; rm.className = 'mod-fill-chip-rm';
-  rm.addEventListener('click', () => {
-    arr.splice(arr.indexOf(name), 1);
-    chip.remove();
-  });
-  chip.appendChild(rm);
-  wrap.appendChild(chip);
-}
-
 async function openFillModal(chr, mod, title) {
   _fillModTarget = { chr, mod };
-  _fillPCs  = [];
-  _fillNPCs = [];
-  document.getElementById('mod-fill-pcs').innerHTML  = '';
-  document.getElementById('mod-fill-npcs').innerHTML = '';
+  _fillPCs  = []; _fillNPCs = [];
+  document.getElementById('mod-fill-pcs').innerHTML   = '';
+  document.getElementById('mod-fill-npcs').innerHTML  = '';
   document.getElementById('mod-fill-pc-input').value  = '';
   document.getElementById('mod-fill-npc-input').value = '';
   document.getElementById('mod-fill-content').value   = '';
   document.getElementById('mod-fill-error').style.display = 'none';
-  document.getElementById('mod-fill-title').textContent = `⚡ Наполнить: ${title}`;
+  document.getElementById('mod-fill-title').textContent = `🪄 Сгенерировать сценарий: ${title}`;
   document.getElementById('mod-fill-modal').style.display = 'flex';
-
-  // Populate datalists
-  await ensureCharsLoaded();
-  const chars = STATE.characters || [];
-  const pcs   = chars.filter(c => /персонаж игрока/i.test(c.belonging || '') || /персонаж игрока|пк/i.test(c.role || ''));
-  const npcs  = chars.filter(c => !/персонаж игрока/i.test(c.belonging || '') || /создатель нпс|эпизодич/i.test(c.belonging || ''));
-
-  document.getElementById('mod-fill-pc-list').innerHTML  = pcs.map(c  => `<option value="${escHtml(c.name)}">`).join('');
-  document.getElementById('mod-fill-npc-list').innerHTML = chars.map(c => `<option value="${escHtml(c.name)}">`).join('');
+  _populateCharDatalist('mod-fill-pc-list', 'mod-fill-npc-list');
 }
-
-document.addEventListener('click', e => {
-  const fillBtn = e.target.closest('.chd-mod-fill-btn');
-  if (!fillBtn || e.target.closest('.chd-mod-del-btn')) return;
-  openFillModal(fillBtn.dataset.chr, fillBtn.dataset.mod, fillBtn.dataset.title);
-});
 
 document.getElementById('mod-fill-add-pc').addEventListener('click', () => {
   const v = document.getElementById('mod-fill-pc-input').value.trim();
-  if (v) { _fillChip(v, _fillPCs, 'mod-fill-pcs'); document.getElementById('mod-fill-pc-input').value = ''; }
+  _addChip(v, _fillPCs, 'mod-fill-pcs');
+  document.getElementById('mod-fill-pc-input').value = '';
 });
 document.getElementById('mod-fill-add-npc').addEventListener('click', () => {
   const v = document.getElementById('mod-fill-npc-input').value.trim();
-  if (v) { _fillChip(v, _fillNPCs, 'mod-fill-npcs'); document.getElementById('mod-fill-npc-input').value = ''; }
-});
-['mod-fill-pc-input','mod-fill-npc-input'].forEach(id => {
-  document.getElementById(id).addEventListener('keydown', e => {
-    if (e.key === 'Enter') { e.preventDefault(); document.getElementById(id.replace('input','').replace('fill-pc','fill-add-pc').replace('fill-npc','fill-add-npc')).click(); }
-  });
+  _addChip(v, _fillNPCs, 'mod-fill-npcs');
+  document.getElementById('mod-fill-npc-input').value = '';
 });
 document.getElementById('mod-fill-pc-input').addEventListener('keydown', e => {
   if (e.key === 'Enter') { e.preventDefault(); document.getElementById('mod-fill-add-pc').click(); }
@@ -2198,7 +2241,12 @@ async function openModuleDetail(name, preferTab) {
     <div class="cdet-info-col mod-info-col">
       <div class="cdet-sticky-header">
         <div class="cdet-name">${escHtml(d.title || name)}</div>
-        <div class="mod-modal-slug">📁 ${escHtml(d.name)}</div>
+        <div class="mod-modal-slug-row">
+          <span class="mod-modal-slug">📁 ${escHtml(d.name)}</span>
+          <button class="mod-gen-scenario-btn"
+            data-mod="${escHtml(d.name)}"
+            data-chr="${escHtml(d.chronicle || '')}">🪄 Сгенерировать сценарий</button>
+        </div>
       </div>
       <div class="cdet-tab-bar">
         ${tabs.map(t => `<button class="cdet-tab ${t[0] === active ? 'active' : ''} ${t[0] === 'finale' ? 'tab-finale' : ''}" data-tab="${t[0]}">${escHtml(t[1])}</button>`).join('')}
@@ -2208,6 +2256,16 @@ async function openModuleDetail(name, preferTab) {
       </div>
     </div>`;
 }
+
+// Click: "🪄 Сгенерировать сценарий" button in module detail modal
+document.getElementById('module-detail-content').addEventListener('click', e => {
+  const genBtn = e.target.closest('.mod-gen-scenario-btn');
+  if (!genBtn) return;
+  const mod = genBtn.dataset.mod;
+  const chr = genBtn.dataset.chr || _chrDetailSlug || '';
+  document.getElementById('module-detail-modal').classList.remove('open');
+  openFillModal(chr, mod, mod);
+});
 
 // Module card clicks
 document.getElementById('modules-list').addEventListener('click', e => {
