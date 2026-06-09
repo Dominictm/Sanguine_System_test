@@ -1626,42 +1626,15 @@ document.getElementById('mod-create-submit').addEventListener('click', async () 
 
   try {
     const qs = window.location.search;
-
-    // 1. Create module structure
-    const d = await fetch(`/api/chronicles/${encodeURIComponent(_chrDetailSlug)}/modules${qs}`,
+    const d  = await fetch(`/api/chronicles/${encodeURIComponent(_chrDetailSlug)}/modules${qs}`,
       { method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, time, slug }) }).then(r => r.json());
-    if (!d.ok) { errEl.textContent = d.error || 'Ошибка создания'; errEl.style.display = ''; return; }
+        body: JSON.stringify({ name, time, slug, pcs: _createPCs, npcs: _createNPCs, content }) }
+    ).then(r => r.json());
 
-    // 2. If content provided — generate scenario
-    if (content) {
-      btn.textContent = '⏳ Генерация сценария...';
-      const prefs     = JSON.parse(localStorage.getItem('ai-feature-prefs') || '{}');
-      const locSource = prefs.locations || 'openrouter';
-      const modSlug   = d.slug || slug;
+    if (!d.ok) { errEl.textContent = d.error || 'Ошибка'; errEl.style.display = ''; return; }
 
-      const f = await fetch(
-        `/api/chronicles/${encodeURIComponent(_chrDetailSlug)}/modules/${encodeURIComponent(modSlug)}/fill${qs}`,
-        { method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ pcs: _createPCs, npcs: _createNPCs, content, locSource }) }
-      ).then(r => r.json());
-
-      if (!f.ok) {
-        errEl.textContent = `Модуль создан, но генерация не удалась: ${f.error}`;
-        errEl.style.display = '';
-        document.getElementById('mod-create-modal').style.display = 'none';
-        openChrDetail(_chrDetailSlug, _chrDetailDisplay, 'modules');
-        return;
-      }
-
-      const locMsg = f.locations?.length ? ` | 📍 ${f.locations.length} локаций` : '';
-      document.getElementById('mod-create-modal').style.display = 'none';
-      openChrDetail(_chrDetailSlug, _chrDetailDisplay, 'modules');
-      alert(`✓ Модуль создан и заполнен${locMsg}`);
-    } else {
-      document.getElementById('mod-create-modal').style.display = 'none';
-      openChrDetail(_chrDetailSlug, _chrDetailDisplay, 'modules');
-    }
+    document.getElementById('mod-create-modal').style.display = 'none';
+    openChrDetail(_chrDetailSlug, _chrDetailDisplay, 'modules');
   } catch (e) {
     errEl.textContent = 'Ошибка: ' + e.message; errEl.style.display = '';
   } finally {

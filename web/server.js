@@ -1320,7 +1320,14 @@ app.post('/api/chronicles/:slug/modules', express.json(), async (req, res) => {
       return res.status(409).json({ error: `Модуль «${modSlug}» уже существует` });
 
     await fs.mkdir(modDir, { recursive: true });
-    const timeStr = (time || '').trim();
+    const timeStr   = (time || '').trim();
+    const pcs       = Array.isArray(req.body.pcs)  ? req.body.pcs  : [];
+    const npcs      = Array.isArray(req.body.npcs) ? req.body.npcs : [];
+    const concept   = (req.body.content || '').trim();
+
+    const pcBlock  = pcs.length  ? pcs.map(n  => `  - ${n} — Персонаж игрока`).join('\n') : '  - ⚠️ Уточнить';
+    const npcBlock = npcs.length ? npcs.map(n => `  - ${n} — НПС`).join('\n')             : '  - ⚠️ Уточнить';
+
     const mainContent = [
       `# ${timeStr ? timeStr + ' — ' : ''}${name.trim()}`,
       '> Хроника | Vampire: The Masquerade V20 / Changeling: The Dreaming',
@@ -1337,8 +1344,27 @@ app.post('/api/chronicles/:slug/modules', express.json(), async (req, res) => {
       '',
       '---',
       '',
-      '*Краткое содержание — см. запись хроники.*',
+      '## 👥 Участники',
       '',
+      '**Персонажи игроков:**',
+      pcBlock,
+      '',
+      '**НПС:**',
+      npcBlock,
+      '',
+      ...(concept ? [
+        '---',
+        '',
+        '## 💡 Концепция',
+        '',
+        concept,
+        '',
+      ] : [
+        '---',
+        '',
+        '*Краткое содержание — см. запись хроники.*',
+        '',
+      ]),
     ].join('\n');
 
     await fs.writeFile(path.join(modDir, `${modSlug}.md`), mainContent, 'utf-8');
@@ -1357,8 +1383,18 @@ app.post('/api/chronicles/:chr/modules/:mod/fill', express.json(), async (req, r
   try {
     const city    = reqCity(req);
     const { chr, mod } = req.params;
-    const { pcs = [], npcs = [], content = '' } = req.body || {};
-    if (!content.trim()) return res.status(400).json({ ok: false, error: 'Не заполнено поле «Содержание модуля».' });
+    const { pcs = [], npcs = [] } = req.body || {};
+    let content = (req.body.content || '').trim();
+
+    // If content not provided, try to read it from the module's 💡 Концепция section
+    if (!content) {
+      const mainTxtForConcept = await fs.readFile(
+        path.join(chroniclesDir(city), chr, 'modules', mod, `${mod}.md`), 'utf-8').catch(() => '');
+      const conceptMatch = mainTxtForConcept.match(/## 💡 Концепция\s*\n+([\s\S]*?)(?=\n##|\n---|\s*$)/);
+      if (conceptMatch) content = conceptMatch[1].trim();
+    }
+
+    if (!content) return res.status(400).json({ ok: false, error: 'Не заполнено поле «Содержание модуля» и концепция не найдена в файле модуля.' });
 
     // Read module rules
     const moduleRules = await fs.readFile(
