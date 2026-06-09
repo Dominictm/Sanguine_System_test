@@ -1329,7 +1329,7 @@ app.post('/api/chronicles/:slug/modules', express.json(), async (req, res) => {
     const npcBlock = npcs.length ? npcs.map(n => `  - ${n} — НПС`).join('\n')             : '  - ⚠️ Уточнить';
 
     const mainContent = [
-      `# ${timeStr ? timeStr + ' — ' : ''}${name.trim()}`,
+      `# ${name.trim()}`,
       '> Хроника | Vampire: The Masquerade V20 / Changeling: The Dreaming',
       '',
       '> 🔗 [Хроника](../../events.md)',

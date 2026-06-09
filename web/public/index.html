@@ -221,29 +221,27 @@
       </div>
     </div>
 
-    <!-- Module create + generate modal -->
+    <!-- Module create modal -->
     <div id="mod-create-modal" class="chr-modal-backdrop" style="display:none">
       <div class="chr-modal mod-fill-modal">
         <div class="chr-modal-title">📖 Новый модуль</div>
         <div class="chr-modal-body mod-fill-body">
-          <div class="mod-create-basic">
-            <div class="chr-form-group">
-              <label class="chr-form-label">Название *</label>
-              <input class="chr-form-input" id="mod-create-name" placeholder="Встреча в Элизиуме" autocomplete="off">
-            </div>
-            <div class="mod-create-row">
-              <div class="chr-form-group" style="flex:1">
-                <label class="chr-form-label">Время / дата <span class="chr-modal-dim">(опц.)</span></label>
-                <input class="chr-form-input" id="mod-create-time" placeholder="Ноябрь 2010, пятница" autocomplete="off">
-              </div>
-              <div class="chr-form-group" style="flex:1">
-                <label class="chr-form-label">Slug <span class="chr-modal-dim">(авто)</span></label>
-                <input class="chr-form-input chr-form-mono" id="mod-create-slug" placeholder="vstrecha_v_eliziume" autocomplete="off">
-              </div>
-            </div>
+
+          <div class="chr-form-group">
+            <label class="chr-form-label">Название *</label>
+            <input class="chr-form-input" id="mod-create-name" placeholder="Встреча в Элизиуме" autocomplete="off">
           </div>
 
-          <div class="mod-create-divider">⚡ Генерация сценария <span class="chr-modal-dim">(опционально)</span></div>
+          <div class="mod-create-row">
+            <div class="chr-form-group" style="flex:1">
+              <label class="chr-form-label">Время / дата <span class="chr-modal-dim">(опц.)</span></label>
+              <input class="chr-form-input" id="mod-create-time" placeholder="Ноябрь 2010, пятница" autocomplete="off">
+            </div>
+            <div class="chr-form-group" style="flex:1">
+              <label class="chr-form-label">Slug <span class="chr-modal-dim">(авто)</span></label>
+              <input class="chr-form-input chr-form-mono" id="mod-create-slug" placeholder="vstrecha_v_eliziume" autocomplete="off">
+            </div>
+          </div>
 
           <div class="chr-form-group">
             <label class="chr-form-label">Персонажи игроков (ПК)</label>
@@ -266,16 +264,16 @@
           </div>
 
           <div class="chr-form-group">
-            <label class="chr-form-label">Содержание модуля <span class="chr-modal-dim">(идея, завязка, ключевые сцены)</span></label>
+            <label class="chr-form-label">Концепция <span class="chr-modal-dim">(идея, завязка, ключевые сцены)</span></label>
             <textarea class="chr-form-input chr-form-textarea" id="mod-create-content" rows="5"
-              placeholder="Опиши идею модуля — завязку, ключевые сцены, конфликт, НПС, локации, желаемый исход...&#10;Если поле пустое — создаётся только структура модуля без сценария."></textarea>
+              placeholder="Опиши идею модуля — завязку, ключевые сцены, конфликт, НПС, локации..."></textarea>
           </div>
 
           <div id="mod-create-error" class="chr-form-error" style="display:none"></div>
         </div>
         <div class="chr-modal-actions">
           <button id="mod-create-cancel" class="chr-modal-btn cancel">Отмена</button>
-          <button id="mod-create-submit" class="chr-modal-btn create">Создать</button>
+          <button id="mod-create-submit" class="chr-modal-btn create">Сохранить</button>
         </div>
       </div>
     </div>
