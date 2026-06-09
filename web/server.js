@@ -2208,7 +2208,13 @@ async function callOpenRouter(model, systemPrompt, userPrompt, imageBuffers) {
   const msg   = data.choices?.[0]?.message;
   // Some reasoning models return content: null — fall back to reasoning text
   const text  = (msg?.content || msg?.reasoning || '').trim();
-  if (!text) throw new Error('OpenRouter вернул пустой ответ: ' + JSON.stringify(data));
+  if (!text) {
+    // Image-generation models return images[], not text
+    if (msg?.images?.length) {
+      throw new Error(`Модель «${data.model}» — генератор изображений, а не текста. Выберите другую модель в настройках ИИ.`);
+    }
+    throw new Error('OpenRouter вернул пустой ответ от модели «' + data.model + '»');
+  }
   return text;
 }
 
@@ -3197,7 +3203,12 @@ app.get('/api/openrouter/models', async (req, res) => {
     const free = (data.data || [])
       .filter(m => {
         const p = m.pricing || {};
-        return (String(p.prompt) === '0') && (String(p.completion) === '0');
+        if ((String(p.prompt) !== '0') || (String(p.completion) !== '0')) return false;
+        // Exclude image-generation models — they return content:null + images:[],
+        // not text, so they break every text-generation endpoint.
+        const outModes = m.architecture?.output_modalities;
+        if (outModes?.length && !outModes.includes('text')) return false;
+        return true;
       })
       .map(m => ({ id: m.id, label: m.name || m.id }))
       .sort((a, b) => a.label.localeCompare(b.label));
