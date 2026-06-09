@@ -805,7 +805,7 @@ const OR_FREE_MODELS_FALLBACK = [
   { id: 'google/gemma-4-26b-a4b-it:free',   label: 'Google Gemma 4 26B (Vision)' },
   { id: 'nvidia/nemotron-nano-12b-v2-vl:free', label: 'Nvidia Nemotron Nano 12B VL' },
   { id: 'moonshotai/kimi-k2.6:free',         label: 'Moonshot Kimi K2.6' },
-  { id: 'openrouter/auto',                   label: 'Free Models Router' },
+  { id: 'openrouter/free',                   label: 'Free Models Router' },
 ];
 // Keep OR_FREE_MODELS alias for other usages
 const OR_FREE_MODELS = OR_FREE_MODELS_FALLBACK;

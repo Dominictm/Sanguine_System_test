@@ -2118,7 +2118,7 @@ async function makeGenerationClient(preferSource = null, modelOverride = null) {
   const wantOR     = preferSource === 'openrouter';
   const wantClaude = preferSource === 'claude';
 
-  const orModel = () => modelOverride || process.env.OPENROUTER_MODEL || 'openrouter/auto';
+  const orModel = () => modelOverride || process.env.OPENROUTER_MODEL || 'openrouter/free';
   const clModel = () => modelOverride || 'claude-opus-4-8';
 
   // ── OpenRouter ────────────────────────────────────────────────
@@ -2221,7 +2221,7 @@ app.get('/api/auth-status', async (req, res) => {
       return res.json({
         source: 'openrouter',
         ok:     true,
-        model:  process.env.OPENROUTER_MODEL || 'openrouter/auto:free',
+        model:  process.env.OPENROUTER_MODEL || 'openrouter/free',
       });
     }
 
@@ -3201,7 +3201,7 @@ app.get('/api/openrouter/models', async (req, res) => {
       })
       .map(m => ({ id: m.id, label: m.name || m.id }))
       .sort((a, b) => a.label.localeCompare(b.label));
-    free.push({ id: 'openrouter/auto', label: 'Free Models Router' });
+    free.push({ id: 'openrouter/free', label: 'Free Models Router' });
     _orModelsCache = free;
     _orModelsCacheAt = Date.now();
     res.json({ ok: true, models: free });
@@ -3213,7 +3213,7 @@ app.get('/api/openrouter/models', async (req, res) => {
       { id: 'moonshotai/kimi-k2.6:free',               label: 'Moonshot Kimi K2.6' },
       { id: 'meta-llama/llama-4-scout:free',           label: 'Meta Llama 4 Scout' },
       { id: 'microsoft/mai-ds-r1:free',                label: 'Microsoft MAI DS R1' },
-      { id: 'openrouter/auto',                         label: 'Free Models Router' },
+      { id: 'openrouter/free',                         label: 'Free Models Router' },
     ];
     res.json({ ok: true, models: fallback, fromFallback: true });
   }
