@@ -838,12 +838,16 @@ const OR_FEAT_MODELS_FALLBACK = {
   ],
 };
 
-// Build per-feature model lists: use live labels where available, else static fallback
+// Build per-feature model lists: only include models confirmed free by live API.
+// Falls back to static list if live fetch failed, or to full free list if none of
+// the curated models are currently available.
 function _buildFeatOrModels(liveModels) {
-  const liveMap = Object.fromEntries((liveModels || []).map(m => [m.id, m]));
+  if (!liveModels?.length) return { ...OR_FEAT_MODELS_FALLBACK };
+  const liveMap = Object.fromEntries(liveModels.map(m => [m.id, m]));
   const result  = {};
   for (const [feat, curated] of Object.entries(OR_FEAT_MODELS_FALLBACK)) {
-    result[feat] = curated.map(c => liveMap[c.id] || c);
+    const filtered = curated.filter(c => !!liveMap[c.id]).map(c => liveMap[c.id]);
+    result[feat] = filtered.length ? filtered : liveModels;
   }
   return result;
 }
