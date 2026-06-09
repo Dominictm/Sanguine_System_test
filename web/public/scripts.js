@@ -800,12 +800,15 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
 // AI Models Settings tab
 // ═══════════════════════════════════════════════════════════════
 
-const OR_FREE_MODELS = [
-  { id: 'google/gemma-4-26b-a4b-it:free',                   label: 'Google Gemma 4 26B (Vision)' },
-  { id: 'nvidia/nemotron-nano-12b-v2-vl:free',              label: 'Nvidia Nemotron Nano 12B VL' },
-  { id: 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free', label: 'Nvidia Nemotron Omni 30B (Reasoning)' },
-  { id: 'moonshotai/kimi-k2.6:free',                        label: 'Moonshot Kimi K2.6' },
+// Fallback if /api/openrouter/models is unavailable
+const OR_FREE_MODELS_FALLBACK = [
+  { id: 'google/gemma-4-26b-a4b-it:free',   label: 'Google Gemma 4 26B (Vision)' },
+  { id: 'nvidia/nemotron-nano-12b-v2-vl:free', label: 'Nvidia Nemotron Nano 12B VL' },
+  { id: 'moonshotai/kimi-k2.6:free',         label: 'Moonshot Kimi K2.6' },
+  { id: 'openrouter/auto',                   label: 'Free Models Router' },
 ];
+// Keep OR_FREE_MODELS alias for other usages
+const OR_FREE_MODELS = OR_FREE_MODELS_FALLBACK;
 const CLAUDE_MODELS = [
   { id: 'claude-opus-4-8',           label: 'Claude Opus 4.8 — лучшее качество' },
   { id: 'claude-sonnet-4-6',         label: 'Claude Sonnet 4.6 — сбалансированно' },
@@ -813,6 +816,45 @@ const CLAUDE_MODELS = [
 ];
 
 let _aiSettingsLoaded = false;
+let _orModelsRuntime  = null; // cached after first fetch
+
+function _renderFeatCard(feat, icon, label, desc, pref, orModels) {
+  const provider = pref.provider || 'openrouter';
+  const model    = pref.model;
+  const models   = provider === 'claude' ? CLAUDE_MODELS : orModels;
+  const opts = models.map(m =>
+    `<option value="${escHtml(m.id)}" ${model === m.id ? 'selected' : ''}>${escHtml(m.label)}</option>`
+  ).join('');
+  return `
+    <div class="ais-feat-card" data-feat="${feat}">
+      <div class="ais-feat-card-header">
+        <span class="ais-feat-icon">${icon}</span>
+        <div class="ais-feat-meta">
+          <div class="ais-feat-label">${label}</div>
+          <div class="ais-feat-desc">${desc}</div>
+        </div>
+        <div class="ais-feat-card-radios">
+          <label class="ais-feat-prov-btn">
+            <input type="radio" name="feat-${feat}" value="openrouter" ${provider === 'openrouter' ? 'checked' : ''}>
+            <span>OpenRouter</span>
+          </label>
+          <label class="ais-feat-prov-btn">
+            <input type="radio" name="feat-${feat}" value="claude" ${provider === 'claude' ? 'checked' : ''}>
+            <span>Claude</span>
+          </label>
+        </div>
+      </div>
+      <select class="ais-feat-model-select" id="feat-${feat}-model">${opts}</select>
+    </div>`;
+}
+
+// Backward-compat helper: prefs[key] may be string (old) or {provider, model} (new)
+function _getPref(prefs, key, defProv = 'openrouter') {
+  const v = prefs[key];
+  if (!v)                     return { provider: defProv, model: null };
+  if (typeof v === 'string')  return { provider: v, model: null };
+  return { provider: v.provider || defProv, model: v.model || null };
+}
 
 async function loadAiSettings() {
   if (_aiSettingsLoaded) return;
@@ -823,9 +865,17 @@ async function loadAiSettings() {
   let orSettings = { OPENROUTER_MODEL: '', hasKey: false };
   try { orSettings = await fetch('/api/settings').then(r => r.json()); } catch {}
 
-  const featPrefs  = JSON.parse(localStorage.getItem('ai-feature-prefs') || '{}');
-  const appearSrc  = featPrefs.appearance || 'openrouter';
-  const locSrc     = featPrefs.locations  || 'openrouter';
+  // Fetch live OR models list (fallback to hardcoded on failure)
+  let orModels = OR_FREE_MODELS_FALLBACK;
+  try {
+    const md = await fetch('/api/openrouter/models').then(r => r.json());
+    if (md.ok && md.models?.length) orModels = md.models;
+  } catch {}
+
+  const featPrefs = JSON.parse(localStorage.getItem('ai-feature-prefs') || '{}');
+  const appearPref = _getPref(featPrefs, 'appearance', 'openrouter');
+  const locPref    = _getPref(featPrefs, 'locations',  'openrouter');
+  const prosePref  = _getPref(featPrefs, 'prose',      'claude');
 
   el.innerHTML = `
     <div class="ais-layout">
@@ -895,80 +945,17 @@ async function loadAiSettings() {
 
     </div><!-- /ais-left -->
 
-    <!-- RIGHT COLUMN: Features table -->
+    <!-- RIGHT COLUMN: Features cards -->
     <div class="ais-right">
       <div class="ais-section ais-features-section">
         <div class="ais-section-title">⚡ Назначение провайдеров</div>
-        <div class="ais-section-hint">Выбери, какой сервис используется для каждой функции.</div>
+        <div class="ais-section-hint">Выбери провайдера и модель для каждой функции.</div>
 
-        <table class="ais-feat-table">
-          <thead>
-            <tr>
-              <th class="ais-feat-col-name">Функция</th>
-              <th class="ais-feat-col-prov">OpenRouter</th>
-              <th class="ais-feat-col-prov">Claude</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr class="ais-feat-row">
-              <td class="ais-feat-name">
-                <span class="ais-feat-icon">👁</span>
-                <div>
-                  <div class="ais-feat-label">Внешность по арту</div>
-                  <div class="ais-feat-desc">Vision-анализ изображений персонажа</div>
-                </div>
-              </td>
-              <td class="ais-feat-radio-cell">
-                <input type="radio" name="feat-appearance" value="openrouter"
-                  class="ais-feat-radio" id="feat-appearance-or"
-                  ${appearSrc === 'openrouter' ? 'checked' : ''}>
-              </td>
-              <td class="ais-feat-radio-cell">
-                <input type="radio" name="feat-appearance" value="claude"
-                  class="ais-feat-radio" id="feat-appearance-cl"
-                  ${appearSrc === 'claude' ? 'checked' : ''}>
-              </td>
-            </tr>
-            <tr class="ais-feat-row">
-              <td class="ais-feat-name">
-                <span class="ais-feat-icon">📍</span>
-                <div>
-                  <div class="ais-feat-label">Генерация локаций</div>
-                  <div class="ais-feat-desc">Карточки мест при наполнении модуля</div>
-                </div>
-              </td>
-              <td class="ais-feat-radio-cell">
-                <input type="radio" name="feat-locations" value="openrouter"
-                  class="ais-feat-radio" id="feat-loc-or"
-                  ${locSrc === 'openrouter' ? 'checked' : ''}>
-              </td>
-              <td class="ais-feat-radio-cell">
-                <input type="radio" name="feat-locations" value="claude"
-                  class="ais-feat-radio" id="feat-loc-cl"
-                  ${locSrc === 'claude' ? 'checked' : ''}>
-              </td>
-            </tr>
-            <tr class="ais-feat-row">
-              <td class="ais-feat-name">
-                <span class="ais-feat-icon">🪄</span>
-                <div>
-                  <div class="ais-feat-label">Генерация прозы</div>
-                  <div class="ais-feat-desc">Дневники и финалы сессии</div>
-                </div>
-              </td>
-              <td class="ais-feat-radio-cell">
-                <input type="radio" name="feat-prose" value="openrouter"
-                  class="ais-feat-radio" id="feat-prose-or"
-                  ${(featPrefs.prose || 'claude') === 'openrouter' ? 'checked' : ''}>
-              </td>
-              <td class="ais-feat-radio-cell">
-                <input type="radio" name="feat-prose" value="claude"
-                  class="ais-feat-radio" id="feat-prose-cl"
-                  ${(featPrefs.prose || 'claude') === 'claude' ? 'checked' : ''}>
-              </td>
-            </tr>
-          </tbody>
-        </table>
+        <div class="ais-feat-cards" id="ais-feat-cards">
+          ${_renderFeatCard('appearance', '👁', 'Внешность по арту',    'Vision-анализ изображений персонажа', appearPref, orModels)}
+          ${_renderFeatCard('locations',  '📍', 'Генерация локаций',    'Карточки мест при наполнении модуля', locPref,    orModels)}
+          ${_renderFeatCard('prose',      '🪄', 'Генерация прозы',      'Дневники и финалы сессии',            prosePref,  orModels)}
+        </div>
 
         <button class="ais-confirm-btn" id="ais-feat-save" style="margin-top:16px">✓ Применить</button>
         <div class="ais-status" id="ais-feat-status"></div>
@@ -1052,17 +1039,29 @@ async function loadAiSettings() {
   });
 
   // Features table: save provider preferences
+  // Wire radio changes to swap model dropdown options
+  el.querySelectorAll('.ais-feat-card').forEach(card => {
+    const feat = card.dataset.feat;
+    card.querySelectorAll(`input[name="feat-${feat}"]`).forEach(radio => {
+      radio.addEventListener('change', () => {
+        const sel = document.getElementById(`feat-${feat}-model`);
+        if (!sel) return;
+        const models = radio.value === 'claude' ? CLAUDE_MODELS : (orModels || OR_FREE_MODELS_FALLBACK);
+        sel.innerHTML = models.map(m =>
+          `<option value="${escHtml(m.id)}">${escHtml(m.label)}</option>`
+        ).join('');
+      });
+    });
+  });
+
   document.getElementById('ais-feat-save').addEventListener('click', () => {
-    const btn    = document.getElementById('ais-feat-save');
     const status = document.getElementById('ais-feat-status');
-    const appearSel = document.querySelector('input[name="feat-appearance"]:checked');
-    if (!appearSel) { status.textContent = 'Выбери провайдер'; status.className = 'ais-status err'; return; }
-    const proseSel = document.querySelector('input[name="feat-prose"]:checked');
-    const locSel   = document.querySelector('input[name="feat-locations"]:checked');
-    const prefs = JSON.parse(localStorage.getItem('ai-feature-prefs') || '{}');
-    prefs.appearance = appearSel.value;
-    if (proseSel) prefs.prose     = proseSel.value;
-    if (locSel)   prefs.locations = locSel.value;
+    const prefs  = {};
+    for (const feat of ['appearance', 'locations', 'prose']) {
+      const provSel = document.querySelector(`input[name="feat-${feat}"]:checked`);
+      const modSel  = document.getElementById(`feat-${feat}-model`);
+      if (provSel) prefs[feat] = { provider: provSel.value, model: modSel?.value || null };
+    }
     localStorage.setItem('ai-feature-prefs', JSON.stringify(prefs));
     status.textContent = '✓ Сохранено';
     status.className = 'ais-status ok';
@@ -1706,11 +1705,11 @@ document.getElementById('mod-fill-generate').addEventListener('click', async () 
   try {
     const qs      = window.location.search;
     const prefs   = JSON.parse(localStorage.getItem('ai-feature-prefs') || '{}');
-    const locSource = prefs.locations || 'openrouter';
+    const locPref = _getPref(prefs, 'locations', 'openrouter');
     const d  = await fetch(
       `/api/chronicles/${encodeURIComponent(_fillModTarget.chr)}/modules/${encodeURIComponent(_fillModTarget.mod)}/fill${qs}`,
       { method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pcs: _fillPCs, npcs: _fillNPCs, content, locSource }) }
+        body: JSON.stringify({ pcs: _fillPCs, npcs: _fillNPCs, content, locSource: locPref.provider, locModel: locPref.model }) }
     ).then(r => r.json());
 
     if (!d.ok) { errEl.textContent = d.error || 'Ошибка генерации'; errEl.style.display = ''; return; }
@@ -2520,7 +2519,8 @@ async function lsSetupProseZone(stubs) {
   if (!zone || !stubs.length) return;
 
   const featPrefs   = JSON.parse(localStorage.getItem('ai-feature-prefs') || '{}');
-  const proseSrc    = featPrefs.prose || 'claude';
+  const _prosePref  = _getPref(featPrefs, 'prose', 'claude');
+  const proseSrc    = _prosePref.provider;
   const useOR       = proseSrc === 'openrouter';
 
   let claudeAvail = false;
@@ -2552,11 +2552,18 @@ async function lsSetupProseZone(stubs) {
 }
 
 async function lsGenProse(stubs, source = 'claude') {
-  const btn   = document.getElementById('ls-genprose');
-  const out   = document.getElementById('ls-prose-result');
-  const model = (document.getElementById('ls-prose-model') || {}).value || '';
-  const useOR = source === 'openrouter';
-  const qs    = window.location.search;
+  const btn     = document.getElementById('ls-genprose');
+  const out     = document.getElementById('ls-prose-result');
+  const useOR   = source === 'openrouter';
+  const qs      = window.location.search;
+
+  // Claude model from prose-model select (if visible)
+  const claudeModelEl = document.getElementById('ls-prose-model');
+  const claudeModel   = claudeModelEl?.value || '';
+
+  // OR model from saved prefs
+  const _fp      = JSON.parse(localStorage.getItem('ai-feature-prefs') || '{}');
+  const orModel  = _getPref(_fp, 'prose', 'openrouter').model || null;
 
   btn.disabled = true;
   btn.textContent = useOR ? '⏳ OpenRouter пишет прозу…' : '⏳ Claude пишет прозу…';
@@ -2567,7 +2574,7 @@ async function lsGenProse(stubs, source = 'claude') {
     const endpoint = useOR ? '/api/openrouter/generate-prose' : '/api/claude/generate-prose';
     j = await fetch(endpoint + qs, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ stubs, model })
+      body: JSON.stringify({ stubs, model: useOR ? orModel : claudeModel })
     }).then(r => r.json());
   } catch (e) {
     out.innerHTML = `<div class="ls-err">⚠ ${escHtml(e.message)}</div>`;
@@ -3081,16 +3088,18 @@ async function _generateAppearance(charName) {
   if (btn) { btn.disabled = true; btn.textContent = '⏳ Анализ арта...'; }
 
   try {
-    const model        = localStorage.getItem('ai-model') || 'claude-opus-4-8';
+    const claudeModel  = localStorage.getItem('ai-model') || 'claude-opus-4-8';
     const featPrefs    = JSON.parse(localStorage.getItem('ai-feature-prefs') || '{}');
-    const preferSource = featPrefs.appearance || null; // 'openrouter' | 'claude' | null
+    const _appPref     = _getPref(featPrefs, 'appearance', 'openrouter');
+    const preferSource = _appPref.provider;
+    const orModel      = preferSource === 'openrouter' ? (_appPref.model || null) : null;
     const qs           = window.location.search;
 
     // 1. Генерируем внешность через Vision API
     const resp = await fetch(
       `/api/characters/${encodeURIComponent(charName)}/generate-appearance${qs}`,
       { method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model, preferSource }) }
+        body: JSON.stringify({ model: claudeModel, preferSource, orModel }) }
     );
     const d = await resp.json();
     if (!d.ok) { alert('Ошибка генерации: ' + (d.error || 'неизвестная ошибка')); return; }

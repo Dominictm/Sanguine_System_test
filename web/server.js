@@ -1535,6 +1535,7 @@ ${content}
 
     // ── Generate location cards ───────────────────────────────────────────
     const locSource = req.body?.locSource || null;
+    const locModel  = req.body?.locModel  || null;
     const createdLocations = [];
     try {
       const locPrompt = `Проанализируй сценарий ниже и выведи список новых локаций (мест действия), для которых нужны карточки.
@@ -1545,7 +1546,7 @@ ${content}
 ${scenarioText.slice(0, 3000)}`;
 
       let locNamesRaw = '';
-      const locGen = await makeGenerationClient(locSource).catch(() => null);
+      const locGen = await makeGenerationClient(locSource, locModel).catch(() => null);
       if (locGen?.source === 'openrouter') {
         const r = await fetch('https://openrouter.ai/api/v1/chat/completions', {
           method: 'POST',
@@ -1555,7 +1556,7 @@ ${scenarioText.slice(0, 3000)}`;
         const d = await r.json();
         locNamesRaw = d.choices?.[0]?.message?.content || '';
       } else if (locGen?.client) {
-        const m = await locGen.client.messages.create({ model: 'claude-haiku-4-5-20251001', max_tokens: 300, messages: [{ role: 'user', content: locPrompt }] });
+        const m = await locGen.client.messages.create({ model: locGen.model || 'claude-haiku-4-5-20251001', max_tokens: 300, messages: [{ role: 'user', content: locPrompt }] });
         locNamesRaw = m.content[0]?.text || '';
       }
 
@@ -2113,21 +2114,21 @@ const CLAUDE_CREDS_PATH = path.join(
 const VALID_MODELS = ['claude-opus-4-8', 'claude-sonnet-4-6', 'claude-haiku-4-5-20251001'];
 
 // preferSource: 'openrouter' | 'claude' | null (auto)
-async function makeGenerationClient(preferSource = null) {
+async function makeGenerationClient(preferSource = null, modelOverride = null) {
   const wantOR     = preferSource === 'openrouter';
   const wantClaude = preferSource === 'claude';
 
+  const orModel = () => modelOverride || process.env.OPENROUTER_MODEL || 'openrouter/auto';
+  const clModel = () => modelOverride || 'claude-opus-4-8';
+
   // ── OpenRouter ────────────────────────────────────────────────
   if ((wantOR || (!wantClaude && !preferSource)) && process.env.OPENROUTER_API_KEY) {
-    return {
-      source: 'openrouter',
-      model:  process.env.OPENROUTER_MODEL || 'openrouter/auto:free',
-    };
+    return { source: 'openrouter', model: orModel() };
   }
 
   // ── Anthropic API key ─────────────────────────────────────────
   if (!wantOR && process.env.ANTHROPIC_API_KEY) {
-    return { source: 'api-key', client: new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY }) };
+    return { source: 'api-key', client: new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY }), model: clModel() };
   }
 
   // ── Claude.ai OAuth (Claude Code login) ──────────────────────
@@ -2140,7 +2141,7 @@ async function makeGenerationClient(preferSource = null) {
         if (oauth.expiresAt && Date.now() >= oauth.expiresAt) {
           throw new Error('Claude.ai OAuth токен истёк. Выполни любую команду в Claude Code.');
         }
-        return { source: 'claude-login', client: new Anthropic({ authToken: oauth.accessToken }) };
+        return { source: 'claude-login', client: new Anthropic({ authToken: oauth.accessToken }), model: clModel() };
       }
     } catch (e) {
       if (e.message.includes('истёк')) throw e;
@@ -2149,7 +2150,7 @@ async function makeGenerationClient(preferSource = null) {
 
   // ── Fallback: try OpenRouter even if prefer=claude but nothing else works ──
   if (!wantClaude && process.env.OPENROUTER_API_KEY) {
-    return { source: 'openrouter', model: process.env.OPENROUTER_MODEL || 'openrouter/auto:free' };
+    return { source: 'openrouter', model: orModel() };
   }
 
   throw new Error(
@@ -2254,7 +2255,8 @@ app.get('/api/auth-status', async (req, res) => {
 app.post('/api/characters/:name/generate-appearance', express.json(), async (req, res) => {
   try {
     const preferSource = req.body?.preferSource || null;
-    const gen = await makeGenerationClient(preferSource);
+    const orModel      = req.body?.orModel      || null;
+    const gen = await makeGenerationClient(preferSource, orModel);
 
     const name = decodeURIComponent(req.params.name);
     const city = reqCity(req);
@@ -3008,7 +3010,8 @@ async function buildProseContext(city, valid) {
 
 app.post('/api/openrouter/generate-prose', express.json(), async (req, res) => {
   try {
-    const stubs = Array.isArray(req.body.stubs) ? req.body.stubs : [];
+    const stubs      = Array.isArray(req.body.stubs) ? req.body.stubs : [];
+    const proseModel = req.body?.model || null;
     if (!stubs.length) return res.status(400).json({ ok: false, error: 'Не переданы stub-файлы.' });
 
     const city  = reqCity(req);
@@ -3049,7 +3052,7 @@ ${stubContents.map(s => `\n---\n## ${s.rel}\n${s.txt}`).join('\n')}`;
       return res.status(503).json({ ok: false, error: 'OPENROUTER_API_KEY не задан. Настрой в Инструменты → Модели AI.' });
     }
 
-    const model = process.env.OPENROUTER_MODEL || 'google/gemma-4-26b-a4b-it:free';
+    const model = proseModel || process.env.OPENROUTER_MODEL || 'google/gemma-4-26b-a4b-it:free';
 
     const orResp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
@@ -3171,6 +3174,48 @@ app.post('/api/claude/generate-prose', async (req, res) => {
     });
   } catch (e) {
     res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+// ── OpenRouter: list free models ──────────────────────────────────────────────
+
+let _orModelsCache = null;
+let _orModelsCacheAt = 0;
+const OR_MODELS_TTL = 30 * 60 * 1000; // 30 min
+
+app.get('/api/openrouter/models', async (req, res) => {
+  if (_orModelsCache && (Date.now() - _orModelsCacheAt) < OR_MODELS_TTL) {
+    return res.json({ ok: true, models: _orModelsCache });
+  }
+  try {
+    const apiKey  = process.env.OPENROUTER_API_KEY;
+    const headers = { 'Content-Type': 'application/json' };
+    if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`;
+    const resp = await fetch('https://openrouter.ai/api/v1/models', { headers });
+    if (!resp.ok) throw new Error(`OpenRouter API: ${resp.status}`);
+    const data = await resp.json();
+    const free = (data.data || [])
+      .filter(m => {
+        const p = m.pricing || {};
+        return (String(p.prompt) === '0') && (String(p.completion) === '0');
+      })
+      .map(m => ({ id: m.id, label: m.name || m.id }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+    free.push({ id: 'openrouter/auto', label: 'Free Models Router' });
+    _orModelsCache = free;
+    _orModelsCacheAt = Date.now();
+    res.json({ ok: true, models: free });
+  } catch (e) {
+    console.error('[or-models]', e.message);
+    const fallback = [
+      { id: 'google/gemma-4-26b-a4b-it:free',         label: 'Google Gemma 4 26B (Vision)' },
+      { id: 'nvidia/nemotron-nano-12b-v2-vl:free',     label: 'Nvidia Nemotron Nano 12B VL' },
+      { id: 'moonshotai/kimi-k2.6:free',               label: 'Moonshot Kimi K2.6' },
+      { id: 'meta-llama/llama-4-scout:free',           label: 'Meta Llama 4 Scout' },
+      { id: 'microsoft/mai-ds-r1:free',                label: 'Microsoft MAI DS R1' },
+      { id: 'openrouter/auto',                         label: 'Free Models Router' },
+    ];
+    res.json({ ok: true, models: fallback, fromFallback: true });
   }
 });
 
