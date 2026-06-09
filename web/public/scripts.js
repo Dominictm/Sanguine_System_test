@@ -809,6 +809,44 @@ const OR_FREE_MODELS_FALLBACK = [
 ];
 // Keep OR_FREE_MODELS alias for other usages
 const OR_FREE_MODELS = OR_FREE_MODELS_FALLBACK;
+
+// Per-feature curated model lists (fallback when live fetch fails)
+const OR_FEAT_MODELS_FALLBACK = {
+  // Vision-capable models — для анализа изображений персонажей
+  appearance: [
+    { id: 'meta-llama/llama-3.2-11b-vision-instruct:free', label: 'Llama 3.2 11B Vision' },
+    { id: 'qwen/qwen2.5-vl-7b-instruct:free',             label: 'Qwen 2.5 VL 7B (Vision)' },
+    { id: 'google/gemma-3-27b-it:free',                   label: 'Google Gemma 3 27B' },
+    { id: 'microsoft/phi-4-multimodal-instruct:free',     label: 'Microsoft Phi-4 Multimodal' },
+    { id: 'openrouter/free',                              label: 'Free Models Router' },
+  ],
+  // Strong instruction-following models — для структурированных карточек локаций
+  locations: [
+    { id: 'meta-llama/llama-3.3-70b-instruct:free', label: 'Llama 3.3 70B Instruct' },
+    { id: 'deepseek/deepseek-chat:free',            label: 'DeepSeek Chat' },
+    { id: 'google/gemma-3-27b-it:free',             label: 'Google Gemma 3 27B' },
+    { id: 'mistralai/mistral-7b-instruct:free',     label: 'Mistral 7B Instruct' },
+    { id: 'openrouter/free',                        label: 'Free Models Router' },
+  ],
+  // Creative/narrative models — для дневников и финалов сессии
+  prose: [
+    { id: 'meta-llama/llama-3.3-70b-instruct:free', label: 'Llama 3.3 70B Instruct' },
+    { id: 'deepseek/deepseek-r1:free',              label: 'DeepSeek R1 (Reasoning)' },
+    { id: 'qwen/qwen3-235b-a22b:free',              label: 'Qwen3 235B A22B' },
+    { id: 'google/gemma-3-27b-it:free',             label: 'Google Gemma 3 27B' },
+    { id: 'openrouter/free',                        label: 'Free Models Router' },
+  ],
+};
+
+// Build per-feature model lists: use live labels where available, else static fallback
+function _buildFeatOrModels(liveModels) {
+  const liveMap = Object.fromEntries((liveModels || []).map(m => [m.id, m]));
+  const result  = {};
+  for (const [feat, curated] of Object.entries(OR_FEAT_MODELS_FALLBACK)) {
+    result[feat] = curated.map(c => liveMap[c.id] || c);
+  }
+  return result;
+}
 const CLAUDE_MODELS = [
   { id: 'claude-opus-4-8',           label: 'Claude Opus 4.8 — лучшее качество' },
   { id: 'claude-sonnet-4-6',         label: 'Claude Sonnet 4.6 — сбалансированно' },
@@ -871,6 +909,9 @@ async function loadAiSettings() {
     const md = await fetch('/api/openrouter/models').then(r => r.json());
     if (md.ok && md.models?.length) orModels = md.models;
   } catch {}
+
+  // Per-feature curated lists (reconciled against live data)
+  const featOrModels = _buildFeatOrModels(orModels);
 
   const featPrefs = JSON.parse(localStorage.getItem('ai-feature-prefs') || '{}');
   const appearPref = _getPref(featPrefs, 'appearance', 'openrouter');
@@ -952,9 +993,9 @@ async function loadAiSettings() {
         <div class="ais-section-hint">Выбери провайдера и модель для каждой функции.</div>
 
         <div class="ais-feat-cards" id="ais-feat-cards">
-          ${_renderFeatCard('appearance', '👁', 'Внешность по арту',    'Vision-анализ изображений персонажа', appearPref, orModels)}
-          ${_renderFeatCard('locations',  '📍', 'Генерация локаций',    'Карточки мест при наполнении модуля', locPref,    orModels)}
-          ${_renderFeatCard('prose',      '🪄', 'Генерация прозы',      'Дневники и финалы сессии',            prosePref,  orModels)}
+          ${_renderFeatCard('appearance', '👁', 'Внешность по арту',    'Vision-анализ изображений персонажа', appearPref, featOrModels.appearance)}
+          ${_renderFeatCard('locations',  '📍', 'Генерация локаций',    'Карточки мест при наполнении модуля', locPref,    featOrModels.locations)}
+          ${_renderFeatCard('prose',      '🪄', 'Генерация прозы',      'Дневники и финалы сессии',            prosePref,  featOrModels.prose)}
         </div>
 
         <button class="ais-confirm-btn" id="ais-feat-save" style="margin-top:16px">✓ Применить</button>
@@ -1046,7 +1087,9 @@ async function loadAiSettings() {
       radio.addEventListener('change', () => {
         const sel = document.getElementById(`feat-${feat}-model`);
         if (!sel) return;
-        const models = radio.value === 'claude' ? CLAUDE_MODELS : (orModels || OR_FREE_MODELS_FALLBACK);
+        const models = radio.value === 'claude'
+          ? CLAUDE_MODELS
+          : (featOrModels[feat] || OR_FEAT_MODELS_FALLBACK[feat] || OR_FREE_MODELS_FALLBACK);
         sel.innerHTML = models.map(m =>
           `<option value="${escHtml(m.id)}">${escHtml(m.label)}</option>`
         ).join('');
