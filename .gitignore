@@ -1,6 +1,10 @@
 web/node_modules/
 node_modules/
 tests/report_*.html
+web/tests/report*.html
+web/tests/node_modules/
+web/server.log
+web/nul
 *.jpg
 *.jpeg
 *.png

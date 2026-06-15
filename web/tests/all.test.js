@@ -10,6 +10,10 @@ const { startServer, stopServer, apiJson } = require('./helpers');
 const {
   readPrompt, writePrompt, periodLabel,
   threadStatusKey, parseThreadsContent, THREAD_STATUS,
+  slugify, CYRILLIC_TR, parseDiary,
+  mdExtractLinks, mdStripLinks, mdStripInline, classifyChronicleLink,
+  categorizeRel, parseCharacter, parseLocation, parseEvent, parseChronicle,
+  parseChronicleParticipants,
 } = require('../lib/parsers');
 
 // ── Shared fixtures ───────────────────────────────────────────────────────────
@@ -87,9 +91,30 @@ describe('Parsers — unit', () => {
       assert.ok(r.includes('  новый негатив'));
       assert.ok(!r.includes('без фона'));
     });
-    it('is no-op when block is absent', () => {
+    it('appends a bullet when image block is absent', () => {
       const base = '# Без блока\n\nТекст.';
-      assert.equal(writePrompt(base, 'image', 'test', 'indented'), base);
+      const r = writePrompt(base, 'image', 'test', 'indented');
+      assert.notEqual(r, base, 'should not be a no-op');
+      assert.ok(r.includes('🎨 Промт для генерации изображения'), 'label missing');
+      assert.ok(r.includes('  test'), 'value not indented');
+    });
+    it('appends a bullet when negative block is absent', () => {
+      const base = '# Без блока\n\nТекст.';
+      const r = writePrompt(base, 'negative', 'blurry', 'indented');
+      assert.ok(r.includes('🚫 Негативный промт'), 'label missing');
+      assert.ok(r.includes('  blurry'));
+    });
+    it('inserts before the images section when present', () => {
+      const card = [
+        '# 🧛 Тест', '',
+        '- **Голос:** тихий',
+        '- **Отношения:**', '  - —', '',
+        '---', '', '## 🖼️ Изображения', '- ⏳ нет',
+      ].join('\n');
+      const r = writePrompt(card, 'image', 'dark portrait', 'indented');
+      const promptPos = r.indexOf('🎨 Промт');
+      const imgPos    = r.indexOf('## 🖼️ Изображения');
+      assert.ok(promptPos !== -1 && promptPos < imgPos, 'prompt must precede images section');
     });
   });
 
@@ -118,6 +143,34 @@ describe('Parsers — unit', () => {
       const r = writePrompt('# Пустая локация\n\nТекст.', 'negative', 'blur', 'fenced');
       assert.ok(r.includes('Негативный промт'));
       assert.ok(r.includes('blur'));
+    });
+  });
+
+  describe('slugify', () => {
+    it('transliterates Cyrillic → ASCII', () =>
+      assert.equal(slugify('Виктор Ламбер'), 'viktor_lamber'));
+    it('collapses separators and trims underscores', () =>
+      assert.equal(slugify('  Клуб —  Носферату!! '), 'klub_nosferatu'));
+    it('drops soft/hard signs', () =>
+      assert.equal(slugify('Любовь'), 'lyubov'));
+    it('handles digits', () =>
+      assert.equal(slugify('Округ 12'), 'okrug_12'));
+    it('null / undefined → empty string', () => {
+      assert.equal(slugify(null), '');
+      assert.equal(slugify(undefined), '');
+    });
+    it('already-ASCII slug is stable', () =>
+      assert.equal(slugify('gerson'), 'gerson'));
+
+    it('browser parity — public/scripts.js _NTR mirrors CYRILLIC_TR', () => {
+      const src = require('fs').readFileSync(
+        path.join(__dirname, '../public/scripts.js'), 'utf-8');
+      const m = src.match(/const _NTR\s*=\s*(\{[^}]*\})/);
+      assert.ok(m, '_NTR literal not found in scripts.js');
+      // eslint-disable-next-line no-new-func
+      const browserMap = (new Function(`return (${m[1]})`))();
+      assert.deepEqual(browserMap, CYRILLIC_TR,
+        'browser _NTR has diverged from canonical CYRILLIC_TR — keep them in sync');
     });
   });
 
@@ -154,6 +207,65 @@ describe('Parsers — unit', () => {
     });
   });
 
+  describe('parseDiary', () => {
+    const ENTRY = [
+      '# 📖 Дневник', '',
+      '### 📅 Сессия 1', '',
+      '- **👤 Автор:** Герсон',
+      '- **📍 Локация:** Элизиум',
+      '- **🎭 Тон/Стиль:** мрачный',
+      '- **📖 Текст записи:**',
+      '  Первая строка.',
+      '  Вторая строка.',
+      '- **🔗 Зеркальная ссылка:**',
+      '  - [Мел](../mel/mel.md)',
+    ].join('\n');
+
+    const RETRO = [
+      '# 📖 Ретроспектива', '',
+      '### 📅 Январь 2010', 'Событие А.', '',
+      '### 📅 Февраль 2010', 'Событие Б.',
+    ].join('\n');
+
+    it('entry — format and title', () => {
+      const d = parseDiary(ENTRY);
+      assert.equal(d.format, 'entry');
+      assert.equal(d.title, '📖 Дневник');
+    });
+    it('entry — session / author / location / tone', () => {
+      const d = parseDiary(ENTRY);
+      assert.equal(d.session, 'Сессия 1');
+      assert.equal(d.author, 'Герсон');
+      assert.equal(d.location, 'Элизиум');
+      assert.equal(d.tone, 'мрачный');
+    });
+    it('entry — multi-line text de-indented', () => {
+      const d = parseDiary(ENTRY);
+      assert.equal(d.text, 'Первая строка.\nВторая строка.');
+    });
+    it('entry — cross refs parsed', () => {
+      const d = parseDiary(ENTRY);
+      assert.deepEqual(d.crossRefs, ['[Мел](../mel/mel.md)']);
+    });
+    it('retrospective — two dated sections', () => {
+      const d = parseDiary(RETRO);
+      assert.equal(d.format, 'retrospective');
+      assert.equal(d.sections.length, 2);
+      assert.equal(d.sections[0].title, 'Январь 2010');
+      assert.equal(d.sections[0].body, 'Событие А.');
+      assert.equal(d.sections[1].title, 'Февраль 2010');
+    });
+    it('empty input → entry with no fields', () => {
+      const d = parseDiary('');
+      assert.equal(d.format, 'entry');
+      assert.equal(d.title, undefined);
+    });
+    it('strips UTF-8 BOM', () => {
+      const d = parseDiary('﻿# Заголовок\n\n### 📅 X');
+      assert.equal(d.title, 'Заголовок');
+    });
+  });
+
   describe('parseThreadsContent', () => {
     const FILE = 'archive/open_threads.md';
     const rows = parseThreadsContent(THREAD_TABLE, FILE);
@@ -178,6 +290,156 @@ describe('Parsers — unit', () => {
       assert.deepEqual(parseThreadsContent(h, FILE), []);
     });
     it('empty string → empty array', () => assert.deepEqual(parseThreadsContent('', FILE), []));
+  });
+
+  describe('markdown helpers', () => {
+    it('mdExtractLinks — text + href pairs', () => {
+      const links = mdExtractLinks('см. [Мел](../mel/mel.md) и [Клуб](x.md)');
+      assert.deepEqual(links, [
+        { text: 'Мел', href: '../mel/mel.md' },
+        { text: 'Клуб', href: 'x.md' },
+      ]);
+    });
+    it('mdStripLinks — keeps link text, drops target', () =>
+      assert.equal(mdStripLinks('видел [Герсона](g.md) вчера'), 'видел Герсона вчера'));
+    it('mdStripInline — strips links, bold and leading bullet', () =>
+      assert.equal(mdStripInline('- **[Мел](m.md)** ушла'), 'Мел ушла'));
+    it('classifyChronicleLink — module link', () => {
+      const r = classifyChronicleLink({ text: 'Модуль', href: '../modules/progulki/x.md' });
+      assert.equal(r.kind, 'module');
+      assert.equal(r.module, 'progulki');
+    });
+    it('classifyChronicleLink — finale / npc / other', () => {
+      assert.equal(classifyChronicleLink({ text: 'Финал', href: 'a.md' }).kind, 'finale');
+      assert.equal(classifyChronicleLink({ text: 'НПС', href: 'a.md' }).kind, 'npc');
+      assert.equal(classifyChronicleLink({ text: 'Локация', href: 'a.md' }).kind, 'other');
+    });
+  });
+
+  describe('categorizeRel', () => {
+    it('family / sire / enemy / ally / romantic / neutral', () => {
+      assert.equal(categorizeRel('старший брат'), 'family');
+      assert.equal(categorizeRel('создал её'),    'sire');
+      assert.equal(categorizeRel('заклятый враг'), 'enemy');
+      assert.equal(categorizeRel('верный союзник'), 'ally');
+      assert.equal(categorizeRel('тайная любовь'), 'romantic');
+      assert.equal(categorizeRel('просто знакомый'), 'neutral');
+    });
+  });
+
+  describe('parseCharacter', () => {
+    const CARD = [
+      '# 🧛 Герсон', '',
+      '- **Слаг:** gerson',
+      '- **Клан / Раса:** Вентру',
+      '- **Линейка WoD:** Вампир',
+      '- **Статус:** Жив',
+      '- **Внешность:** высокий, седой',
+      '- **Отношения:**',
+      '  - [Мел](../mel/mel.md) — союзник',
+      '  - Враг Икс — заклятый враг',
+    ].join('\n');
+
+    it('reads H1 name without emoji', () => assert.equal(parseCharacter(CARD, 'gerson', 'vampires').name, 'Герсон'));
+    it('reads clan via "Клан / Раса"', () => assert.equal(parseCharacter(CARD, 'gerson', 'vampires').clan, 'Вентру'));
+    it('appearance + statusType active', () => {
+      const c = parseCharacter(CARD, 'gerson', 'vampires');
+      assert.equal(c.appearance, 'высокий, седой');
+      assert.equal(c.statusType, 'active');
+    });
+    it('relationships parsed with categorisation, link text resolved', () => {
+      const c = parseCharacter(CARD, 'gerson', 'vampires');
+      assert.equal(c.relationships.length, 2);
+      assert.deepEqual(c.relationships[0], { target: 'Мел', description: 'союзник', type: 'ally' });
+      assert.equal(c.relationships[1].type, 'enemy');
+    });
+    it('infers lineage from label when not given', () =>
+      assert.equal(parseCharacter(CARD, 'gerson', null).lineage, 'vampire'));
+    it('dead status detected', () => {
+      const dead = parseCharacter('# X\n- **Статус:** Уничтожен', 'x', 'vampires');
+      assert.equal(dead.statusType, 'dead');
+    });
+  });
+
+  describe('parseLocation', () => {
+    const CARD = [
+      '# Клуб Носферату',
+      '> **Название:** Клуб | **Округ:** 1 | **Зона:** 🔴 Опасная | **Контроль:** Шабаш',
+      '## 🎭 Атмосфера', 'Дымный подвал.', '',
+      '## 🩸 Контекст', '**Маскарад:** 🔴 высокий риск', '',
+      '## 🪝 Крючки', '1. Первый крючок', '2. Второй крючок',
+    ].join('\n');
+
+    it('title + meta fields', () => {
+      const l = parseLocation(CARD, 'klub_nosferatu');
+      assert.equal(l.title, 'Клуб Носферату');
+      assert.equal(l.district, '1');
+      assert.equal(l.control, 'Шабаш');
+      assert.equal(l.slug, 'klub_nosferatu');
+    });
+    it('atmosphere + masquerade level high', () => {
+      const l = parseLocation(CARD, 'klub_nosferatu');
+      assert.equal(l.atmosphere, 'Дымный подвал.');
+      assert.equal(l.masqueradeLevel, 'high');
+    });
+    it('hooks parsed and de-numbered', () => {
+      const l = parseLocation(CARD, 'klub_nosferatu');
+      assert.deepEqual(l.hooks, ['Первый крючок', 'Второй крючок']);
+    });
+  });
+
+  describe('parseEvent / parseChronicle', () => {
+    const CHR = [
+      '# 📖 Летний Париж', '',
+      '## 🌍 Состояние мира',
+      '> Последнее обновление: **Август 2010**', '',
+      '### Князь', 'Виллем стабилен.', '',
+      '## 📋 Хроника событий', '',
+      '### 📅 Август 2010 — Клуб. Первая встреча.',
+      '- **📍 Локация:** [Клуб](../../locations/x/klub.md)',
+      '- **👥 Участники:**',
+      '  - [Герсон](g.md) (Вентру) — патрон',
+      '  - Безымянный гуль — слуга',
+      '- **📋 Что произошло:** Завязка интриги.',
+      '- **⚖️ Последствия:**',
+      '  - Долг перед Герсоном',
+    ].join('\n');
+
+    it('chronicle title + worldState', () => {
+      const c = parseChronicle(CHR);
+      assert.equal(c.title, '📖 Летний Париж'); // parseChronicle keeps emoji (strips only * and #)
+      assert.equal(c.worldState.lastUpdate, 'Август 2010');
+      assert.ok(c.worldState.sections.length >= 1);
+    });
+    it('one event with date / title parsed', () => {
+      const c = parseChronicle(CHR);
+      assert.equal(c.events.length, 1);
+      assert.equal(c.events[0].date, 'Август 2010');
+      assert.equal(c.events[0].title, 'Первая встреча');
+    });
+    it('event location link + participants + consequences', () => {
+      const ev = parseChronicle(CHR).events[0];
+      assert.equal(ev.location.links[0].slug, 'klub');
+      assert.equal(ev.participants[0].name, 'Герсон');
+      assert.equal(ev.participants.length, 2);
+      assert.deepEqual(ev.consequences, ['Долг перед Герсоном']);
+    });
+    it('parseEvent standalone — assigns given id', () =>
+      assert.equal(parseEvent('### 📅 Май 2010 — Тест.', 7).id, 7));
+  });
+
+  describe('parseChronicleParticipants', () => {
+    it('collects names, skips anonymous', () => {
+      const text = [
+        '## 👥 Участники',
+        '  - Герсон (Вентру) — патрон',
+        '  - Мел / альтер — гостья',
+        '  - Безымянный гуль — слуга',
+      ].join('\n');
+      assert.deepEqual(parseChronicleParticipants(text), ['Герсон', 'Мел']);
+    });
+    it('empty text → empty array', () =>
+      assert.deepEqual(parseChronicleParticipants(''), []));
   });
 
 }); // Parsers — unit
@@ -587,6 +849,112 @@ describe('API — integration', () => {
     it('unknown API route → 404', async () => {
       const r = await fetch('http://localhost:3099/api/__no_such_route__');
       assert.equal(r.status, 404);
+    });
+  });
+
+  // ── AI generation — input validation (no live API calls) ─────────────────────
+  // Character lookup runs before the generation client is built, so a missing
+  // character returns 404 without ever contacting an AI provider.
+  describe('AI generation — validation', () => {
+    it('POST generate-prompt — unknown char → 404', async () => {
+      const { status } = await apiJson(
+        `/api/characters/${encodeURIComponent(CHAR_UNKNOWN)}/generate-prompt${CITY}`,
+        { method: 'POST', body: JSON.stringify({}) });
+      assert.equal(status, 404);
+    });
+    it('POST generate-appearance — unknown char → 404', async () => {
+      const { status } = await apiJson(
+        `/api/characters/${encodeURIComponent(CHAR_UNKNOWN)}/generate-appearance${CITY}`,
+        { method: 'POST', body: JSON.stringify({}) });
+      assert.equal(status, 404);
+    });
+  });
+
+  // ── Image deletion — guards (no real deletion happens) ───────────────────────
+  describe('Image deletion — guards', () => {
+    it('DELETE dotfile name → 400 (filename guard before lookup)', async () => {
+      const { status } = await apiJson(
+        `/api/characters/${CHAR_GERSON}/images/${encodeURIComponent('.hidden')}${CITY}`,
+        { method: 'DELETE' });
+      assert.equal(status, 400);
+    });
+    it('DELETE for unknown char → 404', async () => {
+      const { status } = await apiJson(
+        `/api/characters/${encodeURIComponent(CHAR_UNKNOWN)}/images/whatever.jpg${CITY}`,
+        { method: 'DELETE' });
+      assert.equal(status, 404);
+    });
+    it('DELETE missing file with no card reference → 404 (idempotent guard)', async () => {
+      const { status } = await apiJson(
+        `/api/characters/${CHAR_GERSON}/images/__no_such_file_999.jpg${CITY}`,
+        { method: 'DELETE' });
+      assert.equal(status, 404);
+    });
+  });
+
+  // ── Locations — write guards ─────────────────────────────────────────────────
+  describe('Locations — write guards', () => {
+    it('PUT fields — unknown slug → 404', async () => {
+      const { status } = await apiJson(`/api/locations/__nosuchloc__/fields${CITY}`,
+        { method: 'PUT', body: JSON.stringify({ fields: { atmosphere: 'x' } }) });
+      assert.equal(status, 404);
+    });
+  });
+
+  // ── Archive docs — write validation ──────────────────────────────────────────
+  describe('Archive docs — write validation', () => {
+    it('PUT /api/timeline without content → 400', async () => {
+      const { status, body } = await apiJson(`/api/timeline${CITY}`,
+        { method: 'PUT', body: JSON.stringify({}) });
+      assert.equal(status, 400); assert.ok(body.error);
+    });
+    it('PUT /api/rumors without content → 400', async () => {
+      const { status } = await apiJson(`/api/rumors${CITY}`,
+        { method: 'PUT', body: JSON.stringify({ type: 'elysium' }) });
+      assert.equal(status, 400);
+    });
+  });
+
+  // ── Chronicles & modules — write guards ──────────────────────────────────────
+  describe('Chronicles & modules — write guards', () => {
+    it('GET delete-preview — unknown chronicle → 404', async () => {
+      const { status } = await apiJson(`/api/chronicles/__nochron__/delete-preview${CITY}`);
+      assert.equal(status, 404);
+    });
+    it('DELETE — unknown chronicle → 404', async () => {
+      const { status } = await apiJson(`/api/chronicles/__nochron__${CITY}`, { method: 'DELETE' });
+      assert.equal(status, 404);
+    });
+    it('POST module without name → 400', async () => {
+      const { status, body } = await apiJson(`/api/chronicles/${CHR}/modules${CITY}`,
+        { method: 'POST', body: JSON.stringify({}) });
+      assert.equal(status, 400); assert.ok(body.error);
+    });
+  });
+
+  // ── Rumors — write round-trip (restores original on teardown) ────────────────
+  describe('Rumors — write round-trip', () => {
+    const file = path.join(CITY_ROOT, 'archive', 'rumors_elysium.md');
+    let original = null, existed = false;
+
+    before(async () => {
+      original = await fs.readFile(file, 'utf-8').catch(() => null);
+      existed  = original !== null;
+    });
+    after(async () => {
+      if (existed) await fs.writeFile(file, original, 'utf-8');
+      else await fs.unlink(file).catch(() => {});
+    });
+
+    it('PUT writes content, GET reads it back', async () => {
+      const marker = `__RUMOR_TEST__ ${Date.now()}`;
+      const put = await apiJson(`/api/rumors${CITY}`, {
+        method: 'PUT', body: JSON.stringify({ type: 'elysium', content: marker }) });
+      assert.equal(put.status, 200); assert.ok(put.body.ok);
+      const get = await apiJson(`/api/rumors${CITY}&type=elysium`);
+      assert.equal(get.status, 200);
+      assert.equal(get.body.exists, true);
+      assert.ok(get.body.content.includes(marker));
     });
   });
 

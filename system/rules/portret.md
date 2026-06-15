@@ -16,39 +16,32 @@
 
 ---
 
-# Правила промтов для Локаций (locations/)
+# Правила промтов для локаций
 
 ## Структура папок
 
-**Парижские локации** (события в Париже):
+**Локации в пределах города** (`<slug>` — ASCII-слаг):
 ```
-locations/[Район]_[Номер]/[Название_локации]/[Название].md
-```
-
-**Локации вне Парижа** (другие города, страны, внепарижские события модуля):
-```
-locations/Другие/[Название_модуля]/[Название_локации]/[Название].md
+cities/<город>/locations/district_NN/<район>/<локация>/<локация>.md
 ```
 
-> Пример: локация «Замок в Провансе» для модуля `январь_2011_прованс` →
-> `locations/Другие/январь_2011_прованс/Замок_в_Провансе/Замок_в_Провансе.md`
+**Локации вне города** (другие места, внегородские события модуля):
+```
+cities/<город>/locations/Другие/<модуль>/<локация>/<локация>.md
+```
+
+> Пример: «Замок в Провансе» для модуля `proval_v_provanse` →
+> `cities/paris/locations/Другие/proval_v_provanse/zamok_v_provanse/zamok_v_provanse.md`
 
 Формат карточки — **одинаковый** для обоих случаев. Промт адаптируется под реальное место и время суток (если не ночь — указать явно).
 
 ---
 
-## Эталонный стиль
+## Эталонный стиль — задаётся городом
 
-Все изображения локаций создаются в едином визуальном стиле:
-- **Ночной Париж 2010** — никакого дневного света
-- **Мокрые поверхности** — дождь, туман, отражения
-- **Контраст тёплого и холодного** — янтарные фонари vs холодное синее небо
-- **Haussman или специфическая архитектура** — европейские фасады, брусчатка
-- **Атмосферный туман** — дымка, мист, испарения
-- **Без толпы** — никого или одна тёмная силуэт
-- **Кинематографичная композиция** — широкий угол, уровень улицы, низкий угол
+Визуальная идентичность локаций (палитра, освещение, архитектура, время суток) — **городская специфика**: определяется в `cities/<город>/rules/`. Общая трёхблочная структура и обязательные элементы ниже — каркас, в который подставляются городские значения. Шаблон ниже приведён на парижском инстансе.
 
-Визуальные референсы: ночные фотографии Парижа + концепт-арт VtM: Bloodhunt + нуар-кинематограф
+> Париж 2010: ночь без дневного света, мокрые поверхности, янтарь vs холодная синь, Haussmann/брусчатка, атмосферный туман, без толпы, кинематографичная композиция; референсы — ночные фото Парижа + VtM: Bloodhunt + нуар. Полный эталон — [`cities/paris/rules/paris_canon.md`](../../cities/paris/rules/paris_canon.md).
 
 ---
 
@@ -145,9 +138,11 @@ daytime, sunlight, crowds of people, faces in foreground, modern post-2010 eleme
 
 ### Universal Dark Fantasy Portrait Prompt
 
-(подходит для MidJourney, Stable Diffusion, Flux, DALL·E)
+> ⚠️ **Это референс СТИЛЯ, а не шаблон содержания.** Пример ниже намеренно обобщён («elegant ancient vampire aristocrat») и потому **нарушает 🔒-правило «никаких обобщений»** — копировать его как промт персонажа нельзя. Используй его только для тона/света/среды (Блок 2–3); описание персонажа (Блок 1) всегда строится из секции «Внешность» конкретной карточки.
 
-**ENGLISH VERSION (recommended):**
+(референс тона для MidJourney, Stable Diffusion, Flux, DALL·E)
+
+**ENGLISH VERSION:**
 
 > Cinematic dark fantasy portrait, elegant ancient vampire aristocrat, three-quarter view, long wavy reddish-chestnut hair falling past shoulders, pale almost grey skin with unnatural smoothness, subtle supernatural beauty, dark oversized sunglasses worn indoors with faint amber glow behind lenses, wide charismatic smile slightly too perfect and unsettling, relaxed posture with absolute confidence, bohemian luxury aesthetic, cream or sand-colored tailored jacket over dark ornate brocade vest, partially unbuttoned white shirt, layered antique rings, bracelets, necklaces, centuries-old jewelry collection, decadent immortal charm
 >

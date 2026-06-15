@@ -1,0 +1,48 @@
+name: tests
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+jobs:
+  unit-integration-e2e:
+    name: Unit + API + E2E
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install web dependencies
+        run: npm install
+
+      - name: Unit + integration + E2E
+        # Cross-platform spec reporter (no custom HTML reporter / nul device).
+        run: npm run test:ci
+
+  data-integrity:
+    name: Cards + links validators
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Validate character/location cards (strict)
+        run: node system/schema/validate_cards.js --strict
+
+      - name: Validate internal links
+        shell: pwsh
+        run: ./tools/validate_links.ps1 -Force -Quiet
+
+# NOTE: Selenium UI tests (tests/ui.test.js / npm run test:ui) require a real
+# Chrome browser and are intentionally NOT run here — run them locally with
+# `HEADLESS=1 npm run test:ui`.

@@ -27,8 +27,7 @@ const UI_PORT = Number(process.env.UI_PORT || 3098);
 const BASE    = `http://localhost:${UI_PORT}`;
 const TS      = Date.now().toString().slice(-8);
 const UI_NAME = `Uiburg${TS}`;
-const _TR     = { а:'a',б:'b',в:'v',г:'g',д:'d',е:'e',ё:'e',ж:'zh',з:'z',и:'i',й:'y',к:'k',л:'l',м:'m',н:'n',о:'o',п:'p',р:'r',с:'s',т:'t',у:'u',ф:'f',х:'h',ц:'ts',ч:'ch',ш:'sh',щ:'sch',ъ:'',ы:'y',ь:'',э:'e',ю:'yu',я:'ya' };
-const slugify = s => (s || '').toLowerCase().split('').map(c => _TR[c] !== undefined ? _TR[c] : c).join('').replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').replace(/_+/g, '_');
+const { slugify } = require('../lib/parsers');  // single source of truth for RU→ASCII slugs
 const UI_CITY = slugify(UI_NAME);
 
 const NAV_PAGES = ['dashboard', 'chronicle', 'characters', 'graph', 'modules', 'threads', 'locations', 'tools'];

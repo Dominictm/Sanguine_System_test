@@ -147,12 +147,9 @@ async function loadDashboard() {
   const el = document.getElementById('dash-content');
   el.innerHTML = '<div class="loading-state"><div class="spinner"></div>Загрузка...</div>';
   try {
-    const [stats, auth] = await Promise.all([
-      fetch('/api/status').then(r => r.json()),
-      fetch('/api/auth-status').then(r => r.json()).catch(() => ({ source: 'none', ok: false })),
-    ]);
+    const stats = await fetch('/api/status').then(r => r.json());
     document.getElementById('domain-label').innerHTML = `<span>${stats.domain || 'Домен'}</span>`;
-    renderDashboard(stats, el, auth);
+    renderDashboard(stats, el);
     loadIntegrity();
   } catch {
     el.innerHTML = '<div class="loading-state" style="color:var(--accent3)">⚠ Сервер недоступен</div>';
@@ -170,7 +167,7 @@ function animateValue(el, target, dur = 900) {
   requestAnimationFrame(step);
 }
 
-function renderDashboard(s, container, auth = {}) {
+function renderDashboard(s, container) {
   // Broken links badge
   const blCount = s.brokenLinks;
   const blBadge = blCount === null || blCount === undefined
@@ -201,17 +198,7 @@ function renderDashboard(s, container, auth = {}) {
       </div>`)
     .join('');
 
-  // Auth status badge (compact, for Dashboard)
-  const authBadge = (() => {
-    if (auth.source === 'openrouter') return `<span class="ai-auth-badge ok">✓ OpenRouter · ${auth.model || 'free'}</span>`;
-    if (auth.source === 'api-key')    return `<span class="ai-auth-badge ok">✓ ANTHROPIC_API_KEY</span>`;
-    if (auth.source === 'claude-login' && auth.ok) return `<span class="ai-auth-badge ok">✓ Claude.ai (${auth.subscription || 'pro'}) · ${auth.expiresIn} мин</span>`;
-    if (auth.source === 'claude-login' && auth.expired) return `<span class="ai-auth-badge warn">⚠ Токен истёк</span>`;
-    return `<span class="ai-auth-badge err">✗ Нет авторизации AI</span>`;
-  })();
-
   container.innerHTML = `
-    <div class="dash-ai-status">${authBadge} <a class="dash-ai-link" data-nav="tools" data-tab="ai-settings">⚙ Настройки моделей</a></div>
     <div class="stats-grid">
       <div class="stat-card">
         <div class="stat-label">Персонажи</div>
@@ -1138,6 +1125,8 @@ async function runTool(tool, params, outId, btn) {
 }
 
 // Run a Node CLI tool (cities/-aware) via /api/tool/:name with an args array.
+// NOTE: _NTR MUST mirror CYRILLIC_TR in web/lib/parsers.js (this is the browser copy —
+// no module system in the static SPA). A unit test (slugify — browser parity) enforces it.
 const _NTR = { а:'a',б:'b',в:'v',г:'g',д:'d',е:'e',ё:'e',ж:'zh',з:'z',и:'i',й:'y',к:'k',л:'l',м:'m',н:'n',о:'o',п:'p',р:'r',с:'s',т:'t',у:'u',ф:'f',х:'h',ц:'ts',ч:'ch',ш:'sh',щ:'sch',ъ:'',ы:'y',ь:'',э:'e',ю:'yu',я:'ya' };
 function slugifyJS(s) { return (s || '').toLowerCase().split('').map(c => _NTR[c] !== undefined ? _NTR[c] : c).join('').replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').replace(/_+/g, '_'); }
 async function runNodeTool(name, args, outId, btn) {
@@ -1831,11 +1820,7 @@ document.getElementById('mod-delete-confirm').addEventListener('click', async ()
 
 // ── Create chronicle modal ────────────────────────────────────────────────────
 
-const _TR_SLUG = {а:'a',б:'b',в:'v',г:'g',д:'d',е:'e',ё:'e',ж:'zh',з:'z',и:'i',й:'y',к:'k',л:'l',м:'m',н:'n',о:'o',п:'p',р:'r',с:'s',т:'t',у:'u',ф:'f',х:'h',ц:'ts',ч:'ch',ш:'sh',щ:'sch',ъ:'',ы:'y',ь:'',э:'e',ю:'yu',я:'ya'};
-function slugifyChr(s) {
-  return s.toLowerCase().split('').map(c => _TR_SLUG[c] !== undefined ? _TR_SLUG[c] : c).join('')
-    .replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').replace(/_+/g, '_');
-}
+const slugifyChr = slugifyJS;  // alias — one browser slug impl (see slugifyJS / _NTR)
 
 let _slugEdited = false;
 
@@ -2564,20 +2549,48 @@ async function _loadArchiveEditable(getUrl, putUrl, containerId, emptyMsg, opts 
   if (opts.d20) {
     const d20Btn   = document.getElementById(`${uid}-d20-btn`);
     const d20Badge = document.getElementById(`${uid}-d20-badge`);
-    if (d20Btn) d20Btn.addEventListener('click', () => _rollD20Rumor(`${uid}-view`, d20Badge));
+    if (d20Btn) d20Btn.addEventListener('click', () => _rollD20Rumor(`${uid}-view`, d20Badge, opts.rumorsType || null));
   }
+
+  if (opts.onRendered) opts.onRendered(viewEl);
+
+  // Re-init after in-place save
+  const _origSaveClick = saveBtn.onclick;
+  saveBtn.addEventListener('click', () => {
+    // Wait for the save handler to update viewEl.innerHTML, then re-init
+    const obs = new MutationObserver(() => {
+      obs.disconnect();
+      if (opts.onRendered) opts.onRendered(viewEl);
+    });
+    obs.observe(viewEl, { childList: true, subtree: false });
+  });
 }
 
-function _rollD20Rumor(viewId, badgeEl) {
-  const roll  = Math.floor(Math.random() * 20) + 1;
+function _rollD20Rumor(viewId, badgeEl, type) {
+  const city    = new URLSearchParams(window.location.search).get('city') || 'paris';
+  const toldSet = type
+    ? new Set(JSON.parse(localStorage.getItem(`rumors-told-${city}-${type}`) || '[]'))
+    : new Set();
+
+  // Roll, re-rolling if the result is already told (max 40 attempts = 2 full cycles)
+  let roll, attempts = 0;
+  do {
+    roll = Math.floor(Math.random() * 20) + 1;
+    attempts++;
+  } while (toldSet.has(roll) && attempts < 40);
+
   const table = document.querySelector(`#${viewId} table`);
-  if (!table) { if (badgeEl) { badgeEl.textContent = `🎲 ${roll}`; badgeEl.classList.add('rolled'); setTimeout(() => badgeEl.classList.remove('rolled'), 3000); } return; }
+  if (!table) {
+    if (badgeEl) { badgeEl.textContent = `🎲 ${roll}`; badgeEl.classList.add('rolled'); setTimeout(() => badgeEl.classList.remove('rolled'), 3000); }
+    return;
+  }
 
   let hitRow = null;
   table.querySelectorAll('tbody tr').forEach(row => {
     const cell = row.querySelector('td:first-child');
     if (!cell) return;
-    const txt    = cell.textContent.trim();
+    // .rumor-num span is inserted by _initRumorCheckboxes; fall back to raw text
+    const txt    = (cell.querySelector('.rumor-num')?.textContent ?? cell.textContent).trim();
     const single = txt.match(/^(\d+)$/);
     const range  = txt.match(/^(\d+)\s*[-–—]\s*(\d+)$/);
     const hit    = (single && +single[1] === roll) ||
@@ -2608,6 +2621,152 @@ document.querySelectorAll('#factions-tabbar .chron-tab').forEach(b => b.addEvent
   loadFactions();
 }));
 
+// ── Rumors: checkboxes, archive ───────────────────────────────────────────────
+
+function _rumorCity() {
+  return new URLSearchParams(window.location.search).get('city') || 'paris';
+}
+
+function _initRumorCheckboxes(viewEl, type) {
+  const city = _rumorCity();
+  const key  = `rumors-told-${city}-${type}`;
+  const told = new Set(JSON.parse(localStorage.getItem(key) || '[]'));
+
+  const table = viewEl.querySelector('table');
+  if (!table) return;
+
+  table.querySelectorAll('tbody tr').forEach(row => {
+    if (row.querySelector('.rumor-told-cb')) return; // already inited
+    const firstTd = row.querySelector('td:first-child');
+    if (!firstTd) return;
+    const rawTxt = firstTd.textContent.trim();
+    const num = parseInt(rawTxt);
+    if (isNaN(num)) return;
+
+    // Wrap number in span, add checkbox
+    firstTd.innerHTML = `<span class="rumor-num">${num}</span>`;
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.className = 'rumor-told-cb';
+    cb.dataset.num = num;
+    cb.title = 'Рассказан';
+    cb.checked = told.has(num);
+    firstTd.appendChild(cb);
+
+    row.classList.toggle('rumor-told', told.has(num));
+
+    cb.addEventListener('change', () => {
+      if (cb.checked) told.add(num); else told.delete(num);
+      localStorage.setItem(key, JSON.stringify([...told]));
+      row.classList.toggle('rumor-told', cb.checked);
+    });
+  });
+}
+
+function _archiveRumors(viewEl, type) {
+  const city    = _rumorCity();
+  const toldKey = `rumors-told-${city}-${type}`;
+  const archKey = `rumors-archive-${city}-${type}`;
+  const told    = new Set(JSON.parse(localStorage.getItem(toldKey) || '[]'));
+
+  if (!told.size) {
+    alert('Нет рассказанных слухов.\nОтметь чекбоксы «Рассказан» перед архивированием.');
+    return;
+  }
+
+  // Collect data from current table
+  const table = viewEl.querySelector('table');
+  const rumorData = [];
+  if (table) {
+    const headers = [...table.querySelectorAll('thead th')].map(th => th.textContent.trim());
+    table.querySelectorAll('tbody tr').forEach(row => {
+      const cells = row.querySelectorAll('td');
+      if (!cells.length) return;
+      const num = parseInt(cells[0].querySelector('.rumor-num')?.textContent ?? cells[0].textContent);
+      if (isNaN(num) || !told.has(num)) return;
+      rumorData.push({
+        num,
+        text:     cells[1]?.textContent.trim() || '',
+        source:   cells[2]?.textContent.trim() || '',
+        veracity: cells[3]?.textContent.trim() || '',
+        hook:     cells[4]?.textContent.trim() || '',
+      });
+    });
+  }
+
+  if (!rumorData.length) { alert('Не удалось найти данные рассказанных слухов.'); return; }
+  rumorData.sort((a, b) => a.num - b.num);
+
+  // Save to archive
+  const archive = JSON.parse(localStorage.getItem(archKey) || '[]');
+  archive.unshift({
+    date: new Date().toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' }),
+    rumors: rumorData,
+  });
+  localStorage.setItem(archKey, JSON.stringify(archive));
+
+  // Clear told
+  localStorage.removeItem(toldKey);
+  viewEl.querySelectorAll('.rumor-told-cb').forEach(cb => { cb.checked = false; });
+  viewEl.querySelectorAll('tr.rumor-told').forEach(r => r.classList.remove('rumor-told'));
+
+  _renderRumorsArchive(city, type);
+}
+
+function _renderRumorsArchive(city, type) {
+  const archKey   = `rumors-archive-${city}-${type}`;
+  const archive   = JSON.parse(localStorage.getItem(archKey) || '[]');
+  const container = document.getElementById('rumors-archive');
+  if (!container) return;
+
+  if (!archive.length) { container.innerHTML = ''; return; }
+
+  const typeLabel  = type === 'dreaming' ? 'Грёз' : 'Элизиума';
+  const accentVar  = type === 'dreaming' ? '#a78bca' : 'var(--gold)';
+
+  container.dataset.rumType = type;
+  container.innerHTML = `
+    <div class="rumors-arch-header" style="--arch-accent:${accentVar}">
+      📚 Архив слухов ${typeLabel}
+    </div>
+    ${archive.map((sess, i) => {
+      const pl = sess.rumors.length === 1 ? 'слух' : sess.rumors.length < 5 ? 'слуха' : 'слухов';
+      return `
+        <div class="rumors-arch-session">
+          <button class="rumors-arch-toggle" data-idx="${i}">
+            <span class="rumors-arch-date">${escHtml(sess.date)}</span>
+            <span class="rumors-arch-count">${sess.rumors.length} ${pl}</span>
+            <span class="rumors-arch-chev">▼</span>
+          </button>
+          <div class="rumors-arch-body" id="rarch-body-${i}" style="display:none">
+            <table class="rumors-arch-table">
+              <thead><tr><th>#</th><th>Слух</th><th>Источник</th><th>✓</th></tr></thead>
+              <tbody>
+                ${sess.rumors.map(r => `<tr>
+                  <td class="rumors-arch-num">${r.num}</td>
+                  <td>${escHtml(r.text)}</td>
+                  <td>${escHtml(r.source)}</td>
+                  <td class="rumors-arch-ver">${escHtml(r.veracity)}</td>
+                </tr>`).join('')}
+              </tbody>
+            </table>
+          </div>
+        </div>`;
+    }).join('')}`;
+
+  // Accordion toggle via delegation
+  container.querySelectorAll('.rumors-arch-toggle').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const body  = document.getElementById(`rarch-body-${btn.dataset.idx}`);
+      const chev  = btn.querySelector('.rumors-arch-chev');
+      const open  = body.style.display !== 'none';
+      body.style.display = open ? 'none' : '';
+      if (chev) chev.textContent = open ? '▼' : '▲';
+      btn.classList.toggle('open', !open);
+    });
+  });
+}
+
 // C2 — Слухи (rumors_elysium.md / rumors_dreaming.md)
 let _rumorsType = 'elysium';
 function loadRumors() {
@@ -2617,12 +2776,32 @@ function loadRumors() {
   if (content) content.dataset.rumType = _rumorsType;
   const tabbar = document.getElementById('rumors-tabbar');
   if (tabbar) tabbar.dataset.rumType = _rumorsType;
+
+  const type = _rumorsType;
   _loadArchiveEditable(
-    `/api/rumors?type=${_rumorsType}`,
+    `/api/rumors?type=${type}`,
     '/api/rumors',
     'rumors-content',
-    `${_rumorsType === 'dreaming' ? 'rumors_dreaming.md' : 'rumors_elysium.md'} не найден для этого города.`,
-    { d20: true, putExtra: { type: _rumorsType } }
+    `${type === 'dreaming' ? 'rumors_dreaming.md' : 'rumors_elysium.md'} не найден для этого города.`,
+    {
+      d20: true,
+      rumorsType: type,
+      putExtra: { type },
+      onRendered: (viewEl) => {
+        _initRumorCheckboxes(viewEl, type);
+        // Add "Сгенерировать" button to toolbar (once)
+        const toolbar = document.querySelector('#rumors-content .archive-toolbar');
+        if (toolbar && !toolbar.querySelector('.rumors-gen-btn')) {
+          const genBtn = document.createElement('button');
+          genBtn.className = 'archive-d20-btn rumors-gen-btn';
+          genBtn.textContent = '📚 Сгенерировать';
+          genBtn.title = 'Архивировать рассказанные слухи и начать новый прогон';
+          genBtn.addEventListener('click', () => _archiveRumors(viewEl, type));
+          toolbar.appendChild(genBtn);
+        }
+        _renderRumorsArchive(_rumorCity(), type);
+      },
+    }
   );
 }
 document.querySelectorAll('#rumors-tabbar .chron-tab').forEach(b => b.addEventListener('click', () => {
@@ -4038,29 +4217,82 @@ async function _deleteCharImage(charName, filename) {
   }
 }
 
-function _generatePrompt(charName) {
+let _genPromptRunning = false;
+
+async function _generatePrompt(charName) {
+  if (_genPromptRunning) return;
+
   const c = STATE.characters.find(ch => ch.name === charName);
   if (!c) return;
 
-  const lineageLbl = LINEAGE_LABELS[c.lineage] || c.lineage || 'персонаж';
-  const clan  = c.clan && !c.clan.includes('⚠️') ? `${c.clan}, ` : '';
-  const app   = c.appearance && !c.appearance.includes('⚠️') ? c.appearance : '';
+  // Treat placeholder markers (⏳ Заполнить… / ⚠️ Требуется уточнение) as "no prompt yet".
+  const existingPrompt = (c.imagePrompt || '').trim();
+  const isPlaceholder  = !existingPrompt || /⏳|⚠️/.test(existingPrompt);
+  if (!isPlaceholder) {
+    if (!confirm('Промт уже существует. Заменить его на сгенерированный?')) return;
+  }
 
-  const prompt = [
-    `[Блок 1] Cinematic dark fantasy portrait, ${clan}${lineageLbl}, three-quarter view, ${app || 'описание внешности не заполнено'}`,
-    `[Блок 2] Dim cold atmospheric light from above, deep crimson rim-light from behind, heavy shadows, pure black painterly background with abstract swirling brushstroke textures`,
-    `[Блок 3] Dark fantasy digital painting, visible painterly brushstrokes, textured oil-paint effect, cinematic composition, moody gothic atmosphere, Vampire the Masquerade aesthetic, concept art quality, painterly realism, artstation quality, masterpiece`,
-  ].join('\n');
+  _genPromptRunning = true;
+  const btn = document.getElementById('cdet-gen-prompt');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Генерация...'; }
 
-  const ta = document.getElementById('cdet-prompt-ta');
-  if (ta) {
-    ta.value = prompt;
-    // Открываем редактирование если ещё не открыто
-    if (document.getElementById('cdet-desc-edit')?.style.display === 'none') {
-      _togglePanelEdit('desc', true);
+  try {
+    const qs = window.location.search;
+    const featPrefs  = JSON.parse(localStorage.getItem('ai-feature-prefs') || '{}');
+    const _appPref   = _getPref(featPrefs, 'appearance', 'openrouter');
+    const preferSource = _appPref.provider;
+    const orModel    = preferSource === 'openrouter' ? (_appPref.model || null) : null;
+
+    const resp = await fetch(`/api/characters/${encodeURIComponent(charName)}/generate-prompt${qs}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ preferSource, orModel }),
+    });
+    const d = await resp.json();
+
+    if (resp.status === 429 || d.rateLimited) {
+      alert('Превышен лимит запросов к API.\n\nПодождите минуту и попробуйте снова, или смените модель в Настройках AI.');
+      return;
     }
-    ta.focus();
-    ta.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    if (!d.ok) {
+      alert('Ошибка генерации промта: ' + (d.error || 'неизвестная ошибка'));
+      return;
+    }
+
+    const saveResp = await fetch(`/api/characters/${encodeURIComponent(charName)}/fields${qs}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fields: { imagePrompt: d.positive, negativePrompt: d.negative } }),
+    });
+    const saveData = await saveResp.json();
+    if (!saveData.ok) { alert('Ошибка сохранения промта: ' + (saveData.error || '')); return; }
+
+    Object.assign(c, { imagePrompt: d.positive, negativePrompt: d.negative });
+
+    const negHtml = d.negative
+      ? `<div class="cdet-section-title" style="margin-top:14px">Негативный промт</div><textarea class="cdet-prompt-box cdet-prompt-neg" readonly>${escHtml(d.negative)}</textarea>`
+      : '';
+    const descView = document.getElementById('cdet-desc-view');
+    if (descView) {
+      const appearance = c.appearance && !c.appearance.includes('⚠️') ? c.appearance : '';
+      const voice      = c.voice && !c.voice.includes('⚠️') ? c.voice : '';
+      const html = [
+        appearance ? `<div class="cdet-section-title">Внешность</div><div class="cdet-bio">${escHtml(appearance)}</div><div class="cdet-divider"></div>` : '',
+        voice ? `<div class="cdet-section-title">Голос</div><div class="cdet-voice">${escHtml(voice)}</div><div class="cdet-divider"></div>` : '',
+        `<div class="cdet-section-title">Промт для генерации</div><textarea class="cdet-prompt-box" readonly>${escHtml(d.positive)}</textarea>${negHtml}`,
+      ].filter(Boolean).join('');
+      descView.innerHTML = html;
+    }
+    const promptTa = document.getElementById('cdet-prompt-ta');
+    if (promptTa) promptTa.value = d.positive;
+    const negTa = document.getElementById('cdet-negprompt-ta');
+    if (negTa) negTa.value = d.negative || '';
+
+  } catch (e) {
+    alert('Ошибка: ' + e.message);
+  } finally {
+    _genPromptRunning = false;
+    if (btn) { btn.disabled = false; btn.textContent = '🎨 Промт'; }
   }
 }
 

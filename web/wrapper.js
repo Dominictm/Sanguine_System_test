@@ -17,7 +17,9 @@ let _child = null;
 function start() {
   _child = spawn(process.execPath, [SERVER], {
     stdio: 'inherit',
-    env:   process.env,
+    // VTM_SUPERVISED tells server.js a guardian is watching for exit code 75,
+    // so it may safely self-exit to restart. Without it the server won't kill itself.
+    env:   { ...process.env, VTM_SUPERVISED: '1' },
     cwd:   __dirname,
   });
 

@@ -7,13 +7,12 @@
 //   пример: node tools/new_npc.js london vampires "Эдвард Грей" "Вентру"
 
 const fs = require('fs'), path = require('path'), ROOT = path.resolve(__dirname, '..');
+const { slugify } = require('../web/lib/parsers');  // single source of truth for RU→ASCII slugs
 
 const LINEAGE = {
   vampires: 'Вампир', fairies: 'Фея / Ченджлинг', mortals: 'Смертный',
   werewolves: 'Оборотень', mages: 'Маг', hunters: 'Охотник'
 };
-const _TR = { а:'a',б:'b',в:'v',г:'g',д:'d',е:'e',ё:'e',ж:'zh',з:'z',и:'i',й:'y',к:'k',л:'l',м:'m',н:'n',о:'o',п:'p',р:'r',с:'s',т:'t',у:'u',ф:'f',х:'h',ц:'ts',ч:'ch',ш:'sh',щ:'sch',ъ:'',ы:'y',ь:'',э:'e',ю:'yu',я:'ya' };
-const slugify = s => s.toLowerCase().split('').map(c => _TR[c] !== undefined ? _TR[c] : c).join('').replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').replace(/_+/g, '_');
 
 const [city, lineage, name, clan, sect, role, belonging] = [
   process.argv[2], process.argv[3], process.argv[4],

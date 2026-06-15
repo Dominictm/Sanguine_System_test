@@ -3,7 +3,8 @@
     [string]$Filter       = "",
     [switch]$IncludeRules,   # rules/ skipped by default (contains template paths)
     [switch]$Fix,            # auto-remove broken image links from .md files
-    [switch]$Force           # skip ReadKey — used when called from web server
+    [switch]$Force,          # skip ReadKey — used when called from web server / CI
+    [switch]$Quiet           # suppress the closing "press any key" prompt entirely
 )
 
 $broken     = @()
@@ -149,9 +150,14 @@ if ($broken.Count -eq 0) {
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
 
-if (-not $Force) {
+# Prompt for a keypress only in a genuine interactive console. When run from CI,
+# the web server, or with output/input redirected, never block on ReadKey.
+$interactive = -not $Force -and -not $Quiet `
+    -and [Environment]::UserInteractive `
+    -and -not [Console]::IsInputRedirected
+if ($interactive) {
     Write-Host "  Нажмите любую клавишу для закрытия..." -ForegroundColor DarkGray
-    $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+    try { $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown") } catch { }
 }
 
 # Exit code = number of remaining broken links (useful for pre-commit hooks / CI)

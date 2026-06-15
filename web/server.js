@@ -4,7 +4,14 @@ const fs      = require('fs').promises;
 const crypto  = require('crypto');
 const { spawn } = require('child_process');
 const Anthropic = require('@anthropic-ai/sdk');
-const { RU_MONTHS_NOM, THREAD_STATUS, readPrompt, writePrompt, periodLabel, threadStatusKey, parseThreadsContent } = require('./lib/parsers');
+const {
+  RU_MONTHS_NOM, THREAD_STATUS, slugify, parseDiary, readPrompt, writePrompt,
+  periodLabel, threadStatusKey, parseThreadsContent,
+  mdExtractLinks, mdStripLinks, mdStripInline, classifyChronicleLink,
+  categorizeRel, parseCharacter, parseLocation, parseChronicleLocation,
+  parseParticipant, parseTable, parseWorldState, parseEvent, parseChronicle,
+  parseChronicleParticipants,
+} = require('./lib/parsers');
 
 // Load .env file (secrets not committed to git)
 try {
@@ -75,6 +82,7 @@ const ACTION_MAP = {
   'PUT /api/characters/:name/relations':      req => `✏  Редактирование отношений: ${decodeURIComponent(req.params.name)}`,
   'POST /api/characters/:name/upload-image':  req => `📷 Загрузка изображения → ${decodeURIComponent(req.params.name)}`,
   'POST /api/characters/:name/generate-appearance': req => `🤖 Генерация внешности: ${decodeURIComponent(req.params.name)}`,
+  'POST /api/characters/:name/generate-prompt':    req => `🎨 Генерация промта: ${decodeURIComponent(req.params.name)}`,
   'DELETE /api/characters/:name/images/:filename':  req => `🗑 Удаление изображения: ${decodeURIComponent(req.params.filename)} ← ${decodeURIComponent(req.params.name)}`,
   'GET /api/locations':                       req => `Локации — загрузка (${reqCity(req)})`,
   'GET /api/locations/:slug/images':          req => `Арты локации: ${decodeURIComponent(req.params.slug)}`,
@@ -153,122 +161,9 @@ app.use((req, res, next) => {
   next();
 });
 
-// ── Markdown parser ───────────────────────────────────────────────────────────
-
-function categorizeRel(desc) {
-  const d = desc.toLowerCase();
-  if (/сестр|брат|мать|отец|семь|родств|племян/.test(d)) return 'family';
-  if (/сир|создал|обратил|обратила/.test(d))              return 'sire';
-  if (/чайлд|потомок/.test(d))                            return 'childe';
-  if (/враг|ненавид|угроз|конфликт|противн/.test(d))      return 'enemy';
-  if (/союзник|друг|доверя|помощ|поддерж/.test(d))        return 'ally';
-  if (/любов|романт|привязан|влюбл/.test(d))              return 'romantic';
-  if (/подозр|осторожн|насторож/.test(d))                 return 'suspicious';
-  if (/лояльн|предан|служ|свита/.test(d))                 return 'loyalty';
-  return 'neutral';
-}
-
-function parseCharacter(rawContent, folderName, lineage) {
-  const content = rawContent.replace(/^﻿/, '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-  const c = { name: folderName, lineage, relationships: [] };
-
-  // Name from # header (strip leading emoji / whitespace)
-  const hm = content.match(/^#\s+[^\wЀ-ӿ]*([\wЀ-ӿ].+)$/m);
-  if (hm) c.name = hm[1].trim();
-
-  // Key-value fields:  - **Поле:** Значение
-  const fRe = /^- \*\*([^*:\n]+):\*\*\s*(.+)$/gm;
-  let m;
-  while ((m = fRe.exec(content)) !== null) {
-    const k = m[1].trim();
-    const v = m[2].trim();
-    if (k === 'Клан')         c.clan         = v;
-    if (k === 'Секта')        c.sect         = v;
-    if (k === 'Поколение')    c.generation   = v;
-    if (k === 'Статус')                         c.status        = v;
-    if (k === 'Детали статуса')                 c.statusDetails = v;
-    if (k === 'Линейка WoD')                    c.lineageLabel  = v;
-    if (k === 'Роль')                           c.role          = v;
-    if (k === 'Год обращения')                  c.embraceYear   = v;
-    if (k === 'Сир')                            c.sire          = v;
-    if (k === 'Год рождения')                   c.birthYear     = v;
-    if (k === 'Биография')                      c.biography     = v;
-    if (k === 'Голос')                          c.voice         = v;
-    if (k === 'Внешность')                      c.appearance    = v;
-    if (k === 'Дитя')                           c.childe        = v;
-    if (k === 'Домен / Локация')                c.location      = v;
-    if (/иерархи/i.test(k))                     c.hierarchy     = v;   // «Иерархия в городе» / устар. варианты
-    if (k === 'Деранжементы / Особенности')     c.derangements  = v;
-    if (k === 'Дисциплины')                     c.disciplines   = v;
-    if (k === 'Профессия')                      c.profession    = v;
-    if (k === 'Клан / Раса' && !c.clan)         c.clan          = v;
-    if (k === 'Род' && !c.clan)                 c.clan          = v;
-    if (k === 'Секта / Двор' && !c.sect)        c.sect          = v;
-    if (k === 'Фригольд / Локация' && !c.location) c.location  = v;
-    if (k === 'Принадлежность')                 c.belonging     = v;
-    if (k === 'Присутствие')                    c.presence      = v;   // появления в других городах
-    if (k === 'Алиасы')                         c.aliases       = v;
-  }
-
-  // Diary links: - **📖 Дневники:** [Title](path.md)
-  const diaryField = content.match(/- \*\*📖 Дневники:\*\*\s*(.+)$/m);
-  if (diaryField) {
-    const linkRe = /\[([^\]]+)\]\(([^)]+)\)/g;
-    c.diaries = [];
-    let lm;
-    while ((lm = linkRe.exec(diaryField[1])) !== null) {
-      c.diaries.push({ title: lm[1], file: lm[2] });
-    }
-  } else {
-    c.diaries = [];
-  }
-
-  // Image prompts (handles both card formats — see readPrompt)
-  const imgP = readPrompt(content, 'image');
-  if (imgP !== undefined) c.imagePrompt = imgP;
-  const negP = readPrompt(content, 'negative');
-  if (negP !== undefined) c.negativePrompt = negP;
-
-  // Relationships section (indented sub-bullets after **Отношения:**)
-  const relBlock = content.match(/- \*\*Отношения:\*\*\n((?:[ \t]+- .+\n?)+)/);
-  if (relBlock) {
-    const lines = relBlock[1].split('\n').filter(l => /^\s+-/.test(l));
-    for (const line of lines) {
-      const clean = line.trim().replace(/^-\s*/, '');
-      const dash  = clean.indexOf(' — ');
-      if (dash === -1) continue;
-      const targets = clean.slice(0, dash).split(',')
-        .map(t => t.trim().replace(/\[([^\]]+)\]\([^)]*\)/g, '$1').trim())
-        .filter(Boolean);
-      const desc = clean.slice(dash + 3).trim();
-      for (const tgt of targets) {
-        c.relationships.push({ target: tgt, description: desc, type: categorizeRel(desc) });
-      }
-    }
-  }
-
-  // Lineage normalisation
-  if (!c.lineage) {
-    const ll = (c.lineageLabel || '').toLowerCase();
-    if      (ll.includes('вампир'))                     c.lineage = 'vampire';
-    else if (ll.includes('фея') || ll.includes('ченджлинг')) c.lineage = 'fairy';
-    else if (ll.includes('смертн') || ll.includes('человек')) c.lineage = 'mortal';
-    else if (ll.includes('оборот'))                     c.lineage = 'werewolf';
-    else if (ll.includes('маг'))                        c.lineage = 'mage';
-    else if (ll.includes('охотник'))                    c.lineage = 'hunter';
-    else                                                c.lineage = 'unknown';
-  }
-
-  // Status type
-  const sl = (c.status || '').toLowerCase();
-  c.statusType = (sl.includes('жив') || sl.includes('жива') || sl.includes('активен') || sl.includes('активна')) ? 'active'
-    : sl.includes('торпор') ? 'torpor'
-    : (sl.includes('мёртв') || sl.includes('мертва') || sl.includes('погиб') || sl.includes('уничтожен') || sl.includes('убит')) ? 'dead'
-    : sl.includes('неизвестно') ? 'unknown'
-    : 'unknown';
-
-  return c;
-}
+// ── Markdown / card / chronicle parsers ───────────────────────────────────────
+// categorizeRel, parseCharacter, parseLocation, parseChronicle* and the md* helpers
+// now live in lib/parsers.js (single source of truth — see import at top).
 
 const LINEAGE_MAP = {
   vampires: 'vampire', fairies: 'fairy', mortals: 'mortal',
@@ -324,145 +219,9 @@ async function countMdFiles(dir) {
   return n;
 }
 
-// ── Diary parser ──────────────────────────────────────────────────────────────
+// parseDiary lives in lib/parsers.js (single source of truth — see import above)
 
-function parseDiary(rawContent) {
-  const content = rawContent.replace(/^﻿/, '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-  const d = {};
-
-  const hm = content.match(/^#\s+(.+)$/m);
-  if (hm) d.title = hm[1].trim();
-
-  // Detect format: multiple dated sections = retrospective
-  const sectionMatches = [...content.matchAll(/^###\s+📅\s+(.+)$/gm)];
-
-  if (sectionMatches.length > 1) {
-    d.format = 'retrospective';
-    d.sections = sectionMatches.map((m, i) => {
-      const title = m[1].trim();
-      const bodyStart = m.index + m[0].length;
-      const bodyEnd = i + 1 < sectionMatches.length ? sectionMatches[i + 1].index : content.length;
-      const body = content.slice(bodyStart, bodyEnd)
-        .replace(/(\n---+)+\s*$/, '')
-        .trim();
-      return { title, body };
-    });
-  } else {
-    d.format = 'entry';
-    if (sectionMatches.length === 1) d.session = sectionMatches[0][1].trim();
-
-    for (const [label, key] of [
-      ['👤 Автор',     'author'],
-      ['📍 Локация',   'location'],
-      ['🎭 Тон\\/Стиль', 'tone'],
-    ]) {
-      const m = content.match(new RegExp(`- \\*\\*${label}:\\*\\*\\s*(.+)$`, 'm'));
-      if (m) d[key] = m[1].trim();
-    }
-
-    const textM = content.match(/- \*\*📖 Текст записи:\*\*\n([\s\S]+?)(?=\n- \*\*[🔗📝👁]|$)/);
-    if (textM) d.text = textM[1].replace(/^[ \t]{1,2}/gm, '').trim();
-
-    const crossM = content.match(/- \*\*🔗 Зеркальная ссылка:\*\*\n([\s\S]+?)(?=\n- \*\*[📝👁]|\n---|$)/);
-    if (crossM) {
-      d.crossRefs = crossM[1].split('\n')
-        .filter(l => /^\s+-/.test(l))
-        .map(l => l.replace(/^\s+-\s*/, '').trim())
-        .filter(Boolean);
-    }
-  }
-
-  return d;
-}
-
-// ── Location parser ───────────────────────────────────────────────────────────
-
-function parseLocation(rawContent, folderName) {
-  const content = rawContent.replace(/^﻿/, '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-  const loc = { slug: folderName };
-
-  const hm = content.match(/^#\s+(.+)$/m);
-  if (hm) loc.title = hm[1].trim();
-
-  // Parse any **Label:** value | or end-of-line pattern
-  function metaField(label) {
-    const esc = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const m = content.match(new RegExp(`\\*\\*${esc}:\\*\\*\\s*([^|\\n]+?)(?=\\s*\\||\\s*\\n|$)`, 'm'));
-    return m ? m[1].trim() : null;
-  }
-
-  loc.subtype      = metaField('Название');
-  loc.district     = metaField('Округ');
-  loc.neighborhood = metaField('Район');
-  loc.address      = metaField('Адрес');
-  loc.zone         = metaField('Зона');
-  loc.control      = metaField('Контроль');
-
-  // Atmosphere — emoji and exact wording optional
-  const atmM = content.match(/## (?:🎭\s+)?Атмосфера[^\n]*\n+([\s\S]+?)(?=\n## |\n---)/);
-  if (atmM) loc.atmosphere = atmM[1].trim();
-
-  // VtM table fields
-  for (const [label, key] of [
-    ['Статус',            'locStatus'],
-    ['Фракция',           'faction'],
-    ['Постоянные фигуры', 'figures'],
-    ['Угрозы',            'threats'],
-    ['Маскарад',          'masquerade'],
-  ]) {
-    const m = content.match(new RegExp(`\\|\\s*\\*\\*${label}\\*\\*\\s*\\|\\s*([^|\\n]+)\\|`));
-    if (m) loc[key] = m[1].trim();
-  }
-
-  // VtM section — prose only (strip table rows, separator lines, Маскарад inline)
-  const vtmFreeM = content.match(/## (?:🩸\s+)?(?:VtM[^\n]*|Контекст[^\n]*)\n+([\s\S]+?)(?=\n## |\n---)/i);
-  if (vtmFreeM) {
-    const prose = vtmFreeM[1]
-      .split('\n')
-      .filter(l => !l.startsWith('|'))
-      .join('\n')
-      .replace(/\*\*Маскарад:\*\*[^\n]*/g, '')
-      .trim();
-    if (prose) loc.vtmText = prose;
-  }
-
-  // Masquerade from inline bold if not found in table
-  if (!loc.masquerade) {
-    const maqInline = content.match(/\*\*Маскарад:\*\*\s*([^\n]+)/);
-    if (maqInline) loc.masquerade = maqInline[1].trim();
-  }
-
-  const maq = loc.masquerade || '';
-  loc.masqueradeLevel = maq.includes('🟢') ? 'low' : maq.includes('🟡') ? 'medium' : maq.includes('🔴') ? 'high' : 'unknown';
-
-  // Hooks — emoji, numbering and heading text optional
-  const hooksM = content.match(/## (?:🪝\s+)?(?:Сценарные крючки|\d+\s+крючка?|Крючки)[^\n]*\n+([\s\S]+?)(?=\n## |\n---|$)/i);
-  loc.hooks = hooksM
-    ? (hooksM[1].match(/^\d+\..+$/gm) || []).map(h => h.replace(/^\d+\.\s*/, '').trim())
-    : [];
-
-  // Key points table (## Ключевые точки...)
-  const keyM = content.match(/## (?:Ключевые точки[^\n]*)\n+([\s\S]+?)(?=\n## |\n---|$)/i);
-  if (keyM) {
-    loc.keyPoints = (keyM[1].match(/^\|[^|\n]+\|[^|\n]+\|/gm) || [])
-      .filter(r => !r.match(/[-]{3}/) && !r.match(/^\|\s*\*?\*?(?:Место|Place|Параметр)\*?\*?\s*\|/i))
-      .map(r => {
-        const cells = r.split('|').slice(1, -1).map(c => c.replace(/\*\*/g, '').trim());
-        return { place: cells[0], desc: cells[1] };
-      })
-      .filter(r => r.place);
-  } else {
-    loc.keyPoints = [];
-  }
-
-  // Image prompts (handles both card formats — see readPrompt)
-  const imgPM = readPrompt(content, 'image');
-  if (imgPM !== undefined) loc.imagePrompt = imgPM;
-  const negPM = readPrompt(content, 'negative');
-  if (negPM !== undefined) loc.negativePrompt = negPM;
-
-  return loc;
-}
+// parseLocation lives in lib/parsers.js (single source of truth — see import at top).
 
 async function findLocMdPath(slug, city = DEFAULT_CITY) {
   const locRoot = locsDir(city);
@@ -604,144 +363,7 @@ function resolveThreadFile(city, rel) {
   return path.join(cityDir(city), rel);
 }
 
-function mdExtractLinks(s) {
-  const out = [];
-  const re = /\[([^\]]+)\]\(([^)]+)\)/g;
-  let m;
-  while ((m = re.exec(s)) !== null) out.push({ text: m[1].trim(), href: m[2].trim() });
-  return out;
-}
-function mdStripLinks(s) { return s.replace(/\[([^\]]+)\]\([^)]*\)/g, '$1'); }
-function mdStripInline(s) { return mdStripLinks(s).replace(/\*\*/g, '').replace(/^\s*[-•]\s*/, '').trim(); }
-
-function classifyChronicleLink({ text, href }) {
-  const t = text.toLowerCase();
-  let kind = 'other';
-  if (t.includes('инал'))                       kind = 'finale';
-  else if (t.includes('одул'))                  kind = 'module';
-  else if (t.includes('нпс') || t.includes('npc')) kind = 'npc';
-  // Module folder name = first path segment after modules/
-  let module = null;
-  const mm = href.match(/modules\/([^/]+)\//);
-  if (mm) module = decodeURIComponent(mm[1]);
-  return { text, href, kind, module };
-}
-
-// Extract clickable location links (those pointing into locations/) + plain text
-function parseChronicleLocation(rest) {
-  const links = mdExtractLinks(rest)
-    .filter(l => /locations\//.test(l.href))
-    .map(l => {
-      const base = l.href.split('/').pop().replace(/\.md$/i, '');
-      return { text: l.text, slug: decodeURIComponent(base) };
-    });
-  return { text: mdStripLinks(rest).trim(), links };
-}
-
-// Participant sub-bullet → { text, name } where name is leading identity for matching
-function parseParticipant(line) {
-  const clean = mdStripLinks(line.replace(/^\s*-\s*/, '')).replace(/\*\*/g, '').trim();
-  // Name = leading text before first " (", " — " or " →"
-  const name = clean.split(/\s+\(|\s+—\s+|\s+→\s+/)[0].trim();
-  return { text: clean, name };
-}
-
-function parseTable(lines) {
-  const rowLines = lines.filter(l => /^\s*\|/.test(l));
-  if (rowLines.length < 2) return null;
-  const parseRow = r => r.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map(c => mdStripLinks(c).replace(/\*\*/g, '').trim());
-  const headers = parseRow(rowLines[0]);
-  const body = rowLines.slice(2).map(parseRow);   // skip separator row
-  return { headers, rows: body };
-}
-
-function parseWorldState(block) {
-  const ws = { lastUpdate: null, sections: [] };
-  const lu = block.match(/Последнее обновление:\s*\*\*([^*]+)\*\*/);
-  if (lu) ws.lastUpdate = lu[1].trim();
-
-  for (const part of block.split(/\n(?=###\s)/)) {
-    const lines = part.split('\n');
-    if (!/^###\s/.test(lines[0])) continue;
-    const heading = lines[0].replace(/^###\s*/, '').trim();
-    const body = lines.slice(1);
-    const table = parseTable(body);
-    const prose = body
-      .map(l => l.trim())
-      .filter(l => l && !/^\|/.test(l) && !/^---+$/.test(l) && !/^>/.test(l))
-      .map(mdStripLinks);
-    ws.sections.push({ heading, table, prose });
-  }
-  return ws;
-}
-
-function parseEvent(chunk, id) {
-  const lines = chunk.split('\n');
-  const ev = {
-    id, parallel: null, location: { text: '', links: [] },
-    participants: [], eventsText: '', consequences: [], worldChanges: [], links: []
-  };
-  ev.heading = lines[0].replace(/^###\s*📅\s*/, '').trim();
-  const dash = ev.heading.indexOf(' — ');
-  ev.date  = dash !== -1 ? ev.heading.slice(0, dash).trim() : ev.heading;
-  // После даты заголовок имеет вид "[краткая локация]. [Название]." Первое предложение —
-  // локация (дублирует поле 📍 ниже), остальное — название. Если предложение одно
-  // (напр. у записей, созданных логгером) — это и есть название.
-  const afterDash = dash !== -1 ? ev.heading.slice(dash + 3).trim() : '';
-  const sentences = afterDash.split('. ');
-  ev.title = (sentences.length > 1 ? sentences.slice(1).join('. ') : afterDash).replace(/\.\s*$/, '').trim();
-
-  let field = null;
-  const proseBuf = [];
-
-  for (let i = 1; i < lines.length; i++) {
-    const raw = lines[i];
-    const t = raw.trim();
-    if (/^>\s*🔗/.test(t)) { mdExtractLinks(t).forEach(l => ev.links.push(classifyChronicleLink(l))); continue; }
-    if (/^>\s*⚡/.test(t)) { const m = t.match(/\*(.+?)\*/); ev.parallel = m ? m[1].trim() : t.replace(/^>\s*⚡\s*/, '').trim(); continue; }
-
-    const fm = t.match(/^-\s*\*\*([^:]+):\*\*\s*(.*)$/);
-    if (fm && /📍|👥|📋|⚖️|🌍/.test(fm[1])) {
-      const lbl = fm[1], rest = fm[2];
-      if      (lbl.includes('📍')) { field = 'location';     const pl = parseChronicleLocation(rest); ev.location = pl; }
-      else if (lbl.includes('👥')) { field = 'participants'; }
-      else if (lbl.includes('📋')) { field = 'events';       if (rest) proseBuf.push(rest); }
-      else if (lbl.includes('⚖️')) { field = 'consequences'; }
-      else if (lbl.includes('🌍')) { field = 'worldChanges'; }
-      continue;
-    }
-
-    if      (field === 'participants' && /^-\s+/.test(t)) ev.participants.push(parseParticipant(t));
-    else if (field === 'consequences' && /^-\s+/.test(t)) ev.consequences.push(mdStripInline(t));
-    else if (field === 'worldChanges' && /^-\s+/.test(t)) ev.worldChanges.push(mdStripInline(t));
-    else if (field === 'events')                          proseBuf.push(raw);
-    else if (field === 'location' && t && !/^-/.test(t))  ev.location.text += ' ' + mdStripLinks(t).trim();
-  }
-  ev.eventsText = proseBuf.join('\n').trim();
-  return ev;
-}
-
-function parseChronicle(raw) {
-  const content = raw.replace(/^﻿/, '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-
-  const hm = content.match(/^#\s+(.+)$/m);
-  const title = hm ? hm[1].replace(/[*#]/g, '').trim() : 'Хроника';
-
-  // World state block: between "## 🌍 Состояние мира" and "## 📋 Хроника событий"
-  let worldState = null;
-  const wsM = content.match(/##\s*🌍[^\n]*\n([\s\S]*?)(?=\n##\s)/);
-  if (wsM) worldState = parseWorldState(wsM[1]);
-
-  // Events block: after "## 📋 Хроника событий"
-  const events = [];
-  const evBlockM = content.match(/##\s*📋[^\n]*\n([\s\S]*)$/);
-  if (evBlockM) {
-    const chunks = evBlockM[1].split(/\n(?=###\s*📅)/).filter(c => /^###\s*📅/.test(c.trim()));
-    chunks.forEach((c, i) => events.push(parseEvent(c.trim(), i)));
-  }
-
-  return { title, worldState, events };
-}
+// md* helpers + parseChronicle* live in lib/parsers.js (single source of truth — see import at top).
 
 // ── Integrity checks ───────────────────────────────────────────────────────────
 
@@ -1070,23 +692,7 @@ app.post('/api/chronicles', express.json(), async (req, res) => {
 // ── Chronicle delete helpers ──────────────────────────────────────────────────
 
 // Parse participant names from events.md (lines under 👥 Участники:)
-function parseChronicleParticipants(eventsText) {
-  const names = new Set();
-  let inPart = false;
-  for (const line of eventsText.split('\n')) {
-    if (/👥\s*Участники/i.test(line)) { inPart = true; continue; }
-    if (inPart) {
-      if (/^\s*-\s+/.test(line)) {
-        // "  - Имя Фамилия (Клан, ...) — роль" — extract before first ( or —
-        const raw = line.replace(/^\s*-\s+/, '').split(/[\(—\/]/)[0].trim();
-        if (raw && !/без имён|безымянн/i.test(raw)) names.add(raw);
-      } else if (!/^\s*$/.test(line) && !/^\s{2,}/.test(line)) {
-        inPart = false;
-      }
-    }
-  }
-  return [...names];
-}
+// parseChronicleParticipants lives in lib/parsers.js (single source of truth — see import at top).
 
 // Find all .md files recursively
 async function findMdFiles(dir) {
@@ -2910,10 +2516,7 @@ app.get('/api/auth-status', async (req, res) => {
 
 app.post('/api/characters/:name/generate-appearance', express.json(), async (req, res) => {
   try {
-    const preferSource = req.body?.preferSource || null;
-    const orModel      = req.body?.orModel      || null;
-    const gen = await makeGenerationClient(preferSource, orModel);
-
+    // Validate cheap inputs BEFORE constructing a generation client (no API call needed to 404/400).
     const name = decodeURIComponent(req.params.name);
     const city = reqCity(req);
     const chars = await getAllCharacters(city);
@@ -2924,6 +2527,10 @@ app.post('/api/characters/:name/generate-appearance', express.json(), async (req
     const files  = await fs.readdir(artDir).catch(() => []);
     const imgs   = files.filter(f => /\.(jpg|jpeg|png|webp|gif)$/i.test(f)).sort();
     if (!imgs.length) return res.status(400).json({ error: 'Нет изображений в папке art/ персонажа' });
+
+    const preferSource = req.body?.preferSource || null;
+    const orModel      = req.body?.orModel      || null;
+    const gen = await makeGenerationClient(preferSource, orModel);
 
     // OAuth tier has tighter limits — cap at 1 image; OpenRouter/API-key can use more
     const MAX_IMGS = gen.source === 'claude-login' ? 1 : 4;
@@ -2992,6 +2599,115 @@ app.post('/api/characters/:name/generate-appearance', express.json(), async (req
     const status = e.status ?? 500;
     const msg    = e.error?.error?.message ?? e.message ?? String(e);
     console.error(`[generate-appearance] ${status}`, msg);
+    res.status(status >= 400 && status < 600 ? status : 500).json({ error: msg });
+  }
+});
+
+// ── Generate image prompt for a character ─────────────────────────────────────
+
+app.post('/api/characters/:name/generate-prompt', express.json(), async (req, res) => {
+  try {
+    // Validate cheap inputs BEFORE constructing a generation client (no API call needed to 404/400).
+    const name = decodeURIComponent(req.params.name);
+    const city = reqCity(req);
+    const chars = await getAllCharacters(city);
+    const char  = chars.find(c => c.name === name);
+    if (!char) return res.status(404).json({ error: 'Персонаж не найден' });
+
+    const appearance = char.appearance && !char.appearance.includes('⚠️') ? char.appearance.trim() : '';
+    if (!appearance) return res.status(400).json({ error: 'Заполните поле «Внешность» перед генерацией промта' });
+
+    const preferSource = req.body?.preferSource || null;
+    const orModel      = req.body?.orModel      || null;
+    const gen = await makeGenerationClient(preferSource, orModel);
+
+    const portretRules = await fs.readFile(path.join(ROOT, 'system', 'rules', 'portret.md'), 'utf-8').catch(() => '');
+
+    const lineageName = { vampires: 'vampire', fairies: 'changeling / fairy', mortals: 'mortal',
+      werewolves: 'werewolf', mages: 'mage', hunters: 'hunter' }[char.lineageFolder] || 'character';
+    const clan = char.clan && !char.clan.includes('⚠️') ? char.clan : '';
+
+    const systemPrompt = 'You are an expert prompt writer for AI image generation (DALL-E 3, Midjourney, Stable Diffusion). You write precise, vivid, technically correct English prompts for dark fantasy gothic RPG art.';
+    const userPrompt = `Write an image generation prompt for a Vampire: The Masquerade character card.
+
+Character:
+- Name: ${char.name}
+- Type: ${lineageName}${clan ? ` (${clan})` : ''}
+- Appearance (Russian): ${appearance}
+
+Rules excerpt:
+${portretRules.slice(0, 1200)}
+
+Output ONLY valid JSON, no extra text:
+{
+  "positive": "[Блок 1] <character appearance, pose, clothing — full English translation and expansion>\\n[Блок 2] <lighting, atmosphere, background>\\n[Блок 3] <style, medium, quality keywords>",
+  "negative": "<comma-separated negative terms>"
+}
+
+Requirements:
+- ALL text must be in English
+- Positive prompt: exactly 3 blocks labeled [Блок 1], [Блок 2], [Блок 3]
+- Block 1: translate character appearance from Russian, expand with specific visual details
+- Block 2: cinematic lighting, mood, background
+- Block 3: art style, medium, quality tags (dark fantasy digital painting, painterly brushstrokes, VtM aesthetic, concept art quality, artstation masterpiece)
+- Negative prompt: photorealistic photography, 3D render, CGI, anime, cartoon, blurry, low quality, deformed, blood, gore, wounds, injuries, violence
+- NO blood, wounds, gore, violence in positive prompt under any circumstances`;
+
+    let positive = '', negative = '';
+
+    const parseResult = (text) => {
+      const match = text.match(/\{[\s\S]*\}/);
+      if (!match) return;
+      const parsed = JSON.parse(match[0]);
+      positive = (parsed.positive || '').trim();
+      negative = (parsed.negative || '').trim();
+    };
+
+    if (gen.source === 'openrouter') {
+      const modelsToTry = [gen.model, ...OR_FALLBACK_MODELS.filter(m => m !== gen.model)];
+      let lastErr, allRateLimited = true;
+      for (const m of modelsToTry) {
+        try {
+          const r = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`, 'Content-Type': 'application/json', 'HTTP-Referer': 'http://localhost:3000' },
+            body: JSON.stringify({ model: m, max_tokens: 600, messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: userPrompt }] }),
+          });
+          const d = await r.json();
+          if (!r.ok) { const e = new Error(d.error?.message || `HTTP ${r.status}`); e.status = r.status; throw e; }
+          parseResult(d.choices?.[0]?.message?.content || '');
+          allRateLimited = false;
+          break;
+        } catch (e) {
+          lastErr = e;
+          const is429 = e.status === 429;
+          const retryable = e.status === 404 || is429 || (e.status === 400 && /not a valid model|No endpoints/i.test(e.message));
+          if (!retryable) { allRateLimited = false; throw e; }
+          if (!is429) allRateLimited = false;
+          console.warn(`[generate-prompt] model ${m} unavailable (${e.status}), trying next...`);
+          if (is429) await new Promise(r => setTimeout(r, 800));
+        }
+      }
+      if (!positive) {
+        if (allRateLimited) return res.status(429).json({ rateLimited: true, error: 'Превышен лимит запросов ко всем моделям. Подождите минуту и попробуйте снова.' });
+        throw lastErr;
+      }
+    } else {
+      const model = VALID_MODELS.includes(req.body?.model) ? req.body.model : 'claude-haiku-4-5-20251001';
+      const message = await gen.client.messages.create({
+        model, max_tokens: 600, system: systemPrompt,
+        messages: [{ role: 'user', content: userPrompt }],
+      });
+      parseResult(message.content[0]?.text?.trim() || '');
+    }
+
+    if (!positive) return res.status(500).json({ error: 'Модель не вернула промт. Попробуйте ещё раз.' });
+
+    res.json({ ok: true, positive, negative, source: gen.source });
+  } catch (e) {
+    const status = e.status ?? 500;
+    const msg    = e.error?.error?.message ?? e.message ?? String(e);
+    console.error(`[generate-prompt] ${status}`, msg);
     res.status(status >= 400 && status < 600 ? status : 500).json({ error: msg });
   }
 });
@@ -3094,26 +2810,35 @@ app.delete('/api/characters/:name/images/:filename', async (req, res) => {
       return res.status(400).json({ error: 'Недопустимый путь' });
     }
 
-    await fs.unlink(filePath);
+    // Idempotent: a missing file on disk is not an error if we can still clean its
+    // dangling reference from the card. Other unlink errors propagate to catch.
+    const fileWasMissing = await fs.unlink(filePath)
+      .then(() => false)
+      .catch(e => { if (e.code === 'ENOENT') return true; throw e; });
 
     // Remove line referencing this file from ## 🖼️ Изображения
     const cardPath = path.join(charsDir(city), char.lineageFolder, char.slug, `${char.slug}.md`);
     let card = await fs.readFile(cardPath, 'utf-8').catch(() => null);
+    let refRemoved = false;
     if (card) {
-      const lines = card.split('\n').filter(l => !l.includes(`art/${filename}`));
-      card = lines.join('\n');
+      const before = card;
+      card = card.split('\n').filter(l => !l.includes(`art/${filename}`)).join('\n');
       // If section empty — add placeholder
       card = card.replace(
         /(## 🖼️ Изображения\n)(\s*\n)((?!- ))/,
         '$1\n- ⏳ Изображение не предоставлено\n$3'
       );
-      await fs.writeFile(cardPath, card, 'utf-8');
+      if (card !== before) { await fs.writeFile(cardPath, card, 'utf-8'); refRemoved = true; }
+    }
+
+    // Genuine 404 only when the file was absent AND nothing referenced it.
+    if (fileWasMissing && !refRemoved) {
+      return res.status(404).json({ error: 'Файл не найден' });
     }
 
     delete _cache[city];
-    res.json({ ok: true, filename });
+    res.json({ ok: true, filename, fileWasMissing });
   } catch (e) {
-    if (e.code === 'ENOENT') return res.status(404).json({ error: 'Файл не найден' });
     res.status(500).json({ error: e.message });
   }
 });
@@ -3176,12 +2901,7 @@ function _extractLocNamesFromScenario(text, max = 5) {
   return [];
 }
 
-// RU→ASCII slug for new module/chronicle folder names
-const _SLUG_TR = { а:'a',б:'b',в:'v',г:'g',д:'d',е:'e',ё:'e',ж:'zh',з:'z',и:'i',й:'y',к:'k',л:'l',м:'m',н:'n',о:'o',п:'p',р:'r',с:'s',т:'t',у:'u',ф:'f',х:'h',ц:'ts',ч:'ch',ш:'sh',щ:'sch',ъ:'',ы:'y',ь:'',э:'e',ю:'yu',я:'ya' };
-function slugify(s) {
-  return String(s).toLowerCase().split('').map(c => _SLUG_TR[c] !== undefined ? _SLUG_TR[c] : c).join('')
-    .replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').replace(/_+/g, '_');
-}
+// slug generation lives in lib/parsers.js (single source of truth — see import above)
 function renderChronicleEventsSkeleton(displayName) {
   return `# 📖 ${displayName} — События\n\n> Хроника города · сводка города — [events.md](../../archive/events.md)\n> Протокол записей — [chronicle.md](../../../../system/rules/chronicle.md)\n\n---\n\n`;
 }
@@ -4031,7 +3751,7 @@ app.post('/api/settings', express.json(), async (req, res) => {
     await fs.writeFile(ENV_PATH, newContent, 'utf-8');
 
     const needsRestart = req.body?.restart !== false;
-    res.json({ ok: true, needsRestart });
+    res.json({ ok: true, needsRestart, supervised: SUPERVISED });
     if (needsRestart) scheduleRestart('[settings]');
   } catch (e) {
     console.error('[settings]', e.message);
@@ -4040,14 +3760,27 @@ app.post('/api/settings', express.json(), async (req, res) => {
 });
 
 const RESTART_CODE = 75; // wrapper.js watches for this exit code to restart
+// Only self-exit to restart when a guardian (wrapper.js) is watching — otherwise
+// `process.exit(75)` would kill the server permanently with nothing to relaunch it.
+const SUPERVISED = process.env.VTM_SUPERVISED === '1';
 
 function scheduleRestart(tag = '[restart]', delayMs = 300) {
+  if (!SUPERVISED) {
+    console.warn(`${tag} Авто-рестарт пропущен: сервер запущен без wrapper.js. ` +
+      `Изменения вступят в силу после ручного перезапуска (web/start.bat или npm start).`);
+    return false;
+  }
   console.log(`${tag} Перезапуск (exit ${RESTART_CODE})...`);
   setTimeout(() => process.exit(RESTART_CODE), delayMs);
+  return true;
 }
 
 app.post('/api/restart', (req, res) => {
-  res.json({ ok: true, message: 'Перезапуск...' });
+  res.json({
+    ok: true,
+    supervised: SUPERVISED,
+    message: SUPERVISED ? 'Перезапуск...' : 'Сервер запущен без wrapper.js — перезапустите вручную.',
+  });
   scheduleRestart('[restart]');
 });
 
