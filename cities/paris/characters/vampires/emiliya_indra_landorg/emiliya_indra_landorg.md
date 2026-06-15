@@ -58,7 +58,10 @@
   [Блок 3] Dark fantasy digital painting, visible painterly brushstrokes, textured oil-paint effect, cinematic composition, moody gothic atmosphere, Vampire the Masquerade aesthetic, concept art quality, painterly realism, artstation quality, masterpiece
 - **🚫 Негативный промт (Парадный №2):**
   photorealistic photography, digital art, anime, cartoon, illustration, watermark, text overlay, blurry, low quality, artifacts, deformed anatomy, extra limbs, oversaturated colors, bright white background, 3D render, CGI, sword, weapon, cigarette, modern clothing, pantsuit, clean minimalist fashion.
+- **Принадлежность:** Персонаж игрока
 
 ---
 
 ## 🖼️ Изображения
+
+- [Образ 1](art/emiliya_indra_landorg_01.png)

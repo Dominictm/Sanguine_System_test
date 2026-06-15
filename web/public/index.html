@@ -40,6 +40,9 @@
       <a class="nav-item" data-page="graph">
         <span class="nav-icon">🕸</span><span>Связи</span>
       </a>
+      <a class="nav-item" data-page="factions">
+        <span class="nav-icon">🗺️</span><span>Фракции</span>
+      </a>
       <a class="nav-item" data-page="chronicles-page">
         <span class="nav-icon">📕</span><span>Хроники</span>
       </a>
@@ -49,11 +52,17 @@
       <a class="nav-item" data-page="threads">
         <span class="nav-icon">🧵</span><span>Нити</span>
       </a>
+      <a class="nav-item" data-page="rumors">
+        <span class="nav-icon">🎲</span><span>Слухи</span>
+      </a>
       <a class="nav-item" data-page="locations">
         <span class="nav-icon">📍</span><span>Локации</span>
       </a>
       <a class="nav-item" data-page="tools">
         <span class="nav-icon">⚙️</span><span>Инструменты</span>
+      </a>
+      <a class="nav-item" data-page="search">
+        <span class="nav-icon">🔍</span><span>Поиск</span>
       </a>
     </nav>
 
@@ -84,7 +93,8 @@
       </div>
 
       <div class="chronicle-tabbar">
-        <button class="chron-tab active" data-chron-tab="timeline">🕰 Хронология</button>
+        <button class="chron-tab active" data-chron-tab="timeline">📋 События сессий</button>
+        <button class="chron-tab" data-chron-tab="lore">🕰 Хронология мира</button>
         <button class="chron-tab" data-chron-tab="world">🌍 Состояние мира</button>
       </div>
 
@@ -190,6 +200,35 @@
       </div>
       <div id="modules-list">
         <div class="loading-state"><div class="spinner"></div>Загрузка...</div>
+      </div>
+    </section>
+
+    <!-- Module Detail Page -->
+    <section id="page-module" class="page">
+      <div class="modp-header">
+        <button class="modp-back-btn" id="modp-back-btn">← Модули</button>
+        <div class="modp-header-main">
+          <h1 class="modp-title" id="modp-title">Загрузка...</h1>
+          <div class="modp-badges" id="modp-badges"></div>
+        </div>
+      </div>
+
+      <div class="modp-tabbar" id="modp-tabbar">
+        <button class="modp-tab active" data-modtab="info">ℹ Краткое</button>
+        <button class="modp-tab" data-modtab="scenario">📝 Сценарий</button>
+        <button class="modp-tab" data-modtab="events">📅 События</button>
+        <button class="modp-tab" data-modtab="npcs">👥 НПС</button>
+        <button class="modp-tab" data-modtab="locations">📍 Локации</button>
+        <button class="modp-tab" data-modtab="threads">🧵 Нити</button>
+      </div>
+
+      <div class="modp-body">
+        <div class="modp-panel active" id="modp-panel-info"></div>
+        <div class="modp-panel" id="modp-panel-scenario"></div>
+        <div class="modp-panel" id="modp-panel-events"></div>
+        <div class="modp-panel" id="modp-panel-npcs"></div>
+        <div class="modp-panel" id="modp-panel-locations"></div>
+        <div class="modp-panel" id="modp-panel-threads"></div>
       </div>
     </section>
 
@@ -348,8 +387,65 @@
       <div class="page-header">
         <h1 class="page-title">Нити</h1>
         <span class="page-sub" id="threads-sub">Открытые нити</span>
+        <button class="btn-submit" id="btn-new-thread" style="margin-left:auto">+ Новая нить</button>
+      </div>
+      <div id="thread-form" class="thread-form" style="display:none">
+        <div class="form-row">
+          <div class="form-group" style="flex:2"><label class="form-label">Заголовок *</label><input class="form-control" id="th-title" placeholder="Короткое имя нити"></div>
+          <div class="form-group"><label class="form-label">Приоритет</label>
+            <select class="form-control" id="th-prio"><option>Высокий</option><option selected>Средний</option><option>Низкий</option></select>
+          </div>
+          <div class="form-group"><label class="form-label">Статус</label>
+            <select class="form-control" id="th-status">
+              <option value="active">🔴 Активна</option>
+              <option value="background">🟡 Фоновая</option>
+              <option value="closed">🟢 Закрыта</option>
+              <option value="abandoned">⚫ Заброшена</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group"><label class="form-label">Описание</label><textarea class="form-control" id="th-desc" rows="2" placeholder="Суть нити, вопрос без ответа…"></textarea></div>
+        <div class="form-row">
+          <div class="form-group" style="flex:2"><label class="form-label">Источник</label><input class="form-control" id="th-source" placeholder="«Модуль», месяц год"></div>
+          <div class="form-group"><label class="form-label">Файл</label><select class="form-control" id="th-file"></select></div>
+        </div>
+        <div class="btn-row">
+          <button class="btn-submit" id="btn-save-thread">Создать</button>
+          <button class="btn-submit btn-secondary" id="btn-cancel-thread">Отмена</button>
+          <span id="th-err" class="err" style="display:none"></span>
+        </div>
       </div>
       <div id="threads-list">
+        <div class="loading-state"><div class="spinner"></div>Загрузка...</div>
+      </div>
+    </section>
+
+    <!-- Factions (political_state.md) -->
+    <section id="page-factions" class="page">
+      <div class="page-header">
+        <h1 class="page-title">Фракции</h1>
+        <span class="page-sub">Политический расклад домена</span>
+      </div>
+      <div class="chronicle-tabbar" id="factions-tabbar">
+        <button class="chron-tab active" data-fac-tab="map">🗺️ Карта фракций</button>
+        <button class="chron-tab" data-fac-tab="visitors">🧳 Визитёры</button>
+      </div>
+      <div id="factions-content">
+        <div class="loading-state"><div class="spinner"></div>Загрузка...</div>
+      </div>
+    </section>
+
+    <!-- Rumors (rumors_*.md) -->
+    <section id="page-rumors" class="page">
+      <div class="page-header">
+        <h1 class="page-title">Слухи</h1>
+        <span class="page-sub">d20 · бросай на сцене</span>
+      </div>
+      <div class="chronicle-tabbar" id="rumors-tabbar" data-rum-type="elysium">
+        <button class="chron-tab active" data-rum-type="elysium">🏛️ Элизиум</button>
+        <button class="chron-tab" data-rum-type="dreaming">🌙 Грёзы</button>
+      </div>
+      <div id="rumors-content" data-rum-type="elysium">
         <div class="loading-state"><div class="spinner"></div>Загрузка...</div>
       </div>
     </section>
@@ -455,13 +551,11 @@
 
       <!-- New Module -->
       <div class="tab-panel" id="tab-new-module">
-        <div class="form-group">
-          <label class="form-label">Название модуля *</label>
-          <input class="form-control" id="module-name" placeholder="ноябрь_2010_опера">
-          <p class="form-hint">Формат: месяц_год_описание — например ноябрь_2010_охота</p>
-        </div>
-        <button class="btn-submit" id="btn-new-module">Создать модуль</button>
-        <pre class="output-area" id="out-new-module"></pre>
+        <p class="validate-hint">
+          Модули теперь создаются <strong>внутри хроники</strong>: открой хронику в разделе «Хроники»
+          и нажми «+ Модуль». Так модуль сразу привязывается к нужной хронике, ПК и НПС.
+        </p>
+        <button class="btn-submit" id="btn-goto-chronicles">Перейти к хроникам</button>
       </div>
 
       <!-- Validate -->
@@ -525,6 +619,12 @@
         <div class="ls-section">
           <div class="ls-sec-title">🔄 Индекс событий</div>
           <button class="btn-submit btn-secondary" id="btn-rebuild-idx">Пересобрать индекс города</button>
+        </div>
+
+        <div class="ls-section">
+          <div class="ls-sec-title">📇 Реестр персонажей</div>
+          <p class="form-hint">Добавляет в <code>characters_index.md</code> папки персонажей, которых там нет, и сообщает о «висячих» записях. Существующие записи не трогает.</p>
+          <button class="btn-submit btn-secondary" id="btn-sync-index">Синхронизировать реестр</button>
         </div>
 
         <pre class="output-area" id="out-more"></pre>
@@ -631,6 +731,21 @@
       </div>
     </section>
 
+    <!-- Search -->
+    <section id="page-search" class="page">
+      <div class="page-header">
+        <h1 class="page-title">Поиск</h1>
+        <span class="page-sub" id="search-global-sub"></span>
+      </div>
+      <div class="srch-bar">
+        <input class="srch-input" id="srch-input" placeholder="Поиск по персонажам, локациям, событиям, модулям…" autocomplete="off" maxlength="120">
+        <button class="srch-btn" id="srch-btn">🔍</button>
+      </div>
+      <div id="srch-results">
+        <div class="srch-hint">Введи запрос — минимум 3 символа</div>
+      </div>
+    </section>
+
   </div><!-- #main -->
 </div><!-- #app -->
 
@@ -710,6 +825,15 @@
     <button class="modal-close" id="module-detail-close">✕</button>
     <div id="module-detail-content"></div>
   </div>
+</div>
+
+<!-- ── Image Lightbox ── -->
+<div id="img-lightbox" class="img-lightbox">
+  <button class="lightbox-close" id="lightbox-close">✕</button>
+  <button class="lightbox-nav prev" id="lightbox-prev">&#8249;</button>
+  <button class="lightbox-nav next" id="lightbox-next">&#8250;</button>
+  <img class="lightbox-img" id="lightbox-img" src="" alt="">
+  <div class="lightbox-counter" id="lightbox-counter"></div>
 </div>
 
 <script src="scripts.js"></script>

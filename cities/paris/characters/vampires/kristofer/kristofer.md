@@ -7,7 +7,7 @@
 - **Слаг:** kristofer
 - **Родной город:** Париж
 - **Линейка WoD:** Вампир
-- **Клан:** Сетиты (Followers of Set)
+- **Клан:** Сетиты
 - **Секта:** Независимые
 - **Поколение:** 11-е
 - **Год рождения:** 1952
@@ -29,6 +29,8 @@
   [Блок 3] Dark fantasy digital painting, visible painterly brushstrokes, textured oil-paint effect, cinematic composition, moody gothic atmosphere, Vampire the Masquerade aesthetic, concept art quality, painterly realism, artstation quality, masterpiece
 - **🚫 Негативный промт:**
   photorealistic photography, digital art, anime, cartoon, illustration, watermark, text overlay, blurry, low quality, artifacts, deformed anatomy, extra limbs, oversaturated colors, bright white background, 3D render, CGI.
+- **Иерархия в городе:** н/п — гость; в Париже не имеет официального статуса
+- **Принадлежность:** Создатель НПС
 
 ---
 

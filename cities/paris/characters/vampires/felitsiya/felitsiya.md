@@ -105,5 +105,4 @@ photorealistic, photo, 3D render, CGI, anime style, chibi, watermark, signature,
 - [Образ 1](art/felitsiya_01.png)
 - [Образ 2](art/felitsiya_02.png)
 - [Образ 3](art/felitsiya_03.png)
-- [Образ 4](art/felitsiya_04.png)
 

@@ -20,7 +20,7 @@ if %errorlevel% == 0 (
     echo   Server already running at http://localhost:3000
     start http://localhost:3000
     echo.
-    pause
+    
     exit /b 0
 )
 
@@ -57,4 +57,4 @@ node wrapper.js
 echo.
 echo   Server stopped (code: %errorlevel%).
 echo.
-pause
+

@@ -1,15 +1,16 @@
 ﻿# update_images.ps1
-# Сканирует папки персонажей и локаций.
-# Если в папке обнаружены изображения, не внесённые в карточку .md, обновляет:
-#   1. Секцию «## 🖼️ Изображения» в карточке персонажа / локации
-#   2. Строку «Арт:» в characters_ALL.md (только для персонажей)
+# Сканирует папки персонажей и локаций в cities/<город>/.
+# Если в папке art/ (персонажи) или рядом с карточкой (локации) обнаружены изображения,
+# не внесённые в карточку .md, обновляет секцию «## 🖼️ Изображения».
 #
 # Запуск:
-#   .\tools\update_images.ps1              — применить изменения
-#   .\tools\update_images.ps1 -DryRun      — только показать, без записи
+#   .\tools\update_images.ps1                 — все города, применить изменения
+#   .\tools\update_images.ps1 -City paris     — только указанный город
+#   .\tools\update_images.ps1 -DryRun         — только показать, без записи
 
 [CmdletBinding()]
 param(
+    [string]$City   = '',
     [switch]$DryRun
 )
 
@@ -17,12 +18,10 @@ $ErrorActionPreference = 'Stop'
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $OutputEncoding          = [System.Text.Encoding]::UTF8
 
-$Root    = Split-Path $PSScriptRoot -Parent
-$AllMd   = Join-Path $Root 'characters\characters_ALL.md'
-$ImgExts = @('.jpg', '.jpeg', '.png', '.gif', '.webp')
-
-# Линейки для определения пути в characters_ALL.md
-$Lineages = @('vampires','fairies','mortals','werewolves','mages','hunters')
+$Root        = Split-Path $PSScriptRoot -Parent
+$CitiesRoot  = Join-Path $Root 'cities'
+$ImgExts     = @('.jpg', '.jpeg', '.png', '.gif', '.webp')
+$Lineages    = @('vampires','fairies','mortals','werewolves','mages','hunters')
 
 # ─── Вспомогательные функции ─────────────────────────────────────────────────
 
@@ -44,7 +43,7 @@ function Get-LinkedFilenames($lines) {
         if ($inSection -and $l -match '^## ')  { break }
         if ($inSection -and $l -match '\]\(([^)]+)\)') {
             $href    = $matches[1]
-            # Берём только имя файла (без пути — в карточках пути нет)
+            # Берём только имя файла (в карточках путь — art/<file> или <file>)
             $decoded = Decode-Url $href
             $result += [System.IO.Path]::GetFileName($decoded)
         }
@@ -68,11 +67,10 @@ function Get-MaxImageIndex($lines) {
 }
 
 # Обновляет секцию ## 🖼️ Изображения в файле карточки.
+# $hrefPrefix — префикс пути для новых ссылок ('art/' для персонажей, '' для локаций).
 # Возвращает $true если файл был изменён.
-function Update-CardSection($cardPath, $newFiles) {
+function Update-CardSection($cardPath, $newFiles, $hrefPrefix) {
     $raw   = [System.IO.File]::ReadAllText($cardPath, [System.Text.Encoding]::UTF8)
-    $lines = $raw -split "(?<=`n)"    # сохраняем переносы
-    # Работаем со строками без завершающего \n для удобства
     $clean = $raw -replace "`r`n", "`n" -replace "`r", "`n"
     $ls    = $clean -split "`n"
 
@@ -88,7 +86,7 @@ function Update-CardSection($cardPath, $newFiles) {
         foreach ($fn in $newFiles) {
             $maxIdx++
             $enc = Encode-Url $fn
-            $newLines += "- [Образ $maxIdx — $fn]($enc)"
+            $newLines += "- [Образ $maxIdx]($hrefPrefix$enc)"
         }
         $combined = $clean.TrimEnd() + "`n`n## 🖼️ Изображения`n`n" + ($newLines -join "`n") + "`n"
         if (-not $DryRun) {
@@ -108,7 +106,7 @@ function Update-CardSection($cardPath, $newFiles) {
     $hasPlaceholder   = $false
     for ($i = $secIdx + 1; $i -lt $secEnd; $i++) {
         $l = $ls[$i].TrimEnd()
-        if ($l -match '⏳')         { $hasPlaceholder = $true }
+        if ($l -match '⏳')             { $hasPlaceholder = $true }
         elseif ($l -match '^\s*-\s*\[') { $existingImgLines += $l }
     }
 
@@ -119,11 +117,10 @@ function Update-CardSection($cardPath, $newFiles) {
     foreach ($fn in $newFiles) {
         $maxIdx++
         $enc      = Encode-Url $fn
-        $newLines += "- [Образ $maxIdx — $fn]($enc)"
+        $newLines += "- [Образ $maxIdx]($hrefPrefix$enc)"
     }
 
     # Собираем новое содержимое секции
-    $sectionContent = @()
     if ($hasPlaceholder -and $existingImgLines.Count -eq 0) {
         # Только плейсхолдер — заменяем целиком
         $sectionContent = $newLines
@@ -136,7 +133,6 @@ function Update-CardSection($cardPath, $newFiles) {
     $after  = if ($secEnd -lt $ls.Count) { $ls[$secEnd..($ls.Count - 1)] } else { @() }
 
     $combined = ($before + $sectionContent + @('') + $after) -join "`n"
-    # Убираем тройные и более пустые строки
     $combined = $combined -replace "(\n){3,}", "`n`n"
     $combined = $combined.TrimEnd() + "`n"
 
@@ -148,77 +144,24 @@ function Update-CardSection($cardPath, $newFiles) {
     return $true
 }
 
-# Обновляет строку «Арт:» в characters_ALL.md для одного персонажа.
-# $lineage — подпапка ('vampires', 'fairies', ...)
-# $charName — имя персонажа (название папки)
-# $allImgFiles — полный список изображений в папке (существующие + новые)
-function Update-AllMdArt($lineage, $charName, $allImgFiles) {
-    if (-not (Test-Path $AllMd)) { return }
-
-    $raw   = [System.IO.File]::ReadAllText($AllMd, [System.Text.Encoding]::UTF8)
-    $clean = $raw -replace "`r`n", "`n" -replace "`r", "`n"
-    $ls    = $clean -split "`n"
-
-    # Ищем заголовок записи персонажа — содержит encoded имя или прямое имя
-    $charEnc   = Encode-Url $charName
-    $charEntry = -1
-    for ($i = 0; $i -lt $ls.Count; $i++) {
-        $l = $ls[$i]
-        if ($l -match '^### \[' -and ($l -match [regex]::Escape($charName) -or $l -match [regex]::Escape($charEnc))) {
-            $charEntry = $i; break
-        }
-    }
-    if ($charEntry -eq -1) { return }   # персонажа нет в списке
-
-    # Ищем строку «**Арт:**» в следующих 8 строках
-    $artIdx = -1
-    for ($i = $charEntry + 1; $i -lt [Math]::Min($charEntry + 9, $ls.Count); $i++) {
-        if ($ls[$i] -match '^\s*-\s*\*\*Арт:\*\*') { $artIdx = $i; break }
-    }
-    if ($artIdx -eq -1) { return }   # нет поля Арт
-
-    # Строим новую строку Арт
-    $relBase   = "$lineage/" + (Encode-Url $charName) + "/"
-    $artParts  = @()
-    $n         = 0
-    foreach ($fn in @($allImgFiles)) {
-        $n++
-        $fnEnc     = Encode-Url $fn
-        $artParts += "[Образ $n]($relBase$fnEnc)"
-    }
-    $newArtLine = "- **Арт:** " + ($artParts -join ' · ')
-
-    if ($ls[$artIdx].TrimEnd() -eq $newArtLine) { return }   # не изменилось
-
-    $ls[$artIdx] = $newArtLine
-    $combined = ($ls -join "`n").TrimEnd() + "`n"
-
-    if (-not $DryRun) {
-        [System.IO.File]::WriteAllText($AllMd, $combined, [System.Text.Encoding]::UTF8)
-    }
-    Write-Host "    ✎  characters_ALL.md → Арт обновлён" -ForegroundColor Cyan
-}
-
 # ─── Сканирование одной папки ─────────────────────────────────────────────────
 
 # Возвращает список новых файлов изображений (есть в папке, нет в карточке)
 function Scan-Folder($folderPath, $cardPath) {
+    if (-not (Test-Path $folderPath)) { return @() }
     $dirItems = Get-ChildItem $folderPath -File | Where-Object {
         $ImgExts -contains $_.Extension.ToLower()
     }
     if (-not $dirItems) { return @() }
 
-    $raw        = [System.IO.File]::ReadAllText($cardPath, [System.Text.Encoding]::UTF8)
-    $clean      = $raw -replace "`r`n", "`n" -replace "`r", "`n"
-    $ls         = $clean -split "`n"
-    $linked     = Get-LinkedFilenames $ls
+    $raw    = [System.IO.File]::ReadAllText($cardPath, [System.Text.Encoding]::UTF8)
+    $clean  = $raw -replace "`r`n", "`n" -replace "`r", "`n"
+    $ls     = $clean -split "`n"
+    $linked = Get-LinkedFilenames $ls
 
     $newFiles = @()
     foreach ($item in $dirItems) {
         $fn = $item.Name
-        # Пропускаем portrait.png генерируемый веб-сервером — он alias, не отдельный образ
-        # Раскомментировать строку ниже если portrait.* нужно добавлять:
-        # if ($fn -match '^portrait\.' ) { continue }
         if ($linked -notcontains $fn) { $newFiles += $fn }
     }
     return $newFiles
@@ -226,71 +169,81 @@ function Scan-Folder($folderPath, $cardPath) {
 
 # ─── Основной обход ───────────────────────────────────────────────────────────
 
-$totalUpdated  = 0
-$totalNew      = 0
+if (-not (Test-Path $CitiesRoot)) {
+    Write-Host "  ✗ Папка cities/ не найдена: $CitiesRoot" -ForegroundColor Red
+    exit 1
+}
+
+if ($City) {
+    $p = Join-Path $CitiesRoot $City
+    if (-not (Test-Path $p)) { Write-Host "  ✗ Город не найден: $City" -ForegroundColor Red; exit 1 }
+    $cityDirs = @(Get-Item $p)
+} else {
+    $cityDirs = @(Get-ChildItem $CitiesRoot -Directory)
+}
+
+$totalUpdated = 0
+$totalNew     = 0
 
 Write-Host ""
 Write-Host "  🖼️  update_images.ps1$(if($DryRun){' [DRY RUN]'})" -ForegroundColor Yellow
 Write-Host "  ─────────────────────────────────────────────────" -ForegroundColor DarkGray
-Write-Host ""
 
-# ── Персонажи ─────────────────────────────────────────────────────────────────
-Write-Host "  👥 Персонажи" -ForegroundColor White
+foreach ($cityDir in $cityDirs) {
+    Write-Host ""
+    Write-Host "  🏙  $($cityDir.Name)" -ForegroundColor Magenta
 
-foreach ($lineage in $Lineages) {
-    $lineageDir = Join-Path $Root "characters\$lineage"
-    if (-not (Test-Path $lineageDir)) { continue }
+    # ── Персонажи ─────────────────────────────────────────────────────────────
+    $charsRoot = Join-Path $cityDir.FullName 'characters'
+    if (Test-Path $charsRoot) {
+        Write-Host "    👥 Персонажи" -ForegroundColor White
+        foreach ($lineage in $Lineages) {
+            $lineageDir = Join-Path $charsRoot $lineage
+            if (-not (Test-Path $lineageDir)) { continue }
 
-    foreach ($charDir in Get-ChildItem $lineageDir -Directory) {
-        $charName = $charDir.Name
-        $cardPath = Join-Path $charDir.FullName "$charName.md"
-        if (-not (Test-Path $cardPath)) { continue }
+            foreach ($charDir in Get-ChildItem $lineageDir -Directory) {
+                $slug     = $charDir.Name
+                $cardPath = Join-Path $charDir.FullName "$slug.md"
+                if (-not (Test-Path $cardPath)) { continue }
 
-        $newFiles = Scan-Folder $charDir.FullName $cardPath
-        if (-not $newFiles) { continue }
+                $artDir   = Join-Path $charDir.FullName 'art'
+                $newFiles = Scan-Folder $artDir $cardPath
+                if (-not $newFiles) { continue }
 
-        Write-Host "    + $charName  →  $($newFiles.Count) новых: $($newFiles -join ', ')" -ForegroundColor Green
-
-        # Все изображения (уже существующие в карточке + новые) для обновления Арт:
-        $raw      = [System.IO.File]::ReadAllText($cardPath, [System.Text.Encoding]::UTF8)
-        $ls       = ($raw -replace "`r`n","`n") -split "`n"
-        $existing = Get-LinkedFilenames $ls
-        $allImgs  = @($existing) + @($newFiles)
-
-        $changed = Update-CardSection $cardPath $newFiles
-        if ($changed) {
-            $totalUpdated++
-            $totalNew += $newFiles.Count
+                Write-Host "      + $slug  →  $($newFiles.Count) новых: $($newFiles -join ', ')" -ForegroundColor Green
+                if (Update-CardSection $cardPath $newFiles 'art/') {
+                    $totalUpdated++
+                    $totalNew += $newFiles.Count
+                }
+            }
         }
-
-        Update-AllMdArt $lineage $charName $allImgs
     }
-}
 
-# ── Локации ───────────────────────────────────────────────────────────────────
-Write-Host ""
-Write-Host "  🗺️  Локации" -ForegroundColor White
+    # ── Локации ───────────────────────────────────────────────────────────────
+    $locRoot = Join-Path $cityDir.FullName 'locations'
+    if (Test-Path $locRoot) {
+        Write-Host "    🗺  Локации" -ForegroundColor White
+        Get-ChildItem $locRoot -Directory -Recurse | ForEach-Object {
+            $locDir   = $_
+            $locName  = $locDir.Name
+            $cardPath = Join-Path $locDir.FullName "$locName.md"
+            if (-not (Test-Path $cardPath)) { return }
 
-$locRoot = Join-Path $Root 'locations'
-if (Test-Path $locRoot) {
-    # Рекурсивно ищем папки, содержащие .md с тем же именем
-    Get-ChildItem $locRoot -Directory -Recurse | ForEach-Object {
-        $locDir  = $_
-        $locName = $locDir.Name
-        $cardPath = Join-Path $locDir.FullName "$locName.md"
-        if (-not (Test-Path $cardPath)) { return }
+            # Изображения могут лежать в art/ или рядом с карточкой
+            $artDir   = Join-Path $locDir.FullName 'art'
+            $hasArt   = Test-Path $artDir
+            $scanDir  = if ($hasArt) { $artDir } else { $locDir.FullName }
+            $prefix   = if ($hasArt) { 'art/' } else { '' }
 
-        $newFiles = Scan-Folder $locDir.FullName $cardPath
-        if (-not $newFiles) { return }
+            $newFiles = Scan-Folder $scanDir $cardPath
+            if (-not $newFiles) { return }
 
-        Write-Host "    + $locName  →  $($newFiles.Count) новых: $($newFiles -join ', ')" -ForegroundColor Green
-
-        $changed = Update-CardSection $cardPath $newFiles
-        if ($changed) {
-            $totalUpdated++
-            $totalNew += $newFiles.Count
+            Write-Host "      + $locName  →  $($newFiles.Count) новых: $($newFiles -join ', ')" -ForegroundColor Green
+            if (Update-CardSection $cardPath $newFiles $prefix) {
+                $totalUpdated++
+                $totalNew += $newFiles.Count
+            }
         }
-        # Локации в characters_ALL.md не обновляем
     }
 }
 

@@ -4,6 +4,7 @@ const fs      = require('fs').promises;
 const crypto  = require('crypto');
 const { spawn } = require('child_process');
 const Anthropic = require('@anthropic-ai/sdk');
+const { RU_MONTHS_NOM, THREAD_STATUS, readPrompt, writePrompt, periodLabel, threadStatusKey, parseThreadsContent } = require('./lib/parsers');
 
 // Load .env file (secrets not committed to git)
 try {
@@ -74,7 +75,11 @@ const ACTION_MAP = {
   'PUT /api/characters/:name/relations':      req => `✏  Редактирование отношений: ${decodeURIComponent(req.params.name)}`,
   'POST /api/characters/:name/upload-image':  req => `📷 Загрузка изображения → ${decodeURIComponent(req.params.name)}`,
   'POST /api/characters/:name/generate-appearance': req => `🤖 Генерация внешности: ${decodeURIComponent(req.params.name)}`,
+  'DELETE /api/characters/:name/images/:filename':  req => `🗑 Удаление изображения: ${decodeURIComponent(req.params.filename)} ← ${decodeURIComponent(req.params.name)}`,
   'GET /api/locations':                       req => `Локации — загрузка (${reqCity(req)})`,
+  'GET /api/locations/:slug/images':          req => `Арты локации: ${decodeURIComponent(req.params.slug)}`,
+  'PUT /api/locations/:slug/fields':          req => `✏  Редактирование локации: ${decodeURIComponent(req.params.slug)}`,
+  'POST /api/locations/:slug/upload-image':   req => `📷 Загрузка изображения локации → ${decodeURIComponent(req.params.slug)}`,
   'GET /api/graph':                           req => `Граф связей (${reqCity(req)})`,
   'GET /api/modules':                         req => `Модули — загрузка (${reqCity(req)})`,
   'GET /api/modules/:name':                   req => `Модуль: ${decodeURIComponent(req.params.name)}`,
@@ -82,6 +87,11 @@ const ACTION_MAP = {
   'GET /api/threads':                         req => `Открытые нити (${reqCity(req)})`,
   'GET /api/integrity':                       req => `Проверка целостности (${reqCity(req)})`,
   'GET /api/auth-status':                     () => 'Статус авторизации Claude',
+  'PUT /api/factions':  req => `✏  Фракции — сохранение (${reqCity(req)})`,
+  'PUT /api/timeline':  req => `✏  Хронология — сохранение (${reqCity(req)})`,
+  'PUT /api/visitors':  req => `✏  Визитёры — сохранение (${reqCity(req)})`,
+  'PUT /api/rumors':    req => `✏  Слухи — сохранение (${reqCity(req)})`,
+  'GET /api/search':    req => `🔍 Поиск: «${req.query.q || ''}» (${reqCity(req)})`,
   'POST /api/tool/:name':                     req => `🔧 Инструмент: ${req.params.name} [args: ${(req.body?.args||[]).join(', ')}]`,
   'POST /api/run-tool':                       req => `🔧 PS-инструмент: ${req.body?.tool}`,
   'POST /api/log-session':                    () => 'Запись сессии',
@@ -196,6 +206,8 @@ function parseCharacter(rawContent, folderName, lineage) {
     if (k === 'Секта / Двор' && !c.sect)        c.sect          = v;
     if (k === 'Фригольд / Локация' && !c.location) c.location  = v;
     if (k === 'Принадлежность')                 c.belonging     = v;
+    if (k === 'Присутствие')                    c.presence      = v;   // появления в других городах
+    if (k === 'Алиасы')                         c.aliases       = v;
   }
 
   // Diary links: - **📖 Дневники:** [Title](path.md)
@@ -211,12 +223,11 @@ function parseCharacter(rawContent, folderName, lineage) {
     c.diaries = [];
   }
 
-  // Multi-line image prompt block
-  const promptM = content.match(/- \*\*[^*]*Промт для генерации[^*]*\*\*[^\n]*\n((?:[ \t]+[^\n]+\n?)+)/);
-  if (promptM) c.imagePrompt = promptM[1].replace(/^[ \t]+/gm, '').trim();
-
-  const negM = content.match(/- \*\*[^*]*Негативный промт[^*]*\*\*[^\n]*\n((?:[ \t]+[^\n]+\n?)+)/);
-  if (negM) c.negativePrompt = negM[1].replace(/^[ \t]+/gm, '').trim();
+  // Image prompts (handles both card formats — see readPrompt)
+  const imgP = readPrompt(content, 'image');
+  if (imgP !== undefined) c.imagePrompt = imgP;
+  const negP = readPrompt(content, 'negative');
+  if (negP !== undefined) c.negativePrompt = negP;
 
   // Relationships section (indented sub-bullets after **Отношения:**)
   const relBlock = content.match(/- \*\*Отношения:\*\*\n((?:[ \t]+- .+\n?)+)/);
@@ -283,6 +294,7 @@ async function getAllCharacters(city = DEFAULT_CITY) {
         char.lineageFolder = folder;
         char.slug = entry;
         char.city = city;
+        char.hasSheet = await fs.access(path.join(charDir, `${entry}-sheet.md`)).then(() => true).catch(() => false);
 
         // Images live in <slug>/art/. Prefer slug_NN.* (web upload), else first image.
         const artFiles = await fs.readdir(path.join(charDir, 'art')).catch(() => []);
@@ -443,13 +455,32 @@ function parseLocation(rawContent, folderName) {
     loc.keyPoints = [];
   }
 
-  const imgPM = content.match(/\*\*GPT[^*]*\*\*:\n```[^\n]*\n([\s\S]+?)\n```/);
-  if (imgPM) loc.imagePrompt = imgPM[1].trim();
-
-  const negPM = content.match(/\*\*Негативный промт[^*]*\*\*:\n```[^\n]*\n([\s\S]+?)\n```/);
-  if (negPM) loc.negativePrompt = negPM[1].trim();
+  // Image prompts (handles both card formats — see readPrompt)
+  const imgPM = readPrompt(content, 'image');
+  if (imgPM !== undefined) loc.imagePrompt = imgPM;
+  const negPM = readPrompt(content, 'negative');
+  if (negPM !== undefined) loc.negativePrompt = negPM;
 
   return loc;
+}
+
+async function findLocMdPath(slug, city = DEFAULT_CITY) {
+  const locRoot = locsDir(city);
+  async function walk(dir) {
+    let entries;
+    try { entries = await fs.readdir(dir, { withFileTypes: true }); } catch { return null; }
+    for (const e of entries) {
+      if (e.name.startsWith('.')) continue;
+      const full = path.join(dir, e.name);
+      if (e.isDirectory()) { const r = await walk(full); if (r) return r; }
+      else if (e.name.endsWith('.md')) {
+        const parsed = parseLocation(await fs.readFile(full, 'utf-8').catch(() => ''), path.basename(path.dirname(full)));
+        if (parsed.slug === slug) return full;
+      }
+    }
+    return null;
+  }
+  return walk(locRoot);
 }
 
 async function getAllLocations(city = DEFAULT_CITY) {
@@ -469,11 +500,14 @@ async function getAllLocations(city = DEFAULT_CITY) {
           const content   = await fs.readFile(fullPath, 'utf-8');
           const locFolder = path.dirname(fullPath);
           const loc       = parseLocation(content, path.basename(locFolder));
-          const files     = await fs.readdir(locFolder).catch(() => []);
-          const imgFile   = files.find(f => /\.(jpg|jpeg|png|webp|gif)$/i.test(f));
-          if (imgFile) {
+          const artDir    = path.join(locFolder, 'art');
+          const artFiles  = await fs.readdir(artDir).catch(() => []);
+          const imgFiles  = artFiles.filter(f => /\.(jpg|jpeg|png|webp|gif)$/i.test(f)).sort();
+          if (imgFiles.length) {
             const relParts = path.relative(locRoot, locFolder).split(path.sep);
-            loc.imageUrl = `/city-img/${city}/locations/` + relParts.map(p => encodeURIComponent(p)).join('/') + '/' + encodeURIComponent(imgFile);
+            const base = `/city-img/${city}/locations/` + relParts.map(p => encodeURIComponent(p)).join('/') + '/art/';
+            loc.imageUrl  = base + encodeURIComponent(imgFiles[0]);
+            loc.imageUrls = imgFiles.map(f => base + encodeURIComponent(f));
           }
           result.push(loc);
         } catch {}
@@ -546,6 +580,28 @@ async function readOpenThreadsRaw(city = DEFAULT_CITY) {
     if (raw) all += '\n' + raw;
   }
   return all;
+}
+
+// All threads across archive + per-chronicle files, each tagged with its file.
+async function readThreadsStructured(city = DEFAULT_CITY) {
+  const threads = [];
+  const archRel = 'archive/open_threads.md';
+  const archRaw = await fs.readFile(path.join(cityDir(city), archRel), 'utf-8').catch(() => null);
+  if (archRaw) threads.push(...parseThreadsContent(archRaw, archRel));
+  let chrs; try { chrs = await fs.readdir(chroniclesDir(city), { withFileTypes: true }); } catch { chrs = []; }
+  for (const ch of chrs) {
+    if (!ch.isDirectory()) continue;
+    const rel = `chronicles/${ch.name}/open_threads.md`;
+    const raw = await fs.readFile(path.join(cityDir(city), rel), 'utf-8').catch(() => null);
+    if (raw) threads.push(...parseThreadsContent(raw, rel));
+  }
+  return threads;
+}
+
+// Whitelist + resolve a city-relative thread file to an absolute path (no traversal).
+function resolveThreadFile(city, rel) {
+  if (!/^(archive\/open_threads\.md|chronicles\/[^/]+\/open_threads\.md)$/.test(rel || '')) return null;
+  return path.join(cityDir(city), rel);
 }
 
 function mdExtractLinks(s) {
@@ -1533,64 +1589,25 @@ ${content}
     await fs.writeFile(path.join(modDir, `${mod}.md`), mainContent, 'utf-8');
     console.log(`[fill-module] ${mod}.md updated`);
 
-    // ── Generate location cards ───────────────────────────────────────────
+    // ── Generate location cards (single AI call for all cards at once) ──────────
+    // Step 1: extract location names from scenario text via regex — no AI call.
+    // Step 2: if names found, one AI call returns all cards as JSON.
     const locSource = req.body?.locSource || null;
     const locModel  = req.body?.locModel  || null;
     const createdLocations = [];
     try {
-      const locPrompt = `Проанализируй сценарий ниже и выведи список новых локаций (мест действия), для которых нужны карточки.
-Ответ строго в формате JSON-массива строк с именами локаций на русском языке. Только те, которые фигурируют как значимые места действия.
-Пример: ["Заброшенный особняк в Пасси", "Ночной клуб «Ла Шимер»", "Канализация под 5-м арр."]
+      const locNames = _extractLocNamesFromScenario(scenarioText);
 
-СЦЕНАРИЙ:
-${scenarioText.slice(0, 3000)}`;
+      if (locNames.length > 0) {
+        const locGen = await makeGenerationClient(locSource, locModel).catch(() => null);
+        const portretRules = await fs.readFile(path.join(ROOT, 'system', 'rules', 'portret.md'), 'utf-8').catch(() => '');
 
-      let locNamesRaw = '';
-      const locGen = await makeGenerationClient(locSource, locModel).catch(() => null);
-      if (locGen?.source === 'openrouter') {
-        const r = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-          method: 'POST',
-          headers: { 'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`, 'Content-Type': 'application/json', 'HTTP-Referer': 'http://localhost:3000' },
-          body: JSON.stringify({ model: locGen.model, max_tokens: 300, messages: [{ role: 'user', content: locPrompt }] }),
-        });
-        const d = await r.json();
-        locNamesRaw = d.choices?.[0]?.message?.content || '';
-      } else if (locGen?.client) {
-        const m = await locGen.client.messages.create({ model: locGen.model || 'claude-haiku-4-5-20251001', max_tokens: 300, messages: [{ role: 'user', content: locPrompt }] });
-        locNamesRaw = m.content[0]?.text || '';
-      }
-
-      const locNames = JSON.parse(locNamesRaw.match(/\[[\s\S]*\]/)?.[0] || '[]').slice(0, 5);
-
-      // Read location card template rules
-      const portretRules = await fs.readFile(path.join(ROOT, 'system', 'rules', 'portret.md'), 'utf-8').catch(() => '');
-
-      for (const locName of locNames) {
-        const locSlug = slugify(locName);
-        if (!locSlug) continue;
-        const locDir  = path.join(locsDir(city), 'Другие', slugify(modTitle), locSlug);
-        const locFile = path.join(locDir, `${locSlug}.md`);
-        if (await fs.stat(locFile).catch(() => null)) continue; // already exists
-
-        const locCardPrompt = `Создай карточку локации для Vampire: The Masquerade V20, Париж 2010.
-
-Правила оформления:
-${portretRules.slice(0, 1500)}
-
-Локация: «${locName}»
-Контекст модуля: ${modTitle}
-Краткое содержание сценария: ${scenarioText.slice(0, 500)}
-
-Структура карточки:
-# ${locName}
-
-> **Название:** ${locName} | **Округ:** [округ] | **Район:** [район] | **Адрес:** [адрес] | **Зона:** [🟢/🟡/🔴] | **Контроль:** [фракция]
-
+        const cardTemplate = (name) =>
+`# ${name}
+> **Название:** ${name} | **Округ:** [округ] | **Район:** [район] | **Адрес:** [адрес] | **Зона:** [🟢/🟡/🔴] | **Контроль:** [фракция]
 ---
-
 ## 🎭 Атмосфера
-[2–3 предложения, готический нуар]
-
+[2–3 предложения]
 ## 👁️ Сенсорная палитра
 | Канал | |
 |---|---|
@@ -1598,9 +1615,7 @@ ${portretRules.slice(0, 1500)}
 | **Звук** | |
 | **Запах** | |
 | **Тактильное** | |
-
 ---
-
 ## 🩸 Контекст Камарильи / Масок
 | | |
 |---|---|
@@ -1609,36 +1624,64 @@ ${portretRules.slice(0, 1500)}
 | **Постоянные фигуры** | |
 | **Угрозы** | |
 | **Маскарад** | 🔴/🟡/🟢 |
-
 ---
-
 ## 🔗 Связанные модули
 - [${modTitle}](../../../../chronicles/${chr}/modules/${mod}/${mod}.md)
-
 ## 🖼️ Изображения
-- ⏳ Изображение не предоставлено
+- ⏳ Изображение не предоставлено`;
+
+        const allCardsPrompt = `Создай карточки локаций для Vampire: The Masquerade V20, Париж 2010.
+
+Правила оформления (кратко):
+${portretRules.slice(0, 900)}
+
+Контекст модуля: ${modTitle}
+Сценарий (выдержка): ${scenarioText.slice(0, 350)}
+
+Создай карточки для КАЖДОЙ из ${locNames.length} локаций ниже.
+Верни СТРОГО JSON-массив без лишнего текста вне JSON:
+[{"name":"<название>","content":"<полная карточка markdown>"},...]
+
+Шаблон каждой карточки:
+${cardTemplate('«название»')}
+
+Локации:
+${locNames.map((n, i) => `${i + 1}. «${n}»`).join('\n')}
 
 Язык: русский. Стиль: готический нуар VtM.`;
 
-        let locCardText = '';
+        let allLocsRaw = '';
         if (locGen?.source === 'openrouter') {
           const r = await fetch('https://openrouter.ai/api/v1/chat/completions', {
             method: 'POST',
             headers: { 'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`, 'Content-Type': 'application/json', 'HTTP-Referer': 'http://localhost:3000' },
-            body: JSON.stringify({ model: locGen.model, max_tokens: 1500, messages: [{ role: 'user', content: locCardPrompt }] }),
+            body: JSON.stringify({ model: locGen.model, max_tokens: locNames.length * 800 + 200, messages: [{ role: 'user', content: allCardsPrompt }] }),
           });
           const d = await r.json();
-          locCardText = d.choices?.[0]?.message?.content?.trim() || '';
+          allLocsRaw = d.choices?.[0]?.message?.content || '';
         } else if (locGen?.client) {
-          const m = await locGen.client.messages.create({ model: 'claude-haiku-4-5-20251001', max_tokens: 1500, messages: [{ role: 'user', content: locCardPrompt }] });
-          locCardText = m.content[0]?.text?.trim() || '';
+          const m = await locGen.client.messages.create({
+            model: 'claude-haiku-4-5-20251001', max_tokens: locNames.length * 800 + 200,
+            messages: [{ role: 'user', content: allCardsPrompt }],
+          });
+          allLocsRaw = m.content[0]?.text || '';
         }
 
-        if (locCardText) {
-          await fs.mkdir(locDir, { recursive: true });
-          await fs.writeFile(locFile, locCardText + '\n', 'utf-8');
-          createdLocations.push(locName);
-          console.log(`[fill-module] location created: ${locName}`);
+        if (allLocsRaw) {
+          const locCards = JSON.parse(allLocsRaw.match(/\[[\s\S]*\]/)?.[0] || '[]');
+          // Write all location cards in parallel
+          await Promise.all(locCards.map(async ({ name, content }) => {
+            if (!name || !content) return;
+            const locSlug = slugify(name);
+            if (!locSlug) return;
+            const locDir  = path.join(locsDir(city), 'Другие', slugify(modTitle), locSlug);
+            const locFile = path.join(locDir, `${locSlug}.md`);
+            if (await fs.stat(locFile).catch(() => null)) return; // already exists
+            await fs.mkdir(locDir, { recursive: true });
+            await fs.writeFile(locFile, content.trim() + '\n', 'utf-8');
+            createdLocations.push(name);
+            console.log(`[fill-module] location created: ${name}`);
+          }));
         }
       }
     } catch (locErr) {
@@ -1743,23 +1786,194 @@ app.get('/api/modules/:name', async (req, res) => {
 
 app.get('/api/threads', async (req, res) => {
   try {
-    const content = await readOpenThreadsRaw(reqCity(req));
-    const threads = [];
-    for (const line of content.split('\n')) {
-      const m = line.match(/^\|\s*(\d+)\s*\|\s*\*\*([^*]+)\*\*(.*?)\|\s*([^|]+)\|\s*([^|]+)\|\s*([^|]+)\|/);
-      if (!m) continue;
-      const sc = m[5].trim();
-      threads.push({
-        id:          parseInt(m[1]),
-        title:       m[2].trim(),
-        description: m[3].replace(/^[\s—\-]+/, '').trim(),
-        source:      m[4].trim(),
-        status:      sc.includes('🔴') ? 'active' : sc.includes('🟡') ? 'background' : sc.includes('🟢') ? 'closed' : 'unknown',
-        priority:    m[6].replace(/\|?\s*$/, '').trim()
+    res.json(await readThreadsStructured(reqCity(req)));
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Create a new thread (appends a table row). Default target: archive/open_threads.md.
+app.post('/api/threads', express.json(), async (req, res) => {
+  try {
+    const city = reqCity(req);
+    const { title, description = '', source = '', status = 'active', priority = 'Средний' } = req.body || {};
+    const rel = req.body?.file || 'archive/open_threads.md';
+    if (!title || !String(title).trim()) return res.status(400).json({ error: 'Укажите заголовок нити' });
+    const abs = resolveThreadFile(city, rel);
+    if (!abs) return res.status(400).json({ error: 'Некорректный файл нити' });
+    const content = await fs.readFile(abs, 'utf-8').catch(() => null);
+    if (content === null) return res.status(404).json({ error: 'Файл нитей не найден' });
+
+    const lines     = content.split('\n');
+    const headerIdx = lines.findIndex(l => /^\|\s*(№|#)\s*\|\s*Нить/.test(l));
+    if (headerIdx === -1) return res.status(400).json({ error: 'В файле нет таблицы нитей' });
+
+    const ids    = parseThreadsContent(content, rel).map(t => t.id);
+    const nextId = ids.length ? Math.max(...ids) + 1 : 1;
+    const desc   = String(description).trim();
+    const statusText = THREAD_STATUS[status] || THREAD_STATUS.active;
+    const row = `| ${nextId} | **${String(title).trim()}**${desc ? ' — ' + desc : ''} | ${String(source).trim() || '—'} | ${statusText} | ${priority} |`;
+
+    let insertAt = headerIdx + 2; // skip header + separator
+    while (insertAt < lines.length && lines[insertAt].trimStart().startsWith('|')) insertAt++;
+    lines.splice(insertAt, 0, row);
+    await fs.writeFile(abs, lines.join('\n'), 'utf-8');
+    res.json({ ok: true, id: nextId });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Update a thread's status and/or priority in its source file.
+app.patch('/api/threads/:id', express.json(), async (req, res) => {
+  try {
+    const city = reqCity(req);
+    const id   = parseInt(req.params.id);
+    const { file, status, priority } = req.body || {};
+    if (status && !THREAD_STATUS[status]) return res.status(400).json({ error: 'Неизвестный статус' });
+    const abs = resolveThreadFile(city, file);
+    if (!abs) return res.status(400).json({ error: 'Некорректный файл нити' });
+
+    const content = await fs.readFile(abs, 'utf-8').catch(() => null);
+    if (content === null) return res.status(404).json({ error: 'Файл нитей не найден' });
+    const lines = content.split('\n');
+
+    let done = false;
+    for (let i = 0; i < lines.length; i++) {
+      const m = lines[i].match(/^\|\s*(\d+)\s*\|/);
+      if (!m || parseInt(m[1]) !== id) continue;
+      const cells = lines[i].split('|'); // ['', ' id ', ' **t** desc ', ' src ', ' status ', ' prio ', '']
+      if (cells.length < 6) break;
+      if (status)   cells[4] = ` ${THREAD_STATUS[status]} `;
+      if (priority) cells[5] = ` ${String(priority).trim()} `;
+      lines[i] = cells.join('|');
+      done = true;
+      break;
+    }
+    if (!done) return res.status(404).json({ error: 'Нить не найдена' });
+    await fs.writeFile(abs, lines.join('\n'), 'utf-8');
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Module detail ─────────────────────────────────────────────────────────────
+
+app.get('/api/chronicles/:chr/modules/:mod/detail', async (req, res) => {
+  try {
+    const city = reqCity(req);
+    const { chr, mod } = req.params;
+    const modDir = path.join(chroniclesDir(city), chr, 'modules', mod);
+
+    if (!await fs.stat(modDir).catch(() => null))
+      return res.status(404).json({ error: 'Модуль не найден' });
+
+    const result = { name: mod, chronicle: chr, title: mod, pcs: [], npcs: [], locations: [], events: [] };
+
+    // 1. Main module file — title, metadata, participants, description
+    const mainRaw = await fs.readFile(path.join(modDir, `${mod}.md`), 'utf-8').catch(() => '');
+    if (mainRaw) {
+      const mc = mainRaw.replace(/^﻿/, '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+      const hm = mc.match(/^#\s+(.+)$/m);
+      if (hm) result.title = hm[1].replace(/[*[\]]/g, '').trim();
+
+      for (const [label, key] of [['Тип','type'],['Формат','format'],['Время','time'],['Тон','tone'],['Локация','location']]) {
+        const fm = mc.match(new RegExp(`\\|\\s*\\*\\*${label}\\*\\*\\s*\\|\\s*([^|\\n]+)\\|`));
+        if (fm) result[key] = fm[1].trim();
+      }
+
+      // Description: text between last --- and first ## section (or end)
+      const descM = mc.match(/---\s*\n([\s\S]+?)(?=\n##|\s*$)/);
+      if (descM) result.description = descM[1].trim();
+
+      // Participants: ## 👥 Участники или Действующие лица section
+      // Find the section header and extract content until next ##
+      const sectMatch = mc.match(/^##\s*[^\s]*?\s*(?:Участники|Действующие\s+лица)\s*\n/m);
+      if (sectMatch) {
+        const startIdx = mc.indexOf(sectMatch[0]) + sectMatch[0].length;
+        const restContent = mc.substring(startIdx);
+        const nextSectionIdx = restContent.search(/\n##[^#]/);
+        const section = nextSectionIdx === -1 ? restContent : restContent.substring(0, nextSectionIdx);
+
+        // Parse both formats:
+        // 1. Bullet format: `- [Name](path) — Role`
+        // 2. Subsection format: `### Emoji Name — Role`
+        for (const line of section.split('\n')) {
+          const t = line.trim();
+          if (!t) continue;
+
+          // Format 1: bullet list items `- [Name](path) — Role` or `- Name — Role`
+          // Only process if it looks like a participant (has valid name and role)
+          if (t.startsWith('-') && /[—–]/.test(t)) {
+            const m = t.match(/^-\s+\[?([^\]()—–\n]+?)\]?(?:\([^)]*\))?\s*(?:[—–]\s*(.*))?$/);
+            if (!m) continue;
+            let name = m[1].trim();
+            // Strip leading emoji/symbol if present (anything that's not a Cyrillic/Latin letter or common punctuation)
+            name = name.replace(/^[^\p{L}]+/u, '').trim();
+            // Skip if it starts with a quote or looks like descriptive text (not a name)
+            if (/^[«"'«»]|^\d+\.|\s{2,}/.test(name) || name.length > 100) continue;
+            const role = (m[2] || '').trim();
+            // Validate role looks reasonable (not too long, not just a quote continuation)
+            if (!role || role.length > 200 || /^[«"']$/.test(role)) continue;
+            if (/персонаж игрока|ПК\b/i.test(role)) result.pcs.push({ name, role });
+            else result.npcs.push({ name, role: role || 'НПС' });
+          }
+          // Format 2: subsection headers (### Emoji Name — Role)
+          else if (t.startsWith('###')) {
+            // Extract everything after ### (skip emoji), then split on em/en-dash
+            const afterHash = t.replace(/^###\s+/, '').trim();
+            if (!afterHash) continue;
+            const parts = afterHash.split(/\s*[—–]\s*/);
+            if (parts.length === 0) continue;
+            // First part is name (may include role in parentheses)
+            let name = parts[0].trim();
+            let role = parts[1] ? parts[1].trim() : '';
+            // Strip leading emoji/symbol from name (anything that's not a Cyrillic/Latin letter)
+            name = name.replace(/^[^\p{L}]+/u, '').trim();
+            // Extract name from "Name (role)" format if needed
+            const nameMatch = name.match(/^([^()]+?)(?:\s*\(([^)]+)\))?$/);
+            if (nameMatch) {
+              name = nameMatch[1].trim();
+              if (!role && nameMatch[2]) role = nameMatch[2].trim();
+            }
+            if (!name) continue;
+            if (/персонаж игрока|ПК\b/i.test(role)) result.pcs.push({ name, role });
+            else result.npcs.push({ name, role: role || 'НПС' });
+          }
+        }
+      }
+    }
+
+    // 2. Scenario content
+    result.scenario = await fs.readFile(path.join(modDir, 'scenario.md'), 'utf-8').catch(() => '');
+
+    // 3. NPC details from npc.md
+    result.npcContent = await fs.readFile(path.join(modDir, 'npc.md'), 'utf-8').catch(() => '');
+
+    // 4. Chronicle events (all events for the chronicle)
+    const evRaw = await fs.readFile(path.join(chroniclesDir(city), chr, 'events.md'), 'utf-8').catch(() => '');
+    if (evRaw) {
+      const ec = evRaw.replace(/^﻿/, '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+      ec.split(/\n(?=###\s*📅)/).filter(c => /^###\s*📅/.test(c.trim())).forEach(c => {
+        const ev = parseEvent(c.trim(), result.events.length);
+        ev.chronicle = chr;
+        result.events.push(ev);
       });
     }
-    res.json(threads);
-  } catch (e) { res.status(500).json({ error: e.message }); }
+
+    // 5. Open threads (chronicle-level first, then city archive)
+    result.openThreads = await fs.readFile(path.join(chroniclesDir(city), chr, 'open_threads.md'), 'utf-8').catch(() => null)
+      ?? await fs.readFile(path.join(cityDir(city), 'archive', 'open_threads.md'), 'utf-8').catch(() => '');
+
+    // 6. Extract locations from scenario content (- **Name** — description pattern)
+    if (result.scenario) {
+      const locSec = result.scenario.match(/###?[^#\n]*[Лл]окаци[яи][^\n]*\n([\s\S]+?)(?=\n###|\n---|\s*$)/);
+      if (locSec) {
+        for (const m of locSec[1].matchAll(/[-*]\s+\*\*([^*]+)\*\*\s*[—–]\s*([^\n]+)/g))
+          result.locations.push({ name: m[1].trim(), description: m[2].trim() });
+      }
+    }
+
+    res.json(result);
+  } catch (e) {
+    console.error('[module-detail]', e.message);
+    res.status(500).json({ error: e.message });
+  }
 });
 
 app.get('/api/characters/:name/diary', async (req, res) => {
@@ -1783,9 +1997,260 @@ app.get('/api/characters/:name/diary', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// Add a [label](journal/<period>.md) link to the card's "📖 Дневники" field if absent.
+async function ensureDiaryLink(city, char, period, label) {
+  const cardPath = path.join(charsDir(city), char.lineageFolder, char.slug, `${char.slug}.md`);
+  let card = await fs.readFile(cardPath, 'utf-8').catch(() => null);
+  if (card === null) return;
+  const href = `journal/${period}.md`;
+  if (card.includes(href)) return;                       // already linked
+  const link = `[${label}](${href})`;
+  const fieldRe = /^- \*\*📖 Дневники:\*\*\s*(.*)$/m;
+  if (fieldRe.test(card)) {
+    card = card.replace(fieldRe, (_, cur) => `- **📖 Дневники:** ${cur.trim() ? cur.trim() + ' · ' + link : link}`);
+  } else {
+    // Insert after the last "- **Field:**" metadata bullet
+    const lastM = [...card.matchAll(/^- \*\*[^*:\n]+[^*]*:\*\*\s*.+$/gm)].at(-1);
+    const line = `- **📖 Дневники:** ${link}`;
+    if (lastM) { const pos = lastM.index + lastM[0].length; card = card.slice(0, pos) + '\n' + line + card.slice(pos); }
+    else return;
+  }
+  await fs.writeFile(cardPath, card, 'utf-8');
+}
+
+// Create or append a diary entry (journal/<period>.md), then link it from the card.
+app.put('/api/characters/:name/diary', express.json(), async (req, res) => {
+  try {
+    const city = reqCity(req);
+    const name = decodeURIComponent(req.params.name);
+    const { period, session = '', text = '', mode = 'append' } = req.body || {};
+    const per = String(period || '').trim();
+    if (!/^(\d{4}-\d{2}|retrospective)$/.test(per)) return res.status(400).json({ error: 'Период: ГГГГ-ММ или retrospective' });
+    if (!String(text).trim()) return res.status(400).json({ error: 'Пустой текст записи' });
+
+    const chars = await getAllCharacters(city);
+    const char  = chars.find(c => c.name === name);
+    if (!char) return res.status(404).json({ error: 'Персонаж не найден' });
+
+    const jdir = path.join(charsDir(city), char.lineageFolder, char.slug, 'journal');
+    await fs.mkdir(jdir, { recursive: true });
+    const file = path.join(jdir, `${per}.md`);
+
+    const title   = String(session).trim() || periodLabel(per);
+    const indented = String(text).trim().split('\n').map(l => l.trim() ? '  ' + l : '').join('\n');
+    const section  = `### 📅 ${title}\n\n- **👤 Автор:** ${char.name}\n\n- **📖 Текст записи:**\n\n${indented}\n`;
+
+    const existing = await fs.readFile(file, 'utf-8').catch(() => null);
+    const out = (existing === null || mode === 'create')
+      ? `# 📖 Дневник ${char.name} — ${periodLabel(per)}\n\n---\n\n${section}`
+      : existing.replace(/\s*$/, '') + `\n\n---\n\n${section}`;
+    await fs.writeFile(file, out, 'utf-8');
+
+    await ensureDiaryLink(city, char, per, periodLabel(per));
+    delete _cache[city];
+    res.json({ ok: true, file: `journal/${per}.md` });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// AI-generate diary prose for a character + period (not saved — returned for review).
+app.post('/api/characters/:name/diary/generate', express.json(), async (req, res) => {
+  try {
+    const city = reqCity(req);
+    const name = decodeURIComponent(req.params.name);
+    const { period = '', session = '', hint = '', orModel = null, preferSource = null } = req.body || {};
+
+    const chars = await getAllCharacters(city);
+    const char  = chars.find(c => c.name === name);
+    if (!char) return res.status(404).json({ error: 'Персонаж не найден' });
+
+    const gen = await makeGenerationClient(preferSource, orModel);
+
+    const diaryRules = await fs.readFile(path.join(ROOT, 'system', 'rules', 'diary_rules.md'), 'utf-8').catch(() => '');
+    const card = await fs.readFile(path.join(charsDir(city), char.lineageFolder, char.slug, `${char.slug}.md`), 'utf-8').catch(() => '');
+    let eventsText = '';
+    try {
+      const chrs = (await fs.readdir(chroniclesDir(city), { withFileTypes: true })).filter(e => e.isDirectory());
+      // Sort newest-first by mtime — most relevant for recent diary entries
+      const withMtime = await Promise.all(chrs.map(async e => {
+        const st = await fs.stat(path.join(chroniclesDir(city), e.name)).catch(() => ({ mtimeMs: 0 }));
+        return { name: e.name, mtime: st.mtimeMs };
+      }));
+      withMtime.sort((a, b) => b.mtime - a.mtime);
+      const EVENTS_BUDGET = 8000;
+      for (const { name } of withMtime) {
+        if (eventsText.length >= EVENTS_BUDGET) break;
+        const ev = await fs.readFile(path.join(chroniclesDir(city), name, 'events.md'), 'utf-8').catch(() => null);
+        if (ev) eventsText += `\n### ${name}\n${ev.slice(0, Math.max(1500, EVENTS_BUDGET - eventsText.length))}`;
+      }
+    } catch {}
+
+    const periodTxt = periodLabel(period) || period;
+    const systemPrompt = `Ты — Рассказчик Vampire: The Masquerade V20. Пишешь литературную дневниковую запись от первого лица строго по правилам.
+
+# ПРАВИЛА ДНЕВНИКОВ
+${diaryRules.slice(0, 4000)}
+
+# КАРТОЧКА ПЕРСОНАЖА (голос, характер, факты)
+${card.slice(0, 3000)}
+
+# СОБЫТИЯ ХРОНИКИ (ИСТОЧНИК ФАКТОВ — не выдумывай вне этого)
+${eventsText.slice(0, 8000) || '(не найдены)'}`;
+
+    const userPrompt = `Напиши дневниковую запись персонажа «${char.name}» за период ${periodTxt}${session ? ` (${session})` : ''}.
+${hint ? `Акцент/пожелание: ${hint}\n` : ''}Требования:
+- От первого лица, голосом персонажа (см. карточку).
+- Только факты из событий хроники; канон не выдумывай.
+- Лаконично и литературно, по правилам diary_rules.md.
+- Верни ТОЛЬКО текст записи (без заголовков и markdown-полей).`;
+
+    let text = '';
+    if (gen.source === 'openrouter') {
+      const models = [gen.model, ...OR_FALLBACK_MODELS.filter(m => m !== gen.model)];
+      let lastErr;
+      for (const m of models) {
+        try { text = await callOpenRouter(m, systemPrompt, userPrompt, []); if (m !== gen.model) console.log(`[diary-gen] fallback model: ${m}`); break; }
+        catch (e) {
+          lastErr = e;
+          const retry = e.status === 404 || e.status === 429 || (e.status === 400 && /not a valid model|No endpoints/i.test(e.message));
+          if (!retry) throw e;
+        }
+      }
+      if (!text) throw lastErr;
+    } else {
+      const msg = await gen.client.messages.create({
+        model: gen.model, max_tokens: 1200, system: systemPrompt,
+        messages: [{ role: 'user', content: userPrompt }],
+      });
+      text = msg.content[0]?.text?.trim() || '';
+    }
+    res.json({ ok: true, text, source: gen.source });
+  } catch (e) {
+    const status = e.status ?? 500;
+    res.status(status >= 400 && status < 600 ? status : 500).json({ error: e.message ?? String(e) });
+  }
+});
+
 app.get('/api/locations', async (req, res) => {
   try { res.json(await getAllLocations(reqCity(req))); }
   catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/locations/:slug/images', async (req, res) => {
+  try {
+    const slug = decodeURIComponent(req.params.slug);
+    const city = reqCity(req);
+    const locs = await getAllLocations(city);
+    const loc  = locs.find(l => l.slug === slug);
+    if (!loc) return res.status(404).json({ error: 'not found' });
+    res.json({ images: loc.imageUrls || (loc.imageUrl ? [loc.imageUrl] : []) });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.put('/api/locations/:slug/fields', express.json(), async (req, res) => {
+  try {
+    const slug   = decodeURIComponent(req.params.slug);
+    const city   = reqCity(req);
+    const fields = req.body.fields || {};
+
+    const mdPath = await findLocMdPath(slug, city);
+    if (!mdPath) return res.status(404).json({ error: 'Локация не найдена' });
+
+    let card = await fs.readFile(mdPath, 'utf-8');
+
+    for (const [key, rawValue] of Object.entries(fields)) {
+      const value = String(rawValue).trim();
+
+      if (key === 'atmosphere') {
+        card = card.replace(
+          /(## (?:🎭\s+)?Атмосфера[^\n]*\n+)([\s\S]+?)(\n## |\n---|$)/,
+          (_, hdr, _old, tail) => `${hdr}${value}\n${tail}`
+        );
+        continue;
+      }
+      if (key === 'vtmText') {
+        card = card.replace(
+          /(## (?:🩸\s+)?(?:VtM[^\n]*|Контекст[^\n]*)\n+)([\s\S]+?)(\n## |\n---|$)/i,
+          (_, hdr, body, tail) => {
+            const tableLines = body.split('\n').filter(l => l.startsWith('|') || /^\s*$/.test(l)).join('\n').trim();
+            return `${hdr}${value ? value + '\n\n' : ''}${tableLines}\n${tail}`;
+          }
+        );
+        continue;
+      }
+      if (key === 'imagePrompt') {
+        card = writePrompt(card, 'image', value, 'fenced');
+        continue;
+      }
+      if (key === 'negativePrompt') {
+        card = writePrompt(card, 'negative', value, 'fenced');
+        continue;
+      }
+      if (key === 'hooks') {
+        const lines = value.split('\n').filter(l => l.trim());
+        const numbered = lines.map((l, i) => `${i + 1}. ${l.replace(/^\d+\.\s*/, '')}`).join('\n');
+        card = card.replace(
+          /(## (?:🪝\s+)?(?:Сценарные крючки|Крючки)[^\n]*\n+)([\s\S]+?)(\n## |\n---|$)/i,
+          (_, hdr, _old, tail) => `${hdr}${numbered}\n${tail}`
+        );
+        continue;
+      }
+      // Inline metadata fields
+      const fieldMap = { subtype: 'Название', district: 'Округ', neighborhood: 'Район', address: 'Адрес', control: 'Контроль' };
+      const mdKey = fieldMap[key];
+      if (mdKey) {
+        const esc = mdKey.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        card = card.replace(
+          new RegExp(`(\\*\\*${esc}:\\*\\*)\\s*([^|\\n]+?)(?=\\s*\\||\\s*\\n|$)`, 'm'),
+          `$1 ${value}`
+        );
+      }
+    }
+
+    await fs.writeFile(mdPath, card, 'utf-8');
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/locations/:slug/upload-image', express.json({ limit: '20mb' }), async (req, res) => {
+  try {
+    const { base64, ext = 'jpg' } = req.body;
+    const slug = decodeURIComponent(req.params.slug);
+    const city = reqCity(req);
+
+    const mdPath = await findLocMdPath(slug, city);
+    if (!mdPath) return res.status(404).json({ error: 'Локация не найдена' });
+
+    const locFolder = path.dirname(mdPath);
+    const artDir    = path.join(locFolder, 'art');
+    await fs.mkdir(artDir, { recursive: true });
+
+    const safeExt = (ext || 'jpg').toLowerCase().replace(/[^a-z]/g, '') || 'jpg';
+    const existing = await fs.readdir(artDir).catch(() => []);
+    const slugRe   = new RegExp(`^${slug.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}_(\\d+)\\.[a-z]+$`, 'i');
+    const nums     = existing.map(f => { const m = slugRe.exec(f); return m ? parseInt(m[1], 10) : 0; }).filter(n => n > 0);
+    const nextNum  = (nums.length ? Math.max(...nums) : 0) + 1;
+    const filename = `${slug}_${String(nextNum).padStart(2, '0')}.${safeExt}`;
+
+    await fs.writeFile(path.join(artDir, filename), Buffer.from(base64, 'base64'));
+
+    let card = await fs.readFile(mdPath, 'utf-8').catch(() => null);
+    if (card) {
+      const newLine = `- [Образ ${nextNum}](art/${filename})`;
+      if (/⏳[^\n]*изображение не предоставлено/i.test(card)) {
+        card = card.replace(/- ⏳[^\n]*изображение не предоставлено[^\n]*/i, newLine);
+      } else {
+        card = card.replace(/(## 🖼️ Изображения\n)([\s\S]*?)(\n##|\s*$)/, (_, hdr, body, tail) => {
+          return `${hdr}${body.replace(/\n+$/, '')}\n${newLine}\n${tail}`;
+        });
+      }
+      await fs.writeFile(mdPath, card, 'utf-8');
+    }
+
+    const locRoot  = locsDir(city);
+    const relParts = path.relative(locRoot, locFolder).split(path.sep);
+    const url = `/city-img/${city}/locations/` + relParts.map(p => encodeURIComponent(p)).join('/') + '/art/' + encodeURIComponent(filename);
+    res.json({ success: true, filename, url });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 app.get('/api/chronicle', async (req, res) => {
@@ -1797,6 +2262,177 @@ app.get('/api/chronicle', async (req, res) => {
     const parsed = parseChronicle(raw);          // title + World State from archive/events.md
     parsed.events = await aggregateEvents(city); // full events from chronicles/<chr>/events.md
     res.json({ exists: true, ...parsed });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Raw markdown archive docs — rendered client-side with the lore renderer.
+const archiveDoc = file => async (req, res) => {
+  try {
+    const content = await fs.readFile(path.join(archiveDir(reqCity(req)), file), 'utf-8').catch(() => null);
+    res.json({ exists: content !== null, content: content || '' });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+};
+app.get('/api/timeline', archiveDoc('timeline.md'));          // historical lore (B3)
+app.get('/api/factions', archiveDoc('political_state.md'));   // C1 — faction map
+app.get('/api/visitors', archiveDoc('visitors.md'));          // C3 — cross-city guests
+
+// C2 — rumor tables (Elysium d20 / Dreaming d20)
+app.get('/api/rumors', async (req, res) => {
+  try {
+    const which = req.query.type === 'dreaming' ? 'rumors_dreaming.md' : 'rumors_elysium.md';
+    const content = await fs.readFile(path.join(archiveDir(reqCity(req)), which), 'utf-8').catch(() => null);
+    res.json({ exists: content !== null, content: content || '', type: req.query.type === 'dreaming' ? 'dreaming' : 'elysium' });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// PUT — write archive docs back to disk
+const _writeArchiveDoc = (file) => async (req, res) => {
+  try {
+    const city    = reqCity(req);
+    const content = req.body?.content;
+    if (typeof content !== 'string') return res.status(400).json({ error: 'content required' });
+    const dir = archiveDir(city);
+    await fs.mkdir(dir, { recursive: true });
+    await fs.writeFile(path.join(dir, file), content, 'utf-8');
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+};
+app.put('/api/timeline', express.json(), _writeArchiveDoc('timeline.md'));
+app.put('/api/factions', express.json(), _writeArchiveDoc('political_state.md'));
+app.put('/api/visitors', express.json(), _writeArchiveDoc('visitors.md'));
+app.put('/api/rumors', express.json(), async (req, res) => {
+  try {
+    const city    = reqCity(req);
+    const type    = req.body?.type === 'dreaming' ? 'dreaming' : 'elysium';
+    const content = req.body?.content;
+    if (typeof content !== 'string') return res.status(400).json({ error: 'content required' });
+    const file = type === 'dreaming' ? 'rumors_dreaming.md' : 'rumors_elysium.md';
+    const dir  = archiveDir(city);
+    await fs.mkdir(dir, { recursive: true });
+    await fs.writeFile(path.join(dir, file), content, 'utf-8');
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// C4 — V20 character sheet (<slug>-sheet.md next to the card)
+app.get('/api/characters/:name/sheet', async (req, res) => {
+  try {
+    const city  = reqCity(req);
+    const name  = decodeURIComponent(req.params.name);
+    const chars = await getAllCharacters(city);
+    const char  = chars.find(c => c.name === name);
+    if (!char) return res.status(404).json({ error: 'Персонаж не найден' });
+    const file = path.join(charsDir(city), char.lineageFolder, char.slug, `${char.slug}-sheet.md`);
+    const content = await fs.readFile(file, 'utf-8').catch(() => null);
+    res.json({ exists: content !== null, content: content || '' });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Global search ──────────────────────────────────────────────────────────────
+app.get('/api/search', async (req, res) => {
+  try {
+    const city = reqCity(req);
+    const q = (req.query.q || '').trim().toLowerCase();
+    if (!q || q.length < 3) return res.json({ query: q, results: {}, total: 0 });
+
+    const cityBase = cityDir(city);
+
+    const mkExcerpt = (content, len = 160) => {
+      const idx = content.toLowerCase().indexOf(q);
+      if (idx < 0) return content.slice(0, len).replace(/\n/g, ' ');
+      const start = Math.max(0, idx - 60);
+      const end   = Math.min(content.length, idx + q.length + 100);
+      return (start > 0 ? '…' : '') + content.slice(start, end).replace(/\n/g, ' ') + (end < content.length ? '…' : '');
+    };
+
+    const walkMd = async (dir, filterFn) => {
+      const hits = [];
+      const walk = async d => {
+        let entries;
+        try { entries = await fs.readdir(d, { withFileTypes: true }); } catch { return; }
+        for (const e of entries) {
+          const p = path.join(d, e.name);
+          if (e.isDirectory()) { await walk(p); }
+          else if (e.name.endsWith('.md')) {
+            if (filterFn && !filterFn(p, e.name)) continue;
+            let content;
+            try { content = await fs.readFile(p, 'utf-8'); } catch { continue; }
+            if (content.toLowerCase().includes(q)) hits.push({ path: p, content });
+          }
+        }
+      };
+      await walk(dir);
+      return hits;
+    };
+
+    const h1 = s => { const m = s.match(/^#\s+(.+)$/m); return m ? m[1].replace(/[🧛🧚🧑🐺🔮🏹⚔️🩸*_]/g, '').trim() : ''; };
+
+    // Characters — main card only (slug/slug.md, not -sheet.md, not journals)
+    const charHits = await walkMd(path.join(cityBase, 'characters'), (p, name) => {
+      if (name.endsWith('-sheet.md')) return false;
+      const parts = p.split(path.sep);
+      const slug = parts[parts.length - 2];
+      return name === `${slug}.md`;
+    });
+    const characters = charHits.map(m => {
+      const parts  = m.path.split(path.sep);
+      const slug   = parts[parts.length - 2];
+      const lineage = parts[parts.length - 3];
+      const linMatch = m.content.match(/Линейка WoD[:\s*]+(.+)/);
+      return { slug, name: h1(m.content) || slug, lineage: linMatch ? linMatch[1].replace(/[*_]/g, '').trim() : lineage, excerpt: mkExcerpt(m.content) };
+    });
+
+    // Locations — main card only (loc-name/loc-name.md)
+    const locHits = await walkMd(path.join(cityBase, 'locations'), (p, name) => {
+      if (name.endsWith('-sheet.md')) return false;
+      const parts = p.split(path.sep);
+      const slug = parts[parts.length - 2];
+      return name === `${slug}.md`;
+    });
+    const locations = locHits.map(m => {
+      const parts = m.path.split(path.sep);
+      const slug  = parts[parts.length - 2];
+      return { slug, name: h1(m.content) || slug, excerpt: mkExcerpt(m.content) };
+    });
+
+    // Chronicle modules (chronicles/*/modules/**/*.md)
+    const modHits = await walkMd(path.join(cityBase, 'chronicles'), p => {
+      const rel = path.relative(path.join(cityBase, 'chronicles'), p);
+      return rel.includes(`${path.sep}modules${path.sep}`);
+    });
+    const modules = modHits.map(m => {
+      const parts  = m.path.split(path.sep);
+      const chrIdx = parts.findIndex(x => x === 'chronicles');
+      const chronicle = parts[chrIdx + 1] || '';
+      const modSlug   = parts[parts.length - 2];
+      return { chronicle, module: modSlug, title: h1(m.content) || modSlug, excerpt: mkExcerpt(m.content) };
+    });
+
+    // Chronicle events.md files — extract matching lines only
+    const evHits = await walkMd(path.join(cityBase, 'chronicles'), (p, n) => n === 'events.md');
+    const events = [];
+    for (const m of evHits) {
+      const parts  = m.path.split(path.sep);
+      const chrIdx = parts.findIndex(x => x === 'chronicles');
+      const chronicle = parts[chrIdx + 1] || '';
+      for (const line of m.content.split('\n')) {
+        if (line.toLowerCase().includes(q)) {
+          events.push({ chronicle, excerpt: line.trim().slice(0, 220) });
+          if (events.length >= 20) break;
+        }
+      }
+    }
+
+    // Archive docs
+    const archHits = await walkMd(path.join(cityBase, 'archive'));
+    const ARCHIVE_LABELS = { 'political_state.md': 'Фракции', 'timeline.md': 'Хронология', 'visitors.md': 'Визитёры', 'rumors_elysium.md': 'Слухи (Элизиум)', 'rumors_dreaming.md': 'Слухи (Грёзы)' };
+    const archive = archHits.map(m => {
+      const file = path.basename(m.path);
+      return { file, label: ARCHIVE_LABELS[file] || file, excerpt: mkExcerpt(m.content) };
+    });
+
+    const total = characters.length + locations.length + modules.length + events.length + archive.length;
+    res.json({ query: q, results: { characters, locations, modules, events, archive }, total });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -1860,8 +2496,8 @@ app.get('/api/integrity', async (req, res) => {
     const referenced = new Set();
     try {
       const all = await fs.readFile(path.join(archiveDir(city), 'characters_index.md'), 'utf-8');
-      // Only real markdown hrefs with an actual folder segment: ](lineage/Folder/…)
-      const re = /\]\((?:characters\/)?(vampires|fairies|mortals|werewolves|mages|hunters)\/([^/)]+)\/[^)]*\)/g;
+      // Match paths like ../characters/vampires/slug/ or characters/vampires/slug/ or vampires/slug/
+      const re = /\([^)]*?\/(vampires|fairies|mortals|werewolves|mages|hunters)\/([^/)]+)\//g;
       let m;
       while ((m = re.exec(all)) !== null) referenced.add(`${m[1]}/${decodeURIComponent(m[2])}`);
     } catch {}
@@ -1888,11 +2524,11 @@ app.get('/api/integrity', async (req, res) => {
 const SWITCH_PARAMS = ['Fix'];
 
 // Tools that write project files → trigger background revalidation on success.
-const FILE_MUTATING_TOOLS = new Set(['new_npc', 'new_module', 'new_city']);
+const FILE_MUTATING_TOOLS = new Set(['new_npc', 'new_city']);
 
 // ── Run a Node CLI tool (cities/-aware) ────────────────────────────────────────
 // Args are passed as an array to spawn() WITHOUT a shell → no injection risk.
-const NODE_TOOLS = new Set(['new_city', 'new_npc', 'new_location', 'migrate_char', 'close_chronicle', 'build_city_events']);
+const NODE_TOOLS = new Set(['new_city', 'new_npc', 'new_location', 'migrate_char', 'close_chronicle', 'build_city_events', 'sync_index']);
 app.post('/api/tool/:name', async (req, res) => {
   const name = req.params.name;
   if (!NODE_TOOLS.has(name)) return res.status(400).json({ ok: false, output: 'Unknown tool' });
@@ -1912,14 +2548,15 @@ app.post('/api/tool/:name', async (req, res) => {
 
 app.post('/api/run-tool', async (req, res) => {
   const { tool, params = {} } = req.body;
-  const allowed = ['new_city','new_npc','new_module','validate_links','status','search'];
+  // PowerShell tools only. new_city/new_npc are Node tools (use /api/tool/:name);
+  // module creation lives in the chronicle flow (POST /api/chronicles/:slug/modules).
+  const allowed = ['validate_links', 'search'];
   if (!allowed.includes(tool)) return res.status(400).json({ error: 'Unknown tool' });
 
   const script = path.join(ROOT, 'tools', `${tool}.ps1`);
 
   // -Force skips interactive Read-Host / ReadKey for all interactive tools
-  const forceFlag = ['new_city', 'new_npc', 'new_module', 'validate_links'].includes(tool)
-    ? '-Force' : '';
+  const forceFlag = ['validate_links'].includes(tool) ? '-Force' : '';
 
   // Regular params (-Key 'Value')
   const regularParamStr = Object.entries(params)
@@ -2024,21 +2661,23 @@ app.put('/api/characters/:name/fields', express.json(), async (req, res) => {
     let card = await fs.readFile(cardPath, 'utf-8');
 
     for (const [key, rawValue] of Object.entries(fields)) {
-      // imagePrompt / negativePrompt — multi-line indented block
+      // H1 display name — preserves emoji prefix
+      if (key === 'name') {
+        const newName = String(rawValue).replace(/\n+/g, ' ').trim();
+        if (!newName) continue;
+        card = card.replace(
+          /^(#\s+[^\wЀ-ӿ]*)([\wЀ-ӿ].+)$/m,
+          (_, prefix) => `${prefix}${newName}`
+        );
+        continue;
+      }
+      // imagePrompt / negativePrompt — multi-line indented block (character format)
       if (key === 'imagePrompt') {
-        const indented = rawValue.split('\n').map(l => l.trim() ? '  ' + l.trim() : '').join('\n');
-        const blockRe = /(-\s*\*\*[^*]*Промт для генерации[^*]*\*\*[^\n]*\n)((?:[ \t]+[^\n]+\n?)+)/;
-        if (blockRe.test(card)) {
-          card = card.replace(blockRe, `$1${indented}\n`);
-        }
+        card = writePrompt(card, 'image', rawValue, 'indented');
         continue;
       }
       if (key === 'negativePrompt') {
-        const indented = rawValue.split('\n').map(l => l.trim() ? '  ' + l.trim() : '').join('\n');
-        const blockRe = /(-\s*\*\*[^*]*Негативный промт[^*]*\*\*[^\n]*\n)((?:[ \t]+[^\n]+\n?)+)/;
-        if (blockRe.test(card)) {
-          card = card.replace(blockRe, `$1${indented}\n`);
-        }
+        card = writePrompt(card, 'negative', rawValue, 'indented');
         continue;
       }
 
@@ -2134,11 +2773,10 @@ async function makeGenerationClient(preferSource = null, modelOverride = null) {
   // ── Claude.ai OAuth (Claude Code login) ──────────────────────
   if (!wantOR) {
     try {
-      const raw   = await fs.readFile(CLAUDE_CREDS_PATH, 'utf-8');
-      const creds = JSON.parse(raw);
-      const oauth = creds?.claudeAiOauth;
+      const oauth = await _readOauthCached();
       if (oauth?.accessToken) {
         if (oauth.expiresAt && Date.now() >= oauth.expiresAt) {
+          _oauthCredsCacheAt = 0; // invalidate so next call re-reads
           throw new Error('Claude.ai OAuth токен истёк. Выполни любую команду в Claude Code.');
         }
         return { source: 'claude-login', client: new Anthropic({ authToken: oauth.accessToken }), model: clModel() };
@@ -2170,7 +2808,7 @@ const OR_FALLBACK_MODELS = [
   'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free',
 ];
 
-async function callOpenRouter(model, systemPrompt, userPrompt, imageBuffers) {
+async function callOpenRouter(model, systemPrompt, userPrompt, imageBuffers, timeoutMs = 75000) {
   const content = [
     ...imageBuffers.map(({ buf, mime }) => ({
       type: 'image_url',
@@ -2188,16 +2826,28 @@ async function callOpenRouter(model, systemPrompt, userPrompt, imageBuffers) {
     ],
   });
 
-  const resp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-    method:  'POST',
-    headers: {
-      'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
-      'Content-Type':  'application/json',
-      'HTTP-Referer':  'http://localhost:3000',
-      'X-Title':       'VTM Chronicle Manager',
-    },
-    body,
-  });
+  // Abort the request if the model never responds, so callers don't hang forever.
+  const ctrl  = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  let resp;
+  try {
+    resp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method:  'POST',
+      headers: {
+        'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
+        'Content-Type':  'application/json',
+        'HTTP-Referer':  'http://localhost:3000',
+        'X-Title':       'VTM Chronicle Manager',
+      },
+      body,
+      signal: ctrl.signal,
+    });
+  } catch (e) {
+    if (e.name === 'AbortError') throw Object.assign(new Error(`Модель «${model}» не ответила за ${Math.round(timeoutMs / 1000)}с`), { status: 504 });
+    throw e;
+  } finally {
+    clearTimeout(timer);
+  }
 
   if (!resp.ok) {
     const errText = await resp.text().catch(() => '');
@@ -2292,7 +2942,7 @@ app.post('/api/characters/:name/generate-appearance', express.json(), async (req
       werewolves: 'оборотня', mages: 'мага', hunters: 'охотника' }[char.lineageFolder] || 'персонажа';
 
     const systemPrompt = 'Ты — редактор персонажных карточек для настольной RPG Vampire: The Masquerade.';
-    const userPrompt   = `Перед тобой ${imageBuffers.length > 1 ? `${imageBuffers.length} изображения` : 'изображение'} ${lineageName} по имени ${char.name}.\n\nОпиши внешность для карточки. Требования:\n- 3–5 конкретных визуальных маркеров (лицо, волосы, кожа, глаза, одежда, характерные детали)\n- Стиль: лаконичный, образный, готический. Без «воды».\n- Язык: русский.\n- Формат: один абзац, без списков и заголовков.\n- Упомяни всё необычное, характерное, запоминающееся.`;
+    const userPrompt   = `Перед тобой ${imageBuffers.length > 1 ? `${imageBuffers.length} изображения` : 'изображение'} ${lineageName} по имени ${char.name}.\n\nОпиши внешность для карточки. Требования:\n- 3–5 конкретных визуальных маркеров (лицо, волосы, кожа, глаза, одежда, характерные детали)\n- Стиль: лаконичный, образный, готический. Без «воды».\n- Язык: русский.\n- Формат: один абзац, без списков и заголовков.\n- Упомяни всё необычное, характерное, запоминающееся.\n- Запрет: не упоминать кровь, раны, увечья, явные признаки насилия — даже если они видны на изображении.`;
 
     let appearance = '';
 
@@ -2300,20 +2950,30 @@ app.post('/api/characters/:name/generate-appearance', express.json(), async (req
       // Try primary model, then fallbacks if endpoint not found
       const modelsToTry = [gen.model, ...OR_FALLBACK_MODELS.filter(m => m !== gen.model)];
       let lastErr;
+      let allRateLimited = true;
       for (const m of modelsToTry) {
         try {
           appearance = await callOpenRouter(m, systemPrompt, userPrompt, imageBuffers);
           if (m !== gen.model) console.log(`[generate-appearance] fallback model used: ${m}`);
+          allRateLimited = false;
           break;
         } catch (e) {
           lastErr = e;
-          const retryable = e.status === 404 || e.status === 429
+          const is429 = e.status === 429;
+          const retryable = e.status === 404 || is429
             || (e.status === 400 && /not a valid model|No endpoints/i.test(e.message));
-          if (!retryable) throw e;
-          console.warn(`[generate-appearance] model ${m} unavailable, trying next...`);
+          if (!retryable) { allRateLimited = false; throw e; }
+          if (!is429) allRateLimited = false;
+          console.warn(`[generate-appearance] model ${m} unavailable (${e.status}), trying next...`);
+          if (is429) await new Promise(r => setTimeout(r, 800));
         }
       }
-      if (!appearance) throw lastErr;
+      if (!appearance) {
+        if (allRateLimited) {
+          return res.status(429).json({ rateLimited: true, error: 'Превышен лимит запросов ко всем моделям. Подождите минуту и попробуйте снова.' });
+        }
+        throw lastErr;
+      }
     } else {
       // Anthropic SDK format
       const imgContents = imageBuffers.map(({ buf, mime }) => ({
@@ -2412,6 +3072,52 @@ app.post('/api/characters/:name/upload-image', express.json({ limit: '20mb' }), 
   }
 });
 
+// ── Delete character image ────────────────────────────────────────────────────
+
+app.delete('/api/characters/:name/images/:filename', async (req, res) => {
+  try {
+    const name     = decodeURIComponent(req.params.name);
+    const filename = decodeURIComponent(req.params.filename);
+    const city     = reqCity(req);
+
+    if (/[/\\]|^\./.test(filename)) {
+      return res.status(400).json({ error: 'Недопустимое имя файла' });
+    }
+
+    const chars = await getAllCharacters(city);
+    const char  = chars.find(c => c.name === name);
+    if (!char) return res.status(404).json({ error: 'Персонаж не найден' });
+
+    const artDir  = path.join(charsDir(city), char.lineageFolder, char.slug, 'art');
+    const filePath = path.resolve(artDir, filename);
+    if (!filePath.startsWith(path.resolve(artDir))) {
+      return res.status(400).json({ error: 'Недопустимый путь' });
+    }
+
+    await fs.unlink(filePath);
+
+    // Remove line referencing this file from ## 🖼️ Изображения
+    const cardPath = path.join(charsDir(city), char.lineageFolder, char.slug, `${char.slug}.md`);
+    let card = await fs.readFile(cardPath, 'utf-8').catch(() => null);
+    if (card) {
+      const lines = card.split('\n').filter(l => !l.includes(`art/${filename}`));
+      card = lines.join('\n');
+      // If section empty — add placeholder
+      card = card.replace(
+        /(## 🖼️ Изображения\n)(\s*\n)((?!- ))/,
+        '$1\n- ⏳ Изображение не предоставлено\n$3'
+      );
+      await fs.writeFile(cardPath, card, 'utf-8');
+    }
+
+    delete _cache[city];
+    res.json({ ok: true, filename });
+  } catch (e) {
+    if (e.code === 'ENOENT') return res.status(404).json({ error: 'Файл не найден' });
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ── Log session: orchestrated post-session write ───────────────────────────────
 //
 // Produces ALL factual artifacts of a played session in one action, following
@@ -2446,6 +3152,28 @@ function diaryToneFor(c) {
   if (c.lineage === 'mortal') return 'Наблюдательный, человеческий';
   if (c.lineage === 'fairy')  return 'Грёзовый, образный';
   return 'Меланхоличный';
+}
+
+// Extract location names from generated scenario text (no AI call needed).
+// Looks for "### Name" headers inside the "Локации" section, falling back to
+// bold list items. Returns up to `max` names.
+function _extractLocNamesFromScenario(text, max = 5) {
+  // Primary: find a "Локации" section, collect its ### sub-headers
+  const secM = text.match(/(?:^|\n)#{1,3}[^#\n]*Локации[^\n]*\n([\s\S]*?)(?=\n#{1,3}\s+(?:\d+\.\s+)?(?:НПС|Завязка|Кульминация|Финал|Варианты|Открытые)|$)/i);
+  if (secM) {
+    const names = [...secM[1].matchAll(/^#{2,4}\s+(.+)$/gm)]
+      .map(m => m[1].replace(/[*_[\]🏛📍⚠💀🔴🟡🟢✦—]/g, '').trim())
+      .filter(n => n.length >= 4 && n.length <= 100 && !/^(нпс|завязка|кульм|финал|open|нить)/i.test(n));
+    if (names.length > 0) return names.slice(0, max);
+  }
+  // Fallback: bold bullet items under any mention of "Локации"
+  const boldM = text.match(/Локации[^\n]*\n([\s\S]{0,1500}?)(?=\n##|$)/i);
+  if (boldM) {
+    const names = [...boldM[1].matchAll(/^\s*[-*•]?\s*\*\*([^*]{4,80})\*\*/gm)]
+      .map(m => m[1].trim());
+    if (names.length > 0) return names.slice(0, max);
+  }
+  return [];
 }
 
 // RU→ASCII slug for new module/chronicle folder names
@@ -2948,8 +3676,18 @@ function runClaude(prompt, { budget = 2, timeoutMs = 240000, allow = 'Read,Edit,
 }
 
 app.get('/api/claude/health', (req, res) => {
+  if (_claudeHealthCache && (Date.now() - _claudeHealthCacheAt) < CLAUDE_HEALTH_TTL) {
+    return res.json(_claudeHealthCache);
+  }
   let sent = false;
-  const done = body => { if (!sent) { sent = true; res.json(body); } };
+  const done = body => {
+    if (!sent) {
+      sent = true;
+      _claudeHealthCache = body;
+      _claudeHealthCacheAt = Date.now();
+      res.json(body);
+    }
+  };
   const ps = spawn('claude --version', { shell: true });
   let out = '';
   const timer = setTimeout(() => { ps.kill(); done({ available: false }); }, 8000);
@@ -3188,6 +3926,25 @@ app.post('/api/claude/generate-prose', async (req, res) => {
 let _orModelsCache = null;
 let _orModelsCacheAt = 0;
 const OR_MODELS_TTL = 30 * 60 * 1000; // 30 min
+
+// Cache Claude CLI health check (5 min) — avoids spawning a shell on every diary load
+let _claudeHealthCache = null;
+let _claudeHealthCacheAt = 0;
+const CLAUDE_HEALTH_TTL = 5 * 60_000;
+
+// Cache Claude OAuth credentials read (60 s) — avoids disk I/O on every AI call
+let _oauthCredsCache = null;
+let _oauthCredsCacheAt = 0;
+const OAUTH_CREDS_TTL = 60_000;
+async function _readOauthCached() {
+  if (_oauthCredsCacheAt && (Date.now() - _oauthCredsCacheAt) < OAUTH_CREDS_TTL) return _oauthCredsCache;
+  try {
+    const raw = await fs.readFile(CLAUDE_CREDS_PATH, 'utf-8');
+    _oauthCredsCache = JSON.parse(raw)?.claudeAiOauth || null;
+  } catch { _oauthCredsCache = null; }
+  _oauthCredsCacheAt = Date.now();
+  return _oauthCredsCache;
+}
 
 app.get('/api/openrouter/models', async (req, res) => {
   if (_orModelsCache && (Date.now() - _orModelsCacheAt) < OR_MODELS_TTL) {

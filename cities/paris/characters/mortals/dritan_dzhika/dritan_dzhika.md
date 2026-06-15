@@ -37,4 +37,3 @@
 ## 🖼️ Изображения
 
 - [Образ 1](art/dritan_dzhika_01.png)
-- [Образ 2](art/dritan_dzhika_02.png)

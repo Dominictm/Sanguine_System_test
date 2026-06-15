@@ -64,12 +64,15 @@
 
 ## 🎨 Промт для генерации изображения
 
-[Блок 1] Cinematic dark fantasy scene, traveling circus at night in a winter forest, faded red-and-gold striped big top tent against the darkness of Bois de Vincennes, generator floodlights cutting through December fog, empty parking lot with sawdust on cold ground, single lantern above the tent entrance — warm amber against the cold dark
-[Блок 2] Cold midnight blue fog from the forest, harsh white spotlights spilling from inside the tent, deep shadows at the edges, midnight blue-black painterly background with abstract swirling brushstroke textures, winter chill and distant ember glow
-[Блок 3] Dark fantasy digital painting, visible painterly brushstrokes, textured oil-paint effect, cinematic composition, moody gothic atmosphere, Vampire the Masquerade aesthetic, concept art quality, painterly realism, artstation quality, masterpiece
+**GPT / DALL-E 3:**
+```
+Cinematic dark fantasy scene, traveling circus at night in a winter forest, faded red-and-gold striped big top tent against the darkness of Bois de Vincennes, generator floodlights cutting through December fog, empty parking lot with sawdust on cold ground, single lantern above the tent entrance — warm amber against the cold dark, cold midnight blue fog from the forest, harsh white spotlights spilling from inside the tent, deep shadows at the edges, midnight blue-black painterly background with abstract swirling brushstroke textures, winter chill and distant ember glow, dark fantasy digital painting, visible painterly brushstrokes, textured oil-paint effect, cinematic composition, moody gothic atmosphere, Vampire the Masquerade aesthetic, concept art quality, painterly realism, artstation quality, masterpiece
+```
 
-**🚫 Негативный промт:**
-photorealistic photography, digital art, anime, cartoon, illustration, watermark, text overlay, blurry, low quality, artifacts, deformed anatomy, extra limbs, oversaturated colors, bright white background, 3D render, CGI.
+**Негативный промт (SD / Flux):**
+```
+photorealistic photography, digital art, anime, cartoon, illustration, watermark, text overlay, blurry, low quality, artifacts, deformed anatomy, extra limbs, oversaturated colors, bright white background, 3D render, CGI
+```
 
 ## 🖼️ Изображения
 

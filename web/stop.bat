@@ -12,7 +12,7 @@ for /f "tokens=5" %%a in ('netstat -ano 2^>nul ^| find "LISTENING" ^| find ":300
 if not defined PID (
     echo   Server is not running.
     echo.
-    pause
+   
     exit /b 0
 )
 
@@ -27,4 +27,4 @@ if %errorlevel% == 0 (
 )
 
 echo.
-pause
+

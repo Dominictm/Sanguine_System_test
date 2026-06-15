@@ -128,8 +128,12 @@ function navigate(page) {
   if (page === 'graph')      loadGraph();
   if (page === 'chronicles-page') loadChroniclesPage();
   if (page === 'modules')         loadModules();
+  if (page === 'module')          loadModulePage();
   if (page === 'threads')    loadThreads();
   if (page === 'locations')  loadLocations();
+  if (page === 'factions')   loadFactions();
+  if (page === 'rumors')     loadRumors();
+  if (page === 'search')     loadSearch();
 }
 
 document.querySelectorAll('[data-page]').forEach(el =>
@@ -423,22 +427,27 @@ document.getElementById('search-input').addEventListener('input', e => {
 });
 
 // ── Grid carousel ─────────────────────────────────────────────────────────────
-const GRID_INTERVAL = 60 * 1000;   // 1 минута
+const GRID_MIN = 12_000;   // мин. интервал между сменами (12 с)
+const GRID_MAX = 50_000;   // макс. интервал (50 с)
 
 let _gridImages  = {};   // name → [url, ...]
 let _gridIdxs    = {};   // name → current index
-let _gridTimers  = {};   // name → intervalID
-let _gridInitTO  = {};   // name → initial-delay timeoutID
+let _gridTimers  = {};   // name → pending timeoutID
 
 function _clearGridTimers() {
-  for (const id of Object.values(_gridTimers)) clearInterval(id);
-  for (const id of Object.values(_gridInitTO)) clearTimeout(id);
+  for (const id of Object.values(_gridTimers)) clearTimeout(id);
   _gridTimers = {};
-  _gridInitTO = {};
+}
+
+function _scheduleCard(name) {
+  const delay = GRID_MIN + Math.floor(Math.random() * (GRID_MAX - GRID_MIN));
+  _gridTimers[name] = setTimeout(() => _advanceCard(name), delay);
 }
 
 async function initGridCarousels() {
   _clearGridTimers();
+  _gridImages = {};
+  _gridIdxs   = {};
 
   const qs   = window.location.search;
   const resp = await fetch('/api/characters/all-images' + qs).catch(() => null);
@@ -449,13 +458,11 @@ async function initGridCarousels() {
 
   _injectGridDims();
 
-  // Каждая карточка стартует со случайным сдвигом 0..59 с
+  // Каждая карточка стартует в свой случайный момент, независимо
   for (const name of Object.keys(_gridImages)) {
-    const delay = Math.floor(Math.random() * GRID_INTERVAL);
-    _gridInitTO[name] = setTimeout(() => {
-      _advanceCard(name);
-      _gridTimers[name] = setInterval(() => _advanceCard(name), GRID_INTERVAL);
-    }, delay);
+    if ((_gridImages[name]?.length || 0) < 2) continue;
+    const initDelay = Math.floor(Math.random() * GRID_MAX);
+    _gridTimers[name] = setTimeout(() => _advanceCard(name), initDelay);
   }
 }
 
@@ -471,7 +478,7 @@ function _injectGridDims() {
 
 function _advanceCard(name) {
   const images = _gridImages[name];
-  if (!images) return;
+  if (!images || images.length < 2) return;
   const card = document.querySelector(`.char-card[data-name="${CSS.escape(name)}"]`);
   if (!card) return;
   const img = card.querySelector('.char-card-art');
@@ -480,9 +487,14 @@ function _advanceCard(name) {
 
   dim.classList.add('dark');
   setTimeout(() => {
-    _gridIdxs[name] = (_gridIdxs[name] + 1) % images.length;
-    img.src = images[_gridIdxs[name]];
-    setTimeout(() => dim.classList.remove('dark'), 300);
+    let next;
+    do { next = Math.floor(Math.random() * images.length); } while (next === _gridIdxs[name]);
+    _gridIdxs[name] = next;
+    img.src = images[next];
+    setTimeout(() => {
+      dim.classList.remove('dark');
+      _scheduleCard(name); // следующий интервал — снова случайный
+    }, 300);
   }, 2100);
 }
 
@@ -902,7 +914,6 @@ async function loadAiSettings() {
   if (_aiSettingsLoaded) return;
   _aiSettingsLoaded = true;
   const el = document.getElementById('ai-settings-content');
-  const savedClaudeModel = localStorage.getItem('ai-model') || 'claude-opus-4-8';
 
   let orSettings = { OPENROUTER_MODEL: '', hasKey: false };
   try { orSettings = await fetch('/api/settings').then(r => r.json()); } catch {}
@@ -966,26 +977,6 @@ async function loadAiSettings() {
 
         <button class="ais-confirm-btn" id="ais-or-save">✓ Подтвердить OpenRouter</button>
         <div class="ais-status" id="ais-or-status"></div>
-      </div>
-
-      <!-- Claude section -->
-      <div class="ais-section">
-        <div class="ais-section-title">🧠 Claude — модель для генерации прозы</div>
-        <div class="ais-section-hint">Используется для генерации дневников и текстов через Claude Code (без API-ключа). Хранится в браузере.</div>
-
-        <div class="ais-field">
-          <label class="ais-label">Модель</label>
-          <div class="ais-models-list">
-            ${CLAUDE_MODELS.map(m => `
-              <label class="ais-model-radio">
-                <input type="radio" name="claude-model" value="${m.id}" ${savedClaudeModel === m.id ? 'checked' : ''}>
-                <span class="ais-model-label">${m.label}</span>
-              </label>`).join('')}
-          </div>
-        </div>
-
-        <button class="ais-confirm-btn" id="ais-claude-save">✓ Подтвердить Claude</button>
-        <div class="ais-status" id="ais-claude-status"></div>
       </div>
 
     </div><!-- /ais-left -->
@@ -1115,17 +1106,6 @@ async function loadAiSettings() {
     setTimeout(() => { status.textContent = ''; status.className = 'ais-status'; }, 2000);
   });
 
-  // Claude: confirm (localStorage only, no restart needed)
-  document.getElementById('ais-claude-save').addEventListener('click', () => {
-    const btn    = document.getElementById('ais-claude-save');
-    const status = document.getElementById('ais-claude-status');
-    const sel    = document.querySelector('input[name="claude-model"]:checked');
-    if (!sel) { status.textContent = 'Выбери модель'; status.className = 'ais-status err'; return; }
-    localStorage.setItem('ai-model', sel.value);
-    status.textContent = '✓ Сохранено в браузере';
-    status.className = 'ais-status ok';
-    btn.textContent = '✓ Подтвердить Claude';
-  });
 }
 
 async function runTool(tool, params, outId, btn) {
@@ -1181,13 +1161,30 @@ function escHtml(s) {
 
 // Compact, safe Markdown → HTML renderer for module files & chronicle prose.
 // Escapes first, then applies a limited block/inline grammar. Links render as
+// Resolve a markdown link [text](href) to an HTML element.
+// Characters and locations become clickable links that open their detail modals.
+function resolveMdLink(text, href) {
+  if (/\/characters\//.test(href)) {
+    const slug = href.replace(/\.md$/, '').split('/').pop();
+    return `<a class="md-link md-link-char" data-char-slug="${slug}" href="#">${text}</a>`;
+  }
+  if (/\/locations\//.test(href)) {
+    const slug = href.replace(/\.md$/, '').split('/').pop();
+    return `<a class="md-link md-link-loc" data-loc-slug="${slug}" href="#">${text}</a>`;
+  }
+  if (/\.md$/.test(href) || href.startsWith('#')) {
+    return `<span class="md-link">${text}</span>`;
+  }
+  return `<a class="md-link" href="${href}" target="_blank" rel="noopener">${text}</a>`;
+}
+
 // styled text (relative .md paths don't resolve in the browser).
 function mdInline(s) {
   return escHtml(s)
     .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
     .replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<em>$2</em>')
     .replace(/`([^`]+)`/g, '<code>$1</code>')
-    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<span class="md-link">$1</span>');
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, t, h) => resolveMdLink(t, h));
 }
 function mdToHtml(md) {
   if (!md) return '';
@@ -1248,7 +1245,6 @@ function getOrigLabel(id) {
   return {
     'btn-new-city':    'Создать домен',
     'btn-new-npc':     'Создать карточку',
-    'btn-new-module':  'Создать модуль',
     'btn-validate':    'Проверить',
     'btn-validate-fix':'Исправить автоматически',
   }[id] || 'Выполнить';
@@ -1271,10 +1267,8 @@ document.getElementById('btn-new-npc').addEventListener('click', () => {
   runNodeTool('new_npc', [CITY, lineage, name, '', '', '', belonging], 'out-new-npc', document.getElementById('btn-new-npc'));
 });
 
-document.getElementById('btn-new-module').addEventListener('click', () => {
-  const name = document.getElementById('module-name').value.trim();
-  if (!name) { alert('Укажите название модуля'); return; }
-  runTool('new_module', { Name: name }, 'out-new-module', document.getElementById('btn-new-module'));
+document.getElementById('btn-goto-chronicles').addEventListener('click', () => {
+  navigate('chronicles-page');
 });
 
 document.getElementById('btn-validate').addEventListener('click', () => {
@@ -1312,6 +1306,7 @@ _moreBtn('btn-close-chr', 'close_chronicle', () => {
   return [CITY, chr, document.getElementById('close-note').value.trim()];
 });
 _moreBtn('btn-rebuild-idx', 'build_city_events', () => [CITY]);
+_moreBtn('btn-sync-index', 'sync_index', () => [CITY]);
 
 // ═══════════════════════════════════════════════════════════════
 // Modules
@@ -1556,7 +1551,11 @@ document.getElementById('chr-detail-body').addEventListener('click', e => {
   if (e.target.closest('.chd-mod-fill-btn')) return;
   // chip links (events tab)
   const chipMod = e.target.closest('.chip-mod');
-  if (chipMod) { openModuleDetail(chipMod.dataset.mod, chipMod.dataset.tab); return; }
+  if (chipMod) {
+    const chr = chipMod.dataset.chr || _chrDetailSlug || '';
+    openModulePage(chr, chipMod.dataset.mod);
+    return;
+  }
   const chipChar = e.target.closest('.chip-char');
   if (chipChar) { /* open char detail if needed */ return; }
   const toggle = e.target.closest('.chron-toggle');
@@ -1568,8 +1567,9 @@ document.getElementById('chr-detail-body').addEventListener('click', e => {
   }
   const modCard = e.target.closest('.chd-mod-card');
   if (modCard) {
-    const mod = modCard.querySelector('.chd-mod-del-btn')?.dataset.mod;
-    if (mod) openModuleDetail(mod);
+    const mod = modCard.dataset.mod;
+    const chr = modCard.dataset.chr || _chrDetailSlug || '';
+    if (mod) openModulePage(chr, mod);
   }
 });
 
@@ -1995,7 +1995,7 @@ async function loadModules() {
         m.hasNpc      ? '<span class="module-file">👥 НПС</span>' : '',
       ].filter(Boolean).join('');
       return `
-      <div class="module-card" data-name="${escHtml(m.name)}">
+      <div class="module-card" data-name="${escHtml(m.name)}" data-chronicle="${escHtml(m.chronicle || '')}">
         <div class="module-title">${escHtml(m.title)}</div>
         ${m.time ? `<div class="module-time">${escHtml(m.time)}</div>` : ''}
         <div class="module-meta">
@@ -2012,9 +2012,246 @@ async function loadModules() {
   }
 }
 
+// ── Module card click → open detail page ────────────────────────────────────
+
+document.getElementById('modules-list').addEventListener('click', e => {
+  const card = e.target.closest('.module-card');
+  if (!card) return;
+  const name      = card.dataset.name;
+  const chronicle = card.dataset.chronicle;
+  if (!name || !chronicle) return;
+  openModulePage(chronicle, name);
+});
+
+// ── Module Detail Page ───────────────────────────────────────────────────────
+
+STATE.currentModule = null;
+
+function openModulePage(chronicle, name) {
+  STATE.currentModule = { chronicle, name };
+  navigate('module');
+}
+
+async function loadModulePage() {
+  if (!STATE.currentModule) { navigate('modules'); return; }
+  const { chronicle, name } = STATE.currentModule;
+  const qs = window.location.search;
+
+  // Reset tab to info
+  document.querySelectorAll('.modp-tab').forEach(b => b.classList.toggle('active', b.dataset.modtab === 'info'));
+  document.querySelectorAll('.modp-panel').forEach(p => p.classList.toggle('active', p.id === 'modp-panel-info'));
+
+  // Show loading state
+  document.getElementById('modp-title').textContent = '⏳ Загрузка...';
+  document.getElementById('modp-badges').innerHTML = '';
+  ['info','scenario','events','npcs','locations','threads'].forEach(t =>
+    document.getElementById(`modp-panel-${t}`).innerHTML = '<div class="loading-state"><div class="spinner"></div>Загрузка...</div>');
+
+  try {
+    const data = await fetch(`/api/chronicles/${encodeURIComponent(chronicle)}/modules/${encodeURIComponent(name)}/detail${qs}`).then(r => r.json());
+    if (data.error) throw new Error(data.error);
+    renderModulePage(data);
+  } catch (e) {
+    document.getElementById('modp-title').textContent = 'Ошибка загрузки';
+    document.getElementById('modp-panel-info').innerHTML = `<div class="modp-empty"><div class="modp-empty-icon">⚠</div>${escHtml(e.message)}</div>`;
+  }
+}
+
+function renderModulePage(data) {
+  // Header
+  document.getElementById('modp-title').textContent = data.title || data.name;
+
+  const badges = [
+    data.type   && `<span class="modp-badge">🎭 ${escHtml(data.type)}</span>`,
+    data.time   && `<span class="modp-badge">📅 ${escHtml(data.time)}</span>`,
+    data.tone   && `<span class="modp-badge">🌙 ${escHtml(data.tone)}</span>`,
+    data.format && `<span class="modp-badge">📖 ${escHtml(data.format)}</span>`,
+    data.chronicle && `<span class="modp-badge" style="border-color:rgba(184,134,11,0.4);color:var(--text);opacity:0.7">📕 ${escHtml(data.chronicle)}</span>`,
+  ].filter(Boolean).join('');
+  document.getElementById('modp-badges').innerHTML = badges;
+
+  // ── КРАТКОЕ ──
+  const descHtml = data.description
+    ? `<div class="modp-section"><div class="modp-section-title">Описание</div><div class="modp-description">${escHtml(data.description)}</div></div>`
+    : '';
+
+  const infoCards = [
+    data.type     && `<div class="modp-info-card"><div class="modp-info-label">Тип</div><div class="modp-info-value">${escHtml(data.type)}</div></div>`,
+    data.time     && `<div class="modp-info-card"><div class="modp-info-label">Время</div><div class="modp-info-value">${escHtml(data.time)}</div></div>`,
+    data.tone     && `<div class="modp-info-card"><div class="modp-info-label">Тон</div><div class="modp-info-value">${escHtml(data.tone)}</div></div>`,
+    data.format   && `<div class="modp-info-card"><div class="modp-info-label">Формат</div><div class="modp-info-value">${escHtml(data.format)}</div></div>`,
+    data.location && `<div class="modp-info-card"><div class="modp-info-label">Локация</div><div class="modp-info-value">${escHtml(data.location)}</div></div>`,
+  ].filter(Boolean).join('');
+
+  const pcsHtml = data.pcs?.length
+    ? `<div class="modp-section"><div class="modp-section-title">👤 Персонажи игроков</div>
+        <div class="modp-char-list">${data.pcs.map(p =>
+          `<div class="modp-char-item"><span class="modp-char-name">${escHtml(p.name)}</span><span class="modp-char-role">${escHtml(p.role)}</span></div>`
+        ).join('')}</div></div>` : '';
+
+  const npcsShortHtml = data.npcs?.length
+    ? `<div class="modp-section"><div class="modp-section-title">🎭 НПС</div>
+        <div class="modp-char-list">${data.npcs.map(p =>
+          `<div class="modp-char-item"><span class="modp-char-name">${escHtml(p.name)}</span><span class="modp-char-role">${escHtml(p.role)}</span></div>`
+        ).join('')}</div></div>` : '';
+
+  document.getElementById('modp-panel-info').innerHTML =
+    (infoCards ? `<div class="modp-info-grid">${infoCards}</div>` : '') +
+    descHtml + pcsHtml + npcsShortHtml ||
+    '<div class="modp-empty"><div class="modp-empty-icon">📄</div>Нет данных</div>';
+
+  // ── СЦЕНАРИЙ ──
+  document.getElementById('modp-panel-scenario').innerHTML = data.scenario
+    ? `<div class="modp-md">${mdToHtml(data.scenario)}</div>`
+    : '<div class="modp-empty"><div class="modp-empty-icon">📝</div>Файл scenario.md отсутствует</div>';
+
+  // ── СОБЫТИЯ ──
+  if (data.events?.length) {
+    document.getElementById('modp-panel-events').innerHTML =
+      data.events.map(ev => `
+        <div class="modp-event">
+          <div class="modp-event-date">${escHtml(ev.date || '')}</div>
+          <div class="modp-event-title">${escHtml(ev.title || '')}</div>
+          ${ev.description ? `<div class="modp-event-desc">${escHtml(ev.description)}</div>` : ''}
+        </div>`).join('');
+  } else {
+    document.getElementById('modp-panel-events').innerHTML =
+      '<div class="modp-empty"><div class="modp-empty-icon">📅</div>События не найдены</div>';
+  }
+
+  // ── НПС ──
+  if (data.npcContent) {
+    document.getElementById('modp-panel-npcs').innerHTML = `<div class="modp-md">${mdToHtml(data.npcContent)}</div>`;
+  } else if (data.npcs?.length) {
+    document.getElementById('modp-panel-npcs').innerHTML =
+      `<div class="modp-char-list">${data.npcs.map(p => `
+        <div class="modp-char-item" style="flex-direction:column;align-items:flex-start;gap:4px">
+          <span class="modp-char-name">${escHtml(p.name)}</span>
+          <span class="modp-char-role">${escHtml(p.role)}</span>
+        </div>`).join('')}</div>`;
+  } else {
+    document.getElementById('modp-panel-npcs').innerHTML =
+      '<div class="modp-empty"><div class="modp-empty-icon">👥</div>Файл npc.md отсутствует</div>';
+  }
+
+  // ── ЛОКАЦИИ ──
+  if (data.locations?.length) {
+    document.getElementById('modp-panel-locations').innerHTML =
+      data.locations.map(loc => `
+        <div class="modp-location">
+          <div class="modp-location-name">${escHtml(loc.name)}</div>
+          <div class="modp-location-desc">${escHtml(loc.description)}</div>
+        </div>`).join('');
+  } else {
+    document.getElementById('modp-panel-locations').innerHTML =
+      '<div class="modp-empty"><div class="modp-empty-icon">📍</div>Локации не найдены в scenario.md</div>';
+  }
+
+  // ── НИТИ ──
+  document.getElementById('modp-panel-threads').innerHTML = data.openThreads
+    ? `<div class="modp-md">${mdToHtml(data.openThreads)}</div>`
+    : '<div class="modp-empty"><div class="modp-empty-icon">🧵</div>Открытые нити отсутствуют</div>';
+}
+
+// Minimal markdown → HTML converter
+function mdToHtml(md) {
+  if (!md) return '';
+  // Extract code blocks before escaping
+  const codeBlocks = [];
+  let src = md.replace(/```([\s\S]*?)```/g, (_, inner) => {
+    codeBlocks.push(inner);
+    return `\x00CODE${codeBlocks.length - 1}\x00`;
+  });
+  // Escape HTML in the rest
+  src = src.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  // Inline code
+  src = src.replace(/`([^`]+)`/g, (_, c) => `<code>${c}</code>`);
+  // Headers
+  src = src.replace(/^######\s+(.+)$/gm, '<h6>$1</h6>');
+  src = src.replace(/^#####\s+(.+)$/gm, '<h5>$1</h5>');
+  src = src.replace(/^####\s+(.+)$/gm,  '<h4>$1</h4>');
+  src = src.replace(/^###\s+(.+)$/gm,   '<h3>$1</h3>');
+  src = src.replace(/^##\s+(.+)$/gm,    '<h2>$1</h2>');
+  src = src.replace(/^#\s+(.+)$/gm,     '<h2>$1</h2>');
+  // Bold + italic
+  src = src.replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>');
+  src = src.replace(/\*\*(.+?)\*\*/g,     '<strong>$1</strong>');
+  src = src.replace(/\*(.+?)\*/g,         '<em>$1</em>');
+  // Links: [text](href)
+  src = src.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, t, h) => resolveMdLink(t, h));
+  // Blockquote
+  src = src.replace(/^&gt;\s*(.+)$/gm, '<blockquote>$1</blockquote>');
+  // Horizontal rule
+  src = src.replace(/^---+$/gm, '<hr style="border:none;border-top:1px solid var(--border);margin:16px 0">');
+  // Lists (group consecutive li into ul)
+  src = src.replace(/^[-*]\s+(.+)$/gm, '<li>$1</li>');
+  src = src.replace(/^(\d+)\.\s+(.+)$/gm, '<li>$2</li>');
+  src = src.replace(/(<li>[^]*?<\/li>(\n|$))+/g, m => `<ul>${m}</ul>`);
+  // Paragraphs
+  src = src.replace(/\n\n+/g, '\x01');
+  const paras = src.split('\x01').map(chunk => {
+    const t = chunk.trim();
+    if (!t) return '';
+    if (/^<(h[1-6]|ul|blockquote|hr|pre)/.test(t)) return t;
+    return `<p>${t.replace(/\n/g, '<br>')}</p>`;
+  });
+  src = paras.join('\n');
+  // Restore code blocks
+  codeBlocks.forEach((cb, i) => {
+    const escaped = cb.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    src = src.replace(`\x00CODE${i}\x00`, `<pre><code>${escaped}</code></pre>`);
+  });
+  return src;
+}
+
+// Module page tab switching
+document.getElementById('modp-tabbar').addEventListener('click', e => {
+  const btn = e.target.closest('.modp-tab');
+  if (!btn) return;
+  const tab = btn.dataset.modtab;
+  document.querySelectorAll('.modp-tab').forEach(b => b.classList.toggle('active', b === btn));
+  document.querySelectorAll('.modp-panel').forEach(p => p.classList.toggle('active', p.id === `modp-panel-${tab}`));
+});
+
+// Back button
+document.getElementById('modp-back-btn').addEventListener('click', () => navigate('modules'));
+
+// Global click delegation for md-link-char / md-link-loc produced by resolveMdLink()
+document.addEventListener('click', e => {
+  const charLink = e.target.closest('.md-link-char');
+  if (charLink) {
+    e.preventDefault();
+    const slug = charLink.dataset.charSlug;
+    ensureCharsLoaded().then(() => {
+      const char = (STATE.characters || []).find(c => c.slug === slug);
+      if (char) openCharDetail(char.name);
+    });
+    return;
+  }
+  const locLink = e.target.closest('.md-link-loc');
+  if (locLink) {
+    e.preventDefault();
+    const slug = locLink.dataset.locSlug;
+    if (slug) openLocDetail(slug);
+  }
+});
+
 // ═══════════════════════════════════════════════════════════════
 // Threads
 // ═══════════════════════════════════════════════════════════════
+
+const THREAD_STATUS_OPTS = [
+  ['active', '🔴 Активна'], ['background', '🟡 Фоновая'],
+  ['closed', '🟢 Закрыта'], ['abandoned', '⚫ Заброшена'],
+];
+const THREAD_PRIO_OPTS = ['Высокий', 'Средний', 'Низкий'];
+let _threadFiles = ['archive/open_threads.md'];
+
+function fileLabel(f) {
+  if (f === 'archive/open_threads.md') return 'Архив города';
+  const m = f.match(/^chronicles\/([^/]+)\//);
+  return m ? m[1] : f;
+}
 
 async function loadThreads() {
   const el = document.getElementById('threads-list');
@@ -2023,34 +2260,88 @@ async function loadThreads() {
     const threads = await fetch('/api/threads').then(r => r.json());
     const active = threads.filter(t => t.status === 'active');
     const bg     = threads.filter(t => t.status === 'background');
+    const done   = threads.filter(t => t.status === 'closed' || t.status === 'abandoned');
     document.getElementById('threads-sub').textContent =
-      `${active.length} активных · ${bg.length} фоновых`;
+      `${active.length} активных · ${bg.length} фоновых · ${done.length} закрытых`;
+
+    // Distinct target files for the "new thread" file picker
+    _threadFiles = [...new Set(['archive/open_threads.md', ...threads.map(t => t.file).filter(Boolean)])];
+    const sel = document.getElementById('th-file');
+    if (sel) sel.innerHTML = _threadFiles.map(f => `<option value="${escHtml(f)}">${escHtml(fileLabel(f))}</option>`).join('');
+
+    const statusSelect = t => `<select class="thread-status">${
+      THREAD_STATUS_OPTS.map(([v, l]) => `<option value="${v}"${v === t.status ? ' selected' : ''}>${l}</option>`).join('')}</select>`;
+    const prioSelect = t => `<select class="thread-prio">${
+      THREAD_PRIO_OPTS.map(p => `<option${p === t.priority ? ' selected' : ''}>${p}</option>`).join('')}</select>`;
 
     const renderThread = t => `
-      <div class="thread-card thread-${escHtml(t.status)}">
+      <div class="thread-card thread-${escHtml(t.status)}" data-id="${t.id}" data-file="${escHtml(t.file || '')}">
         <div class="thread-num">${t.id}</div>
         <div class="thread-body">
           <div class="thread-title">${escHtml(t.title)}</div>
           ${t.description ? `<div class="thread-desc">${escHtml(t.description)}</div>` : ''}
-          <div class="thread-source">${escHtml(t.source)}</div>
+          <div class="thread-source">${escHtml(t.source)} · <span class="thread-file">${escHtml(fileLabel(t.file || ''))}</span></div>
+          <div class="thread-actions">${statusSelect(t)}${prioSelect(t)}</div>
         </div>
-        <div class="thread-priority priority-${escHtml(t.priority.toLowerCase())}">${escHtml(t.priority)}</div>
       </div>`;
 
     let html = '';
-    if (active.length) {
-      html += `<div class="threads-section-header">🔴 Активные (${active.length})</div>`;
-      html += active.map(renderThread).join('');
-    }
-    if (bg.length) {
-      html += `<div class="threads-section-header" style="margin-top:32px">🟡 Фоновые (${bg.length})</div>`;
-      html += bg.map(renderThread).join('');
-    }
+    const section = (icon, label, list) => list.length
+      ? `<div class="threads-section-header" style="margin-top:24px">${icon} ${label} (${list.length})</div>` + list.map(renderThread).join('')
+      : '';
+    html += section('🔴', 'Активные', active);
+    html += section('🟡', 'Фоновые', bg);
+    html += section('🟢', 'Закрытые', done);
     el.innerHTML = html || '<div class="loading-state" style="height:120px">Нитей нет</div>';
   } catch {
     el.innerHTML = '<div class="loading-state" style="color:var(--accent3)">⚠ Не удалось загрузить</div>';
   }
 }
+
+// Per-card status/priority controls (delegated, attached once)
+document.getElementById('threads-list')?.addEventListener('change', async e => {
+  const card = e.target.closest('.thread-card');
+  if (!card) return;
+  const body = { file: card.dataset.file };
+  if (e.target.classList.contains('thread-status'))      body.status   = e.target.value;
+  else if (e.target.classList.contains('thread-prio'))   body.priority = e.target.value;
+  else return;
+  try {
+    const r = await fetch('/api/threads/' + encodeURIComponent(card.dataset.id),
+      { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then(r => r.json());
+    if (r.ok) loadThreads(); else alert(r.error || 'Ошибка обновления');
+  } catch (err) { alert('Ошибка: ' + err.message); }
+});
+
+// New-thread form toggle + submit
+(function wireThreadForm() {
+  const form = document.getElementById('thread-form');
+  const btn  = document.getElementById('btn-new-thread');
+  if (!form || !btn) return;
+  const toggle = show => { form.style.display = show ? '' : 'none'; if (show) document.getElementById('th-title').focus(); };
+  btn.addEventListener('click', () => toggle(form.style.display === 'none'));
+  document.getElementById('btn-cancel-thread').addEventListener('click', () => toggle(false));
+  document.getElementById('btn-save-thread').addEventListener('click', async () => {
+    const err = document.getElementById('th-err');
+    err.style.display = 'none';
+    const payload = {
+      title:       document.getElementById('th-title').value.trim(),
+      description: document.getElementById('th-desc').value.trim(),
+      source:      document.getElementById('th-source').value.trim(),
+      priority:    document.getElementById('th-prio').value,
+      status:      document.getElementById('th-status').value,
+      file:        document.getElementById('th-file').value,
+    };
+    if (!payload.title) { err.textContent = 'Укажите заголовок'; err.style.display = ''; return; }
+    try {
+      const r = await fetch('/api/threads', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }).then(r => r.json());
+      if (!r.ok) { err.textContent = r.error || 'Ошибка'; err.style.display = ''; return; }
+      ['th-title', 'th-desc', 'th-source'].forEach(id => document.getElementById(id).value = '');
+      toggle(false);
+      loadThreads();
+    } catch (e) { err.textContent = 'Ошибка: ' + e.message; err.style.display = ''; }
+  });
+})();
 
 // ═══════════════════════════════════════════════════════════════
 // Chronicle (Stories_of_*.md)
@@ -2117,12 +2408,227 @@ function renderChronicle() {
     return;
   }
   const evCount = (data.events || []).length;
-  document.getElementById('chronicle-sub').textContent =
-    st.tab === 'world' ? 'Состояние мира' : `${evCount} событий`;
-  el.innerHTML = st.tab === 'world'
-    ? renderWorldState(data.worldState)
-    : renderTimeline(data.events || []);
+  const sub = document.getElementById('chronicle-sub');
+
+  if (st.tab === 'world') {
+    sub.textContent = 'Состояние мира';
+    el.innerHTML = renderWorldState(data.worldState);
+    return;
+  }
+  if (st.tab === 'lore') {
+    sub.textContent = 'Хронология мира · timeline.md';
+    _loadArchiveEditable('/api/timeline', '/api/timeline', 'chronicle-content',
+      'timeline.md не найден для этого города');
+    return;
+  }
+  sub.textContent = `${evCount} событий`;
+  el.innerHTML = renderTimeline(data.events || []);
 }
+
+// Render a lore markdown doc (sections + pipe tables + blockquotes + links) → HTML.
+// Used by timeline, factions (political_state), rumors and V20 sheets.
+function renderLoreMd(md) {
+  const lines = md.replace(/\r/g, '').split('\n');
+  const out = [];
+  const cells = row => row.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map(c => c.trim());
+  let i = 0;
+  while (i < lines.length) {
+    const line = lines[i];
+    if (/^\s*\|/.test(line)) {                       // table block
+      const tbl = [];
+      while (i < lines.length && /^\s*\|/.test(lines[i])) { tbl.push(lines[i]); i++; }
+      if (tbl.length >= 2) {
+        const headers = cells(tbl[0]);
+        const rows = tbl.slice(2).map(cells);        // skip the |---| separator
+        out.push(renderTable({ headers, rows }));
+      }
+      continue;
+    }
+    const h = line.match(/^(#{1,6})\s+(.+)$/);
+    if (h) { const lvl = Math.min(h[1].length, 4); out.push(`<h${lvl} class="lore-h">${mdInline(h[2])}</h${lvl}>`); i++; continue; }
+    if (/^\s*>\s?/.test(line)) { out.push(`<blockquote class="lore-quote">${mdInline(line.replace(/^\s*>\s?/, ''))}</blockquote>`); i++; continue; }
+    if (/^\s*---+\s*$/.test(line)) { out.push('<hr class="lore-hr">'); i++; continue; }
+    if (line.trim()) { out.push(`<p class="lore-p">${mdInline(line.trim())}</p>`); i++; continue; }
+    i++;
+  }
+  return `<div class="lore-timeline">${out.join('\n')}</div>`;
+}
+
+// Generic loader for a raw-markdown archive doc → render into a page container.
+async function loadArchiveDoc(url, containerId, emptyMsg) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  el.innerHTML = '<div class="loading-state"><div class="spinner"></div>Загрузка…</div>';
+  try {
+    const d = await fetch(url).then(r => r.json());
+    el.innerHTML = d.exists && d.content
+      ? renderLoreMd(d.content)
+      : `<div class="cdet-empty" style="padding:30px">${escHtml(emptyMsg)}</div>`;
+  } catch {
+    el.innerHTML = '<div class="loading-state" style="color:var(--accent3)">⚠ Не удалось загрузить</div>';
+  }
+}
+
+// Editable archive doc — adds ✏ Edit toolbar (and optional 🎲 d20 roll for rumors).
+// opts: { d20: bool, putExtra: object }
+async function _loadArchiveEditable(getUrl, putUrl, containerId, emptyMsg, opts = {}) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  el.innerHTML = '<div class="loading-state"><div class="spinner"></div>Загрузка…</div>';
+
+  let rawContent = '';
+  let exists = false;
+  try {
+    const d = await fetch(getUrl).then(r => r.json());
+    exists = !!d.exists;
+    rawContent = d.content || '';
+  } catch {
+    el.innerHTML = '<div class="loading-state" style="color:var(--accent3)">⚠ Не удалось загрузить</div>';
+    return;
+  }
+
+  const uid = containerId; // use containerId as unique prefix for sub-element IDs
+  const d20Part = opts.d20
+    ? `<button class="archive-d20-btn" id="${uid}-d20-btn">🎲 Бросить d20</button><span class="archive-d20-badge" id="${uid}-d20-badge"></span>`
+    : '';
+
+  el.innerHTML = `
+    <div class="archive-toolbar">
+      ${d20Part}
+      <button class="archive-edit-btn" id="${uid}-edit-btn">✏ Редактировать</button>
+    </div>
+    <div class="archive-doc-view" id="${uid}-view">${
+      exists && rawContent
+        ? renderLoreMd(rawContent)
+        : `<div class="cdet-empty" style="padding:30px">${escHtml(emptyMsg)}</div>`
+    }</div>
+    <div class="archive-doc-edit" id="${uid}-edit" style="display:none">
+      <textarea class="archive-textarea" id="${uid}-ta" spellcheck="false"></textarea>
+      <div class="archive-edit-bar">
+        <button class="btn-submit" id="${uid}-save-btn">💾 Сохранить</button>
+        <button class="btn-submit btn-secondary" id="${uid}-cancel-btn">Отмена</button>
+        <span class="archive-edit-msg" id="${uid}-msg"></span>
+      </div>
+    </div>`;
+
+  const viewEl   = document.getElementById(`${uid}-view`);
+  const editEl   = document.getElementById(`${uid}-edit`);
+  const taEl     = document.getElementById(`${uid}-ta`);
+  const msgEl    = document.getElementById(`${uid}-msg`);
+  const saveBtn  = document.getElementById(`${uid}-save-btn`);
+  const cancelBtn = document.getElementById(`${uid}-cancel-btn`);
+  const editBtn  = document.getElementById(`${uid}-edit-btn`);
+
+  editBtn.addEventListener('click', () => {
+    taEl.value = rawContent;
+    viewEl.style.display = 'none';
+    editEl.style.display = '';
+    editBtn.style.display = 'none';
+    taEl.focus();
+  });
+
+  cancelBtn.addEventListener('click', () => {
+    editEl.style.display = 'none';
+    viewEl.style.display = '';
+    editBtn.style.display = '';
+    msgEl.textContent = '';
+  });
+
+  saveBtn.addEventListener('click', async () => {
+    const newContent = taEl.value;
+    saveBtn.disabled = true; saveBtn.textContent = '⏳';
+    msgEl.textContent = '';
+    try {
+      const body = { content: newContent, ...(opts.putExtra || {}) };
+      const r = await fetch(putUrl, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      }).then(r => r.json());
+      if (!r.ok) throw new Error(r.error || 'Ошибка');
+      rawContent = newContent;
+      viewEl.innerHTML = rawContent
+        ? renderLoreMd(rawContent)
+        : `<div class="cdet-empty" style="padding:30px">${escHtml(emptyMsg)}</div>`;
+      editEl.style.display = 'none';
+      viewEl.style.display = '';
+      editBtn.style.display = '';
+      msgEl.textContent = '';
+    } catch (e) {
+      msgEl.textContent = '✗ ' + e.message;
+      msgEl.style.color = 'var(--accent3)';
+    } finally {
+      saveBtn.disabled = false; saveBtn.textContent = '💾 Сохранить';
+    }
+  });
+
+  if (opts.d20) {
+    const d20Btn   = document.getElementById(`${uid}-d20-btn`);
+    const d20Badge = document.getElementById(`${uid}-d20-badge`);
+    if (d20Btn) d20Btn.addEventListener('click', () => _rollD20Rumor(`${uid}-view`, d20Badge));
+  }
+}
+
+function _rollD20Rumor(viewId, badgeEl) {
+  const roll  = Math.floor(Math.random() * 20) + 1;
+  const table = document.querySelector(`#${viewId} table`);
+  if (!table) { if (badgeEl) { badgeEl.textContent = `🎲 ${roll}`; badgeEl.classList.add('rolled'); setTimeout(() => badgeEl.classList.remove('rolled'), 3000); } return; }
+
+  let hitRow = null;
+  table.querySelectorAll('tbody tr').forEach(row => {
+    const cell = row.querySelector('td:first-child');
+    if (!cell) return;
+    const txt    = cell.textContent.trim();
+    const single = txt.match(/^(\d+)$/);
+    const range  = txt.match(/^(\d+)\s*[-–—]\s*(\d+)$/);
+    const hit    = (single && +single[1] === roll) ||
+                   (range && roll >= +range[1] && roll <= +range[2]);
+    row.classList.toggle('rumor-hit', hit);
+    if (hit) hitRow = row;
+  });
+
+  if (badgeEl) { badgeEl.textContent = `🎲 ${roll}`; badgeEl.classList.add('rolled'); setTimeout(() => badgeEl.classList.remove('rolled'), 3500); }
+  if (hitRow) hitRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+// C1 — Фракции (political_state.md) + вкладка «Визитёры» (visitors.md)
+let _factionsTab = 'map';
+function loadFactions() {
+  document.querySelectorAll('#factions-tabbar .chron-tab').forEach(b =>
+    b.classList.toggle('active', b.dataset.facTab === _factionsTab));
+  if (_factionsTab === 'visitors') {
+    _loadArchiveEditable('/api/visitors', '/api/visitors', 'factions-content',
+      'Визитёров пока нет. Гости из других городов оформляются в archive/visitors.md.');
+  } else {
+    _loadArchiveEditable('/api/factions', '/api/factions', 'factions-content',
+      'political_state.md не найден для этого города.');
+  }
+}
+document.querySelectorAll('#factions-tabbar .chron-tab').forEach(b => b.addEventListener('click', () => {
+  _factionsTab = b.dataset.facTab;
+  loadFactions();
+}));
+
+// C2 — Слухи (rumors_elysium.md / rumors_dreaming.md)
+let _rumorsType = 'elysium';
+function loadRumors() {
+  document.querySelectorAll('#rumors-tabbar .chron-tab').forEach(b =>
+    b.classList.toggle('active', b.dataset.rumType === _rumorsType));
+  const content = document.getElementById('rumors-content');
+  if (content) content.dataset.rumType = _rumorsType;
+  const tabbar = document.getElementById('rumors-tabbar');
+  if (tabbar) tabbar.dataset.rumType = _rumorsType;
+  _loadArchiveEditable(
+    `/api/rumors?type=${_rumorsType}`,
+    '/api/rumors',
+    'rumors-content',
+    `${_rumorsType === 'dreaming' ? 'rumors_dreaming.md' : 'rumors_elysium.md'} не найден для этого города.`,
+    { d20: true, putExtra: { type: _rumorsType } }
+  );
+}
+document.querySelectorAll('#rumors-tabbar .chron-tab').forEach(b => b.addEventListener('click', () => {
+  _rumorsType = b.dataset.rumType;
+  loadRumors();
+}));
 
 function renderTable(t) {
   if (!t || !t.headers) return '';
@@ -2177,7 +2683,7 @@ function renderTimeline(events) {
         : l.kind === 'npc' ? '👥 НПС' : escHtml(l.text);
       const tab = l.kind === 'finale' ? 'finale' : l.kind === 'npc' ? 'npc' : 'overview';
       return l.module
-        ? `<button class="chron-chip chip-mod" data-mod="${escHtml(l.module)}" data-tab="${tab}">${label}</button>`
+        ? `<button class="chron-chip chip-mod" data-mod="${escHtml(l.module)}" data-chr="${escHtml(ev.chronicle || '')}" data-tab="${tab}">${label}</button>`
         : `<span class="chron-chip">${label}</span>`;
     }).join('');
 
@@ -2229,7 +2735,7 @@ document.getElementById('chronicle-content').addEventListener('click', e => {
   const lc = e.target.closest('.chip-loc');
   if (lc) { openLocDetail(lc.dataset.loc); return; }
   const mc = e.target.closest('.chip-mod');
-  if (mc) { openModuleDetail(mc.dataset.mod, mc.dataset.tab); return; }
+  if (mc) { openModulePage(mc.dataset.chr || '', mc.dataset.mod); return; }
 });
 
 // ═══════════════════════════════════════════════════════════════
@@ -2284,12 +2790,6 @@ document.getElementById('module-detail-content').addEventListener('click', e => 
   const chr = genBtn.dataset.chr || _chrDetailSlug || '';
   document.getElementById('module-detail-modal').classList.remove('open');
   openFillModal(chr, mod, mod);
-});
-
-// Module card clicks
-document.getElementById('modules-list').addEventListener('click', e => {
-  const card = e.target.closest('.module-card[data-name]');
-  if (card) openModuleDetail(card.dataset.name);
 });
 
 // Module modal: tab switching (same pattern as char/loc modals)
@@ -2649,6 +3149,145 @@ async function lsGenProse(stubs, source = 'claude') {
 document.querySelector('.tab-btn[data-tab="log-session"]').addEventListener('click', lsInit);
 
 // ═══════════════════════════════════════════════════════════════
+// Global Search
+// ═══════════════════════════════════════════════════════════════
+
+function loadSearch() {
+  const inp = document.getElementById('srch-input');
+  if (inp && !inp.dataset.inited) {
+    inp.dataset.inited = '1';
+    let _debTimer = null;
+    inp.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { clearTimeout(_debTimer); _runSearch(); }
+    });
+    inp.addEventListener('input', () => {
+      clearTimeout(_debTimer);
+      _debTimer = setTimeout(_runSearch, 420);
+    });
+    document.getElementById('srch-btn').addEventListener('click', _runSearch);
+  }
+  if (inp) inp.focus();
+}
+
+async function _runSearch() {
+  const inp = document.getElementById('srch-input');
+  const resultsEl = document.getElementById('srch-results');
+  const subEl = document.getElementById('search-global-sub');
+  const q = (inp?.value || '').trim();
+  if (q.length < 3) {
+    resultsEl.innerHTML = '<div class="srch-hint">Введи запрос — минимум 3 символа</div>';
+    if (subEl) subEl.textContent = '';
+    return;
+  }
+  resultsEl.innerHTML = '<div class="loading-state"><div class="spinner"></div>Поиск…</div>';
+  try {
+    const data = await fetch(`/api/search?q=${encodeURIComponent(q)}`).then(r => r.json());
+    _renderSearchResults(data, resultsEl, subEl);
+  } catch (e) {
+    resultsEl.innerHTML = `<div class="srch-hint">⚠ Ошибка: ${escHtml(e.message)}</div>`;
+  }
+}
+
+function _renderSearchResults(data, el, subEl) {
+  if (!data.results || data.total === 0) {
+    el.innerHTML = `<div class="srch-hint">Ничего не найдено по запросу «${escHtml(data.query)}»</div>`;
+    if (subEl) subEl.textContent = '';
+    return;
+  }
+  if (subEl) subEl.textContent = `${data.total} результ.`;
+  const hl = (txt) => {
+    if (!txt) return '';
+    const q = escHtml(data.query);
+    return escHtml(txt).replace(new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'),
+      m => `<mark class="srch-hl">${m}</mark>`);
+  };
+
+  const sections = [];
+
+  if ((data.results.characters || []).length) {
+    const rows = data.results.characters.map(c => `
+      <div class="srch-row srch-char" data-name="${escHtml(c.name)}">
+        <div class="srch-row-icon">🎭</div>
+        <div class="srch-row-body">
+          <div class="srch-row-title">${hl(c.name)} <span class="srch-row-tag">${escHtml(c.lineage)}</span></div>
+          <div class="srch-row-excerpt">${hl(c.excerpt)}</div>
+        </div>
+        <button class="srch-open-btn">Открыть →</button>
+      </div>`).join('');
+    sections.push(`<div class="srch-section"><div class="srch-sec-title">🎭 Персонажи <span class="srch-sec-count">${data.results.characters.length}</span></div>${rows}</div>`);
+  }
+
+  if ((data.results.locations || []).length) {
+    const rows = data.results.locations.map(l => `
+      <div class="srch-row srch-loc" data-slug="${escHtml(l.slug)}">
+        <div class="srch-row-icon">📍</div>
+        <div class="srch-row-body">
+          <div class="srch-row-title">${hl(l.name)}</div>
+          <div class="srch-row-excerpt">${hl(l.excerpt)}</div>
+        </div>
+        <button class="srch-open-btn">Открыть →</button>
+      </div>`).join('');
+    sections.push(`<div class="srch-section"><div class="srch-sec-title">📍 Локации <span class="srch-sec-count">${data.results.locations.length}</span></div>${rows}</div>`);
+  }
+
+  if ((data.results.modules || []).length) {
+    const rows = data.results.modules.map(m => `
+      <div class="srch-row srch-mod" data-chr="${escHtml(m.chronicle)}" data-mod="${escHtml(m.module)}">
+        <div class="srch-row-icon">📖</div>
+        <div class="srch-row-body">
+          <div class="srch-row-title">${hl(m.title)} <span class="srch-row-tag">${escHtml(m.chronicle)}</span></div>
+          <div class="srch-row-excerpt">${hl(m.excerpt)}</div>
+        </div>
+        <button class="srch-open-btn">Открыть →</button>
+      </div>`).join('');
+    sections.push(`<div class="srch-section"><div class="srch-sec-title">📖 Модули <span class="srch-sec-count">${data.results.modules.length}</span></div>${rows}</div>`);
+  }
+
+  if ((data.results.events || []).length) {
+    const rows = data.results.events.map(e => `
+      <div class="srch-row">
+        <div class="srch-row-icon">📅</div>
+        <div class="srch-row-body">
+          <div class="srch-row-title"><span class="srch-row-tag">${escHtml(e.chronicle)}</span></div>
+          <div class="srch-row-excerpt">${hl(e.excerpt)}</div>
+        </div>
+      </div>`).join('');
+    sections.push(`<div class="srch-section"><div class="srch-sec-title">📅 События <span class="srch-sec-count">${data.results.events.length}</span></div>${rows}</div>`);
+  }
+
+  if ((data.results.archive || []).length) {
+    const rows = data.results.archive.map(a => `
+      <div class="srch-row">
+        <div class="srch-row-icon">📜</div>
+        <div class="srch-row-body">
+          <div class="srch-row-title">${escHtml(a.label)}</div>
+          <div class="srch-row-excerpt">${hl(a.excerpt)}</div>
+        </div>
+      </div>`).join('');
+    sections.push(`<div class="srch-section"><div class="srch-sec-title">📜 Архив <span class="srch-sec-count">${data.results.archive.length}</span></div>${rows}</div>`);
+  }
+
+  el.innerHTML = sections.join('');
+
+  // Click handlers
+  el.querySelectorAll('.srch-char').forEach(row => {
+    row.querySelector('.srch-open-btn')?.addEventListener('click', () => {
+      ensureCharsLoaded().then(() => openCharDetail(row.dataset.name));
+    });
+  });
+  el.querySelectorAll('.srch-loc').forEach(row => {
+    row.querySelector('.srch-open-btn')?.addEventListener('click', () => {
+      ensureLocsLoaded().then(() => openLocDetail(row.dataset.slug));
+    });
+  });
+  el.querySelectorAll('.srch-mod').forEach(row => {
+    row.querySelector('.srch-open-btn')?.addEventListener('click', () => {
+      openModulePage(row.dataset.chr, row.dataset.mod);
+    });
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════
 // Init
 // ═══════════════════════════════════════════════════════════════
 
@@ -2676,13 +3315,97 @@ const INFO_FIELDS = [
 ];
 
 function renderDiaryList(c) {
-  if (!c.diaries?.length) return '<div class="cdet-empty">Дневников нет</div>';
-  return `<div class="diaries-list">${c.diaries.map(d => `
-    <div class="diary-item" data-char="${escHtml(c.name)}" data-file="${escHtml(d.file)}" data-title="${escHtml(d.title)}">
-      <span class="diary-item-icon">📜</span>
-      <span class="diary-item-title">${escHtml(d.title)}</span>
-      <span class="diary-item-arrow">→</span>
-    </div>`).join('')}</div>`;
+  const ch = escHtml(c.name);
+  const items = c.diaries?.length
+    ? `<div class="diaries-list">${c.diaries.map(d => `
+        <div class="diary-item" data-char="${ch}" data-file="${escHtml(d.file)}" data-title="${escHtml(d.title)}">
+          <span class="diary-item-icon">📜</span>
+          <span class="diary-item-title">${escHtml(d.title)}</span>
+          <span class="diary-item-arrow">→</span>
+        </div>`).join('')}</div>`
+    : '<div class="cdet-empty">Дневников нет</div>';
+
+  return `
+    ${items}
+    <div class="diary-tools">
+      <button class="cdet-edit-btn" id="diary-add-toggle" data-char="${ch}">+ Новая запись</button>
+    </div>
+    <div class="diary-form" id="diary-form" style="display:none">
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Период *</label><input class="form-control" id="diary-period" placeholder="2010-11 / retrospective"></div>
+        <div class="form-group" style="flex:2"><label class="form-label">Заголовок записи</label><input class="form-control" id="diary-session" placeholder="Ноябрь 2010, ночь на манеже"></div>
+      </div>
+      <div class="form-group"><label class="form-label">Акцент для ИИ (необязательно)</label><input class="form-control" id="diary-hint" placeholder="о чём запись, настроение…"></div>
+      <textarea class="cdet-edit-textarea" id="diary-text" rows="10" placeholder="Текст записи (введи вручную или сгенерируй ИИ и отредактируй)…"></textarea>
+      <div class="btn-row" style="margin-top:10px;align-items:center">
+        <button class="btn-submit" id="diary-gen" data-char="${ch}">✍️ Сгенерировать ИИ</button>
+        <button class="btn-submit" id="diary-save" data-char="${ch}">💾 Сохранить</button>
+        <button class="btn-submit btn-secondary" id="diary-cancel">Отмена</button>
+        <span id="diary-form-msg"></span>
+      </div>
+    </div>`;
+}
+
+function _diaryMsg(text, ok = true) {
+  const m = document.getElementById('diary-form-msg');
+  if (m) { m.textContent = text; m.style.color = ok ? 'var(--gold)' : 'var(--accent3)'; }
+}
+
+// C4 — lazy-load a character's V20 sheet (<slug>-sheet.md) into its panel.
+async function _loadCharSheet(charName) {
+  const panel = document.getElementById('cdet-sheet-panel');
+  if (!panel || panel.dataset.loaded) return;
+  panel.dataset.loaded = '1';
+  try {
+    const d = await fetch(`/api/characters/${encodeURIComponent(charName)}/sheet`).then(r => r.json());
+    panel.innerHTML = d.exists && d.content
+      ? renderLoreMd(d.content)
+      : '<div class="cdet-empty">Лист V20 не найден</div>';
+  } catch (e) {
+    panel.dataset.loaded = '';
+    panel.innerHTML = `<div class="cdet-empty">Ошибка загрузки: ${escHtml(e.message)}</div>`;
+  }
+}
+
+async function _diaryGenerate(charName) {
+  const period = document.getElementById('diary-period').value.trim();
+  if (!period) { _diaryMsg('Укажи период (ГГГГ-ММ)', false); return; }
+  const btn = document.getElementById('diary-gen'); const old = btn.textContent;
+  btn.disabled = true; btn.textContent = '⏳ Генерация…'; _diaryMsg('');
+  try {
+    const featPrefs    = JSON.parse(localStorage.getItem('ai-feature-prefs') || '{}');
+    const pref         = _getPref(featPrefs, 'prose', 'openrouter');
+    const preferSource = pref.provider;
+    const orModel      = preferSource === 'openrouter' ? (pref.model || null) : null;
+    const r = await fetch(`/api/characters/${encodeURIComponent(charName)}/diary/generate`,
+      { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ period, session: document.getElementById('diary-session').value.trim(), hint: document.getElementById('diary-hint').value.trim(), preferSource, orModel }) }).then(r => r.json());
+    if (r.error) { _diaryMsg(r.error, false); return; }
+    document.getElementById('diary-text').value = r.text || '';
+    _diaryMsg(`Сгенерировано (${r.source}). Проверь и сохрани.`);
+  } catch (e) { _diaryMsg('Ошибка: ' + e.message, false); }
+  finally { btn.disabled = false; btn.textContent = old; }
+}
+
+async function _diarySave(charName) {
+  const period = document.getElementById('diary-period').value.trim();
+  const text   = document.getElementById('diary-text').value.trim();
+  if (!period) { _diaryMsg('Укажи период (ГГГГ-ММ)', false); return; }
+  if (!text)   { _diaryMsg('Пустой текст записи', false); return; }
+  const btn = document.getElementById('diary-save'); const old = btn.textContent;
+  btn.disabled = true; btn.textContent = '⏳…';
+  try {
+    const r = await fetch(`/api/characters/${encodeURIComponent(charName)}/diary`,
+      { method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ period, session: document.getElementById('diary-session').value.trim(), text }) }).then(r => r.json());
+    if (r.error) { _diaryMsg(r.error, false); return; }
+    _diaryMsg('✓ Сохранено');
+    STATE.characters = []; await ensureCharsLoaded();
+    const c = STATE.characters.find(ch => ch.name === charName);
+    const panel = document.querySelector('#char-detail-content [data-panel="diaries"]');
+    if (panel && c) panel.innerHTML = renderDiaryList(c);
+  } catch (e) { _diaryMsg('Ошибка: ' + e.message, false); }
+  finally { btn.disabled = false; btn.textContent = old; }
 }
 
 function formatDiaryText(text) {
@@ -2806,10 +3529,13 @@ function openCharDetail(name) {
         <button class="cdet-tab" data-tab="bio">Биография</button>
         <button class="cdet-tab" data-tab="rels">Отношения</button>
         <button class="cdet-tab" data-tab="diaries">Дневники${c.diaries?.length ? ` (${c.diaries.length})` : ''}</button>
+        ${c.hasSheet ? `<button class="cdet-tab" data-tab="sheet" data-char="${escHtml(c.name)}">Лист V20</button>` : ''}
         <button class="cdet-tab" data-tab="desc">Описание</button>
       </div>
       <div class="cdet-panels">
         <div class="cdet-panel active" data-panel="info">
+          ${c.presence ? `<div class="cdet-presence">🌍 <b>Присутствие:</b> ${escHtml(c.presence)}</div>` : ''}
+          ${c.aliases ? `<div class="cdet-presence cdet-aliases">🎭 <b>Алиасы:</b> ${escHtml(c.aliases)}</div>` : ''}
           <div class="cdet-info-header">
             <button class="cdet-edit-btn" id="cdet-edit-btn" data-char="${escHtml(c.name)}">✏ Редактировать</button>
           </div>
@@ -2858,6 +3584,9 @@ function openCharDetail(name) {
         <div class="cdet-panel" data-panel="diaries">
           ${renderDiaryList(c)}
         </div>
+        ${c.hasSheet ? `<div class="cdet-panel" data-panel="sheet" id="cdet-sheet-panel">
+          <div class="loading-state"><div class="spinner"></div>Загрузка листа…</div>
+        </div>` : ''}
         <div class="cdet-panel" data-panel="desc">
           <div class="cdet-info-header" style="gap:8px">
             <button class="cdet-gen-appearance-btn" id="cdet-gen-appearance" data-char="${escHtml(c.name)}" title="Сгенерировать описание внешности по артам персонажа (Claude Vision)">👁 Внешность по арту</button>
@@ -2868,6 +3597,7 @@ function openCharDetail(name) {
             ${descHtml || '<div class="cdet-empty">Описание не заполнено</div>'}
           </div>
           <div id="cdet-desc-edit" style="display:none">
+            <div id="cdet-img-gallery"></div>
             <div class="cdet-section-title">Внешность</div>
             <textarea class="cdet-edit-textarea" id="cdet-appearance-ta" rows="5" placeholder="Внешность персонажа...">${c.appearance && !c.appearance.includes('⚠️') ? escHtml(c.appearance) : ''}</textarea>
             <div class="cdet-section-title" style="margin-top:12px">Голос</div>
@@ -2914,6 +3644,7 @@ document.getElementById('char-detail-content').addEventListener('click', e => {
     col.querySelector(`[data-panel="${tab.dataset.tab}"]`).classList.add('active');
     const panels = col.querySelector('.cdet-panels');
     if (panels) panels.scrollTop = 0;
+    if (tab.dataset.tab === 'sheet') _loadCharSheet(tab.dataset.char);
     return;
   }
   if (e.target.closest('#cdet-carousel-prev')) { _carouselGoTo(_carouselIdx - 1, true); return; }
@@ -2931,9 +3662,27 @@ document.getElementById('char-detail-content').addEventListener('click', e => {
   if (savePanelBtn) { _savePanelEdit(savePanelBtn.dataset.savepanel, savePanelBtn.dataset.char); return; }
   if (e.target.closest('#cdet-gen-appearance')) { _generateAppearance(e.target.closest('#cdet-gen-appearance').dataset.char); return; }
   if (e.target.closest('#cdet-gen-prompt')) { _generatePrompt(e.target.closest('#cdet-gen-prompt').dataset.char); return; }
+  if (e.target.closest('.cdet-img-del-btn')) {
+    const btn = e.target.closest('.cdet-img-del-btn');
+    _deleteCharImage(btn.dataset.char, btn.dataset.file);
+    return;
+  }
 
   const uploadBtn = e.target.closest('.cdet-upload-btn');
   if (uploadBtn) { triggerImageUpload(uploadBtn.dataset.char); return; }
+
+  // Diary entry form: toggle / generate / save / cancel
+  if (e.target.closest('#diary-add-toggle')) {
+    const f = document.getElementById('diary-form');
+    if (f) f.style.display = f.style.display === 'none' ? '' : 'none';
+    return;
+  }
+  if (e.target.closest('#diary-cancel')) {
+    const f = document.getElementById('diary-form'); if (f) f.style.display = 'none';
+    return;
+  }
+  if (e.target.closest('#diary-gen'))  { _diaryGenerate(e.target.closest('#diary-gen').dataset.char); return; }
+  if (e.target.closest('#diary-save')) { _diarySave(e.target.closest('#diary-save').dataset.char); return; }
 
   const diaryItem = e.target.closest('.diary-item');
   if (diaryItem) { loadDiaryEntry(diaryItem.dataset.char, diaryItem.dataset.file); return; }
@@ -3041,7 +3790,14 @@ function _togglePanelEdit(panel, on) {
   edit.style.display = on ? '' : 'none';
   bar.classList.toggle('show', on);
   if (btn) { btn.classList.toggle('active', on); btn.textContent = on ? '✏ Режим редактирования' : '✏ Редактировать'; }
-  if (on) edit.querySelector('textarea')?.focus();
+  if (on) {
+    if (panel === 'desc') {
+      const charName = document.querySelector('[data-editpanel="desc"][data-char]')?.dataset.char;
+      if (charName) _loadDescImages(charName);
+    } else {
+      edit.querySelector('textarea')?.focus();
+    }
+  }
 }
 
 async function _savePanelEdit(panel, charName) {
@@ -3131,6 +3887,8 @@ async function _savePanelEdit(panel, charName) {
 }
 
 async function _generateAppearance(charName) {
+  if (_genAppearanceRunning) return;
+  _genAppearanceRunning = true;
   const btn = document.getElementById('cdet-gen-appearance');
   if (btn) { btn.disabled = true; btn.textContent = '⏳ Анализ арта...'; }
 
@@ -3149,6 +3907,10 @@ async function _generateAppearance(charName) {
         body: JSON.stringify({ model: claudeModel, preferSource, orModel }) }
     );
     const d = await resp.json();
+    if (resp.status === 429 || d.rateLimited) {
+      alert('Превышен лимит запросов к API.\n\nПодождите минуту и попробуйте снова, или смените модель в Настройках AI.');
+      return;
+    }
     if (!d.ok) { alert('Ошибка генерации: ' + (d.error || 'неизвестная ошибка')); return; }
 
     // 2. Автосохраняем в карточку персонажа
@@ -3191,7 +3953,88 @@ async function _generateAppearance(charName) {
   } catch(e) {
     alert('Ошибка соединения: ' + e.message);
   } finally {
+    _genAppearanceRunning = false;
     if (btn) { btn.disabled = false; btn.textContent = '👁 Внешность по арту'; }
+  }
+}
+
+async function _loadDescImages(charName) {
+  const gallery = document.getElementById('cdet-img-gallery');
+  if (!gallery) return;
+  gallery.innerHTML = '<div class="cdet-img-gallery-loading">Загрузка…</div>';
+
+  const resp = await fetch(`/api/characters/${encodeURIComponent(charName)}/images${window.location.search}`).catch(() => null);
+  if (!resp?.ok) { gallery.innerHTML = ''; return; }
+  const { images } = await resp.json().catch(() => ({}));
+
+  if (!images?.length) {
+    gallery.innerHTML = '<div class="cdet-empty" style="margin-bottom:12px">Нет загруженных изображений</div>';
+    return;
+  }
+
+  gallery.innerHTML = `
+    <div class="cdet-section-title">Изображения</div>
+    <div class="cdet-img-gallery-grid">
+      ${images.map(url => {
+        const filename = decodeURIComponent(url.split('/').pop());
+        return `<div class="cdet-img-thumb-wrap">
+          <img class="cdet-img-thumb" src="${url}" alt="${escHtml(filename)}">
+          <span class="cdet-img-thumb-name">${escHtml(filename)}</span>
+          <button class="cdet-img-del-btn" data-char="${escHtml(charName)}" data-file="${escHtml(filename)}" title="Удалить">✕</button>
+        </div>`;
+      }).join('')}
+    </div>
+    <div class="cdet-divider"></div>`;
+}
+
+async function _deleteCharImage(charName, filename) {
+  if (!confirm(`Удалить «${filename}»?\nДействие необратимо.`)) return;
+
+  const qs = window.location.search;
+  try {
+    const resp = await fetch(
+      `/api/characters/${encodeURIComponent(charName)}/images/${encodeURIComponent(filename)}${qs}`,
+      { method: 'DELETE' }
+    );
+    const d = await resp.json();
+    if (!d.ok) { alert('Ошибка удаления: ' + (d.error || '')); return; }
+
+    // Remove thumbnail from gallery
+    const wrap = document.querySelector(`.cdet-img-del-btn[data-file="${CSS.escape(filename)}"]`)?.closest('.cdet-img-thumb-wrap');
+    if (wrap) wrap.remove();
+
+    const grid = document.querySelector('.cdet-img-gallery-grid');
+    if (grid && !grid.querySelectorAll('.cdet-img-thumb-wrap').length) {
+      document.getElementById('cdet-img-gallery').innerHTML =
+        '<div class="cdet-empty" style="margin-bottom:12px">Нет загруженных изображений</div>';
+    }
+
+    // Refresh carousel (remove deleted image from list)
+    const encodedFile = encodeURIComponent(filename);
+    _carouselImages = _carouselImages.filter(u => !u.includes(encodedFile) && !u.includes(filename));
+    if (_carouselImages.length) {
+      _carouselIdx = Math.min(_carouselIdx, _carouselImages.length - 1);
+      _carouselGoTo(_carouselIdx);
+      // Rebuild dots
+      const dotsEl = document.getElementById('cdet-carousel-dots');
+      if (dotsEl) {
+        dotsEl.innerHTML = _carouselImages.map((_, i) =>
+          `<div class="cdet-carousel-dot${i === _carouselIdx ? ' active' : ''}"></div>`
+        ).join('');
+      }
+    } else {
+      if (_carouselTimer) { clearInterval(_carouselTimer); _carouselTimer = null; }
+      const carouselEl = document.getElementById('cdet-carousel');
+      const col = document.getElementById('cdet-portrait-col');
+      if (col) col.innerHTML = '<div class="cdet-no-portrait">🩸</div>';
+    }
+
+    // Invalidate grid cache
+    if (_gridImages[charName]) {
+      _gridImages[charName] = _gridImages[charName].filter(u => !u.includes(encodedFile) && !u.includes(filename));
+    }
+  } catch (e) {
+    alert('Ошибка: ' + e.message);
   }
 }
 
@@ -3223,16 +4066,30 @@ function _generatePrompt(charName) {
 
 // ── Info field editing ────────────────────────────────────────────────────────
 let _editCharName   = null;
+let _editOrigName   = null;
 let _editOrigValues = {};
+let _genAppearanceRunning = false;
 
 function _enterInfoEdit(charName) {
   _editCharName = charName;
+  _editOrigName = charName;
   _editOrigValues = {};
 
   const grid = document.getElementById('cdet-info-fields');
   const btn  = document.getElementById('cdet-edit-btn');
   const bar  = document.getElementById('cdet-edit-bar');
   if (!grid || !btn || !bar) return;
+
+  // Make name in sticky header editable
+  const nameEl = document.querySelector('#char-detail-content .cdet-name');
+  if (nameEl && !document.getElementById('cdet-name-input')) {
+    const nameInput = document.createElement('input');
+    nameInput.className = 'cdet-name-input';
+    nameInput.id = 'cdet-name-input';
+    nameInput.value = charName;
+    nameInput.placeholder = 'Имя персонажа';
+    nameEl.replaceWith(nameInput);
+  }
 
   // Replace each .cdet-val with an input
   grid.querySelectorAll('.cdet-val').forEach(cell => {
@@ -3266,8 +4123,8 @@ function _enterInfoEdit(charName) {
   btn.textContent = '✏ Режим редактирования';
   bar.classList.add('show');
 
-  // Focus first input
-  grid.querySelector('.cdet-field-input')?.focus();
+  // Focus name input
+  document.getElementById('cdet-name-input')?.focus();
 }
 
 function _exitInfoEdit(saved) {
@@ -3275,6 +4132,16 @@ function _exitInfoEdit(saved) {
   const btn  = document.getElementById('cdet-edit-btn');
   const bar  = document.getElementById('cdet-edit-bar');
   if (!grid || !btn || !bar) return;
+
+  // Restore name in sticky header
+  const nameInput = document.getElementById('cdet-name-input');
+  if (nameInput) {
+    const displayName = saved ? (nameInput.value.trim() || _editOrigName) : _editOrigName;
+    const nameEl = document.createElement('div');
+    nameEl.className = 'cdet-name';
+    nameEl.textContent = displayName;
+    nameInput.replaceWith(nameEl);
+  }
 
   // Restore value cells
   grid.querySelectorAll('.cdet-field-input').forEach(input => {
@@ -3292,6 +4159,7 @@ function _exitInfoEdit(saved) {
   btn.textContent = '✏ Редактировать';
   bar.classList.remove('show');
   _editCharName = null;
+  _editOrigName = null;
 }
 
 async function _saveInfoFields() {
@@ -3300,7 +4168,14 @@ async function _saveInfoFields() {
   const msg     = document.getElementById('cdet-save-msg');
   if (!grid || !_editCharName) return;
 
+  const prevName = _editCharName;
   const fields = {};
+
+  // Collect name from header input if changed
+  const nameInput = document.getElementById('cdet-name-input');
+  const newName = nameInput?.value.trim();
+  if (newName && newName !== prevName) fields.name = newName;
+
   grid.querySelectorAll('.cdet-field-input').forEach(inp => {
     const v = inp.value.trim();
     if (v) fields[inp.dataset.field] = v;
@@ -3311,17 +4186,38 @@ async function _saveInfoFields() {
 
   try {
     const resp = await fetch(
-      `/api/characters/${encodeURIComponent(_editCharName)}/fields${window.location.search}`,
+      `/api/characters/${encodeURIComponent(prevName)}/fields${window.location.search}`,
       { method: 'PUT', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ fields }) }
     );
     const d = await resp.json();
     if (d.ok) {
+      const finalName = fields.name || prevName;
+
       // Update STATE cache
-      const ch = STATE.characters.find(c => c.name === _editCharName);
-      if (ch) Object.assign(ch, Object.fromEntries(
-        Object.entries(fields).map(([k, v]) => [k, v])
-      ));
+      const ch = STATE.characters.find(c => c.name === prevName);
+      if (ch) {
+        if (fields.name) ch.name = fields.name;
+        Object.assign(ch, Object.fromEntries(
+          Object.entries(fields).filter(([k]) => k !== 'name').map(([k, v]) => [k, v])
+        ));
+      }
+
+      // Sync grid card when name changed
+      if (fields.name) {
+        const gridCard = document.querySelector(`.char-card[data-name="${CSS.escape(prevName)}"]`);
+        if (gridCard) {
+          gridCard.dataset.name = finalName;
+          const gridNameEl = gridCard.querySelector('.char-name');
+          if (gridNameEl) gridNameEl.textContent = finalName;
+        }
+        // Update data-char on modal buttons so subsequent saves work
+        document.querySelectorAll('#char-detail-content [data-char]').forEach(el => {
+          if (el.dataset.char === prevName) el.dataset.char = finalName;
+        });
+        _editCharName = finalName;
+      }
+
       _exitInfoEdit(true);
       msg.classList.add('show');
       setTimeout(() => msg.classList.remove('show'), 2500);
@@ -3508,22 +4404,68 @@ function renderLocations() {
       ${textBlock}
     </div>`;
   }).join('');
+  fitLocTitles();
 }
 
-function openLocDetail(slug) {
+function fitLocTitles() {
+  document.querySelectorAll('.loc-card .loc-title').forEach(el => {
+    el.style.fontSize = '';
+    const fs  = parseFloat(getComputedStyle(el).fontSize);
+    const lh  = parseFloat(getComputedStyle(el).lineHeight) || fs * 1.2;
+    const max = lh * 2 + 2; // 2 строки + 2px буфер
+    if (el.scrollHeight <= max) return;
+    let size = fs;
+    while (el.scrollHeight > max && size > 13) {
+      size -= 0.5;
+      el.style.fontSize = size + 'px';
+    }
+  });
+}
+
+let _currentLocSlug = null;
+
+function openLocDetail(slug, keepTab) {
   const loc = STATE.locations.find(l => l.slug === slug);
   if (!loc) return;
+  _currentLocSlug = slug;
 
   const zc   = zoneClass(loc.zone);
   const mLvl = loc.masqueradeLevel || 'unknown';
 
   const imgCol = loc.imageUrl
-    ? `<img class="locdet-img" src="${loc.imageUrl}" alt="${escHtml(loc.title || loc.slug)}">`
+    ? `<div class="locdet-carousel" id="locdet-carousel">
+        <img class="locdet-carousel-img" id="locdet-carousel-img" src="${loc.imageUrl}" alt="${escHtml(loc.title || loc.slug)}">
+        <div class="locdet-carousel-overlay" id="locdet-carousel-overlay"></div>
+        <button class="locdet-carousel-btn prev" id="locdet-carousel-prev" title="Предыдущее">&#8249;</button>
+        <button class="locdet-carousel-btn next" id="locdet-carousel-next" title="Следующее">&#8250;</button>
+        <div class="locdet-carousel-dots" id="locdet-carousel-dots"></div>
+       </div>`
     : `<div class="locdet-no-img">${ZONE_CLASS_LABELS[zc][0]}</div>`;
 
-  const atmHtml = loc.atmosphere
+  // ── Panels content ────────────────────────────────────────────
+
+  const metaFields = [
+    ['subtype',      'Название',   loc.subtype],
+    ['district',     'Округ',      loc.district],
+    ['neighborhood', 'Район',      loc.neighborhood],
+    ['address',      'Адрес',      loc.address],
+    ['control',      'Контроль',   loc.control],
+  ];
+  const metaViewHtml = `<div class="locdet-table">${[
+    ...metaFields.filter(([, , v]) => v).map(([, k, v]) =>
+      `<div class="locdet-row"><div class="locdet-key">${escHtml(k)}</div><div class="locdet-val">${escHtml(v)}</div></div>`),
+    loc.zone ? `<div class="locdet-row"><div class="locdet-key">Зона</div><div class="locdet-val">${escHtml(loc.zone)}</div></div>` : '',
+  ].filter(Boolean).join('')}</div>`;
+  const metaEditHtml = `<div class="locdet-edit-fields">${metaFields.map(([key, label, val]) =>
+    `<div class="locdet-field-row">
+       <label class="locdet-field-lbl">${escHtml(label)}</label>
+       <input class="form-control locdet-field-inp" id="locdet-meta-${key}" value="${escHtml(val || '')}" placeholder="${escHtml(label)}">
+     </div>`).join('')}</div>`;
+
+  const atmViewHtml = loc.atmosphere
     ? `<div class="locdet-atm">${escHtml(loc.atmosphere)}</div>`
     : '<div class="cdet-empty">Описание не заполнено</div>';
+  const atmEditHtml = `<textarea class="cdet-edit-textarea" id="locdet-atm-ta" rows="12">${escHtml(loc.atmosphere || '')}</textarea>`;
 
   const vtmSections = [
     ['Статус',            loc.locStatus],
@@ -3532,18 +4474,16 @@ function openLocDetail(slug) {
     ['Угрозы',            loc.threats],
     ['Маскарад',          loc.masquerade],
   ].filter(([, v]) => v);
-
   const vtmParts = [];
   if (loc.vtmText) vtmParts.push(`<div class="locdet-atm">${escHtml(loc.vtmText)}</div>`);
   vtmSections.forEach(([k, v]) => vtmParts.push(
-    `<div class="vtm-section">
-      <div class="vtm-lbl">${escHtml(k)}</div>
-      <div class="vtm-body">${escHtml(v)}</div>
-    </div>`
+    `<div class="vtm-section"><div class="vtm-lbl">${escHtml(k)}</div><div class="vtm-body">${escHtml(v)}</div></div>`
   ));
-  const vtmHtml = vtmParts.length
+  const vtmViewHtml = vtmParts.length
     ? vtmParts.join('<div class="diary-divider"></div>')
     : '<div class="cdet-empty">Контекст не заполнен</div>';
+  const vtmEditHtml = `<div class="cdet-section-title" style="margin-bottom:6px">Описание (проза)</div>
+    <textarea class="cdet-edit-textarea" id="locdet-vtm-ta" rows="10">${escHtml(loc.vtmText || '')}</textarea>`;
 
   const keyPointsHtml = loc.keyPoints?.length
     ? `<div class="locdet-table">${loc.keyPoints.map(kp =>
@@ -3553,37 +4493,46 @@ function openLocDetail(slug) {
         </div>`).join('')}</div>`
     : '<div class="cdet-empty">Ключевые точки не заполнены</div>';
 
-  const hooksHtml = loc.hooks?.length
+  const hooksViewHtml = loc.hooks?.length
     ? `<div class="locdet-hooks">${loc.hooks.map((h, i) =>
         `<div class="locdet-hook">
           <span class="locdet-hook-num">${i + 1}</span>
           <span class="locdet-hook-text">${escHtml(h)}</span>
         </div>`).join('')}</div>`
     : '<div class="cdet-empty">Крючки не заполнены</div>';
+  const hooksEditHtml = `
+    <div id="locdet-hooks-edit-list">
+      ${(loc.hooks || []).map((h, i) => `
+        <div class="hooks-item">
+          <span class="hooks-num">${i + 1}</span>
+          <input class="hooks-input" value="${escHtml(h)}" placeholder="Текст крючка…">
+          <button class="hooks-del-btn" title="Удалить">✕</button>
+        </div>`).join('')}
+    </div>
+    <button class="hooks-add-btn" id="locdet-hooks-add">+ Добавить крючок</button>`;
 
-  const promptTab  = loc.imagePrompt ? '<button class="cdet-tab" data-tab="prompt">Промт</button>' : '';
-  const promptPanel = loc.imagePrompt ? `<div class="cdet-panel" data-panel="prompt">
-    <div class="cdet-section-title">Промт для генерации</div>
-    <textarea class="cdet-prompt-box" readonly>${escHtml(loc.imagePrompt)}</textarea>
-    ${loc.negativePrompt ? `<div class="cdet-section-title" style="margin-top:14px">Негативный промт</div>
-    <textarea class="cdet-prompt-box cdet-prompt-neg" readonly>${escHtml(loc.negativePrompt)}</textarea>` : ''}
-  </div>` : '';
+  // ── Images tab ────────────────────────────────────────────────
+  const images = loc.imageUrls || (loc.imageUrl ? [loc.imageUrl] : []);
+  const galleryHtml = images.length
+    ? `<div class="locdet-img-gallery">${images.map(u =>
+        `<img class="locdet-thumb" src="${escHtml(u)}" alt="">`).join('')}</div>`
+    : '<div class="cdet-empty" style="margin-bottom:12px">Изображения не загружены</div>';
 
-  const masqBadge = MASQ_BADGE_LABELS[mLvl]
-    ? `<span class="badge badge-masq-${mLvl}">${MASQ_BADGE_LABELS[mLvl]}</span>`
-    : '';
-
-  const metaRows = [
-    ['Название',   loc.subtype],
-    ['Округ',      loc.district],
-    ['Район',      loc.neighborhood],
-    ['Адрес',      loc.address],
-    ['Зона',       loc.zone],
-    ['Контроль',   loc.control],
-  ].filter(([, v]) => v);
-  const metaHtml = `<div class="locdet-table">${metaRows.map(([k, v]) =>
-    `<div class="locdet-row"><div class="locdet-key">${escHtml(k)}</div><div class="locdet-val">${escHtml(v)}</div></div>`
-  ).join('')}</div>`;
+  // ── Helper: panel with edit button ────────────────────────────
+  function editPanel(id, viewHtml, editHtml, opts = {}) {
+    const { noEdit } = opts;
+    return `
+      <div class="cdet-info-header">
+        ${!noEdit ? `<button class="cdet-edit-btn" data-editloc="${id}">✏ Редактировать</button>` : ''}
+      </div>
+      <div id="locdet-${id}-view">${viewHtml}</div>
+      <div id="locdet-${id}-edit" style="display:none">${editHtml}</div>
+      <div class="cdet-edit-bar" id="locdet-${id}-bar" style="display:none">
+        <button class="cdet-save-btn" data-saveloc="${id}">Сохранить</button>
+        <button class="cdet-cancel-btn" data-cancelloc="${id}">Отмена</button>
+        <span class="cdet-save-msg" id="locdet-${id}-msg" style="display:none">✓ Сохранено</span>
+      </div>`;
+  }
 
   document.getElementById('loc-detail-content').innerHTML = `
     <div class="locdet-img-col">${imgCol}</div>
@@ -3608,19 +4557,39 @@ function openLocDetail(slug) {
         <button class="cdet-tab" data-tab="vtm">VtM</button>
         <button class="cdet-tab" data-tab="keys">Ключевые точки</button>
         <button class="cdet-tab" data-tab="hooks">Крючки</button>
-        ${promptTab}
+        <button class="cdet-tab" data-tab="images">🖼 Изображения</button>
       </div>
       <div class="cdet-panels">
-        <div class="cdet-panel active" data-panel="meta">${metaHtml}</div>
-        <div class="cdet-panel" data-panel="atm">${atmHtml}</div>
-        <div class="cdet-panel" data-panel="vtm">${vtmHtml}</div>
-        <div class="cdet-panel" data-panel="keys">${keyPointsHtml}</div>
-        <div class="cdet-panel" data-panel="hooks">${hooksHtml}</div>
-        ${promptPanel}
+        <div class="cdet-panel active" data-panel="meta">${editPanel('meta', metaViewHtml, metaEditHtml)}</div>
+        <div class="cdet-panel" data-panel="atm">${editPanel('atm', atmViewHtml, atmEditHtml)}</div>
+        <div class="cdet-panel" data-panel="vtm">${editPanel('vtm', vtmViewHtml, vtmEditHtml)}</div>
+        <div class="cdet-panel" data-panel="keys">${editPanel('keys', keyPointsHtml, '', { noEdit: true })}</div>
+        <div class="cdet-panel" data-panel="hooks">${editPanel('hooks', hooksViewHtml, hooksEditHtml)}</div>
+        <div class="cdet-panel" data-panel="images">
+          ${galleryHtml}
+          <div class="cdet-upload-row">
+            <button class="cdet-upload-btn" id="locdet-upload-btn" data-slug="${escHtml(slug)}">📷 Загрузить изображение</button>
+            <span id="locdet-upload-msg" class="cdet-save-msg" style="display:none">✓ Загружено</span>
+          </div>
+          <div class="cdet-section-title" style="margin-top:16px">Промт для генерации (GPT / DALL-E 3)</div>
+          <textarea class="cdet-prompt-box" id="locdet-img-prompt-ta">${escHtml(loc.imagePrompt || '')}</textarea>
+          <div class="cdet-section-title" style="margin-top:12px">Негативный промт (SD / Flux)</div>
+          <textarea class="cdet-prompt-box cdet-prompt-neg" id="locdet-img-neg-ta">${escHtml(loc.negativePrompt || '')}</textarea>
+          <div class="cdet-edit-bar" style="margin-top:8px;display:flex">
+            <button class="cdet-save-btn" data-saveloc="images">Сохранить промты</button>
+            <span class="cdet-save-msg" id="locdet-images-msg" style="display:none">✓ Сохранено</span>
+          </div>
+        </div>
       </div>
     </div>`;
 
   document.getElementById('loc-detail-modal').classList.add('open');
+  if (loc.imageUrl) initLocCarousel(slug);
+
+  if (keepTab) {
+    const tab = document.querySelector(`#loc-detail-content .cdet-tab[data-tab="${keepTab}"]`);
+    if (tab) tab.click();
+  }
 }
 
 // Location card clicks
@@ -3649,12 +4618,46 @@ document.getElementById('loc-filter-masq').addEventListener('change', e => {
 
 // Location modal close
 const locDetailModal = document.getElementById('loc-detail-modal');
-document.getElementById('loc-detail-close').addEventListener('click', () => locDetailModal.classList.remove('open'));
+document.getElementById('loc-detail-close').addEventListener('click', () => {
+  locDetailModal.classList.remove('open');
+  if (_locCarouselTimer) { clearInterval(_locCarouselTimer); _locCarouselTimer = null; }
+});
 locDetailModal.addEventListener('click', e => { if (e.target === locDetailModal) locDetailModal.classList.remove('open'); });
 document.addEventListener('keydown', e => { if (e.key === 'Escape') locDetailModal.classList.remove('open'); });
 
-// Tab switching in location modal (same logic as char modal)
+// Tab switching + carousel + edit/save/cancel + upload in location modal
 document.getElementById('loc-detail-content').addEventListener('click', e => {
+  if (e.target.closest('#locdet-carousel-prev')) { _locCarouselGoTo(_locCarouselIdx - 1, true); return; }
+  if (e.target.closest('#locdet-carousel-next')) { _locCarouselGoTo(_locCarouselIdx + 1, true); return; }
+
+  if (e.target.closest('.hooks-del-btn')) {
+    const item = e.target.closest('.hooks-item');
+    if (item) { item.remove(); _renumberHooks(); }
+    return;
+  }
+  if (e.target.closest('#locdet-hooks-add')) {
+    const list = document.getElementById('locdet-hooks-edit-list');
+    if (list) {
+      const n = list.querySelectorAll('.hooks-item').length + 1;
+      const div = document.createElement('div');
+      div.className = 'hooks-item';
+      div.innerHTML = `<span class="hooks-num">${n}</span><input class="hooks-input" placeholder="Текст крючка…"><button class="hooks-del-btn" title="Удалить">✕</button>`;
+      list.appendChild(div);
+      div.querySelector('.hooks-input').focus();
+    }
+    return;
+  }
+
+  const editBtn   = e.target.closest('[data-editloc]');
+  const saveBtn   = e.target.closest('[data-saveloc]');
+  const cancelBtn = e.target.closest('[data-cancelloc]');
+  const uploadBtn = e.target.closest('#locdet-upload-btn');
+
+  if (editBtn)   { _locToggleEdit(editBtn.dataset.editloc, true);    return; }
+  if (cancelBtn) { _locToggleEdit(cancelBtn.dataset.cancelloc, false); return; }
+  if (saveBtn)   { _locSavePanel(saveBtn.dataset.saveloc);           return; }
+  if (uploadBtn) { _locTriggerUpload(uploadBtn.dataset.slug);        return; }
+
   const tab = e.target.closest('.cdet-tab');
   if (!tab) return;
   const col = tab.closest('.cdet-info-col');
@@ -3665,6 +4668,232 @@ document.getElementById('loc-detail-content').addEventListener('click', e => {
   const panels = col.querySelector('.cdet-panels');
   if (panels) panels.scrollTop = 0;
 });
+
+function _renumberHooks() {
+  document.querySelectorAll('#locdet-hooks-edit-list .hooks-item').forEach((item, i) => {
+    const num = item.querySelector('.hooks-num');
+    if (num) num.textContent = i + 1;
+  });
+}
+
+function _locToggleEdit(panel, enter) {
+  const viewEl = document.getElementById(`locdet-${panel}-view`);
+  const editEl = document.getElementById(`locdet-${panel}-edit`);
+  const barEl  = document.getElementById(`locdet-${panel}-bar`);
+  const msgEl  = document.getElementById(`locdet-${panel}-msg`);
+  if (!viewEl || !editEl) return;
+  viewEl.style.display = enter ? 'none' : '';
+  editEl.style.display = enter ? '' : 'none';
+  if (barEl) barEl.style.display = enter ? 'flex' : 'none';
+  if (msgEl) msgEl.style.display = 'none';
+}
+
+async function _locSavePanel(panel) {
+  const slug = _currentLocSlug;
+  if (!slug) return;
+  const msgEl = document.getElementById(`locdet-${panel}-msg`);
+  const fields = {};
+
+  if (panel === 'atm') {
+    fields.atmosphere = document.getElementById('locdet-atm-ta')?.value || '';
+  } else if (panel === 'vtm') {
+    fields.vtmText = document.getElementById('locdet-vtm-ta')?.value || '';
+  } else if (panel === 'hooks') {
+    const hookInputs = document.querySelectorAll('#locdet-hooks-edit-list .hooks-input');
+    fields.hooks = Array.from(hookInputs).map(i => i.value.trim()).filter(Boolean).join('\n');
+  } else if (panel === 'meta') {
+    for (const key of ['subtype', 'district', 'neighborhood', 'address', 'control']) {
+      const el = document.getElementById(`locdet-meta-${key}`);
+      if (el) fields[key] = el.value;
+    }
+  } else if (panel === 'images') {
+    fields.imagePrompt    = document.getElementById('locdet-img-prompt-ta')?.value || '';
+    fields.negativePrompt = document.getElementById('locdet-img-neg-ta')?.value || '';
+  }
+
+  try {
+    const resp = await fetch(`/api/locations/${encodeURIComponent(slug)}/fields${window.location.search}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fields })
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+
+    if (msgEl) { msgEl.style.display = ''; setTimeout(() => { if (msgEl) msgEl.style.display = 'none'; }, 2500); }
+    if (panel !== 'images') _locToggleEdit(panel, false);
+
+    // Reload and re-render keeping current tab
+    const activeTab = document.querySelector('#loc-detail-content .cdet-tab.active')?.dataset.tab;
+    const data = await fetch(`/api/locations${window.location.search}`).then(r => r.json()).catch(() => null);
+    if (data) {
+      STATE.locations = data;
+      openLocDetail(slug, activeTab);
+    }
+  } catch {
+    if (msgEl) { msgEl.textContent = '✗ Ошибка'; msgEl.style.display = ''; }
+  }
+}
+
+function _locTriggerUpload(slug) {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = 'image/*';
+  input.onchange = async () => {
+    const file = input.files[0];
+    if (!file) return;
+    const msgEl = document.getElementById('locdet-upload-msg');
+    const btn   = document.getElementById('locdet-upload-btn');
+    if (btn) btn.disabled = true;
+    try {
+      const base64 = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result.split(',')[1]);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+      const ext  = file.name.split('.').pop() || 'jpg';
+      const resp = await fetch(`/api/locations/${encodeURIComponent(slug)}/upload-image${window.location.search}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ base64, ext })
+      });
+      if (!resp.ok) throw new Error(await resp.text());
+      const { url } = await resp.json();
+
+      if (msgEl) { msgEl.style.display = ''; setTimeout(() => { if (msgEl) msgEl.style.display = 'none'; }, 2500); }
+
+      // Reload and re-render
+      const data = await fetch(`/api/locations${window.location.search}`).then(r => r.json()).catch(() => null);
+      if (data) {
+        STATE.locations = data;
+        openLocDetail(slug, 'images');
+      }
+    } catch {
+      if (msgEl) { msgEl.textContent = '✗ Ошибка загрузки'; msgEl.style.display = ''; }
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  };
+  input.click();
+}
+
+let _locCarouselImages = [];
+let _locCarouselIdx    = 0;
+let _locCarouselTimer  = null;
+
+async function initLocCarousel(slug) {
+  if (_locCarouselTimer) { clearInterval(_locCarouselTimer); _locCarouselTimer = null; }
+  _locCarouselImages = [];
+  _locCarouselIdx = 0;
+
+  const resp = await fetch(`/api/locations/${encodeURIComponent(slug)}/images${window.location.search}`)
+    .catch(() => null);
+  if (!resp?.ok) return;
+  const { images } = await resp.json().catch(() => ({}));
+  if (!images || images.length <= 1) {
+    document.getElementById('locdet-carousel-prev')?.style.setProperty('display', 'none');
+    document.getElementById('locdet-carousel-next')?.style.setProperty('display', 'none');
+    return;
+  }
+
+  _locCarouselImages = images;
+  _locCarouselIdx    = 0;
+
+  const dotsEl = document.getElementById('locdet-carousel-dots');
+  if (dotsEl) {
+    dotsEl.innerHTML = images.map((_, i) =>
+      `<div class="locdet-carousel-dot${i === 0 ? ' active' : ''}"></div>`
+    ).join('');
+  }
+
+  _locCarouselTimer = setInterval(() => _locCarouselGoTo(_locCarouselIdx + 1), 60 * 1000);
+}
+
+function _locCarouselGoTo(targetIdx, resetTimer = false) {
+  const img     = document.getElementById('locdet-carousel-img');
+  const overlay = document.getElementById('locdet-carousel-overlay');
+  const dotsEl  = document.getElementById('locdet-carousel-dots');
+  if (!img || !overlay || !_locCarouselImages.length) {
+    clearInterval(_locCarouselTimer); _locCarouselTimer = null; return;
+  }
+
+  const next = ((targetIdx % _locCarouselImages.length) + _locCarouselImages.length) % _locCarouselImages.length;
+
+  overlay.classList.add('dimmed');
+  setTimeout(() => {
+    _locCarouselIdx = next;
+    img.src = _locCarouselImages[_locCarouselIdx];
+    if (dotsEl) {
+      dotsEl.querySelectorAll('.locdet-carousel-dot').forEach((d, i) =>
+        d.classList.toggle('active', i === _locCarouselIdx));
+    }
+    setTimeout(() => overlay.classList.remove('dimmed'), 300);
+  }, 2100);
+
+  if (resetTimer && _locCarouselTimer) {
+    clearInterval(_locCarouselTimer);
+    _locCarouselTimer = setInterval(() => _locCarouselGoTo(_locCarouselIdx + 1), 60 * 1000);
+  }
+}
+
+// ── Image Lightbox ───────────────────────────────────────────────────────────
+
+let _lbImages = [];
+let _lbIdx    = 0;
+
+function openLightbox(images, startIdx = 0) {
+  _lbImages = images;
+  _lbIdx    = startIdx;
+  _lbRender();
+  document.getElementById('img-lightbox').classList.add('open');
+}
+
+function _lbRender() {
+  const img     = document.getElementById('lightbox-img');
+  const counter = document.getElementById('lightbox-counter');
+  const prev    = document.getElementById('lightbox-prev');
+  const next    = document.getElementById('lightbox-next');
+  img.src       = _lbImages[_lbIdx];
+  counter.textContent = _lbImages.length > 1 ? `${_lbIdx + 1} / ${_lbImages.length}` : '';
+  prev.style.display  = _lbImages.length > 1 ? '' : 'none';
+  next.style.display  = _lbImages.length > 1 ? '' : 'none';
+}
+
+function _lbGo(delta) {
+  _lbIdx = ((_lbIdx + delta) % _lbImages.length + _lbImages.length) % _lbImages.length;
+  _lbRender();
+}
+
+(function _initLightbox() {
+  const lb   = document.getElementById('img-lightbox');
+  document.getElementById('lightbox-close').addEventListener('click', () => lb.classList.remove('open'));
+  document.getElementById('lightbox-prev').addEventListener('click',  () => _lbGo(-1));
+  document.getElementById('lightbox-next').addEventListener('click',  () => _lbGo(1));
+  lb.addEventListener('click', e => { if (e.target === lb) lb.classList.remove('open'); });
+  document.addEventListener('keydown', e => {
+    if (!lb.classList.contains('open')) return;
+    if (e.key === 'ArrowLeft')  { e.preventDefault(); _lbGo(-1); }
+    if (e.key === 'ArrowRight') { e.preventDefault(); _lbGo(1); }
+    if (e.key === 'Escape')     lb.classList.remove('open');
+  });
+})();
+
+// Open lightbox: carousel image or gallery thumbnail
+document.getElementById('loc-detail-content').addEventListener('click', e => {
+  const carousel = e.target.closest('#locdet-carousel-img');
+  if (carousel) {
+    const images = _locCarouselImages.length ? _locCarouselImages : [carousel.src];
+    openLightbox(images, _locCarouselIdx);
+    return;
+  }
+  const thumb = e.target.closest('.locdet-thumb');
+  if (thumb) {
+    const loc = STATE.locations.find(l => l.slug === _currentLocSlug);
+    const imgs = (loc?.imageUrls) || (loc?.imageUrl ? [loc.imageUrl] : [thumb.src]);
+    const idx  = imgs.indexOf(thumb.src);
+    openLightbox(imgs, idx >= 0 ? idx : 0);
+  }
+}, true);
 
 // ═══════════════════════════════════════════════════════════════
 // Create Character Modal

@@ -40,4 +40,3 @@
 ## 🖼️ Изображения
 
 - [Образ 1](art/ruslan_agaev_01.png)
-- [Образ 2](art/ruslan_agaev_02.png)

@@ -6,7 +6,6 @@
 
 ### 📅 Март 2010 — Ночь La Défense. Ожидание.
 
-> 🔗 [Хроника: Март 2010](../../../../archive/events.md) | [Модуль](../../../../chronicles/parizh_2010_nachalo_goda/modules/la_defence/la_defence.md)
 
 - **👤 Автор:** Квентин / Арлен Дафф
 - **📍 Локация:** Фригольд (ожидание)
