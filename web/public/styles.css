@@ -1872,6 +1872,50 @@ background: linear-gradient(180deg, rgb(121 4 4 / 2%) 0%, rgb(139 0 0 / 35%) 100
 .chd-period-input:focus { border-color: var(--gold); }
 .chd-period-input::placeholder { color: var(--text-dim); }
 
+/* ── "Ранее в хронике…" recap ───────────────────────────── */
+.chd-recap-btn {
+  margin-left: 10px;
+  background: rgba(184,134,11,.10);
+  border: 1px solid rgba(184,134,11,.40);
+  color: var(--gold);
+  font-size: 12px;
+  padding: 5px 12px;
+  border-radius: 2px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background .15s, border-color .15s;
+}
+.chd-recap-btn:hover:not(:disabled) { background: rgba(184,134,11,.20); border-color: var(--gold); }
+.chd-recap-btn:disabled { opacity: .6; cursor: default; }
+
+.chd-recap-panel {
+  margin: 4px 0 14px;
+  border: 1px solid rgba(184,134,11,.35);
+  border-left: 3px solid var(--gold);
+  border-radius: 3px;
+  background: linear-gradient(180deg, rgba(184,134,11,.06), rgba(0,0,0,.15));
+  padding: 14px 16px;
+}
+.chd-recap-loading { display: flex; align-items: center; gap: 10px; color: var(--text-dim); font-size: 13px; }
+.chd-recap-err { color: var(--accent3, #d98); font-size: 13px; }
+.chd-recap-head {
+  display: flex; align-items: center; gap: 10px;
+  margin-bottom: 8px; flex-wrap: wrap;
+}
+.chd-recap-title { color: var(--gold); font-weight: 600; letter-spacing: .04em; }
+.chd-recap-meta  { color: var(--text-dim); font-size: 11px; font-family: var(--f-mono); }
+.chd-recap-copy, .chd-recap-close {
+  background: transparent; border: 1px solid var(--border);
+  color: var(--text-dim); font-size: 11px; padding: 2px 8px;
+  border-radius: 2px; cursor: pointer;
+}
+.chd-recap-copy { margin-left: auto; }
+.chd-recap-copy:hover, .chd-recap-close:hover { color: var(--gold); border-color: var(--gold); }
+.chd-recap-text {
+  color: var(--text); font-size: 14px; line-height: 1.7;
+  font-style: italic; white-space: normal;
+}
+
 /* ── Chronicle delete modal ─────────────────────────────── */
 .chr-modal-backdrop {
   position: fixed; inset: 0;

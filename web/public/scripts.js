@@ -1418,6 +1418,10 @@ async function openChrDetail(slug, display, tab) {
 
   periodWrap.style.display = _chrDetailTab === 'events' ? '' : 'none';
 
+  // Reset the recap panel on every (re)open / tab switch
+  const recapPanel = document.getElementById('chd-recap-panel');
+  if (recapPanel) { recapPanel.style.display = 'none'; recapPanel.innerHTML = ''; }
+
   if (_chrDetailTab === 'modules') {
     periodInput.value = '';
     try {
@@ -1570,6 +1574,70 @@ document.getElementById('chr-detail-modal').addEventListener('click', e => {
   if (e.target === document.getElementById('chr-detail-modal'))
     document.getElementById('chr-detail-modal').style.display = 'none';
 });
+
+// ── "Ранее в хронике…" — AI recap of recent events ────────────────────────────
+let _recapRunning = false;
+document.getElementById('chd-recap-btn').addEventListener('click', () => {
+  if (_chrDetailSlug) _generateChrRecap(_chrDetailSlug);
+});
+
+async function _generateChrRecap(slug) {
+  if (_recapRunning) return;
+  _recapRunning = true;
+  const btn       = document.getElementById('chd-recap-btn');
+  const panel     = document.getElementById('chd-recap-panel');
+  const origLabel = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Генерация…'; }
+  if (panel) {
+    panel.style.display = '';
+    panel.innerHTML = '<div class="chd-recap-loading"><div class="spinner"></div>Собираю пересказ последних событий…</div>';
+  }
+  try {
+    const qs        = window.location.search;
+    const featPrefs = JSON.parse(localStorage.getItem('ai-feature-prefs') || '{}');
+    const pref      = _getPref(featPrefs, 'prose', 'openrouter');
+    const preferSource = pref.provider;
+    const orModel   = preferSource === 'openrouter' ? (pref.model || null) : null;
+
+    const resp = await fetch(`/api/chronicles/${encodeURIComponent(slug)}/recap${qs}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ count: 3, preferSource, orModel }),
+    });
+    const d = await resp.json().catch(() => ({}));
+
+    if (resp.status === 429 || d.rateLimited) {
+      panel.innerHTML = '<div class="chd-recap-err">Превышен лимит запросов к API. Подождите минуту и попробуйте снова, или смените модель в Настройках AI.</div>';
+      return;
+    }
+    if (!d.ok) {
+      panel.innerHTML = `<div class="chd-recap-err">⚠ ${escHtml(d.error || 'Не удалось сгенерировать рекап')}</div>`;
+      return;
+    }
+    panel.innerHTML = `
+      <div class="chd-recap-head">
+        <span class="chd-recap-title">📺 Ранее в хронике…</span>
+        <span class="chd-recap-meta">по ${d.eventsUsed} событиям · ${escHtml(d.source || '')}</span>
+        <button class="chd-recap-copy" id="chd-recap-copy">⧉ Копировать</button>
+        <button class="chd-recap-close" id="chd-recap-close" title="Закрыть">✕</button>
+      </div>
+      <div class="chd-recap-text">${escHtml(d.recap).replace(/\n/g, '<br>')}</div>`;
+    document.getElementById('chd-recap-copy').addEventListener('click', () => {
+      navigator.clipboard.writeText(d.recap).then(() => {
+        const b = document.getElementById('chd-recap-copy');
+        if (b) { b.textContent = '✓ Скопировано'; setTimeout(() => { b.textContent = '⧉ Копировать'; }, 1500); }
+      }).catch(() => {});
+    });
+    document.getElementById('chd-recap-close').addEventListener('click', () => {
+      panel.style.display = 'none'; panel.innerHTML = '';
+    });
+  } catch (e) {
+    if (panel) panel.innerHTML = `<div class="chd-recap-err">⚠ ${escHtml(e.message)}</div>`;
+  } finally {
+    _recapRunning = false;
+    if (btn) { btn.disabled = false; btn.textContent = origLabel || '📺 Ранее в хронике…'; }
+  }
+}
 
 // ── Create module ─────────────────────────────────────────────────────────────
 

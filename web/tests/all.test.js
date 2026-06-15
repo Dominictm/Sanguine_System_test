@@ -609,6 +609,12 @@ describe('API — integration', () => {
         `/api/chronicles/${CHR}/modules/__NOMOD__/detail${CITY}`);
       assert.equal(status, 404);
     });
+    it('POST recap — unknown chronicle (no events.md) → 404', async () => {
+      // events.md / events validation runs before any AI client is built.
+      const { status } = await apiJson(`/api/chronicles/__nochron__/recap${CITY}`,
+        { method: 'POST', body: JSON.stringify({ count: 3 }) });
+      assert.equal(status, 404);
+    });
   });
 
   // ── Archive / lore ─────────────────────────────────────────────────────────

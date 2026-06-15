@@ -89,6 +89,7 @@ const ACTION_MAP = {
   'PUT /api/locations/:slug/fields':          req => `✏  Редактирование локации: ${decodeURIComponent(req.params.slug)}`,
   'POST /api/locations/:slug/upload-image':   req => `📷 Загрузка изображения локации → ${decodeURIComponent(req.params.slug)}`,
   'GET /api/graph':                           req => `Граф связей (${reqCity(req)})`,
+  'POST /api/chronicles/:slug/recap':         req => `📺 Рекап «Ранее в хронике…»: ${req.params.slug}`,
   'GET /api/modules':                         req => `Модули — загрузка (${reqCity(req)})`,
   'GET /api/modules/:name':                   req => `Модуль: ${decodeURIComponent(req.params.name)}`,
   'GET /api/chronicle':                       req => `Хроника (${reqCity(req)})`,
@@ -925,6 +926,106 @@ app.get('/api/chronicles/:slug/events', async (req, res) => {
     events.forEach((ev, i) => { ev.id = i; });
     res.json(events);
   } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── "Ранее в хронике…" — AI recap of the most recent events ────────────────────
+
+app.post('/api/chronicles/:slug/recap', express.json(), async (req, res) => {
+  try {
+    const city   = reqCity(req);
+    const slug   = req.params.slug;
+    const count  = Math.min(Math.max(parseInt(req.body?.count) || 3, 1), 8);
+
+    const chrDir = path.join(chroniclesDir(city), slug);
+    const raw    = await fs.readFile(path.join(chrDir, 'events.md'), 'utf-8').catch(() => null);
+    if (!raw) return res.status(404).json({ error: 'У хроники нет events.md' });
+
+    const content = raw.replace(/^﻿/, '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+    const events  = [];
+    content.split(/\n(?=###\s*📅)/).filter(c => /^###\s*📅/.test(c.trim()))
+      .forEach(c => { const ev = parseEvent(c.trim(), events.length); events.push(ev); });
+    if (!events.length) return res.status(400).json({ error: 'В хронике пока нет событий для пересказа' });
+
+    events.sort((a, b) => eventDateScore(b.date) - eventDateScore(a.date));
+    const recent = events.slice(0, count).reverse(); // oldest → newest of the recent window
+
+    // Validate inputs BEFORE constructing the generation client.
+    const preferSource = req.body?.preferSource || null;
+    const orModel      = req.body?.orModel      || null;
+    const gen = await makeGenerationClient(preferSource, orModel);
+
+    const digest = recent.map(ev => {
+      const parts = (ev.participants || []).map(p => p.name).filter(Boolean).join(', ');
+      const cons  = (ev.consequences || []).join('; ');
+      return [
+        `Дата: ${ev.date}`,
+        ev.title ? `Событие: ${ev.title}` : '',
+        ev.location?.text ? `Место: ${ev.location.text.trim()}` : '',
+        parts ? `Участники: ${parts}` : '',
+        ev.eventsText ? `Что произошло: ${ev.eventsText.replace(/\s+/g, ' ').slice(0, 600)}` : '',
+        cons ? `Последствия: ${cons}` : '',
+      ].filter(Boolean).join('\n');
+    }).join('\n\n---\n\n');
+
+    const systemPrompt = 'Ты — Рассказчик Vampire: The Masquerade V20. Пишешь кинематографичный закадровый пересказ «Ранее в хронике…» для игроков перед началом новой сессии.';
+    const userPrompt = `На основе последних событий хроники напиши пересказ в стиле «Ранее в…» (как заставка перед серией).
+
+Требования:
+- Язык: русский. Тон: мрачный готический нуар, драматичный закадровый голос.
+- 120–220 слов, 1–3 абзаца. Без заголовков, списков и игромеханики.
+- Перечисли ключевые повороты последней сессии, нагнетай интригу к открытым вопросам.
+- Не выдумывай фактов сверх данных. Не раскрывай тайны, которых нет в событиях.
+- Начни со слов «Ранее в хронике…».
+
+СОБЫТИЯ (от старых к новым):
+${digest}`;
+
+    let recap = '';
+    if (gen.source === 'openrouter') {
+      const modelsToTry = [gen.model, ...OR_FALLBACK_MODELS.filter(m => m !== gen.model)];
+      let lastErr, allRateLimited = true;
+      for (const m of modelsToTry) {
+        try {
+          const r = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`, 'Content-Type': 'application/json', 'HTTP-Referer': 'http://localhost:3000' },
+            body: JSON.stringify({ model: m, max_tokens: 600, messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: userPrompt }] }),
+          });
+          const d = await r.json();
+          if (!r.ok) { const e = new Error(d.error?.message || `HTTP ${r.status}`); e.status = r.status; throw e; }
+          recap = (d.choices?.[0]?.message?.content || '').trim();
+          allRateLimited = false;
+          break;
+        } catch (e) {
+          lastErr = e;
+          const is429 = e.status === 429;
+          const retryable = e.status === 404 || is429 || (e.status === 400 && /not a valid model|No endpoints/i.test(e.message));
+          if (!retryable) { allRateLimited = false; throw e; }
+          if (!is429) allRateLimited = false;
+          if (is429) await new Promise(r => setTimeout(r, 800));
+        }
+      }
+      if (!recap) {
+        if (allRateLimited) return res.status(429).json({ rateLimited: true, error: 'Превышен лимит запросов ко всем моделям. Подождите минуту и попробуйте снова.' });
+        throw lastErr;
+      }
+    } else {
+      const model = VALID_MODELS.includes(req.body?.model) ? req.body.model : 'claude-haiku-4-5-20251001';
+      const message = await gen.client.messages.create({
+        model, max_tokens: 600, system: systemPrompt,
+        messages: [{ role: 'user', content: userPrompt }],
+      });
+      recap = message.content[0]?.text?.trim() || '';
+    }
+
+    if (!recap) return res.status(500).json({ error: 'Модель вернула пустой ответ. Попробуйте ещё раз.' });
+    res.json({ ok: true, recap, eventsUsed: recent.length, source: gen.source });
+  } catch (e) {
+    const status = e.status ?? 500;
+    const msg    = e.error?.error?.message ?? e.message ?? String(e);
+    console.error(`[chronicle-recap] ${status}`, msg);
+    res.status(status >= 400 && status < 600 ? status : 500).json({ error: msg });
+  }
 });
 
 // ── Modules by chronicle ──────────────────────────────────────────────────────
