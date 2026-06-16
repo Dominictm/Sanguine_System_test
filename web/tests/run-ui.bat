@@ -4,7 +4,7 @@ cd /d "%~dp0.."
 
 echo.
 echo  =======================================================
-echo   VTM Chronicle Manager -- UI Selenium (Chrome)
+echo   Sanguine System -- UI Selenium (Chrome)
 echo  =======================================================
 echo.
 echo  Requirements: Chrome must be installed.

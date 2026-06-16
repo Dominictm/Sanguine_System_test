@@ -3,7 +3,7 @@ cd /d "%~dp0"
 
 echo.
 echo  =============================================
-echo   VTM Chronicle Manager
+echo   Sanguine System
 echo  =============================================
 echo.
 

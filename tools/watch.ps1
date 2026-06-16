@@ -114,7 +114,7 @@ function Show-Header {
     Clear-Host
     Write-Host ""
     Write-Host "  ╔══════════════════════════════════════════╗" -ForegroundColor DarkRed
-    Write-Host "  ║   VTM Chronicle Manager — Watch Mode     ║" -ForegroundColor DarkRed
+    Write-Host "  ║   Sanguine System — Watch Mode           ║" -ForegroundColor DarkRed
     Write-Host "  ╚══════════════════════════════════════════╝" -ForegroundColor DarkRed
     Write-Host ""
     Write-Host "  Папки:   " -NoNewline -ForegroundColor DarkGray

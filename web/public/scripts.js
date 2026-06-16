@@ -2360,6 +2360,15 @@ function _renderModuleNpcGroups(groups) {
       const desc     = (e.desc || '').trim();
       const descHtml = (desc && !NPC_DESC_NOISE.test(desc))
         ? `<span class="modp-npc-desc">${escHtml(desc)}</span>` : '';
+      // Лист персонажа — кнопки напротив имени (если контекст листа разрешим)
+      const sheetCtl = e.slug ? `
+        <div class="modp-npc-sheet" data-sheet-scope="${e.sheetScope}" data-sheet-name="${escAttr(e.name)}" data-sheet-slug="${escAttr(e.slug)}">
+          ${ e.hasSheet
+            ? `<button class="modp-sheet-btn" data-sheet-act="view">📋 Лист персонажа</button>
+               <button class="modp-sheet-btn ghost" data-sheet-act="regen" title="Перегенерировать лист">♻</button>
+               <button class="modp-sheet-btn ghost" data-sheet-act="edit" title="Редактировать лист">✏</button>`
+            : `<button class="modp-sheet-btn" data-sheet-act="gen">📋 Сгенерировать лист</button>` }
+        </div>` : '';
       // Реплики — только для НПС (ПК озвучивают игроки, не Мастер)
       const dlg = g.kind !== 'pc' ? `
         <div class="modp-npc-dlg">
@@ -2368,7 +2377,10 @@ function _renderModuleNpcGroups(groups) {
           <div class="modp-npc-dlg-result" style="display:none"></div>
         </div>` : '';
       return `<div class="modp-npc-entry">
-        <div class="modp-npc-head">${nameHtml}${descHtml}</div>
+        <div class="modp-npc-head">
+          <div class="modp-npc-head-main">${nameHtml}${descHtml}</div>
+          ${sheetCtl}
+        </div>
         ${dlg}
       </div>`;
     }).join('');
@@ -2804,13 +2816,29 @@ document.getElementById('modp-panel-sessions').addEventListener('click', e => {
   if (editBtn) _editSessionEntry(+editBtn.dataset.sessIdx);
 });
 
-// НПС-panel delegation — open card on name click, generate replies on button click
+// НПС-panel delegation — open card on name click, generate replies, manage sheets
 document.getElementById('modp-panel-npcs').addEventListener('click', e => {
   const dlgBtn = e.target.closest('.modp-npc-dlg-btn');
   if (dlgBtn) { _genModuleNpcDialogue(dlgBtn); return; }
+  const sheetBtn = e.target.closest('.modp-sheet-btn');
+  if (sheetBtn) { _onModuleSheetBtn(sheetBtn); return; }
   const link = e.target.closest('[data-open-char]');
   if (link) { e.preventDefault(); openCharDetail(link.dataset.openChar); }
 });
+
+// Handle a sheet button on the module NPC tab (generate / view / regenerate / edit)
+function _onModuleSheetBtn(btn) {
+  const wrap  = btn.closest('.modp-npc-sheet');
+  const scope = wrap.dataset.sheetScope;
+  const ctx = scope === 'module'
+    ? { scope: 'module', label: wrap.dataset.sheetName, chr: STATE.currentModule.chronicle, mod: STATE.currentModule.name, slug: wrap.dataset.sheetSlug, onSaved: loadModulePage }
+    : { scope: 'character', name: wrap.dataset.sheetName, label: wrap.dataset.sheetName, onSaved: loadModulePage };
+  const act = btn.dataset.sheetAct;
+  if (act === 'view') { openSheetOverlay(ctx, 'view'); return; }
+  if (act === 'edit') { openSheetOverlay(ctx, 'edit'); return; }
+  if (act === 'regen' && !confirm('Перегенерировать лист? Текущий будет перезаписан.')) return;
+  _generateSheet(ctx, btn);
+}
 
 // Back button
 document.getElementById('modp-back-btn').addEventListener('click', () => navigate('modules'));
@@ -4254,20 +4282,214 @@ function _diaryMsg(text, ok = true) {
   if (m) { m.textContent = text; m.style.color = ok ? 'var(--gold)' : 'var(--accent3)'; }
 }
 
-// C4 — lazy-load a character's V20 sheet (<slug>-sheet.md) into its panel.
+// C4 — V20 sheet panel for canonical characters: toolbar (generate/regenerate/edit) + rendered sheet.
 async function _loadCharSheet(charName) {
   const panel = document.getElementById('cdet-sheet-panel');
-  if (!panel || panel.dataset.loaded) return;
+  if (!panel) return;
   panel.dataset.loaded = '1';
-  try {
-    const d = await fetch(`/api/characters/${encodeURIComponent(charName)}/sheet`).then(r => r.json());
-    panel.innerHTML = d.exists && d.content
-      ? renderLoreMd(d.content)
-      : '<div class="cdet-empty">Лист V20 не найден</div>';
-  } catch (e) {
-    panel.dataset.loaded = '';
-    panel.innerHTML = `<div class="cdet-empty">Ошибка загрузки: ${escHtml(e.message)}</div>`;
+  panel.innerHTML = '<div class="loading-state"><div class="spinner"></div>Загрузка листа…</div>';
+  let d;
+  try { d = await fetch(`/api/characters/${encodeURIComponent(charName)}/sheet${location.search}`).then(r => r.json()); }
+  catch (e) { panel.innerHTML = `<div class="cdet-empty">Ошибка загрузки: ${escHtml(e.message)}</div>`; return; }
+
+  const has = d.exists && d.content;
+  const ctx = { scope: 'character', name: charName, onSaved: () => _loadCharSheet(charName) };
+  const toolbar = has
+    ? `<button class="cdet-sheet-btn" data-sheet-act="regen">♻ Перегенерировать</button>
+       <button class="cdet-sheet-btn" data-sheet-act="edit">✏ Редактировать</button>`
+    : `<button class="cdet-sheet-btn primary" data-sheet-act="gen">📋 Сгенерировать лист</button>`;
+  panel.innerHTML =
+    `<div class="cdet-sheet-toolbar">${toolbar}</div>
+     <div class="cdet-sheet-body">${ has ? renderLoreMd(d.content) : '<div class="cdet-empty">Лист ещё не сгенерирован — нажми «Сгенерировать лист».</div>' }</div>`;
+  panel.querySelectorAll('[data-sheet-act]').forEach(b => b.addEventListener('click', async () => {
+    const act = b.dataset.sheetAct;
+    if (act === 'edit') { openSheetOverlay(ctx, 'edit'); return; }
+    if (act === 'regen' && !confirm('Перегенерировать лист? Текущий будет перезаписан.')) return;
+    await _generateSheet(ctx, b);
+  }));
+}
+
+// ═══════════════════ V20 sheet: generate · view · edit (dot-radio) ═══════════════════
+
+function _sheetApi(ctx) {
+  const qs = location.search;
+  if (ctx.scope === 'module') {
+    const base = `/api/chronicles/${encodeURIComponent(ctx.chr)}/modules/${encodeURIComponent(ctx.mod)}/npc/${encodeURIComponent(ctx.slug)}/sheet`;
+    return { get: base + qs, gen: base + '/generate' + qs, put: base + qs };
   }
+  const base = `/api/characters/${encodeURIComponent(ctx.name)}/sheet`;
+  return { get: base + qs, gen: base + '/generate' + qs, put: base + qs };
+}
+
+const _SHEET_EDIT_SECTIONS = /атрибут|способност|преимуществ|дисциплин|предыстор|добродетел/i;
+function _sheetDots(v) { v = Math.max(0, Math.min(5, v | 0)); return '●'.repeat(v) + '○'.repeat(5 - v); }
+
+// Find which cells of a table row carry a 0–5 rating (dots / number / combined).
+function _parseRatingCells(cells) {
+  let dotsIdx = -1, numIdx = -1, combinedIdx = -1, value = null, m;
+  for (let j = 1; j < cells.length; j++) {
+    const c = cells[j];
+    if (/^[●○]+$/.test(c)) { dotsIdx = j; value = (c.match(/●/g) || []).length; }
+    else if ((m = c.match(/^([●○]+)\s*(\d+)$/))) { combinedIdx = j; value = parseInt(m[2], 10); }
+    else if (/^\d+$/.test(c)) { const n = parseInt(c, 10); if (n >= 0 && n <= 5) { numIdx = j; value = n; } }
+  }
+  if (value == null || value < 0 || value > 5) return null;
+  return { value, dotsIdx, numIdx, combinedIdx };
+}
+
+// Parse a sheet markdown into editable rated rows (preserving line indices for rebuild).
+function _parseSheetForEdit(md) {
+  const lines = (md || '').replace(/\r\n/g, '\n').split('\n');
+  const groups = [], editable = [];
+  let curSection = '', curSub = '', curGroup = null, m;
+  const flush = () => { if (curGroup && curGroup.rows.length) groups.push(curGroup); curGroup = null; };
+  for (let i = 0; i < lines.length; i++) {
+    const ln = lines[i];
+    if ((m = ln.match(/^##\s+(.+)$/)))  { flush(); curSection = m[1].replace(/[#*]/g, '').trim(); curSub = ''; continue; }
+    if ((m = ln.match(/^###\s+(.+)$/))) { flush(); curSub     = m[1].replace(/[#*]/g, '').trim(); continue; }
+    if (!(_SHEET_EDIT_SECTIONS.test(curSection) || _SHEET_EDIT_SECTIONS.test(curSub))) continue;
+    if (!/^\s*\|/.test(ln) || /\|\s*:?-{3,}/.test(ln)) continue;     // not a data row / separator
+    const cells = ln.split('|').slice(1, -1).map(c => c.trim());
+    if (cells.length < 2) continue;
+    const name = cells[0].replace(/\*\*/g, '').trim();
+    // Skip table header rows (\b is unreliable for Cyrillic, so match stems anchored at start)
+    if (!name || /^(название|поле|характеристик|атрибут|способност|дисциплин|предыстор|добродетел|уровень|значение)/i.test(name)) continue;
+    const rating = _parseRatingCells(cells);
+    if (!rating) continue;
+    if (!curGroup) curGroup = { section: curSection, subsection: curSub, rows: [] };
+    const row = { name, value: rating.value, lineIdx: i, cells, rating };
+    curGroup.rows.push(row); editable.push(row);
+  }
+  flush();
+  return { lines, groups, editable };
+}
+
+function _rebuildSheetRow(cells, rating, v) {
+  const out = cells.slice();
+  if (rating.combinedIdx >= 0) out[rating.combinedIdx] = _sheetDots(v) + ' ' + v;
+  if (rating.dotsIdx >= 0)     out[rating.dotsIdx]     = _sheetDots(v);
+  if (rating.numIdx >= 0)      out[rating.numIdx]      = String(v);
+  return '| ' + out.join(' | ') + ' |';
+}
+function _buildEditedSheet(parsed) {
+  const lines = parsed.lines.slice();
+  for (const r of parsed.editable) lines[r.lineIdx] = _rebuildSheetRow(r.cells, r.rating, r.value);
+  return lines.join('\n');
+}
+
+function _dotControl(idx, v) {
+  let s = `<span class="sheet-dots" data-row="${idx}">`;
+  for (let d = 1; d <= 5; d++) s += `<span class="sheet-dot${d <= v ? ' on' : ''}" data-row="${idx}" data-val="${d}"></span>`;
+  return s + `<span class="sheet-dot-val">${v}</span></span>`;
+}
+function _renderSheetEditor(parsed) {
+  if (!parsed.editable.length) return '<div class="cdet-empty">В листе не найдено редактируемых характеристик.</div>';
+  return parsed.groups.map(g => {
+    const title = [g.section, g.subsection].filter(Boolean).join(' · ');
+    const rows = g.rows.map(r => {
+      const idx = parsed.editable.indexOf(r);
+      return `<div class="sheet-edit-row"><span class="sheet-edit-name">${escHtml(r.name)}</span>${_dotControl(idx, r.value)}</div>`;
+    }).join('');
+    return `<div class="sheet-edit-group"><div class="sheet-edit-gtitle">${escHtml(title)}</div>${rows}</div>`;
+  }).join('');
+}
+
+let _sheetEditState = null;
+function _ensureSheetOverlay() {
+  let ov = document.getElementById('sheet-overlay');
+  if (ov) return ov;
+  ov = document.createElement('div');
+  ov.id = 'sheet-overlay'; ov.className = 'sheet-overlay';
+  ov.innerHTML = `<div class="sheet-modal">
+    <div class="sheet-modal-head">
+      <span class="sheet-modal-title" id="sheet-modal-title">Лист персонажа</span>
+      <div class="sheet-modal-actions" id="sheet-modal-actions"></div>
+      <button class="sheet-modal-close" id="sheet-modal-close" title="Закрыть">✕</button>
+    </div>
+    <div class="sheet-modal-body" id="sheet-modal-body"></div>
+    <div class="sheet-modal-status" id="sheet-modal-status"></div>
+  </div>`;
+  document.body.appendChild(ov);
+  ov.addEventListener('click', e => { if (e.target === ov) _closeSheetOverlay(); });
+  ov.querySelector('#sheet-modal-close').addEventListener('click', _closeSheetOverlay);
+  ov.querySelector('#sheet-modal-body').addEventListener('click', e => {
+    const dot = e.target.closest('.sheet-dot');
+    if (dot) _onSheetDotClick(dot);
+  });
+  return ov;
+}
+function _closeSheetOverlay() { const ov = document.getElementById('sheet-overlay'); if (ov) ov.classList.remove('open'); _sheetEditState = null; }
+function _onSheetDotClick(dotEl) {
+  if (!_sheetEditState) return;
+  const idx = +dotEl.dataset.row, dv = +dotEl.dataset.val;
+  const r = _sheetEditState.parsed.editable[idx]; if (!r) return;
+  r.value = (r.value === dv) ? dv - 1 : dv;                 // click active dot → step down (allows 0)
+  const cont = dotEl.closest('.sheet-dots');
+  cont.querySelectorAll('.sheet-dot').forEach(el => el.classList.toggle('on', +el.dataset.val <= r.value));
+  cont.querySelector('.sheet-dot-val').textContent = r.value;
+}
+
+async function openSheetOverlay(ctx, mode) {
+  _ensureSheetOverlay();
+  const ov = document.getElementById('sheet-overlay'); ov.classList.add('open');
+  const title = ov.querySelector('#sheet-modal-title');
+  const actions = ov.querySelector('#sheet-modal-actions');
+  const body = ov.querySelector('#sheet-modal-body');
+  const status = ov.querySelector('#sheet-modal-status');
+  status.textContent = ''; status.className = 'sheet-modal-status'; actions.innerHTML = '';
+  title.textContent = `${ctx.name || ctx.label || 'Персонаж'} — Лист V20`;
+  body.innerHTML = '<div class="loading-state"><div class="spinner"></div>Загрузка…</div>';
+
+  let d;
+  try { d = await fetch(_sheetApi(ctx).get).then(r => r.json()); }
+  catch (e) { body.innerHTML = `<div class="cdet-empty">Ошибка: ${escHtml(e.message)}</div>`; return; }
+  if (!d.exists || !d.content) { body.innerHTML = '<div class="cdet-empty">Лист ещё не сгенерирован.</div>'; return; }
+
+  if (mode === 'edit') {
+    _sheetEditState = { ctx, parsed: _parseSheetForEdit(d.content) };
+    body.innerHTML = `<div class="sheet-edit">${_renderSheetEditor(_sheetEditState.parsed)}</div>`;
+    actions.innerHTML = `<button class="sheet-btn sheet-btn-save" id="sheet-save">💾 Сохранить</button>`;
+    ov.querySelector('#sheet-save').addEventListener('click', _saveSheetEdit);
+  } else {
+    _sheetEditState = null;
+    body.innerHTML = `<div class="sheet-view md-body">${mdToHtml(d.content)}</div>`;
+    actions.innerHTML = `<button class="sheet-btn" id="sheet-to-edit">✏ Редактировать</button>`;
+    ov.querySelector('#sheet-to-edit').addEventListener('click', () => openSheetOverlay(ctx, 'edit'));
+  }
+}
+
+async function _saveSheetEdit() {
+  if (!_sheetEditState) return;
+  const status = document.getElementById('sheet-modal-status');
+  const btn = document.getElementById('sheet-save');
+  btn.disabled = true; btn.textContent = '⏳ Сохранение…'; status.textContent = ''; status.className = 'sheet-modal-status';
+  try {
+    const md = _buildEditedSheet(_sheetEditState.parsed);
+    const d = await fetch(_sheetApi(_sheetEditState.ctx).put,
+      { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: md }) }
+    ).then(r => r.json());
+    if (!d.ok) throw new Error(d.error || 'не удалось');
+    status.textContent = '✓ Сохранено'; status.classList.add('ok');
+    _sheetEditState.ctx.onSaved?.();
+  } catch (e) { status.textContent = '✗ ' + e.message; status.classList.add('err'); }
+  finally { btn.disabled = false; btn.textContent = '💾 Сохранить'; }
+}
+
+// Generate (or regenerate) a sheet for any context (character / module NPC).
+async function _generateSheet(ctx, btn) {
+  const old = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Генерация…'; }
+  try {
+    const prefs = JSON.parse(localStorage.getItem('ai-feature-prefs') || '{}');
+    const pref  = _getPref(prefs, 'prose', 'openrouter');
+    const d = await fetch(_sheetApi(ctx).gen,
+      { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ source: pref.provider, model: pref.model }) }
+    ).then(r => r.json());
+    if (!d.ok) throw new Error(d.error || 'не удалось');
+    ctx.onSaved?.();
+    return true;
+  } catch (e) { alert('Ошибка генерации листа: ' + e.message); return false; }
+  finally { if (btn) { btn.disabled = false; btn.textContent = old; } }
 }
 
 async function _diaryGenerate(charName) {
@@ -4436,7 +4658,7 @@ function openCharDetail(name) {
         <button class="cdet-tab" data-tab="bio">Биография</button>
         <button class="cdet-tab" data-tab="rels">Отношения</button>
         <button class="cdet-tab" data-tab="diaries">Дневники${c.diaries?.length ? ` (${c.diaries.length})` : ''}</button>
-        ${c.hasSheet ? `<button class="cdet-tab" data-tab="sheet" data-char="${escHtml(c.name)}">Лист V20</button>` : ''}
+        <button class="cdet-tab" data-tab="sheet" data-char="${escHtml(c.name)}">Лист V20</button>
         <button class="cdet-tab" data-tab="desc">Описание</button>
       </div>
       <div class="cdet-panels">
@@ -4494,9 +4716,9 @@ function openCharDetail(name) {
         <div class="cdet-panel" data-panel="diaries">
           ${renderDiaryList(c)}
         </div>
-        ${c.hasSheet ? `<div class="cdet-panel" data-panel="sheet" id="cdet-sheet-panel">
+        <div class="cdet-panel" data-panel="sheet" id="cdet-sheet-panel">
           <div class="loading-state"><div class="spinner"></div>Загрузка листа…</div>
-        </div>` : ''}
+        </div>
         <div class="cdet-panel" data-panel="desc">
           <div class="cdet-info-header" style="gap:8px">
             <button class="cdet-gen-appearance-btn" id="cdet-gen-appearance" data-char="${escHtml(c.name)}" title="Сгенерировать описание внешности по артам персонажа (Claude Vision)">👁 Внешность по арту</button>

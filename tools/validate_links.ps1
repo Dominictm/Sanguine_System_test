@@ -125,7 +125,7 @@ if ($Fix) {
 $rulesNote = if ($IncludeRules) { "" } else { " (rules/ excluded)" }
 Write-Host ""
 Write-Host "========================================" -ForegroundColor Cyan
-Write-Host "  VTM Chronicle Manager -- Link Validator" -ForegroundColor Cyan
+Write-Host "  Sanguine System -- Link Validator" -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host "  Files   : $($mdFiles.Count)$rulesNote"
 Write-Host "  Checked : $checked"

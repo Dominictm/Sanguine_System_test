@@ -1,6 +1,6 @@
 'use strict';
 /**
- * UI — Selenium/Chrome автотесты VTM Chronicle Manager.
+ * UI — Selenium/Chrome автотесты Sanguine System.
  * Проверяет реальный фронтенд: загрузку SPA, навигацию, персонажей, переключатель
  * города, вкладку «Инструменты». Создаёт одноразовый город и убирает за собой.
  *
@@ -141,7 +141,7 @@ describe('UI — Selenium (Chrome)', () => {
   describe('Загрузка приложения', () => {
     it('SPA открывается, заголовок и сайдбар на месте', async () => {
       await driver.get(`${BASE}?city=${browse.city}`);
-      assert.strictEqual(await driver.getTitle(), 'VTM Chronicle Manager');
+      assert.strictEqual(await driver.getTitle(), 'Sanguine System');
       await css('#sidebar .sidebar-logo');
       assert.ok(await count('.nav-item') >= NAV_PAGES.length, 'не все пункты меню');
     });

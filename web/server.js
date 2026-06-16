@@ -1946,6 +1946,28 @@ app.get('/api/chronicles/:chr/modules/:mod/detail', async (req, res) => {
     result.npcContent = await fs.readFile(path.join(modDir, 'npc.md'), 'utf-8').catch(() => '');
     result.npcGroups  = _parseNpcMdGroups(result.npcContent);
 
+    // Enrich each NPC with sheet status: episodic → npc/<slug>/<slug>-sheet.md, canonical → char's sheet
+    {
+      const allChars = await getAllCharacters(city).catch(() => []);
+      for (const g of result.npcGroups) {
+        for (const e of g.entries) {
+          if (g.kind === 'modular') {
+            const m = (e.cardHref || '').match(/npc\/([^/]+)\//);
+            e.slug = m ? m[1] : slugify(e.name);
+            e.sheetScope = 'module';
+            e.hasSheet = !!(await fs.stat(path.join(modDir, 'npc', e.slug, `${e.slug}-sheet.md`)).catch(() => null));
+          } else {
+            const ch = allChars.find(c => c.name === e.name) || allChars.find(c => _nameMatch(c.name, e.name));
+            e.slug = ch?.slug || null;
+            e.sheetScope = 'character';
+            e.hasSheet = ch
+              ? !!(await fs.stat(path.join(charsDir(city), ch.lineageFolder, ch.slug, `${ch.slug}-sheet.md`)).catch(() => null))
+              : false;
+          }
+        }
+      }
+    }
+
     // 3b. In-play session log (Phase B)
     result.sessions = _parseSessions(
       await fs.readFile(path.join(modDir, 'sessions.md'), 'utf-8').catch(() => ''));
@@ -2392,6 +2414,120 @@ app.get('/api/characters/:name/sheet', async (req, res) => {
     const content = await fs.readFile(file, 'utf-8').catch(() => null);
     res.json({ exists: content !== null, content: content || '' });
   } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── V20 sheet generation / save (canonical chars + episodic module NPCs) ──────
+
+// Generate a full V20 sheet (markdown) from a character/NPC card, per the rules.
+async function _generateV20Sheet({ card, displayName, gen }) {
+  const sheetRules = await fs.readFile(path.join(ROOT, 'system', 'rules', 'character_sheet_v20.md'), 'utf-8').catch(() => '');
+  const systemPrompt = `Ты — Мастер Vampire: The Masquerade V20. Составляешь игромеханический лист персонажа СТРОГО по правилам и шаблону ниже.
+
+# ПРАВИЛА ЛИСТА (character_sheet_v20.md)
+${sheetRules.slice(0, 8000)}`;
+  const userPrompt = `Составь ПОЛНЫЙ лист персонажа «${displayName}» по карточке ниже.
+
+# КАРТОЧКА ПЕРСОНАЖА
+${(card || '').slice(0, 3500)}
+
+Требования:
+- Точно следуй СТРУКТУРЕ и ФОРМАТУ ШАБЛОНА из правил (заголовки «##», таблицы, точки «●○»).
+- ОБЯЗАТЕЛЬНО учитывай специфику и роль персонажа (Шаг 7): профильные способности — высокие, непрофильные — низкие. Стрелок хорошо стреляет, водитель водит, охотник — оккультизм/оружие и т.п.
+- Атрибуты 1–5, способности 0–5; клан, поколение, клановые дисциплины и слабость — по справочным таблицам.
+- Заполни ВСЕ разделы шаблона: концепция, атрибуты, способности, преимущества, производные, слабости, снаряжение, опыт.
+- Для КАЖДОЙ точечной характеристики (атрибуты, способности, дисциплины, предыстории, добродетели) указывай И точки, И число в формате «| Название | ●●●○○ | N |» — чтобы лист можно было редактировать.
+- Верни ТОЛЬКО markdown листа, начиная с «# 🎲 ${displayName} — Лист персонажа V20». Без пояснений и без \`\`\`.`;
+  const out = await genTextWithRetry(gen, { system: systemPrompt, user: userPrompt, maxTokens: 3500 });
+  return (out.text || '').replace(/^```(?:markdown)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
+}
+
+// Insert «> 🎲 [Лист персонажа](rel)» under the card H1 if not present.
+async function _ensureSheetLink(cardPath, sheetRel) {
+  let txt = await fs.readFile(cardPath, 'utf-8').catch(() => '');
+  if (!txt || txt.includes(`(${sheetRel})`)) return;
+  txt = txt.replace(/^(﻿?#\s+.+\n)/, `$1\n> 🎲 [Лист персонажа](${sheetRel})\n`);
+  await fs.writeFile(cardPath, txt, 'utf-8');
+}
+
+// Generate (or regenerate) a canonical character's sheet
+app.post('/api/characters/:name/sheet/generate', express.json(), async (req, res) => {
+  try {
+    const city  = reqCity(req);
+    const name  = decodeURIComponent(req.params.name);
+    const chars = await getAllCharacters(city);
+    const char  = chars.find(c => c.name === name);
+    if (!char) return res.status(404).json({ ok: false, error: 'Персонаж не найден' });
+    const dir  = path.join(charsDir(city), char.lineageFolder, char.slug);
+    const card = await fs.readFile(path.join(dir, `${char.slug}.md`), 'utf-8').catch(() => '');
+    if (!card) return res.status(404).json({ ok: false, error: 'Карточка персонажа не найдена' });
+    const gen  = await makeGenerationClient(req.body?.source || null, req.body?.model || null);
+    const text = await _generateV20Sheet({ card, displayName: char.name, gen });
+    if (!text) return res.status(500).json({ ok: false, error: 'ИИ вернул пустой лист' });
+    await fs.writeFile(path.join(dir, `${char.slug}-sheet.md`), text + '\n', 'utf-8');
+    await _ensureSheetLink(path.join(dir, `${char.slug}.md`), `${char.slug}-sheet.md`);
+    res.json({ ok: true, content: text });
+  } catch (e) { res.status(e.status >= 400 && e.status < 600 ? e.status : 500).json({ ok: false, error: e.message }); }
+});
+
+// Save an edited canonical sheet (raw markdown from the editor)
+app.put('/api/characters/:name/sheet', express.json(), async (req, res) => {
+  try {
+    const city  = reqCity(req);
+    const name  = decodeURIComponent(req.params.name);
+    const content = String(req.body?.content || '');
+    if (!content.trim()) return res.status(400).json({ ok: false, error: 'Пустой лист' });
+    const chars = await getAllCharacters(city);
+    const char  = chars.find(c => c.name === name);
+    if (!char) return res.status(404).json({ ok: false, error: 'Персонаж не найден' });
+    const dir = path.join(charsDir(city), char.lineageFolder, char.slug);
+    await fs.writeFile(path.join(dir, `${char.slug}-sheet.md`), content.replace(/\s*$/, '') + '\n', 'utf-8');
+    await _ensureSheetLink(path.join(dir, `${char.slug}.md`), `${char.slug}-sheet.md`);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
+// ── Module NPC sheets (episodic NPCs: chronicles/<chr>/modules/<mod>/npc/<slug>/) ──
+function _npcSheetPaths(city, chr, mod, slug) {
+  const dir = path.join(chroniclesDir(city), chr, 'modules', mod, 'npc', slug);
+  return { dir, card: path.join(dir, `${slug}.md`), sheet: path.join(dir, `${slug}-sheet.md`) };
+}
+
+app.get('/api/chronicles/:chr/modules/:mod/npc/:slug/sheet', async (req, res) => {
+  try {
+    const { chr, mod, slug } = req.params;
+    const { sheet } = _npcSheetPaths(reqCity(req), chr, mod, decodeURIComponent(slug));
+    const content = await fs.readFile(sheet, 'utf-8').catch(() => null);
+    res.json({ exists: content !== null, content: content || '' });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/chronicles/:chr/modules/:mod/npc/:slug/sheet/generate', express.json(), async (req, res) => {
+  try {
+    const { chr, mod, slug } = req.params;
+    const p = _npcSheetPaths(reqCity(req), chr, mod, decodeURIComponent(slug));
+    const card = await fs.readFile(p.card, 'utf-8').catch(() => '');
+    if (!card) return res.status(404).json({ ok: false, error: 'Карточка НПС не найдена' });
+    const displayName = (card.match(/^#{1,6}\s+(.+)$/m)?.[1] || slug)
+      .replace(/^[^\p{L}]+/u, '').replace(/^карточка\s+нпс\s*:?\s*/i, '').split(/\s*[—–]\s*/)[0].trim();
+    const gen  = await makeGenerationClient(req.body?.source || null, req.body?.model || null);
+    const text = await _generateV20Sheet({ card, displayName, gen });
+    if (!text) return res.status(500).json({ ok: false, error: 'ИИ вернул пустой лист' });
+    await fs.writeFile(p.sheet, text + '\n', 'utf-8');
+    await _ensureSheetLink(p.card, `${decodeURIComponent(slug)}-sheet.md`);
+    res.json({ ok: true, content: text });
+  } catch (e) { res.status(e.status >= 400 && e.status < 600 ? e.status : 500).json({ ok: false, error: e.message }); }
+});
+
+app.put('/api/chronicles/:chr/modules/:mod/npc/:slug/sheet', express.json(), async (req, res) => {
+  try {
+    const { chr, mod, slug } = req.params;
+    const content = String(req.body?.content || '');
+    if (!content.trim()) return res.status(400).json({ ok: false, error: 'Пустой лист' });
+    const p = _npcSheetPaths(reqCity(req), chr, mod, decodeURIComponent(slug));
+    if (!await fs.stat(p.dir).catch(() => null)) return res.status(404).json({ ok: false, error: 'Папка НПС не найдена' });
+    await fs.writeFile(p.sheet, content.replace(/\s*$/, '') + '\n', 'utf-8');
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
 
 // ── Global search ──────────────────────────────────────────────────────────────
@@ -3064,7 +3200,7 @@ function _oaEndpoint(provider) {
       'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
       'Content-Type':  'application/json',
       'HTTP-Referer':  'http://localhost:3000',
-      'X-Title':       'VTM Chronicle Manager',
+      'X-Title':       'Sanguine System',
     },
   };
 }
@@ -4910,8 +5046,8 @@ app.post('/api/restart', (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`\n  \u{1F9DB} VTM Chronicle Manager`);
-  console.log(`  ───────────────────────`);
+  console.log(`\n  \u{1FA78} Sanguine System`);
+  console.log(`  ─────────────────`);
   console.log(`  http://localhost:${PORT}\n`);
   // Run initial validation on startup
   runValidationBackground();

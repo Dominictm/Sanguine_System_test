@@ -1,7 +1,7 @@
 {
-  "name": "vtm-chronicle-manager",
+  "name": "sanguine-system",
   "version": "1.0.0",
-  "description": "Local web UI for VTM Chronicle Manager",
+  "description": "Local web UI for Sanguine System",
   "main": "server.js",
   "scripts": {
     "start": "node wrapper.js",

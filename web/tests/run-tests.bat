@@ -4,7 +4,7 @@ cd /d "%~dp0.."
 
 echo.
 echo  =======================================================
-echo   VTM Chronicle Manager -- Unit + API + E2E (110 tests)
+echo   Sanguine System -- Unit + API + E2E (110 tests)
 echo  =======================================================
 echo.
 

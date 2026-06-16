@@ -1,6 +1,6 @@
 'use strict';
 /**
- * E2E — сквозной цикл хроники VTM Chronicle Manager.
+ * E2E — сквозной цикл хроники Sanguine System.
  * Поднимает сервер на порту 3097, создаёт одноразовый тестовый город,
  * проходит: new_city → new_npc → new_location → /api/log-session (preview + commit,
  * включая инлайн-НПС) → /api/status → close_chronicle → build_city_events →

@@ -1,4 +1,4 @@
-# WoD Chronicle Manager
+# Sanguine System
 
 Структурированная система ведения хроник **World of Darkness** (Vampire: The Masquerade V20 и смежные линейки) с **ИИ-Рассказчиком** и локальным веб-интерфейсом для просмотра, генерации и ведения игры.
 
