@@ -1025,16 +1025,34 @@ async function loadAiSettings() {
       <!-- Claude / Anthropic section -->
       <div class="ais-section">
         <div class="ais-section-title">🧠 Claude (Anthropic) — авторизация</div>
-        <div class="ais-section-hint">${_claudeAuthHint(orSettings)}</div>
+        <div class="ais-section-hint" id="ais-claude-hint">${_claudeAuthHint(orSettings)}</div>
 
+        <!-- Вариант 1: вход через Claude Code (OAuth, без API-ключа) -->
         <div class="ais-field">
-          <label class="ais-label">API Key
+          <label class="ais-label">Вход через Claude Code <span class="ais-key-state">без API-ключа</span></label>
+          <div class="ais-claude-btnrow">
+            <button class="ais-confirm-btn ais-claude-oauth-btn" id="ais-claude-login">🔓 Войти через Claude Code</button>
+            <button class="ais-confirm-btn ais-ghost-btn" id="ais-claude-status">🔄 Обновить статус</button>
+            ${orSettings.claudeOauth?.expired && orSettings.claudeOauth?.hasRefresh
+              ? '<button class="ais-confirm-btn ais-ghost-btn" id="ais-claude-refresh">♻️ Обновить токен</button>' : ''}
+          </div>
+          <div class="ais-claude-code-form" id="ais-claude-code-form" style="display:none">
+            <input class="ais-input ais-mono" id="ais-claude-code" placeholder="Вставь код авторизации (вида CODE#STATE)">
+            <button class="ais-confirm-btn" id="ais-claude-code-submit">✓ Подтвердить код</button>
+          </div>
+          <div class="ais-field-hint">Кнопка откроет страницу Claude. Авторизуйся под своим аккаунтом, скопируй показанный код и вставь его выше — токен подписки сохранится локально.</div>
+          <div class="ais-status" id="ais-claude-oauth-status"></div>
+        </div>
+
+        <!-- Вариант 2: API-ключ -->
+        <div class="ais-field">
+          <label class="ais-label">…или API Key
             <span class="ais-key-state ${orSettings.hasAnthropicKey ? 'ok' : ''}">${orSettings.hasAnthropicKey ? '● задан' : '○ не задан'}</span>
           </label>
           <input class="ais-input" id="ais-anthropic-key" type="password"
             placeholder="${orSettings.hasAnthropicKey ? '•••••• (задан)' : 'sk-ant-...'}"
             autocomplete="new-password">
-          <div class="ais-field-hint">Альтернатива входу через Claude Code. Оставь пустым — не изменится; очисти и подтверди — удалить.</div>
+          <div class="ais-field-hint">Оставь пустым — не изменится; очисти и подтверди — удалить.</div>
         </div>
 
         <button class="ais-confirm-btn" id="ais-anthropic-save">✓ Подтвердить Claude</button>
@@ -1132,6 +1150,57 @@ async function loadAiSettings() {
     () => _saveKey('ais-openai-save', 'ais-openai-status', 'ais-openai-key', 'OPENAI_API_KEY', '✓ Подтвердить OpenAI'));
   document.getElementById('ais-anthropic-save').addEventListener('click',
     () => _saveKey('ais-anthropic-save', 'ais-anthropic-status', 'ais-anthropic-key', 'ANTHROPIC_API_KEY', '✓ Подтвердить Claude'));
+
+  // Claude Code OAuth login (no API key): open authorize URL, then paste the code
+  let _claudeOauthState = null;
+  const claudeOauthStatus = document.getElementById('ais-claude-oauth-status');
+  document.getElementById('ais-claude-login')?.addEventListener('click', async () => {
+    claudeOauthStatus.className = 'ais-status';
+    claudeOauthStatus.textContent = '⏳ Готовлю ссылку…';
+    try {
+      const d = await fetch('/api/claude/oauth/start', { method: 'POST' }).then(r => r.json());
+      if (!d.ok) throw new Error(d.error);
+      _claudeOauthState = d.state;
+      window.open(d.url, '_blank', 'noopener');
+      document.getElementById('ais-claude-code-form').style.display = '';
+      document.getElementById('ais-claude-code').focus();
+      claudeOauthStatus.textContent = 'Открыл страницу Claude. Авторизуйся → скопируй код → вставь выше и подтверди.';
+    } catch (e) { claudeOauthStatus.textContent = '✗ ' + e.message; claudeOauthStatus.classList.add('err'); }
+  });
+  document.getElementById('ais-claude-code-submit')?.addEventListener('click', async () => {
+    const btn  = document.getElementById('ais-claude-code-submit');
+    const code = document.getElementById('ais-claude-code').value.trim();
+    if (!code) { claudeOauthStatus.className = 'ais-status err'; claudeOauthStatus.textContent = 'Вставь код авторизации.'; return; }
+    btn.disabled = true; btn.textContent = '⏳…';
+    claudeOauthStatus.className = 'ais-status'; claudeOauthStatus.textContent = '⏳ Обмениваю код на токен…';
+    try {
+      const d = await fetch('/api/claude/oauth/exchange', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code, state: _claudeOauthState })
+      }).then(r => r.json());
+      if (!d.ok) throw new Error(d.error);
+      claudeOauthStatus.textContent = `✓ Вход выполнен (подписка: ${d.claudeOauth?.subscription || '—'}). Обновляю…`;
+      claudeOauthStatus.classList.add('ok');
+      _aiSettingsLoaded = false; setTimeout(loadAiSettings, 900);
+    } catch (e) { claudeOauthStatus.textContent = '✗ ' + e.message; claudeOauthStatus.classList.add('err'); }
+    finally { btn.disabled = false; btn.textContent = '✓ Подтвердить код'; }
+  });
+  document.getElementById('ais-claude-status')?.addEventListener('click', async () => {
+    claudeOauthStatus.className = 'ais-status'; claudeOauthStatus.textContent = '⏳ Обновляю статус…';
+    try { await fetch('/api/claude/status').then(r => r.json()); _aiSettingsLoaded = false; loadAiSettings(); }
+    catch (e) { claudeOauthStatus.textContent = '✗ ' + e.message; claudeOauthStatus.classList.add('err'); }
+  });
+  document.getElementById('ais-claude-refresh')?.addEventListener('click', async () => {
+    const btn = document.getElementById('ais-claude-refresh');
+    btn.disabled = true; btn.textContent = '⏳…';
+    claudeOauthStatus.className = 'ais-status'; claudeOauthStatus.textContent = '⏳ Обновляю токен…';
+    try {
+      const d = await fetch('/api/claude/oauth/refresh', { method: 'POST' }).then(r => r.json());
+      if (!d.ok) throw new Error(d.error);
+      claudeOauthStatus.textContent = '✓ Токен обновлён. Обновляю…'; claudeOauthStatus.classList.add('ok');
+      _aiSettingsLoaded = false; setTimeout(loadAiSettings, 700);
+    } catch (e) { claudeOauthStatus.textContent = '✗ ' + e.message; claudeOauthStatus.classList.add('err'); btn.disabled = false; btn.textContent = '♻️ Обновить токен'; }
+  });
 
   // Features table: save provider preferences
   // Wire radio changes to swap model dropdown options

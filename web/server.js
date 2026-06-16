@@ -3011,8 +3011,15 @@ async function makeGenerationClient(preferSource = null, modelOverride = null) {
       const oauth = await _readOauthCached();
       if (oauth?.accessToken) {
         if (oauth.expiresAt && Date.now() >= oauth.expiresAt) {
+          // Try to refresh silently before giving up
+          if (oauth.refreshToken) {
+            try {
+              const refreshed = await _refreshClaudeOauth();
+              return { source: 'claude-login', client: new Anthropic({ authToken: refreshed.accessToken }), model: clModel() };
+            } catch { /* fall through to error */ }
+          }
           _oauthCredsCacheAt = 0; // invalidate so next call re-reads
-          throw new Error('Claude.ai OAuth токен истёк. Выполни любую команду в Claude Code.');
+          throw new Error('Claude.ai OAuth токен истёк. Войди заново (Инструменты → Модели AI) или выполни команду в Claude Code.');
         }
         return { source: 'claude-login', client: new Anthropic({ authToken: oauth.accessToken }), model: clModel() };
       }
@@ -3207,6 +3214,130 @@ app.get('/api/auth-status', async (req, res) => {
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
+});
+
+// ── Claude Code OAuth login (subscription token, no API key) ───────────────────
+// Same PKCE flow Claude Code CLI uses: build an authorize URL, user logs in and
+// pastes the returned code, we exchange it for a token and write .credentials.json.
+const CLAUDE_OAUTH = {
+  clientId:     '9d1c250a-e61b-44d9-88ed-5944d1962f5e', // Claude Code public client
+  authorizeUrl: 'https://claude.ai/oauth/authorize',
+  tokenUrl:     'https://console.anthropic.com/v1/oauth/token',
+  redirectUri:  'https://console.anthropic.com/oauth/code/callback',
+  scope:        'org:create_api_key user:profile user:inference',
+};
+const _oauthPending = new Map(); // state -> { verifier, createdAt }
+
+function _pkcePair() {
+  const verifier  = crypto.randomBytes(32).toString('base64url');
+  const challenge = crypto.createHash('sha256').update(verifier).digest('base64url');
+  return { verifier, challenge };
+}
+
+// Merge an OAuth token response into ~/.claude/.credentials.json (touch only claudeAiOauth).
+async function _writeClaudeOauth(tokenData, prevRefresh = null) {
+  const oauth = {
+    accessToken:      tokenData.access_token,
+    refreshToken:     tokenData.refresh_token || prevRefresh || null,
+    expiresAt:        tokenData.expires_in ? Date.now() + tokenData.expires_in * 1000 : null,
+    scopes:           (tokenData.scope || CLAUDE_OAUTH.scope).split(' '),
+    subscriptionType: tokenData.subscription_type || tokenData.account?.subscription_type || 'unknown',
+  };
+  let creds = {};
+  try { creds = JSON.parse(await fs.readFile(CLAUDE_CREDS_PATH, 'utf-8')); } catch {}
+  if (!creds || typeof creds !== 'object') creds = {};
+  creds.claudeAiOauth = oauth;
+  await fs.mkdir(path.dirname(CLAUDE_CREDS_PATH), { recursive: true }).catch(() => {});
+  await fs.writeFile(CLAUDE_CREDS_PATH, JSON.stringify(creds, null, 2), 'utf-8');
+  _oauthCredsCache = oauth; _oauthCredsCacheAt = Date.now();
+  return oauth;
+}
+
+// Refresh an expired access token using the stored refresh_token.
+async function _refreshClaudeOauth() {
+  const oauth = await _readOauthCached();
+  if (!oauth?.refreshToken) throw Object.assign(new Error('Нет refresh_token — войди через Claude Code заново.'), { status: 400 });
+  const r = await fetch(CLAUDE_OAUTH.tokenUrl, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ grant_type: 'refresh_token', refresh_token: oauth.refreshToken, client_id: CLAUDE_OAUTH.clientId }),
+  });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw Object.assign(new Error(data.error_description || data.error || `Обновление токена не удалось (${r.status})`), { status: r.status });
+  return _writeClaudeOauth(data, oauth.refreshToken);
+}
+
+const _oauthInfo = o => o && ({
+  expired:      !!(o.expiresAt && Date.now() >= o.expiresAt),
+  subscription: o.subscriptionType || 'unknown',
+  expiresIn:    o.expiresAt ? Math.max(0, Math.round((o.expiresAt - Date.now()) / 60000)) : null,
+  hasRefresh:   !!o.refreshToken,
+});
+
+// Step 1 — build the authorize URL (PKCE) and remember the verifier by state.
+app.post('/api/claude/oauth/start', express.json(), async (req, res) => {
+  try {
+    const { verifier, challenge } = _pkcePair();
+    const state = crypto.randomBytes(16).toString('hex');
+    _oauthPending.set(state, { verifier, createdAt: Date.now() });
+    for (const [k, v] of _oauthPending) if (Date.now() - v.createdAt > 15 * 60_000) _oauthPending.delete(k);
+
+    const u = new URL(CLAUDE_OAUTH.authorizeUrl);
+    u.searchParams.set('code', 'true');
+    u.searchParams.set('client_id', CLAUDE_OAUTH.clientId);
+    u.searchParams.set('response_type', 'code');
+    u.searchParams.set('redirect_uri', CLAUDE_OAUTH.redirectUri);
+    u.searchParams.set('scope', CLAUDE_OAUTH.scope);
+    u.searchParams.set('code_challenge', challenge);
+    u.searchParams.set('code_challenge_method', 'S256');
+    u.searchParams.set('state', state);
+    res.json({ ok: true, url: u.toString(), state });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
+// Step 2 — exchange the pasted code («CODE#STATE») for a token; write credentials.
+app.post('/api/claude/oauth/exchange', express.json(), async (req, res) => {
+  try {
+    const pasted = String(req.body?.code || '').trim();
+    if (!pasted) return res.status(400).json({ ok: false, error: 'Вставь код авторизации.' });
+    const [rawCode, hashState] = pasted.split('#');
+    const state   = (hashState || req.body?.state || '').trim();
+    const pending = _oauthPending.get(state);
+    if (!pending) return res.status(400).json({ ok: false, error: 'Сессия входа не найдена или истекла. Нажми «Войти через Claude Code» заново.' });
+
+    const r = await fetch(CLAUDE_OAUTH.tokenUrl, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        grant_type:    'authorization_code',
+        code:          rawCode.trim(),
+        state,
+        client_id:     CLAUDE_OAUTH.clientId,
+        redirect_uri:  CLAUDE_OAUTH.redirectUri,
+        code_verifier: pending.verifier,
+      }),
+    });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) return res.status(r.status >= 400 && r.status < 600 ? r.status : 500)
+      .json({ ok: false, error: data.error_description || data.error || `Обмен кода не удался (${r.status})` });
+
+    _oauthPending.delete(state);
+    const oauth = await _writeClaudeOauth(data);
+    res.json({ ok: true, claudeOauth: _oauthInfo(oauth) });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
+// Refresh the access token (used when expired but a refresh_token exists).
+app.post('/api/claude/oauth/refresh', express.json(), async (req, res) => {
+  try { res.json({ ok: true, claudeOauth: _oauthInfo(await _refreshClaudeOauth()) }); }
+  catch (e) { res.status(e.status || 500).json({ ok: false, error: e.message }); }
+});
+
+// Fresh Claude auth status (bypasses the 60s cache) — for the «Обновить статус» button.
+app.get('/api/claude/status', async (req, res) => {
+  try {
+    _oauthCredsCacheAt = 0;
+    const oauth = await _readOauthCached();
+    res.json({ ok: true, claudeOauth: _oauthInfo(oauth) || null, hasAnthropicKey: !!process.env.ANTHROPIC_API_KEY });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
 
 // ── Generate appearance from art images via Vision API ────────────────────────
@@ -4699,6 +4830,7 @@ app.get('/api/settings', async (req, res) => {
       expired:      !!(oauth.expiresAt && Date.now() >= oauth.expiresAt),
       subscription: oauth.subscriptionType || 'unknown',
       expiresIn:    oauth.expiresAt ? Math.max(0, Math.round((oauth.expiresAt - Date.now()) / 60000)) : null,
+      hasRefresh:   !!oauth.refreshToken,
     } : null;
 
     res.json({

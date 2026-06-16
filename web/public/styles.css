@@ -317,6 +317,15 @@ body {
 /* API-key state chip in credential section labels */
 .ais-key-state { font-size: 10.5px; font-weight: 600; letter-spacing: 0.5px; color: var(--text-dim); margin-left: 8px; }
 .ais-key-state.ok { color: #7fd27f; }
+
+/* Claude Code OAuth login controls */
+.ais-claude-btnrow { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+.ais-confirm-btn.ais-claude-oauth-btn { background: rgba(184,134,11,0.16); border-color: rgba(184,134,11,0.5); color: var(--gold); }
+.ais-confirm-btn.ais-claude-oauth-btn:hover { background: rgba(184,134,11,0.28); }
+.ais-confirm-btn.ais-ghost-btn { background: transparent; opacity: 0.8; }
+.ais-confirm-btn.ais-ghost-btn:hover { opacity: 1; }
+.ais-claude-code-form { display: flex; gap: 8px; margin: 8px 0; flex-wrap: wrap; }
+.ais-claude-code-form .ais-input { flex: 1; min-width: 220px; }
 .ais-feat-prov-btn input[type="radio"] {
   width: 14px; height: 14px;
   accent-color: var(--gold);
@@ -471,6 +480,7 @@ body {
   cursor: pointer;
   transition: border-color .2s;
   -webkit-appearance: none;
+  appearance: none;
 }
 .filter-select:focus { border-color: var(--accent2); }
 
@@ -848,6 +858,7 @@ textarea.form-control { resize: vertical; min-height: 80px; }
 select.form-control {
   cursor: pointer;
   -webkit-appearance: none;
+  appearance: none;
 }
 
 .form-hint {
@@ -2087,6 +2098,7 @@ background: linear-gradient(180deg, rgb(121 4 4 / 2%) 0%, rgb(139 0 0 / 35%) 100
   margin-bottom: 5px;
   display: -webkit-box;
   -webkit-line-clamp: 2;
+  line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
@@ -3500,8 +3512,8 @@ a.md-link-loc:hover { color: #9ee0ba; border-bottom-color: #9ee0ba; opacity: 1; 
 
 /* City switcher (multi-city) */
 .city-switch { padding: 0 20px 16px; margin-bottom: 6px; border-bottom: 1px solid var(--border); }
-.city-switch label { display: block; font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--gold); opacity: 0.8; margin-bottom: 6px; }
-.city-switch select { width: 100%; background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 7px 9px; font-size: 13px; font-family: var(--f-body); cursor: pointer; text-transform: capitalize; }
+.city-switch label { display: block; font-size: 20px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--gold); opacity: 0.8; margin-bottom: 6px; }
+.city-switch select { width: 100%; background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 7px 9px; font-size: 20px; font-family: var(--f-body); cursor: pointer; text-transform: capitalize; }
 .city-switch select:hover { border-color: var(--crimson); }
 .city-switch select:focus { outline: none; border-color: var(--accent); box-shadow: var(--glow); }
 
