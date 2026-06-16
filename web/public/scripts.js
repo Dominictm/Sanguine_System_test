@@ -54,6 +54,8 @@ const REL_COLORS = {
   loyalty:    '#B8860B',
   romantic:   '#D06890',
   suspicious: '#9B6BAE',
+  acquaintance: '#6FA8A8',
+  secret:     '#8A4FB0',
   neutral:    '#555555'
 };
 
@@ -66,8 +68,13 @@ const REL_LABELS = {
   loyalty:    'Преданность',
   romantic:   'Романтика',
   suspicious: 'Подозрение',
+  acquaintance: 'Знакомый',
+  secret:     'Тайная связь',
   neutral:    'Нейтральный'
 };
+
+// Standard relation types offered in the «Отношения» editor (datalist)
+const REL_TYPE_OPTIONS = ['Семья', 'Сир/Чайлд', 'Союзник', 'Враг', 'Преданность', 'Нейтральный', 'Знакомый', 'Тайная связь'];
 
 const NODE_COLORS = {
   vampire:  '#7A0000',
@@ -329,13 +336,26 @@ function renderIntegrity(data, el) {
       <span class="ip-title">🛡 Целостность данных</span>
       <span class="ip-summary ${total === 0 ? 'ip-clean' : ''}">${total === 0 ? '✓ Чисто' : total + ' замечаний'}</span>
     </div>
-    ${rows}`;
+    ${rows}
+    <div class="ip-canon">
+      <div class="ip-canon-title">🔍 Проверка непротиворечий канону</div>
+      <textarea id="ip-canon-text" class="ip-canon-text" rows="3" placeholder="Вставь текст сцены или события — ИИ сверит со статусами НПС, датами и «мёртвыми» в сцене"></textarea>
+      <button id="ip-canon-btn" class="ip-canon-btn">🔍 Проверить</button>
+      <div id="ip-canon-result" class="canon-result" style="display:none"></div>
+    </div>`;
 }
 
 // Clickable dashboard stat cards → navigate; integrity rows → expand
 document.getElementById('dash-content').addEventListener('click', e => {
   const card = e.target.closest('.stat-clickable[data-nav]');
   if (card) { navigate(card.dataset.nav); return; }
+
+  if (e.target.closest('#ip-canon-btn')) {
+    _runCanonCheck(document.getElementById('ip-canon-text')?.value || '',
+      document.getElementById('ip-canon-result'),
+      document.getElementById('ip-canon-btn'), '🔍 Проверить');
+    return;
+  }
 
   const head = e.target.closest('.ip-check-head.ip-expandable');
   if (head) {
@@ -541,7 +561,7 @@ async function loadGraph() {
 }
 
 function buildLegend() {
-  const types = ['family','sire','ally','enemy','loyalty','neutral'];
+  const types = ['family','sire','ally','enemy','loyalty','acquaintance','secret','neutral'];
   document.getElementById('graph-legend').innerHTML = types.map(t =>
     `<div class="legend-item">
       <div class="legend-line" style="background:${REL_COLORS[t]}"></div>
@@ -835,19 +855,26 @@ const OR_FEAT_MODELS_FALLBACK = {
     { id: 'google/gemma-3-27b-it:free',             label: 'Google Gemma 3 27B' },
     { id: 'openrouter/free',                        label: 'Free Models Router' },
   ],
+  // Conversational/character models — для реплик НПС в характере
+  dialogue: [
+    { id: 'meta-llama/llama-3.3-70b-instruct:free', label: 'Llama 3.3 70B Instruct' },
+    { id: 'qwen/qwen3-235b-a22b:free',              label: 'Qwen3 235B A22B' },
+    { id: 'google/gemma-3-27b-it:free',             label: 'Google Gemma 3 27B' },
+    { id: 'mistralai/mistral-7b-instruct:free',     label: 'Mistral 7B Instruct' },
+    { id: 'openrouter/free',                        label: 'Free Models Router' },
+  ],
 };
 
-// Build per-feature model lists: only include models confirmed free by live API.
-// Falls back to static list if live fetch failed, or to full free list if none of
-// the curated models are currently available.
+// Build per-feature model lists. Every feature gets ALL free models reported live by
+// the API, with «openrouter/free» pinned to the top so it's always available. The
+// curated OR_FEAT_MODELS_FALLBACK is used only when the live fetch failed (offline).
 function _buildFeatOrModels(liveModels) {
   if (!liveModels?.length) return { ...OR_FEAT_MODELS_FALLBACK };
-  const liveMap = Object.fromEntries(liveModels.map(m => [m.id, m]));
-  const result  = {};
-  for (const [feat, curated] of Object.entries(OR_FEAT_MODELS_FALLBACK)) {
-    const filtered = curated.filter(c => !!liveMap[c.id]).map(c => liveMap[c.id]);
-    result[feat] = filtered.length ? filtered : liveModels;
-  }
+  const rest = liveModels.filter(m => m.id !== 'openrouter/free');
+  const free = liveModels.find(m => m.id === 'openrouter/free') || { id: 'openrouter/free', label: 'Free Models Router' };
+  const all  = [free, ...rest];                       // openrouter/free first, then every free model
+  const result = {};
+  for (const feat of Object.keys(OR_FEAT_MODELS_FALLBACK)) result[feat] = all;
   return result;
 }
 const CLAUDE_MODELS = [
@@ -855,6 +882,18 @@ const CLAUDE_MODELS = [
   { id: 'claude-sonnet-4-6',         label: 'Claude Sonnet 4.6 — сбалансированно' },
   { id: 'claude-haiku-4-5-20251001', label: 'Claude Haiku 4.5 — быстро' },
 ];
+const OPENAI_MODELS = [
+  { id: 'gpt-4o-mini',  label: 'GPT-4o mini — быстро и дёшево' },
+  { id: 'gpt-4o',       label: 'GPT-4o — сбалансированно (vision)' },
+  { id: 'gpt-4.1',      label: 'GPT-4.1 — высокое качество' },
+  { id: 'gpt-4.1-mini', label: 'GPT-4.1 mini' },
+];
+// Resolve a feature's model list by provider.
+function _modelsForProvider(provider, orModels) {
+  if (provider === 'claude') return CLAUDE_MODELS;
+  if (provider === 'openai') return OPENAI_MODELS;
+  return orModels;
+}
 
 let _aiSettingsLoaded = false;
 let _orModelsRuntime  = null; // cached after first fetch
@@ -862,10 +901,15 @@ let _orModelsRuntime  = null; // cached after first fetch
 function _renderFeatCard(feat, icon, label, desc, pref, orModels) {
   const provider = pref.provider || 'openrouter';
   const model    = pref.model;
-  const models   = provider === 'claude' ? CLAUDE_MODELS : orModels;
+  const models   = _modelsForProvider(provider, orModels);
   const opts = models.map(m =>
     `<option value="${escHtml(m.id)}" ${model === m.id ? 'selected' : ''}>${escHtml(m.label)}</option>`
   ).join('');
+  const radio = (val, lbl) =>
+    `<label class="ais-feat-prov-btn">
+       <input type="radio" name="feat-${feat}" value="${val}" ${provider === val ? 'checked' : ''}>
+       <span>${lbl}</span>
+     </label>`;
   return `
     <div class="ais-feat-card" data-feat="${feat}">
       <div class="ais-feat-card-header">
@@ -875,18 +919,25 @@ function _renderFeatCard(feat, icon, label, desc, pref, orModels) {
           <div class="ais-feat-desc">${desc}</div>
         </div>
         <div class="ais-feat-card-radios">
-          <label class="ais-feat-prov-btn">
-            <input type="radio" name="feat-${feat}" value="openrouter" ${provider === 'openrouter' ? 'checked' : ''}>
-            <span>OpenRouter</span>
-          </label>
-          <label class="ais-feat-prov-btn">
-            <input type="radio" name="feat-${feat}" value="claude" ${provider === 'claude' ? 'checked' : ''}>
-            <span>Claude</span>
-          </label>
+          ${radio('openrouter', 'OpenRouter')}
+          ${radio('openai', 'GPT')}
+          ${radio('claude', 'Claude')}
         </div>
       </div>
       <select class="ais-feat-model-select" id="feat-${feat}-model">${opts}</select>
     </div>`;
+}
+
+// Human-readable Claude auth state for the credentials section.
+function _claudeAuthHint(s) {
+  const o = s.claudeOauth;
+  if (o && !o.expired) {
+    const left = o.expiresIn != null ? ` · токен ~${o.expiresIn} мин` : '';
+    return `✅ Вход через Claude Code активен (подписка: ${escHtml(o.subscription)}${left}). API-ключ можно не задавать.`;
+  }
+  if (o && o.expired) return '⚠️ Токен Claude Code истёк — выполни любую команду в Claude Code, либо задай API-ключ ниже.';
+  if (s.hasAnthropicKey) return '🔑 Используется ANTHROPIC_API_KEY. Вход через аккаунт — отдельно, в приложении Claude Code (CLI).';
+  return 'Claude не авторизован. Войди через Claude Code (CLI) — приложение подхватит вход автоматически — или задай API-ключ ниже.';
 }
 
 // Backward-compat helper: prefs[key] may be string (old) or {provider, model} (new)
@@ -902,7 +953,7 @@ async function loadAiSettings() {
   _aiSettingsLoaded = true;
   const el = document.getElementById('ai-settings-content');
 
-  let orSettings = { OPENROUTER_MODEL: '', hasKey: false };
+  let orSettings = { OPENROUTER_MODEL: '', hasKey: false, hasOpenAIKey: false, hasAnthropicKey: false, claudeOauth: null };
   try { orSettings = await fetch('/api/settings').then(r => r.json()); } catch {}
 
   // Fetch live OR models list (fallback to hardcoded on failure)
@@ -916,9 +967,10 @@ async function loadAiSettings() {
   const featOrModels = _buildFeatOrModels(orModels);
 
   const featPrefs = JSON.parse(localStorage.getItem('ai-feature-prefs') || '{}');
-  const appearPref = _getPref(featPrefs, 'appearance', 'openrouter');
-  const locPref    = _getPref(featPrefs, 'locations',  'openrouter');
-  const prosePref  = _getPref(featPrefs, 'prose',      'claude');
+  const appearPref   = _getPref(featPrefs, 'appearance', 'openrouter');
+  const locPref      = _getPref(featPrefs, 'locations',  'openrouter');
+  const prosePref    = _getPref(featPrefs, 'prose',      'claude');
+  const dialoguePref = _getPref(featPrefs, 'dialogue',   'openrouter');
 
   el.innerHTML = `
     <div class="ais-layout">
@@ -944,26 +996,49 @@ async function loadAiSettings() {
           <input class="ais-input" id="ais-or-key" type="password"
             placeholder="${orSettings.hasKey ? '•••••• (задан)' : 'sk-or-v1-...'}"
             autocomplete="new-password">
-          <div class="ais-field-hint">Оставь пустым — ключ не изменится. Очисти и подтверди — удалить ключ.</div>
-        </div>
-
-        <div class="ais-field">
-          <label class="ais-label">Модель</label>
-          <div class="ais-combo-row">
-            <select class="ais-select" id="ais-or-model-select">
-              <option value="">— выбрать из списка —</option>
-              ${OR_FREE_MODELS.map(m => `<option value="${m.id}" ${orSettings.OPENROUTER_MODEL === m.id ? 'selected' : ''}>${m.label}</option>`).join('')}
-              <option value="__custom__" ${!OR_FREE_MODELS.some(m => m.id === orSettings.OPENROUTER_MODEL) && orSettings.OPENROUTER_MODEL ? 'selected' : ''}>Другая модель...</option>
-            </select>
-            <input class="ais-input ais-mono" id="ais-or-model-custom"
-              placeholder="provider/model-name:free"
-              value="${!OR_FREE_MODELS.some(m => m.id === orSettings.OPENROUTER_MODEL) ? orSettings.OPENROUTER_MODEL : ''}"
-              style="display:${!OR_FREE_MODELS.some(m => m.id === orSettings.OPENROUTER_MODEL) && orSettings.OPENROUTER_MODEL ? '' : 'none'}">
-          </div>
+          <div class="ais-field-hint">Оставь пустым — ключ не изменится. Очисти и подтверди — удалить ключ. Модель выбирается в «⚡ Назначение провайдеров».</div>
         </div>
 
         <button class="ais-confirm-btn" id="ais-or-save">✓ Подтвердить OpenRouter</button>
         <div class="ais-status" id="ais-or-status"></div>
+      </div>
+
+      <!-- OpenAI / GPT section -->
+      <div class="ais-section">
+        <div class="ais-section-title">🤖 OpenAI (GPT) — внешние модели</div>
+        <div class="ais-section-hint">Доступ к API только по ключу (вход через аккаунт ChatGPT для API не работает). Модель — в «⚡ Назначение провайдеров».</div>
+
+        <div class="ais-field">
+          <label class="ais-label">API Key
+            <span class="ais-key-state ${orSettings.hasOpenAIKey ? 'ok' : ''}">${orSettings.hasOpenAIKey ? '● задан' : '○ не задан'}</span>
+          </label>
+          <input class="ais-input" id="ais-openai-key" type="password"
+            placeholder="${orSettings.hasOpenAIKey ? '•••••• (задан)' : 'sk-...'}"
+            autocomplete="new-password">
+          <div class="ais-field-hint">Оставь пустым — ключ не изменится. Очисти и подтверди — удалить ключ.</div>
+        </div>
+
+        <button class="ais-confirm-btn" id="ais-openai-save">✓ Подтвердить OpenAI</button>
+        <div class="ais-status" id="ais-openai-status"></div>
+      </div>
+
+      <!-- Claude / Anthropic section -->
+      <div class="ais-section">
+        <div class="ais-section-title">🧠 Claude (Anthropic) — авторизация</div>
+        <div class="ais-section-hint">${_claudeAuthHint(orSettings)}</div>
+
+        <div class="ais-field">
+          <label class="ais-label">API Key
+            <span class="ais-key-state ${orSettings.hasAnthropicKey ? 'ok' : ''}">${orSettings.hasAnthropicKey ? '● задан' : '○ не задан'}</span>
+          </label>
+          <input class="ais-input" id="ais-anthropic-key" type="password"
+            placeholder="${orSettings.hasAnthropicKey ? '•••••• (задан)' : 'sk-ant-...'}"
+            autocomplete="new-password">
+          <div class="ais-field-hint">Альтернатива входу через Claude Code. Оставь пустым — не изменится; очисти и подтверди — удалить.</div>
+        </div>
+
+        <button class="ais-confirm-btn" id="ais-anthropic-save">✓ Подтвердить Claude</button>
+        <div class="ais-status" id="ais-anthropic-status"></div>
       </div>
 
     </div><!-- /ais-left -->
@@ -975,9 +1050,10 @@ async function loadAiSettings() {
         <div class="ais-section-hint">Выбери провайдера и модель для каждой функции.</div>
 
         <div class="ais-feat-cards" id="ais-feat-cards">
-          ${_renderFeatCard('appearance', '👁', 'Внешность по арту',    'Vision-анализ изображений персонажа', appearPref, featOrModels.appearance)}
-          ${_renderFeatCard('locations',  '📍', 'Генерация локаций',    'Карточки мест при наполнении модуля', locPref,    featOrModels.locations)}
-          ${_renderFeatCard('prose',      '🪄', 'Генерация прозы',      'Дневники и финалы сессии',            prosePref,  featOrModels.prose)}
+          ${_renderFeatCard('appearance', '👁', 'Внешность по арту',    'Vision-анализ изображений персонажа', appearPref,   featOrModels.appearance)}
+          ${_renderFeatCard('locations',  '📍', 'Генерация локаций',    'Карточки мест при наполнении модуля', locPref,      featOrModels.locations)}
+          ${_renderFeatCard('prose',      '🪄', 'Генерация прозы',      'Дневники и финалы сессии',            prosePref,    featOrModels.prose)}
+          ${_renderFeatCard('dialogue',   '💬', 'Генерация фраз',       'Реплики НПС в характере',             dialoguePref, featOrModels.dialogue)}
         </div>
 
         <button class="ais-confirm-btn" id="ais-feat-save" style="margin-top:16px">✓ Применить</button>
@@ -1028,28 +1104,17 @@ async function loadAiSettings() {
     }
   });
 
-  // OpenRouter: custom model toggle
-  document.getElementById('ais-or-model-select').addEventListener('change', e => {
-    const custom = document.getElementById('ais-or-model-custom');
-    if (e.target.value === '__custom__') { custom.style.display = ''; custom.focus(); }
-    else { custom.style.display = 'none'; custom.value = ''; }
-  });
-
-  // OpenRouter: confirm
-  document.getElementById('ais-or-save').addEventListener('click', async () => {
-    const btn    = document.getElementById('ais-or-save');
-    const status = document.getElementById('ais-or-status');
-    const key    = document.getElementById('ais-or-key').value;
-    const sel    = document.getElementById('ais-or-model-select').value;
-    const custom = document.getElementById('ais-or-model-custom').value.trim();
-    const model  = sel === '__custom__' ? custom : (sel || orSettings.OPENROUTER_MODEL);
-
+  // Save an API key to .env (shared by OpenRouter / OpenAI / Claude sections)
+  const _saveKey = async (btnId, statusId, inputId, field, btnLabel) => {
+    const btn    = document.getElementById(btnId);
+    const status = document.getElementById(statusId);
+    const key    = document.getElementById(inputId).value;
     btn.disabled = true; btn.textContent = '⏳ Сохранение...';
     status.className = 'ais-status';
     try {
       const d = await fetch('/api/settings', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ OPENROUTER_API_KEY: key, OPENROUTER_MODEL: model })
+        body: JSON.stringify({ [field]: key })
       }).then(r => r.json());
       if (!d.ok) throw new Error(d.error);
       status.textContent = d.needsRestart ? '✓ Сохранено — сервер перезапускается...' : '✓ Сохранено';
@@ -1058,8 +1123,15 @@ async function loadAiSettings() {
       if (d.needsRestart) setTimeout(() => { _aiSettingsLoaded = false; loadAiSettings(); }, 2500);
     } catch (e) {
       status.textContent = '✗ Ошибка: ' + e.message; status.classList.add('err');
-    } finally { btn.disabled = false; btn.textContent = '✓ Подтвердить OpenRouter'; }
-  });
+    } finally { btn.disabled = false; btn.textContent = btnLabel; }
+  };
+
+  document.getElementById('ais-or-save').addEventListener('click',
+    () => _saveKey('ais-or-save', 'ais-or-status', 'ais-or-key', 'OPENROUTER_API_KEY', '✓ Подтвердить OpenRouter'));
+  document.getElementById('ais-openai-save').addEventListener('click',
+    () => _saveKey('ais-openai-save', 'ais-openai-status', 'ais-openai-key', 'OPENAI_API_KEY', '✓ Подтвердить OpenAI'));
+  document.getElementById('ais-anthropic-save').addEventListener('click',
+    () => _saveKey('ais-anthropic-save', 'ais-anthropic-status', 'ais-anthropic-key', 'ANTHROPIC_API_KEY', '✓ Подтвердить Claude'));
 
   // Features table: save provider preferences
   // Wire radio changes to swap model dropdown options
@@ -1069,9 +1141,8 @@ async function loadAiSettings() {
       radio.addEventListener('change', () => {
         const sel = document.getElementById(`feat-${feat}-model`);
         if (!sel) return;
-        const models = radio.value === 'claude'
-          ? CLAUDE_MODELS
-          : (featOrModels[feat] || OR_FEAT_MODELS_FALLBACK[feat] || OR_FREE_MODELS_FALLBACK);
+        const orList = featOrModels[feat] || OR_FEAT_MODELS_FALLBACK[feat] || OR_FREE_MODELS_FALLBACK;
+        const models = _modelsForProvider(radio.value, orList);
         sel.innerHTML = models.map(m =>
           `<option value="${escHtml(m.id)}">${escHtml(m.label)}</option>`
         ).join('');
@@ -1082,7 +1153,7 @@ async function loadAiSettings() {
   document.getElementById('ais-feat-save').addEventListener('click', () => {
     const status = document.getElementById('ais-feat-status');
     const prefs  = {};
-    for (const feat of ['appearance', 'locations', 'prose']) {
+    for (const feat of ['appearance', 'locations', 'prose', 'dialogue']) {
       const provSel = document.querySelector(`input[name="feat-${feat}"]:checked`);
       const modSel  = document.getElementById(`feat-${feat}-model`);
       if (provSel) prefs[feat] = { provider: provSel.value, model: modSel?.value || null };
@@ -1146,6 +1217,16 @@ async function runNodeTool(name, args, outId, btn) {
 
 function escHtml(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+function escAttr(s) { return escHtml(s).replace(/"/g, '&quot;'); }
+
+// One editable relationship row (name + type/description + delete) for the «Отношения» tab
+function _relRowHtml(target = '', description = '') {
+  return `<div class="cdet-rel-row">
+    <input class="cdet-rel-name-inp" list="cdet-rel-names" placeholder="Имя персонажа" value="${escAttr(target)}">
+    <input class="cdet-rel-type-inp" list="cdet-rel-types" placeholder="Вид отношений / описание" value="${escAttr(description)}">
+    <button class="cdet-rel-del-btn" type="button" title="Удалить связь">✕</button>
+  </div>`;
 }
 
 // Compact, safe Markdown → HTML renderer for module files & chronicle prose.
@@ -1246,14 +1327,76 @@ document.getElementById('btn-new-city').addEventListener('click', () => {
   runNodeTool('new_city', [slugifyJS(city), city, year || ''], 'out-new-city', document.getElementById('btn-new-city'));
 });
 
-const NPC_LINEAGE = { vampire: 'vampires', fairy: 'fairies', mortal: 'mortals', werewolf: 'werewolves', mage: 'mages', hunter: 'hunters' };
-document.getElementById('btn-new-npc').addEventListener('click', () => {
+// Vampire-only fields visible / clan+sect required only for vampires
+function _updateNpcForm() {
+  const isVamp = document.getElementById('npc-type').value === 'vampire';
+  document.getElementById('npc-vamp-fields').style.display = isVamp ? '' : 'none';
+  document.getElementById('npc-clan-req').style.display = isVamp ? '' : 'none';
+  document.getElementById('npc-sect-req').style.display = isVamp ? '' : 'none';
+}
+document.getElementById('npc-type').addEventListener('change', _updateNpcForm);
+_updateNpcForm();
+
+document.getElementById('btn-new-npc').addEventListener('click', async () => {
+  const btn = document.getElementById('btn-new-npc');
+  const out = document.getElementById('out-new-npc');
+  const lineage = document.getElementById('npc-type').value;
+  const isVamp  = lineage === 'vampire';
   const name = document.getElementById('npc-name').value.trim();
-  if (!name) { alert('Укажите имя НПС'); return; }
+  const clan = document.getElementById('npc-clan').value.trim();
+  const sect = document.getElementById('npc-sect').value.trim();
+  if (!name) { alert('Укажи имя'); return; }
   if (!CITY) { alert('Сначала выбери город в шапке'); return; }
-  const lineage   = NPC_LINEAGE[document.getElementById('npc-type').value] || 'mortals';
-  const belonging = document.getElementById('npc-belonging')?.value || 'Создатель НПС';
-  runNodeTool('new_npc', [CITY, lineage, name, '', '', '', belonging], 'out-new-npc', document.getElementById('btn-new-npc'));
+  if (isVamp && !clan) { alert('Клан обязателен для вампира'); return; }
+  if (isVamp && !sect) { alert('Секта обязательна для вампира'); return; }
+
+  const payload = {
+    name, lineage, clan, sect,
+    generation:  document.getElementById('npc-generation').value.trim(),
+    birthYear:   document.getElementById('npc-birth').value.trim(),
+    embraceYear: document.getElementById('npc-embrace').value.trim(),
+    sire:        document.getElementById('npc-sire').value.trim(),
+    biography:   document.getElementById('npc-bio').value.trim(),
+    appearance:  document.getElementById('npc-appearance').value.trim(),
+  };
+
+  btn.disabled = true; btn.textContent = '⏳ Создание...';
+  out.className = 'output-area show'; out.textContent = '';
+  try {
+    const qs = window.location.search;
+    const d  = await fetch('/api/characters' + qs,
+      { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }
+    ).then(r => r.json());
+    if (!d.ok) { out.innerHTML = `<span class="err">⚠ ${escHtml(d.error || 'Ошибка')}</span>`; return; }
+    let msg = `✓ Создан: cities/${CITY}/characters/${d.lineage}/${d.slug}/${d.slug}.md`;
+
+    // Optional art upload (reuses the existing per-character upload endpoint)
+    const file = document.getElementById('npc-art')?.files?.[0];
+    if (file) {
+      const base64 = await new Promise((resolve, reject) => {
+        const fr = new FileReader();
+        fr.onload = () => resolve(String(fr.result).split(',')[1]);
+        fr.onerror = reject;
+        fr.readAsDataURL(file);
+      });
+      const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
+      const u = await fetch(`/api/characters/${encodeURIComponent(name)}/upload-image${qs}`,
+        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ base64, ext }) }
+      ).then(r => r.json());
+      msg += u.ok ? '\n📷 Арт загружен' : `\n⚠ Арт не загружен: ${u.error || ''}`;
+    }
+    out.innerHTML = `<span class="ok">${escHtml(msg)}</span>`;
+
+    ['npc-name','npc-clan','npc-sect','npc-generation','npc-birth','npc-embrace','npc-sire','npc-bio','npc-appearance']
+      .forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+    const art = document.getElementById('npc-art'); if (art) art.value = '';
+    STATE.characters = []; STATE.graph.inited = false;
+    if (STATE.page === 'dashboard') loadDashboard();
+  } catch (e) {
+    out.innerHTML = `<span class="err">⚠ ${escHtml(e.message)}</span>`;
+  } finally {
+    btn.disabled = false; btn.textContent = 'Создать карточку';
+  }
 });
 
 document.getElementById('btn-goto-chronicles').addEventListener('click', () => {
@@ -1723,6 +1866,9 @@ document.getElementById('mod-create-submit').addEventListener('click', async () 
   const btn     = document.getElementById('mod-create-submit');
 
   if (!name) { errEl.textContent = 'Введи название модуля'; errEl.style.display = ''; return; }
+  if (!time) { errEl.textContent = 'Укажи время/дату модуля — нужно для проверки таймлайна (желательно с годом)'; errEl.style.display = ''; return; }
+  if (!/\b(?:19|20)\d{2}\b/.test(time) &&
+      !confirm('В поле «Время» нет года. Без года проверка таймлайна менее точна. Всё равно создать?')) return;
   errEl.style.display = 'none';
   btn.disabled = true;
   btn.textContent = '⏳ Создание...';
@@ -1751,11 +1897,13 @@ document.getElementById('mod-create-modal').addEventListener('keydown', e => {
 
 // ── Generate scenario modal (for existing modules) ────────────────────────────
 
-let _fillModTarget = null; // { chr, mod }
-let _fillPCs  = [];
-let _fillNPCs = [];
+let _fillModTarget   = null; // { chr, mod }
+let _fillPCs         = [];
+let _fillNPCs        = [];
+let _fillFromModPage = false;
 
-async function openFillModal(chr, mod, title) {
+async function openFillModal(chr, mod, title, fromModPage = false) {
+  _fillFromModPage = fromModPage;
   _fillModTarget = { chr, mod };
   _fillPCs  = []; _fillNPCs = [];
   document.getElementById('mod-fill-pcs').innerHTML   = '';
@@ -1819,8 +1967,11 @@ document.getElementById('mod-fill-generate').addEventListener('click', async () 
     if (!d.ok) { errEl.textContent = d.error || 'Ошибка генерации'; errEl.style.display = ''; return; }
 
     document.getElementById('mod-fill-modal').style.display = 'none';
-    _fillModTarget = null;
-    if (_chrDetailSlug) openChrDetail(_chrDetailSlug, _chrDetailDisplay, 'modules');
+    const fromMod = _fillFromModPage;
+    _fillModTarget   = null;
+    _fillFromModPage = false;
+    if (fromMod) { loadModulePage(); }
+    else if (_chrDetailSlug) { openChrDetail(_chrDetailSlug, _chrDetailDisplay, 'modules'); }
 
     const locMsg = d.locations?.length
       ? `\n📍 Создано локаций: ${d.locations.length} (${d.locations.join(', ')})`
@@ -2082,6 +2233,7 @@ STATE.currentModule = null;
 
 function openModulePage(chronicle, name) {
   STATE.currentModule = { chronicle, name };
+  document.getElementById('chr-detail-modal').style.display = 'none';
   navigate('module');
 }
 
@@ -2101,7 +2253,12 @@ async function loadModulePage() {
     document.getElementById(`modp-panel-${t}`).innerHTML = '<div class="loading-state"><div class="spinner"></div>Загрузка...</div>');
 
   try {
-    const data = await fetch(`/api/chronicles/${encodeURIComponent(chronicle)}/modules/${encodeURIComponent(name)}/detail${qs}`).then(r => r.json());
+    const [data] = await Promise.all([
+      fetch(`/api/chronicles/${encodeURIComponent(chronicle)}/modules/${encodeURIComponent(name)}/detail${qs}`).then(r => r.json()),
+      // Reuse the roster so НПС-names can link to their cards (and openCharDetail works)
+      STATE.characters.length ? Promise.resolve()
+        : fetch(`/api/characters${qs}`).then(r => r.json()).then(d => { STATE.characters = Array.isArray(d) ? d : []; }).catch(() => {}),
+    ]);
     if (data.error) throw new Error(data.error);
     renderModulePage(data);
   } catch (e) {
@@ -2110,11 +2267,101 @@ async function loadModulePage() {
   }
 }
 
+// Permanent scene-picker option — игроки могут отступать от сценария (VtM)
+const SCENE_OFF_SCRIPT = 'События вне сценария';
+
+// Resolve a character by name (exact, ё-insensitive) against the loaded roster.
+function _findCharByName(name) {
+  const n = (name || '').toLowerCase().replace(/ё/g, 'е').trim();
+  return (STATE.characters || []).find(c => (c.name || '').toLowerCase().replace(/ё/g, 'е').trim() === n);
+}
+
+// Generic placeholders in npc.md desc that just repeat the section — hidden in the UI.
+const NPC_DESC_NOISE = /^(персонаж игрока|пк|роль(\s+в\s+модуле)?|нпс)$/i;
+
+// Render the «НПС» tab from structured groups: clickable name (→ card), trimmed desc,
+// and a per-NPC «Реплика НПС» box (situation textarea + generate button).
+function _renderModuleNpcGroups(groups) {
+  return groups.map(g => {
+    const entries = g.entries.map(e => {
+      const known    = _findCharByName(e.name);
+      const nameHtml = known
+        ? `<a class="modp-npc-name modp-npc-link" data-open-char="${escAttr(known.name)}" title="Открыть карточку">${escHtml(e.name)}</a>`
+        : `<span class="modp-npc-name">${escHtml(e.name)}</span>`;
+      const desc     = (e.desc || '').trim();
+      const descHtml = (desc && !NPC_DESC_NOISE.test(desc))
+        ? `<span class="modp-npc-desc">${escHtml(desc)}</span>` : '';
+      // Реплики — только для НПС (ПК озвучивают игроки, не Мастер)
+      const dlg = g.kind !== 'pc' ? `
+        <div class="modp-npc-dlg">
+          <textarea class="modp-npc-sit" rows="2" placeholder="Ситуация в сцене / на что отвечает НПС"></textarea>
+          <button class="modp-npc-dlg-btn" data-npc-name="${escAttr(e.name)}" data-npc-modular="${g.kind === 'modular' ? 1 : 0}">💬 Реплика НПС</button>
+          <div class="modp-npc-dlg-result" style="display:none"></div>
+        </div>` : '';
+      return `<div class="modp-npc-entry">
+        <div class="modp-npc-head">${nameHtml}${descHtml}</div>
+        ${dlg}
+      </div>`;
+    }).join('');
+    return `<div class="modp-npc-group">
+      <div class="modp-npc-group-title">${escHtml(g.title)}</div>
+      ${entries}
+    </div>`;
+  }).join('');
+}
+
+// Generate in-character replies for one NPC on the module page (Voice + clan style).
+async function _genModuleNpcDialogue(btn) {
+  const entry = btn.closest('.modp-npc-entry');
+  const sit   = entry.querySelector('.modp-npc-sit');
+  const box   = entry.querySelector('.modp-npc-dlg-result');
+  const name  = btn.dataset.npcName;
+  const modular = btn.dataset.npcModular === '1';
+  const situation = sit?.value.trim() || '';
+  box.style.display = '';
+  if (!situation) { box.innerHTML = '<div class="canon-warn">Опиши ситуацию / на что отвечает НПС.</div>'; return; }
+  const lbl = btn.textContent;
+  btn.disabled = true; btn.textContent = '⏳ Генерация…';
+  box.innerHTML = '<div class="canon-loading">💬 Подбираю реплики в характере…</div>';
+  try {
+    const qs    = window.location.search;
+    const prefs = JSON.parse(localStorage.getItem('ai-feature-prefs') || '{}');
+    const pref  = _getPref(prefs, 'dialogue', 'openrouter');
+    const body  = { situation, source: pref.provider, model: pref.model };
+    // Модульные НПС не в общем реестре — подскажем серверу, где искать карточку
+    if (modular && STATE.currentModule) { body.chr = STATE.currentModule.chronicle; body.mod = STATE.currentModule.name; }
+    const d = await fetch(`/api/characters/${encodeURIComponent(name)}/dialogue${qs}`,
+      { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }
+    ).then(r => r.json());
+    if (!d.ok) { box.innerHTML = `<div class="canon-warn">Ошибка: ${escHtml(d.error || 'не удалось')}</div>`; return; }
+    const lines = (d.text || '').split('\n').map(l => l.trim()).filter(Boolean);
+    box.innerHTML = (lines.length ? _dlgFallbackNote(d.source) : '') + (lines.length
+      ? `<div class="cdet-dlg-lines">${lines.map(l => `<div class="cdet-dlg-line">${escHtml(l)}</div>`).join('')}</div>`
+      : '<div class="canon-warn">Пустой ответ.</div>');
+  } catch (e) {
+    box.innerHTML = `<div class="canon-warn">Ошибка: ${escHtml(e.message)}</div>`;
+  } finally {
+    btn.disabled = false; btn.textContent = lbl;
+  }
+}
+
+// Muted note when Claude was rate-limited and the server fell back to another provider.
+function _dlgFallbackNote(source) {
+  if (source === 'openrouter-fallback')
+    return '<div class="canon-warn" style="margin-bottom:6px">⚠️ Claude был перегружен (429) — реплики сгенерированы резервным OpenRouter.</div>';
+  if (source === 'openai-fallback')
+    return '<div class="canon-warn" style="margin-bottom:6px">⚠️ Claude был перегружен (429) — реплики сгенерированы резервным GPT.</div>';
+  return '';
+}
+
 function renderModulePage(data) {
+  STATE.currentModuleData = data;
   // Header
   document.getElementById('modp-title').textContent = data.title || data.name;
 
+  const isClosed = /закрыт/i.test(data.status || '');
   const badges = [
+    data.status && `<span class="modp-badge${isClosed ? ' modp-badge-closed' : ''}">${escHtml(data.status)}</span>`,
     data.type   && `<span class="modp-badge">🎭 ${escHtml(data.type)}</span>`,
     data.time   && `<span class="modp-badge">📅 ${escHtml(data.time)}</span>`,
     data.tone   && `<span class="modp-badge">🌙 ${escHtml(data.tone)}</span>`,
@@ -2123,14 +2370,20 @@ function renderModulePage(data) {
   ].filter(Boolean).join('');
   document.getElementById('modp-badges').innerHTML = badges;
 
+  // Disable «Закрыть модуль» if already closed
+  const closeBtn = document.getElementById('modp-close-btn');
+  if (closeBtn) {
+    closeBtn.disabled = isClosed;
+    closeBtn.textContent = isClosed ? '🔒 Закрыт' : '🔒 Закрыть модуль';
+  }
+
   // ── КРАТКОЕ ──
   const descHtml = data.description
     ? `<div class="modp-section"><div class="modp-section-title">Описание</div><div class="modp-description">${escHtml(data.description)}</div></div>`
     : '';
 
+  // Тип и Время не дублируем — они уже в бейджах шапки.
   const infoCards = [
-    data.type     && `<div class="modp-info-card"><div class="modp-info-label">Тип</div><div class="modp-info-value">${escHtml(data.type)}</div></div>`,
-    data.time     && `<div class="modp-info-card"><div class="modp-info-label">Время</div><div class="modp-info-value">${escHtml(data.time)}</div></div>`,
     data.tone     && `<div class="modp-info-card"><div class="modp-info-label">Тон</div><div class="modp-info-value">${escHtml(data.tone)}</div></div>`,
     data.format   && `<div class="modp-info-card"><div class="modp-info-label">Формат</div><div class="modp-info-value">${escHtml(data.format)}</div></div>`,
     data.location && `<div class="modp-info-card"><div class="modp-info-label">Локация</div><div class="modp-info-value">${escHtml(data.location)}</div></div>`,
@@ -2158,6 +2411,84 @@ function renderModulePage(data) {
     ? `<div class="modp-md">${mdToHtml(data.scenario)}</div>`
     : '<div class="modp-empty"><div class="modp-empty-icon">📝</div>Файл scenario.md отсутствует</div>';
 
+  // ── СЕССИИ (Фаза B — ведение во время игры) ──
+  const sessions = data.sessions || [];
+  const today    = new Date().toISOString().slice(0, 10);
+  const sessHtml = sessions.length
+    ? sessions.map((s, i) => `
+        <div class="modp-session" data-sess-idx="${i}">
+          <div class="modp-session-head">
+            <span class="modp-session-title">${escHtml(s.title)}</span>
+            ${s.status ? `<span class="modp-session-status">${escHtml(s.status)}</span>` : ''}
+            <button class="modp-session-edit" data-sess-idx="${i}" title="Редактировать">✏️</button>
+          </div>
+          ${s.scenes ? `<div class="modp-session-scenes">🎬 Сыграно сцен: ${escHtml(s.scenes)}</div>` : ''}
+          ${s.body ? `<div class="modp-session-body">${mdToHtml(s.body)}</div>` : ''}
+        </div>`).join('')
+    : '<div class="modp-empty"><div class="modp-empty-icon">🎲</div>Сессий пока нет — добавь первую запись выше</div>';
+
+  // Scenes from the scenario, excluding those already recorded in earlier sessions.
+  // «События вне сценария» is a permanent option — игроки могут отступать от сценария.
+  const playedText = sessions.map(s => s.scenes || '').join(' | ').toLowerCase();
+  const sceneOpts = (data.scenes || [])
+    .map(sc => (sc.date ? `${sc.date} — ${sc.title}` : sc.title))
+    .filter(Boolean)
+    .filter(label => {
+      const datePart = (label.match(/^(?:сцена|эпизод)\s*\d+/i) || [''])[0].toLowerCase();
+      if (playedText.includes(label.toLowerCase())) return false;
+      if (datePart && playedText.includes(datePart)) return false;
+      return true;
+    });
+  const attr = s => escHtml(s).replace(/"/g, '&quot;');
+  const sceneSelect = `<select id="sess-scene-pick" class="modp-sf-input" title="Добавить сцену или внесценарное событие">
+         <option value="">${sceneOpts.length ? '+ Сцена / событие…' : ((data.scenes && data.scenes.length) ? '✓ Все сцены сыграны — выбери:' : '+ Событие…')}</option>
+         ${sceneOpts.map(l => `<option value="${attr(l)}">${escHtml(l)}</option>`).join('')}
+         <option value="${attr(SCENE_OFF_SCRIPT)}">⚡ ${escHtml(SCENE_OFF_SCRIPT)}</option>
+       </select>`;
+
+  document.getElementById('modp-panel-sessions').innerHTML = `
+    <div class="modp-session-form">
+      <div class="modp-session-form-title">+ Запись сессии</div>
+      <div class="modp-sf-row">
+        <input id="sess-date" class="modp-sf-input" placeholder="Дата (напр. 2010-12-21)" value="${today}">
+        <select id="sess-status" class="modp-sf-input">
+          <option>🟡 В процессе</option>
+          <option>🟢 Завершён</option>
+        </select>
+        ${sceneSelect}
+      </div>
+      <input id="sess-scenes" class="modp-sf-input" placeholder="Сыграно сцен (выбери из меню или впиши вручную)">
+      <textarea id="sess-notes" class="modp-sf-input modp-sf-area" rows="4" placeholder="Что произошло за сессию: события, решения котери, последствия"></textarea>
+      <div class="modp-sf-btns">
+        <button id="sess-add-btn" class="modp-gen-btn">Добавить запись</button>
+        <button id="sess-canon-btn" class="modp-canon-btn" title="Сверить текст с каноном (статусы НПС, даты, «мёртвые» в сцене)">🔍 Проверить канон</button>
+      </div>
+      <div id="sess-error" class="modp-sf-error" style="display:none"></div>
+      <div id="sess-canon-result" class="canon-result" style="display:none"></div>
+    </div>
+    <div class="modp-session-list">${sessHtml}</div>`;
+  document.getElementById('sess-add-btn').addEventListener('click', _addSessionEntry);
+  document.getElementById('sess-canon-btn').addEventListener('click', () => {
+    const scenes = document.getElementById('sess-scenes')?.value.trim() || '';
+    const notes  = document.getElementById('sess-notes')?.value.trim() || '';
+    const text   = [scenes && `Сыграно: ${scenes}`, notes].filter(Boolean).join('\n');
+    _runCanonCheck(text, document.getElementById('sess-canon-result'), document.getElementById('sess-canon-btn'), '🔍 Проверить канон');
+  });
+
+  const scenePick = document.getElementById('sess-scene-pick');
+  if (scenePick) scenePick.addEventListener('change', () => {
+    const opt = scenePick.selectedOptions[0];
+    const val = scenePick.value;
+    if (!val) return;
+    const inp   = document.getElementById('sess-scenes');
+    const parts = inp.value.trim() ? inp.value.split(/\s*,\s*/).filter(Boolean) : [];
+    if (!parts.includes(val)) parts.push(val);
+    inp.value = parts.join(', ');
+    // scenario scenes can be picked once (removed); «События вне сценария» stays
+    if (opt && val !== SCENE_OFF_SCRIPT) opt.remove();
+    scenePick.value = '';
+  });
+
   // ── СОБЫТИЯ ──
   if (data.events?.length) {
     document.getElementById('modp-panel-events').innerHTML =
@@ -2173,17 +2504,20 @@ function renderModulePage(data) {
   }
 
   // ── НПС ──
-  if (data.npcContent) {
-    document.getElementById('modp-panel-npcs').innerHTML = `<div class="modp-md">${mdToHtml(data.npcContent)}</div>`;
+  const npcPanel = document.getElementById('modp-panel-npcs');
+  if (data.npcGroups?.length) {
+    npcPanel.innerHTML = _renderModuleNpcGroups(data.npcGroups);
+  } else if (data.npcContent) {
+    npcPanel.innerHTML = `<div class="modp-md">${mdToHtml(data.npcContent)}</div>`;
   } else if (data.npcs?.length) {
-    document.getElementById('modp-panel-npcs').innerHTML =
+    npcPanel.innerHTML =
       `<div class="modp-char-list">${data.npcs.map(p => `
         <div class="modp-char-item" style="flex-direction:column;align-items:flex-start;gap:4px">
           <span class="modp-char-name">${escHtml(p.name)}</span>
           <span class="modp-char-role">${escHtml(p.role)}</span>
         </div>`).join('')}</div>`;
   } else {
-    document.getElementById('modp-panel-npcs').innerHTML =
+    npcPanel.innerHTML =
       '<div class="modp-empty"><div class="modp-empty-icon">👥</div>Файл npc.md отсутствует</div>';
   }
 
@@ -2266,8 +2600,253 @@ document.getElementById('modp-tabbar').addEventListener('click', e => {
   document.querySelectorAll('.modp-panel').forEach(p => p.classList.toggle('active', p.id === `modp-panel-${tab}`));
 });
 
+// Add an in-play session entry (Phase B)
+// Canon consistency check (shared by session form & integrity panel)
+function _renderCanonIssues(issues) {
+  if (!Array.isArray(issues) || !issues.length)
+    return '<div class="canon-ok">✓ Противоречий канону не найдено</div>';
+  return `<div class="canon-issues">${issues.map(i => `
+    <div class="canon-issue canon-${(i.severity || 'medium')}">
+      <span class="canon-issue-char">${escHtml(i.character || '?')}</span>
+      <div class="canon-issue-body">
+        <div class="canon-issue-text">${escHtml(i.issue || '')}</div>
+        ${i.quote ? `<div class="canon-issue-quote">«${escHtml(i.quote)}»</div>` : ''}
+      </div>
+    </div>`).join('')}</div>`;
+}
+async function _runCanonCheck(text, box, btn, btnLabel) {
+  if (!box) return;
+  box.style.display = '';
+  if (!text || !text.trim()) {
+    box.innerHTML = '<div class="canon-warn">Нечего проверять — заполни текст события.</div>';
+    return;
+  }
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Сверяю…'; }
+  box.innerHTML = '<div class="canon-loading">🔍 Сверяю с каноном…</div>';
+  try {
+    const qs    = window.location.search;
+    const prefs = JSON.parse(localStorage.getItem('ai-feature-prefs') || '{}');
+    const pref  = _getPref(prefs, 'prose', 'claude');
+    const d = await fetch('/api/canon-check' + qs,
+      { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text, source: pref.provider, model: pref.model }) }
+    ).then(r => r.json());
+    box.innerHTML = d.ok ? _renderCanonIssues(d.issues)
+                         : `<div class="canon-warn">Ошибка: ${escHtml(d.error || 'не удалось проверить')}</div>`;
+  } catch (e) {
+    box.innerHTML = `<div class="canon-warn">Ошибка: ${escHtml(e.message)}</div>`;
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = btnLabel || '🔍 Проверить канон'; }
+  }
+}
+
+async function _addSessionEntry() {
+  if (!STATE.currentModule) return;
+  const { chronicle, name } = STATE.currentModule;
+  const btn   = document.getElementById('sess-add-btn');
+  const errEl = document.getElementById('sess-error');
+  const date   = document.getElementById('sess-date').value.trim();
+  const status = document.getElementById('sess-status').value.trim();
+  const scenes = document.getElementById('sess-scenes').value.trim();
+  const notes  = document.getElementById('sess-notes').value.trim();
+  if (!notes && !scenes) {
+    errEl.textContent = 'Заполни «Что произошло» или «Сыграно сцен»';
+    errEl.style.display = ''; return;
+  }
+  errEl.style.display = 'none';
+  btn.disabled = true; btn.textContent = '⏳ Сохранение...';
+  try {
+    const qs = window.location.search;
+    const d  = await fetch(
+      `/api/chronicles/${encodeURIComponent(chronicle)}/modules/${encodeURIComponent(name)}/session${qs}`,
+      { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ date, status, scenes, notes }) }
+    ).then(r => r.json());
+    if (!d.ok) { errEl.textContent = d.error || 'Ошибка'; errEl.style.display = ''; return; }
+    loadModulePage();
+  } catch (e) {
+    errEl.textContent = 'Ошибка: ' + e.message; errEl.style.display = '';
+  } finally {
+    btn.disabled = false; btn.textContent = 'Добавить запись';
+  }
+}
+
+// Turn a session card into an inline edit form (pre-filled)
+function _editSessionEntry(idx) {
+  const s = (STATE.currentModuleData?.sessions || [])[idx];
+  const card = document.querySelector(`.modp-session[data-sess-idx="${idx}"]`);
+  if (!s || !card) return;
+  const statusOpts = ['🟡 В процессе', '🟢 Завершён'];
+  card.innerHTML = `
+    <div class="modp-session-form" style="margin:0">
+      <div class="modp-session-form-title">✏️ Изменить — ${escHtml(s.title)}</div>
+      <div class="modp-sf-row">
+        <input id="sess-edit-date" class="modp-sf-input" value="${escHtml(s.date || '')}" placeholder="Дата">
+        <select id="sess-edit-status" class="modp-sf-input">
+          ${statusOpts.map(o => `<option ${o === s.status ? 'selected' : ''}>${o}</option>`).join('')}
+        </select>
+      </div>
+      <input id="sess-edit-scenes" class="modp-sf-input" value="${escHtml(s.scenes || '')}" placeholder="Сыграно сцен (через запятую)">
+      <textarea id="sess-edit-notes" class="modp-sf-input modp-sf-area" rows="4" placeholder="Что произошло">${escHtml(s.body || '')}</textarea>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button id="sess-edit-save" class="modp-gen-btn">Сохранить</button>
+        <button id="sess-edit-cancel" class="modp-back-btn">Отмена</button>
+        <div id="sess-edit-error" class="modp-sf-error" style="display:none"></div>
+      </div>
+    </div>`;
+  document.getElementById('sess-edit-save').addEventListener('click', () => _saveSessionEdit(idx));
+  document.getElementById('sess-edit-cancel').addEventListener('click', loadModulePage);
+}
+
+async function _saveSessionEdit(idx) {
+  if (!STATE.currentModule) return;
+  const { chronicle, name } = STATE.currentModule;
+  const btn   = document.getElementById('sess-edit-save');
+  const errEl = document.getElementById('sess-edit-error');
+  const date   = document.getElementById('sess-edit-date').value.trim();
+  const status = document.getElementById('sess-edit-status').value.trim();
+  const scenes = document.getElementById('sess-edit-scenes').value.trim();
+  const notes  = document.getElementById('sess-edit-notes').value.trim();
+  if (!notes && !scenes) {
+    errEl.textContent = 'Заполни «Что произошло» или «Сыграно сцен»';
+    errEl.style.display = ''; return;
+  }
+  errEl.style.display = 'none';
+  btn.disabled = true; btn.textContent = '⏳...';
+  try {
+    const qs = window.location.search;
+    const d  = await fetch(
+      `/api/chronicles/${encodeURIComponent(chronicle)}/modules/${encodeURIComponent(name)}/session/${idx}${qs}`,
+      { method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ date, status, scenes, notes }) }
+    ).then(r => r.json());
+    if (!d.ok) { errEl.textContent = d.error || 'Ошибка'; errEl.style.display = ''; return; }
+    loadModulePage();
+  } catch (e) {
+    errEl.textContent = 'Ошибка: ' + e.message; errEl.style.display = '';
+  } finally {
+    btn.disabled = false; btn.textContent = 'Сохранить';
+  }
+}
+
+// Edit-button delegation on the (static) sessions panel — survives innerHTML rebuilds
+document.getElementById('modp-panel-sessions').addEventListener('click', e => {
+  const editBtn = e.target.closest('.modp-session-edit');
+  if (editBtn) _editSessionEntry(+editBtn.dataset.sessIdx);
+});
+
+// НПС-panel delegation — open card on name click, generate replies on button click
+document.getElementById('modp-panel-npcs').addEventListener('click', e => {
+  const dlgBtn = e.target.closest('.modp-npc-dlg-btn');
+  if (dlgBtn) { _genModuleNpcDialogue(dlgBtn); return; }
+  const link = e.target.closest('[data-open-char]');
+  if (link) { e.preventDefault(); openCharDetail(link.dataset.openChar); }
+});
+
 // Back button
 document.getElementById('modp-back-btn').addEventListener('click', () => navigate('modules'));
+
+// Generate module button — direct generation from existing module data
+document.getElementById('modp-gen-btn').addEventListener('click', async () => {
+  if (!STATE.currentModule) return;
+  const { chronicle, name } = STATE.currentModule;
+  const data = STATE.currentModuleData || {};
+  const btn  = document.getElementById('modp-gen-btn');
+
+  if (data.scenario && !confirm('Сценарий уже существует. Перегенерировать?')) return;
+
+  btn.disabled = true; btn.textContent = '⏳ Генерация...';
+  try {
+    const qs      = window.location.search;
+    const prefs   = JSON.parse(localStorage.getItem('ai-feature-prefs') || '{}');
+    const locPref = _getPref(prefs, 'locations', 'openrouter');
+    const pcs     = (data.pcs  || []).map(p => p.name || p);
+    const npcs    = (data.npcs || []).map(p => p.name || p);
+
+    const d = await fetch(
+      `/api/chronicles/${encodeURIComponent(chronicle)}/modules/${encodeURIComponent(name)}/fill${qs}`,
+      { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pcs, npcs, content: '', locSource: locPref.provider, locModel: locPref.model }) }
+    ).then(r => r.json());
+
+    if (!d.ok) { alert('Ошибка генерации: ' + (d.error || 'Неизвестная ошибка')); return; }
+
+    const lines = [`✓ Модуль сгенерирован: ${d.file}`];
+    if (d.locations?.length)       lines.push(`📍 Новых локаций: ${d.locations.length} (${d.locations.join(', ')})`);
+    if (d.reusedLocations?.length) lines.push(`♻️ Переиспользовано локаций: ${d.reusedLocations.join(', ')}`);
+    if (d.npcs?.length)            lines.push(`🧛 Новых НПС: ${d.npcs.length} (${d.npcs.join(', ')})`);
+    if (d.canonNpcs?.length)       lines.push(`♻️ Каноничных НПС: ${d.canonNpcs.join(', ')}`);
+    alert(lines.join('\n'));
+    loadModulePage();
+  } catch (e) {
+    alert('Ошибка: ' + e.message);
+  } finally {
+    btn.disabled = false; btn.textContent = '🪄 Сгенерировать';
+  }
+});
+
+// Close module (Phase C — module-close rules)
+document.getElementById('modp-close-btn').addEventListener('click', async () => {
+  if (!STATE.currentModule) return;
+  const { chronicle, name } = STATE.currentModule;
+  const data = STATE.currentModuleData || {};
+  if (!(data.sessions || []).length &&
+      !confirm('У модуля нет записей сессий. Закрыть всё равно? (финал/событие будут собраны из сценария)')) return;
+  if (!confirm('Закрыть модуль по правилам Фазы C?\nБудут сгенерированы финал и каноничное событие в хронику. Действие пишет канон.')) return;
+
+  const btn = document.getElementById('modp-close-btn');
+  btn.disabled = true; btn.textContent = '⏳ Закрытие...';
+  try {
+    const qs    = window.location.search;
+    const prefs = JSON.parse(localStorage.getItem('ai-feature-prefs') || '{}');
+    const prose = _getPref(prefs, 'prose', 'claude');
+    const d = await fetch(
+      `/api/chronicles/${encodeURIComponent(chronicle)}/modules/${encodeURIComponent(name)}/close${qs}`,
+      { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ source: prose.provider, model: prose.model }) }
+    ).then(r => r.json());
+    if (!d.ok) { alert('Ошибка закрытия: ' + (d.error || 'Неизвестная ошибка')); return; }
+    const lines = ['✓ Модуль закрыт (Фаза C)'];
+    if (d.finale)  lines.push('📕 Создан finale.md');
+    if (d.event)   lines.push('📖 Событие добавлено в хронику');
+    if (d.reminders?.length) lines.push('', 'Осталось вручную:', ...d.reminders.map(r => '• ' + r));
+    alert(lines.join('\n'));
+    loadModulePage();
+  } catch (e) {
+    alert('Ошибка: ' + e.message);
+  } finally {
+    btn.disabled = false; btn.textContent = '🔒 Закрыть модуль';
+  }
+});
+
+// Delete module (+ cleanup of chronicle events, diary links, modular NPCs)
+document.getElementById('modp-del-btn').addEventListener('click', async () => {
+  if (!STATE.currentModule) return;
+  const { chronicle, name } = STATE.currentModule;
+  if (!confirm(`Удалить модуль «${name}» безвозвратно?\nБудут удалены: папка модуля, его записи событий из хроники, ссылки из дневников и модульные (неканоничные) НПС.`)) return;
+  if (!confirm('Точно удалить? Отменить нельзя.')) return;
+
+  const btn = document.getElementById('modp-del-btn');
+  btn.disabled = true; btn.textContent = '⏳ Удаление...';
+  try {
+    const qs = window.location.search;
+    const d  = await fetch(
+      `/api/chronicles/${encodeURIComponent(chronicle)}/modules/${encodeURIComponent(name)}${qs}`,
+      { method: 'DELETE', headers: { 'Content-Type': 'application/json' } }
+    ).then(r => r.json());
+    if (!d.ok) { alert('Ошибка удаления: ' + (d.error || 'Неизвестная ошибка')); return; }
+    const lines = ['✓ Модуль удалён'];
+    if (d.removedEvents)        lines.push(`📖 Удалено событий из хроники: ${d.removedEvents}`);
+    if (d.cleanedChars?.length) lines.push(`📜 Очищены дневники: ${d.cleanedChars.join(', ')}`);
+    if (d.episodicSlugs?.length) lines.push(`🧛 Удалены модульные НПС: ${d.episodicSlugs.join(', ')}`);
+    alert(lines.join('\n'));
+    navigate('modules');
+  } catch (e) {
+    alert('Ошибка: ' + e.message);
+  } finally {
+    btn.disabled = false; btn.textContent = '🗑 Удалить модуль';
+  }
+});
 
 // Global click delegation for md-link-char / md-link-loc produced by resolveMdLink()
 document.addEventListener('click', e => {
@@ -3315,30 +3894,32 @@ async function lsSetupProseZone(stubs) {
   const featPrefs   = JSON.parse(localStorage.getItem('ai-feature-prefs') || '{}');
   const _prosePref  = _getPref(featPrefs, 'prose', 'claude');
   const proseSrc    = _prosePref.provider;
-  const useOR       = proseSrc === 'openrouter';
+  const isOpenAI    = proseSrc === 'openai';
+  const useApi      = proseSrc === 'openrouter' || isOpenAI;   // API-style (single call) vs Claude CLI
 
   let claudeAvail = false;
-  try { claudeAvail = (await fetch('/api/claude/health').then(r => r.json())).available; } catch {}
+  if (!useApi) { try { claudeAvail = (await fetch('/api/claude/health').then(r => r.json())).available; } catch {} }
 
   const claudeNote = claudeAvail
     ? `Дешевле — Sonnet/Haiku, качественнее — Opus.`
     : `<span style="color:var(--accent2)">Claude CLI не найден.</span>`;
+  const apiBtnLabel = isOpenAI ? '🤖 Сгенерировать прозу (GPT)' : '🌐 Сгенерировать прозу (OpenRouter)';
 
   zone.innerHTML = `
     <div class="ls-prose-controls">
-      ${useOR ? '' : `<select class="form-control ls-prose-model" id="ls-prose-model">
+      ${useApi ? '' : `<select class="form-control ls-prose-model" id="ls-prose-model">
         <option value="">Модель: по умолчанию</option>
         <option value="opus">Opus — лучшее качество</option>
         <option value="sonnet">Sonnet — баланс</option>
         <option value="haiku">Haiku — быстро</option>
       </select>`}
-      ${useOR
-        ? `<button class="btn-submit btn-genprose btn-genprose-or" id="ls-genprose" type="button">🌐 Сгенерировать прозу (OpenRouter)</button>`
+      ${useApi
+        ? `<button class="btn-submit btn-genprose btn-genprose-or" id="ls-genprose" type="button">${apiBtnLabel}</button>`
         : `<button class="btn-submit btn-genprose" id="ls-genprose" type="button" ${claudeAvail ? '' : 'disabled'}>🪄 Сгенерировать прозу (Claude)</button>`
       }
     </div>
-    <div class="ls-prose-note">${useOR
-      ? `OpenRouter читает правила дневников, карточки персонажей и события хроники автоматически. Модель: <b>${(process?.env?.OPENROUTER_MODEL || '').split('/').pop() || 'из настроек'}</b>.`
+    <div class="ls-prose-note">${useApi
+      ? `${isOpenAI ? 'GPT' : 'OpenRouter'} читает правила дневников, карточки персонажей и события хроники автоматически. Модель — из «Назначение провайдеров».`
       : claudeNote
     } Настроить: <a class="dash-ai-link" data-nav="tools" data-tab="ai-settings">Модели AI ↗</a></div>
     <div class="ls-prose-result" id="ls-prose-result"></div>`;
@@ -3346,39 +3927,41 @@ async function lsSetupProseZone(stubs) {
 }
 
 async function lsGenProse(stubs, source = 'claude') {
-  const btn     = document.getElementById('ls-genprose');
-  const out     = document.getElementById('ls-prose-result');
-  const useOR   = source === 'openrouter';
-  const qs      = window.location.search;
+  const btn      = document.getElementById('ls-genprose');
+  const out      = document.getElementById('ls-prose-result');
+  const isOpenAI = source === 'openai';
+  const useApi   = source === 'openrouter' || isOpenAI;   // API-style (single call) vs Claude CLI
+  const qs       = window.location.search;
+  const apiBtnLabel = isOpenAI ? '🤖 Сгенерировать прозу (GPT)' : '🌐 Сгенерировать прозу (OpenRouter)';
 
   // Claude model from prose-model select (if visible)
   const claudeModelEl = document.getElementById('ls-prose-model');
   const claudeModel   = claudeModelEl?.value || '';
 
-  // OR model from saved prefs
-  const _fp      = JSON.parse(localStorage.getItem('ai-feature-prefs') || '{}');
-  const orModel  = _getPref(_fp, 'prose', 'openrouter').model || null;
+  // API model from saved prefs (OpenRouter or OpenAI list)
+  const _fp     = JSON.parse(localStorage.getItem('ai-feature-prefs') || '{}');
+  const apiModel = _getPref(_fp, 'prose', 'openrouter').model || null;
 
   btn.disabled = true;
-  btn.textContent = useOR ? '⏳ OpenRouter пишет прозу…' : '⏳ Claude пишет прозу…';
+  btn.textContent = useApi ? `⏳ ${isOpenAI ? 'GPT' : 'OpenRouter'} пишет прозу…` : '⏳ Claude пишет прозу…';
   out.innerHTML = `<div class="ls-note">Идёт генерация — не закрывайте вкладку…</div>`;
 
   let j;
   try {
-    const endpoint = useOR ? '/api/openrouter/generate-prose' : '/api/claude/generate-prose';
+    const endpoint = useApi ? '/api/openrouter/generate-prose' : '/api/claude/generate-prose';
     j = await fetch(endpoint + qs, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ stubs, model: useOR ? orModel : claudeModel })
+      body: JSON.stringify({ stubs, model: useApi ? apiModel : claudeModel, source: isOpenAI ? 'openai' : 'openrouter' })
     }).then(r => r.json());
   } catch (e) {
     out.innerHTML = `<div class="ls-err">⚠ ${escHtml(e.message)}</div>`;
-    btn.disabled = false; btn.textContent = useOR ? '🌐 Сгенерировать прозу (OpenRouter)' : '🪄 Сгенерировать прозу (Claude)';
+    btn.disabled = false; btn.textContent = useApi ? apiBtnLabel : '🪄 Сгенерировать прозу (Claude)';
     return;
   }
 
   if (!j.ok && !(j.written || []).length) {
     out.innerHTML = `<div class="ls-err">⚠ ${escHtml(j.error || 'Не удалось сгенерировать прозу')}</div>`;
-    btn.disabled = false; btn.textContent = useOR ? '🌐 Сгенерировать прозу (OpenRouter)' : '🪄 Сгенерировать прозу (Claude)';
+    btn.disabled = false; btn.textContent = useApi ? apiBtnLabel : '🪄 Сгенерировать прозу (Claude)';
     return;
   }
 
@@ -3561,6 +4144,10 @@ const INFO_FIELDS = [
   ['belonging',    'Принадлежность'],
 ];
 
+// Info fields that stay visible even when empty (shown with a «!» flag in view mode).
+// Остальные пустые поля скрываются в просмотре и видны только при редактировании.
+const REQUIRED_INFO_FIELDS = new Set(['clan']);
+
 function renderDiaryList(c) {
   const ch = escHtml(c.name);
   const items = c.diaries?.length
@@ -3721,9 +4308,13 @@ function openCharDetail(name) {
     .map(([k, lbl]) => {
       const raw = c[k];
       const empty = !raw || raw === '—' || String(raw).includes('⚠️');
+      const required = REQUIRED_INFO_FIELDS.has(k);
+      const opt = (empty && !required) ? ' cdet-opt-empty' : '';   // hidden in view mode
+      const keyHtml = (empty && required)
+        ? `${lbl} <span class="cdet-req-flag" title="Обязательное поле">!</span>` : lbl;
       const display = empty ? 'Неизвестно' : escHtml(raw);
       const cls = empty ? 'cdet-val unknown' : 'cdet-val';
-      return `<div class="cdet-key">${lbl}</div><div class="${cls}" data-field="${k}">${display}</div>`;
+      return `<div class="cdet-key${opt}">${keyHtml}</div><div class="${cls}${opt}" data-field="${k}">${display}</div>`;
     })
     .join('');
 
@@ -3819,8 +4410,11 @@ function openCharDetail(name) {
             ${relsHtml ? `<div class="cdet-rels-list">${relsHtml}</div>` : '<div class="cdet-empty">Нет известных связей</div>'}
           </div>
           <div id="cdet-rels-edit" style="display:none">
-            <div class="cdet-rels-hint">Каждая строка: <em>Имя — описание связи</em></div>
-            <textarea class="cdet-edit-textarea" id="cdet-rels-ta" rows="10" placeholder="Имя — описание связи">${(c.relationships||[]).map(r => `${r.target} — ${r.description}`).join('\n')}</textarea>
+            <div class="cdet-rels-hint">Имя — выбери из списка или впиши своё. Вид отношений — из списка или свой.</div>
+            <div id="cdet-rels-rows">${(c.relationships||[]).map(r => _relRowHtml(r.target, r.description)).join('')}</div>
+            <button class="cdet-rel-add-btn" id="cdet-rel-add-btn" type="button">+ Добавить связь</button>
+            <datalist id="cdet-rel-names">${(STATE.characters||[]).filter(x => x.name !== c.name).map(x => `<option value="${escAttr(x.name)}">`).join('')}</datalist>
+            <datalist id="cdet-rel-types">${REL_TYPE_OPTIONS.map(t => `<option value="${escAttr(t)}">`).join('')}</datalist>
           </div>
           <div class="cdet-edit-bar" id="cdet-rels-bar">
             <button class="cdet-save-btn" data-savepanel="rels" data-char="${escHtml(c.name)}">Сохранить</button>
@@ -3861,6 +4455,14 @@ function openCharDetail(name) {
           </div>
           <div class="cdet-upload-row">
             <button class="cdet-upload-btn" data-char="${escHtml(c.name)}">📷 Загрузить изображение</button>
+          </div>
+          <div class="cdet-divider"></div>
+          <div class="cdet-dialogue">
+            <div class="cdet-section-title">💬 Реплики НПС в сцене</div>
+            <div class="cdet-dialogue-hint">Голос персонажа + клановый стиль (diary_rules.md). Опиши ситуацию — ИИ выдаст реплики в характере.</div>
+            <textarea class="cdet-edit-textarea" id="cdet-dlg-situation" rows="2" placeholder="Ситуация: напр. «Князь требует объяснений на Элизиуме»"></textarea>
+            <button class="cdet-gen-prompt-btn" id="cdet-gen-dialogue" data-char="${escHtml(c.name)}">💬 Сгенерировать реплики</button>
+            <div id="cdet-dlg-result" class="cdet-dialogue-result" style="display:none"></div>
           </div>
         </div>
       </div>
@@ -3907,8 +4509,21 @@ document.getElementById('char-detail-content').addEventListener('click', e => {
   if (cancelPanelBtn) { _togglePanelEdit(cancelPanelBtn.dataset.cancelpanel, false); return; }
   const savePanelBtn = e.target.closest('[data-savepanel]');
   if (savePanelBtn) { _savePanelEdit(savePanelBtn.dataset.savepanel, savePanelBtn.dataset.char); return; }
+
+  // Relations editor: add / delete a single row
+  if (e.target.closest('#cdet-rel-add-btn')) {
+    const rows = document.getElementById('cdet-rels-rows');
+    if (rows) {
+      rows.insertAdjacentHTML('beforeend', _relRowHtml());
+      rows.lastElementChild?.querySelector('.cdet-rel-name-inp')?.focus();
+    }
+    return;
+  }
+  const relDelBtn = e.target.closest('.cdet-rel-del-btn');
+  if (relDelBtn) { relDelBtn.closest('.cdet-rel-row')?.remove(); return; }
   if (e.target.closest('#cdet-gen-appearance')) { _generateAppearance(e.target.closest('#cdet-gen-appearance').dataset.char); return; }
   if (e.target.closest('#cdet-gen-prompt')) { _generatePrompt(e.target.closest('#cdet-gen-prompt').dataset.char); return; }
+  if (e.target.closest('#cdet-gen-dialogue')) { _genDialogue(e.target.closest('#cdet-gen-dialogue').dataset.char); return; }
   if (e.target.closest('.cdet-img-del-btn')) {
     const btn = e.target.closest('.cdet-img-del-btn');
     _deleteCharImage(btn.dataset.char, btn.dataset.file);
@@ -4041,6 +4656,13 @@ function _togglePanelEdit(panel, on) {
     if (panel === 'desc') {
       const charName = document.querySelector('[data-editpanel="desc"][data-char]')?.dataset.char;
       if (charName) _loadDescImages(charName);
+    } else if (panel === 'rels') {
+      // Rebuild rows from the latest saved relationships (discard prior unsaved edits)
+      const charName = document.querySelector('[data-editpanel="rels"][data-char]')?.dataset.char;
+      const ch  = STATE.characters.find(c => c.name === charName);
+      const rows = document.getElementById('cdet-rels-rows');
+      if (ch && rows) rows.innerHTML = (ch.relationships || []).map(r => _relRowHtml(r.target, r.description)).join('');
+      rows?.querySelector('.cdet-rel-name-inp')?.focus();
     } else {
       edit.querySelector('textarea')?.focus();
     }
@@ -4074,17 +4696,24 @@ async function _savePanelEdit(panel, charName) {
           bio ? `<div class="cdet-bio">${escHtml(bio)}</div>` : '<div class="cdet-empty">Биография не заполнена</div>';
       }
     } else if (panel === 'rels') {
-      const lines = (document.getElementById('cdet-rels-ta')?.value || '').split('\n');
+      const lines = Array.from(document.querySelectorAll('#cdet-rels-rows .cdet-rel-row')).map(row => {
+        const target = row.querySelector('.cdet-rel-name-inp')?.value.trim() || '';
+        const desc   = row.querySelector('.cdet-rel-type-inp')?.value.trim() || '';
+        if (!target) return null;
+        return desc ? `${target} — ${desc}` : target;
+      }).filter(Boolean);
       const r = await fetch(`/api/characters/${encodeURIComponent(charName)}/relations${qs}`,
         { method: 'PUT', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ lines }) });
       const d = await r.json();
       ok = d.ok;
       if (ok) {
-        // Refresh relations view
-        const rels = lines.filter(l => l.includes(' — ')).map(l => {
+        // Refresh relations view (handles "Имя — описание" and name-only)
+        const rels = lines.map(l => {
           const idx = l.indexOf(' — ');
-          return { target: l.slice(0, idx).trim(), description: l.slice(idx + 3).trim() };
+          return idx >= 0
+            ? { target: l.slice(0, idx).trim(), description: l.slice(idx + 3).trim() }
+            : { target: l.trim(), description: '' };
         });
         const ch = STATE.characters.find(c => c.name === charName);
         if (ch) ch.relationships = rels;
@@ -4287,6 +4916,37 @@ async function _deleteCharImage(charName, filename) {
 
 let _genPromptRunning = false;
 
+// Generate in-character NPC dialogue lines (Voice + clan style)
+async function _genDialogue(charName) {
+  const sitEl = document.getElementById('cdet-dlg-situation');
+  const box   = document.getElementById('cdet-dlg-result');
+  const btn   = document.getElementById('cdet-gen-dialogue');
+  const situation = sitEl?.value.trim() || '';
+  if (!box) return;
+  box.style.display = '';
+  if (!situation) { box.innerHTML = '<div class="canon-warn">Опиши ситуацию для реплик.</div>'; return; }
+  btn.disabled = true; btn.textContent = '⏳ Генерация…';
+  box.innerHTML = '<div class="canon-loading">💬 Подбираю реплики в характере…</div>';
+  try {
+    const qs    = window.location.search;
+    const prefs = JSON.parse(localStorage.getItem('ai-feature-prefs') || '{}');
+    const pref  = _getPref(prefs, 'dialogue', 'openrouter');
+    const d = await fetch(`/api/characters/${encodeURIComponent(charName)}/dialogue${qs}`,
+      { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ situation, source: pref.provider, model: pref.model }) }
+    ).then(r => r.json());
+    if (!d.ok) { box.innerHTML = `<div class="canon-warn">Ошибка: ${escHtml(d.error || 'не удалось')}</div>`; return; }
+    const lines = (d.text || '').split('\n').map(l => l.trim()).filter(Boolean);
+    box.innerHTML = (lines.length ? _dlgFallbackNote(d.source) : '') + (lines.length
+      ? `<div class="cdet-dlg-lines">${lines.map(l => `<div class="cdet-dlg-line">${escHtml(l)}</div>`).join('')}</div>`
+      : '<div class="canon-warn">Пустой ответ.</div>');
+  } catch (e) {
+    box.innerHTML = `<div class="canon-warn">Ошибка: ${escHtml(e.message)}</div>`;
+  } finally {
+    btn.disabled = false; btn.textContent = '💬 Сгенерировать реплики';
+  }
+}
+
 async function _generatePrompt(charName) {
   if (_genPromptRunning) return;
 
@@ -4380,6 +5040,8 @@ function _enterInfoEdit(charName) {
   const bar  = document.getElementById('cdet-edit-bar');
   if (!grid || !btn || !bar) return;
 
+  grid.classList.add('editing');   // reveal empty optional fields while editing
+
   // Make name in sticky header editable
   const nameEl = document.querySelector('#char-detail-content .cdet-name');
   if (nameEl && !document.getElementById('cdet-name-input')) {
@@ -4443,17 +5105,28 @@ function _exitInfoEdit(saved) {
     nameInput.replaceWith(nameEl);
   }
 
-  // Restore value cells
+  // Restore value cells (+ re-apply view-mode hiding of empty optional fields)
   grid.querySelectorAll('.cdet-field-input').forEach(input => {
-    const key   = input.dataset.field;
-    const value = saved ? input.value.trim() : (_editOrigValues[key] || '');
-    const empty = !value;
+    const key      = input.dataset.field;
+    const value    = saved ? input.value.trim() : (_editOrigValues[key] || '');
+    const empty    = !value;
+    const required = REQUIRED_INFO_FIELDS.has(key);
+    const hide     = empty && !required;
     const div = document.createElement('div');
-    div.className = empty ? 'cdet-val unknown' : 'cdet-val';
+    div.className = 'cdet-val' + (empty ? ' unknown' : '') + (hide ? ' cdet-opt-empty' : '');
     div.dataset.field = key;
     div.textContent   = empty ? 'Неизвестно' : value;
+    // sync the preceding label cell (hide class + required «!» flag)
+    const keyCell = input.previousElementSibling;
+    if (keyCell && keyCell.classList.contains('cdet-key')) {
+      const lbl = (INFO_FIELDS.find(([fk]) => fk === key) || [null, key])[1];
+      keyCell.innerHTML = (empty && required)
+        ? `${lbl} <span class="cdet-req-flag" title="Обязательное поле">!</span>` : lbl;
+      keyCell.classList.toggle('cdet-opt-empty', hide);
+    }
     input.replaceWith(div);
   });
+  grid.classList.remove('editing');
 
   btn.classList.remove('active');
   btn.textContent = '✏ Редактировать';

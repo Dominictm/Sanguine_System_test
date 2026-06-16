@@ -218,6 +218,8 @@ function categorizeRel(desc) {
   if (/любов|романт|привязан|влюбл/.test(d))              return 'romantic';
   if (/подозр|осторожн|насторож/.test(d))                 return 'suspicious';
   if (/лояльн|предан|служ|свита/.test(d))                 return 'loyalty';
+  if (/тайн|секрет|скрыт|негласн|подпольн/.test(d))       return 'secret';
+  if (/знаком|приятел|контакт|встреч/.test(d))            return 'acquaintance';
   return 'neutral';
 }
 

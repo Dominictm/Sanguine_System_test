@@ -206,7 +206,12 @@
     <!-- Module Detail Page -->
     <section id="page-module" class="page">
       <div class="modp-header">
-        <button class="modp-back-btn" id="modp-back-btn">← Модули</button>
+        <div class="modp-header-btns">
+          <button class="modp-back-btn" id="modp-back-btn">← Модули</button>
+          <button class="modp-gen-btn" id="modp-gen-btn">🪄 Сгенерировать</button>
+          <button class="modp-close-btn" id="modp-close-btn">🔒 Закрыть модуль</button>
+          <button class="modp-del-btn" id="modp-del-btn">🗑 Удалить модуль</button>
+        </div>
         <div class="modp-header-main">
           <h1 class="modp-title" id="modp-title">Загрузка...</h1>
           <div class="modp-badges" id="modp-badges"></div>
@@ -216,6 +221,7 @@
       <div class="modp-tabbar" id="modp-tabbar">
         <button class="modp-tab active" data-modtab="info">ℹ Краткое</button>
         <button class="modp-tab" data-modtab="scenario">📝 Сценарий</button>
+        <button class="modp-tab" data-modtab="sessions">🎲 Сессии</button>
         <button class="modp-tab" data-modtab="events">📅 События</button>
         <button class="modp-tab" data-modtab="npcs">👥 НПС</button>
         <button class="modp-tab" data-modtab="locations">📍 Локации</button>
@@ -225,6 +231,7 @@
       <div class="modp-body">
         <div class="modp-panel active" id="modp-panel-info"></div>
         <div class="modp-panel" id="modp-panel-scenario"></div>
+        <div class="modp-panel" id="modp-panel-sessions"></div>
         <div class="modp-panel" id="modp-panel-events"></div>
         <div class="modp-panel" id="modp-panel-npcs"></div>
         <div class="modp-panel" id="modp-panel-locations"></div>
@@ -275,8 +282,8 @@
 
           <div class="mod-create-row">
             <div class="chr-form-group" style="flex:1">
-              <label class="chr-form-label">Время / дата <span class="chr-modal-dim">(опц.)</span></label>
-              <input class="chr-form-input" id="mod-create-time" placeholder="Ноябрь 2010, пятница" autocomplete="off">
+              <label class="chr-form-label">Время / дата <span style="color:#e87070">*</span> <span class="chr-modal-dim">(с годом)</span></label>
+              <input class="chr-form-input" id="mod-create-time" placeholder="Декабрь 2009, пятница" autocomplete="off" required>
             </div>
             <div class="chr-form-group" style="flex:1">
               <label class="chr-form-label">Slug <span class="chr-modal-dim">(авто)</span></label>
@@ -525,7 +532,7 @@
       <div class="tab-panel" id="tab-new-npc">
         <div class="form-row">
           <div class="form-group">
-            <label class="form-label">Имя НПС *</label>
+            <label class="form-label">Имя *</label>
             <input class="form-control" id="npc-name" placeholder="Эмилия Вольф">
           </div>
           <div class="form-group">
@@ -539,14 +546,48 @@
               <option value="hunter">Охотник</option>
             </select>
           </div>
+        </div>
+        <div class="form-row">
           <div class="form-group">
-            <label class="form-label">Принадлежность</label>
-            <select class="form-control" id="npc-belonging">
-              <option value="Создатель НПС">Создатель НПС</option>
-              <option value="Персонаж игрока">Персонаж игрока</option>
-              <option value="Эпизодический персонаж">Эпизодический персонаж</option>
-            </select>
+            <label class="form-label">Клан <span id="npc-clan-req" class="form-req">*</span></label>
+            <input class="form-control" id="npc-clan" placeholder="Бруха">
           </div>
+          <div class="form-group">
+            <label class="form-label">Секта <span id="npc-sect-req" class="form-req">*</span></label>
+            <input class="form-control" id="npc-sect" placeholder="Камарилья">
+          </div>
+        </div>
+        <div id="npc-vamp-fields">
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Поколение</label>
+              <input class="form-control" id="npc-generation" placeholder="10-е">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Год рождения</label>
+              <input class="form-control" id="npc-birth" placeholder="1955">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Год обращения</label>
+              <input class="form-control" id="npc-embrace" placeholder="1978">
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Сир</label>
+            <input class="form-control" id="npc-sire" placeholder="Имя сира">
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Биография</label>
+          <textarea class="form-control" id="npc-bio" rows="4" placeholder="Краткая биография..."></textarea>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Внешность</label>
+          <textarea class="form-control" id="npc-appearance" rows="3" placeholder="3–5 визуальных маркеров..."></textarea>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Арт <span class="chr-modal-dim">(необязательно)</span></label>
+          <input type="file" class="form-control" id="npc-art" accept="image/jpeg,image/png,image/webp,image/gif">
         </div>
         <button class="btn-submit" id="btn-new-npc">Создать карточку</button>
         <pre class="output-area" id="out-new-npc"></pre>

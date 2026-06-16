@@ -661,25 +661,16 @@ app.post('/api/chronicles', express.json(), async (req, res) => {
       return res.status(409).json({ error: `Хроника «${slug}» уже существует` });
     }
 
-    let cityDisplay = city;
-    try {
-      const cm = await fs.readFile(path.join(cityDir(city), 'city.md'), 'utf-8');
-      const dm = cm.match(/^#\s+(.+?)(?:\s*—|\s*$)/m);
-      if (dm) cityDisplay = dm[1].replace(/^[^\p{L}\p{N}]+/u, '').trim();
-    } catch {}
-
-    const fullDisplay = `${cityDisplay} — ${display}`;
-
     await fs.mkdir(path.join(chrDir, 'modules'), { recursive: true });
 
     await fs.writeFile(path.join(chrDir, 'chronicle.md'),
       renderChronicleMd(display, slug, city, mood?.trim() || '', []), 'utf-8');
 
     await fs.writeFile(path.join(chrDir, 'events.md'),
-      renderChronicleEventsSkeleton(fullDisplay), 'utf-8');
+      renderChronicleEventsSkeleton(display), 'utf-8');
 
     await fs.writeFile(path.join(chrDir, 'open_threads.md'),
-      renderOpenThreadsSkeleton(fullDisplay), 'utf-8');
+      renderOpenThreadsSkeleton(display), 'utf-8');
 
     console.log(`[create-chronicle] ${city}/${slug}: «${display}»`);
     delete _cache[city];
@@ -981,19 +972,12 @@ app.post('/api/chronicles/:slug/recap', express.json(), async (req, res) => {
 ${digest}`;
 
     let recap = '';
-    if (gen.source === 'openrouter') {
-      const modelsToTry = [gen.model, ...OR_FALLBACK_MODELS.filter(m => m !== gen.model)];
+    if (_isOA(gen)) {
+      const modelsToTry = _oaModels(gen);
       let lastErr, allRateLimited = true;
       for (const m of modelsToTry) {
         try {
-          const r = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-            method: 'POST',
-            headers: { 'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`, 'Content-Type': 'application/json', 'HTTP-Referer': 'http://localhost:3000' },
-            body: JSON.stringify({ model: m, max_tokens: 600, messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: userPrompt }] }),
-          });
-          const d = await r.json();
-          if (!r.ok) { const e = new Error(d.error?.message || `HTTP ${r.status}`); e.status = r.status; throw e; }
-          recap = (d.choices?.[0]?.message?.content || '').trim();
+          recap = await _oaCall(gen)(m, systemPrompt, userPrompt, [], 75000, 600);
           allRateLimited = false;
           break;
         } catch (e) {
@@ -1074,6 +1058,7 @@ app.post('/api/chronicles/:slug/modules', express.json(), async (req, res) => {
     const chr    = req.params.slug;
     const { name, time } = req.body || {};
     if (!name?.trim()) return res.status(400).json({ error: 'Укажи название модуля' });
+    if (!time?.trim()) return res.status(400).json({ error: 'Укажи время/дату модуля — это нужно для проверки таймлайна (желательно с годом)' });
 
     const modSlug = req.body.slug?.trim() || slugify(name.trim());
     if (!modSlug) return res.status(400).json({ error: 'Не удалось сформировать slug' });
@@ -1164,15 +1149,19 @@ app.post('/api/chronicles/:chr/modules/:mod/fill', express.json(), async (req, r
       path.join(ROOT, 'system', 'rules', 'module_rules.md'), 'utf-8').catch(() => '');
     const cityMd = await fs.readFile(path.join(cityDir(city), 'city.md'), 'utf-8').catch(() => '');
 
-    // Read character cards for participants
+    // Read character cards for participants + build a timeline/relations digest
     const chars = await getAllCharacters(city);
-    const charCards = [];
+    const charCards   = [];
+    const charDigests = [];
     for (const name of [...pcs, ...npcs]) {
       const ch = chars.find(c => c.name === name || c.name.toLowerCase() === name.toLowerCase());
       if (!ch) continue;
       const cardPath = path.join(charsDir(city), ch.lineageFolder, ch.slug, `${ch.slug}.md`);
       const card = await fs.readFile(cardPath, 'utf-8').catch(() => null);
-      if (card) charCards.push(`### ${ch.name} (${pcs.includes(name) ? 'ПК' : 'НПС'})\n${card.slice(0, 2000)}`);
+      if (!card) continue;
+      const kind = pcs.includes(name) ? 'ПК' : 'НПС';
+      charCards.push(`### ${ch.name} (${kind})\n${card.slice(0, 2000)}`);
+      charDigests.push(_charTimelineDigest(ch.name, kind, card));
     }
 
     // Read module title from main file
@@ -1180,6 +1169,20 @@ app.post('/api/chronicles/:chr/modules/:mod/fill', express.json(), async (req, r
     const mainTxt = await fs.readFile(path.join(modDir, `${mod}.md`), 'utf-8').catch(() => '');
     const titleM  = mainTxt.match(/^#\s+(.+)$/m);
     const modTitle = titleM ? titleM[1].replace(/[*[\]]/g, '').trim() : mod;
+
+    // Module date — for the timeline check (year falls back to the chronicle slug/spine)
+    const chronicleMd = await fs.readFile(path.join(chroniclesDir(city), chr, 'chronicle.md'), 'utf-8').catch(() => '');
+    const modTime   = (mainTxt.match(/\|\s*\*\*Время\*\*\s*\|\s*([^|\n]+)\|/)?.[1] || '').replace(/⚠️.*/, '').trim();
+    const yearGuess = mainTxt.match(/\b(?:19|20)\d{2}\b/)?.[0]
+                   || chr.match(/(?:19|20)\d{2}/)?.[0]
+                   || chronicleMd.match(/\b(?:19|20)\d{2}\b/)?.[0] || '';
+    const moduleWhen = [modTime || '', (yearGuess && !modTime.includes(yearGuess)) ? `(${yearGuess})` : '']
+      .filter(Boolean).join(' ') || '(не указано)';
+
+    // Catalogs of existing entities — so the AI REUSES them (by exact name) instead of inventing duplicates
+    const allLocs    = await getAllLocations(city).catch(() => []);
+    const npcCatalog = chars.map(c => `- ${c.name}${c.clan ? ` (${c.clan})` : ''}`).slice(0, 60).join('\n') || '(нет)';
+    const locCatalog = allLocs.map(l => `- ${l.name}${l.district ? ` — ${l.district}` : ''}`).slice(0, 60).join('\n') || '(нет)';
 
     const systemPrompt = `Ты — Мастер (Рассказчик) в Vampire: The Masquerade V20. Создаёшь сценарий модуля по правилам игры.
 
@@ -1190,25 +1193,45 @@ ${moduleRules.slice(0, 3000)}
 ${cityMd.slice(0, 2000)}
 
 # УЧАСТНИКИ МОДУЛЯ
-${charCards.join('\n\n') || '(не указаны)'}`;
+${charCards.join('\n\n') || '(не указаны)'}
+
+# ТАЙМЛАЙН И СВЯЗИ УЧАСТНИКОВ (статус, роль, даты и связи — для проверки совместимости с датой модуля)
+${charDigests.join('\n\n') || '(нет данных)'}
+
+# СУЩЕСТВУЮЩИЕ НПС (переиспользуй их ИМЕНА БЕЗ ИЗМЕНЕНИЙ, если подходят по смыслу; новых вводи только при необходимости)
+${npcCatalog}
+
+# СУЩЕСТВУЮЩИЕ ЛОКАЦИИ — формат «Название — Округ» (переиспользуй НАЗВАНИЯ БЕЗ ИЗМЕНЕНИЙ, если подходят)
+${locCatalog}
+# ПРАВИЛО ТИПОВЫХ ЛОКАЦИЙ: не выдумывай новых названий для типовых мест (станция метро, кафе, переулок, катакомбы), если в каталоге уже есть место ТОГО ЖЕ ТИПА — используй существующее (по названию). Новое типовое место вводи ТОЛЬКО если действие переносится в округ, где такого места ещё нет; тогда привяжи его к конкретному округу.`;
 
     const userPrompt = `Создай полный сценарий (scenario.md) для модуля «${modTitle}» по следующей идее:
 
 ${content}
 
+Время действия модуля: ${moduleWhen}
 Персонажи игроков: ${pcs.length ? pcs.join(', ') : '(не указаны)'}
 НПС: ${npcs.length ? npcs.join(', ') : '(не указаны)'}
 
+ВАЖНО — переиспользование: сначала проверь списки «СУЩЕСТВУЮЩИЕ НПС» и «СУЩЕСТВУЮЩИЕ ЛОКАЦИИ» — если кто-то/что-то подходит, используй ИХ ИМЕНА ДОСЛОВНО. Новых вводи только если среди существующих нет подходящих.
+
+ВАЖНО — проверка таймлайна: сверь дату «${moduleWhen}» с разделом «ТАЙМЛАЙН И СВЯЗИ УЧАСТНИКОВ». Если на эту дату персонаж НЕ МОГ участвовать или его статус/роль был ИНЫМ (ещё не на должности, в торпоре, ещё не обращён/не прибыл, уже уничтожен) — обязательно это отметь. В САМОМ НАЧАЛЕ сценария добавь раздел «## ⚠️ Проверка таймлайна» с предупреждениями Мастеру по каждому такому персонажу: что именно не сходится и как это обыграть (заменить, понизить статус, объяснить присутствие). Если конфликтов нет — напиши «Конфликтов таймлайна не выявлено».
+
+ВАЖНО — связи: учитывай СВЯЗИ между персонажами (раздел «Связи» в таймлайне) — вплетай их в мотивации, конфликты и сцены, а не игнорируй.
+
+ВАЖНО — НПС: КАЖДЫЙ НПС, включая эпизодических антагонистов и второстепенных (охотник, информатор, гуль, торговец и т.п.), должен иметь КОНКРЕТНОЕ ИМЯ и быть перечислен в разделе «НПС» отдельным пунктом «- Имя — роль». Безымянных функциональных персонажей в разделе НПС быть не должно — иначе для них не создастся карточка.
+
 Структура сценария (строго по правилам module_rules.md):
+0. ## ⚠️ Проверка таймлайна — в самом начале (см. выше)
 1. Предпосылки — что привело к этой ситуации
-2. Локации — 2-3 ключевых места с атмосферой
-3. НПС — мотивации, секреты, роли
+2. Локации — 2-3 ключевых места с атмосферой (раздел с заголовком «Локации», каждая — отдельным пунктом)
+3. НПС — мотивации, секреты, роли (раздел «НПС»; каждый с ИМЕНЕМ, отдельным пунктом «- Имя — роль»)
 4. Завязка — как ПК втягиваются в события
 5. Сцены (3–5) — каждая с конфликтом и вариантами развития
 6. Кульминация — пиковый момент напряжения
 7. Варианты финала — 2-3 возможных исхода
 8. Открытые нити — что останется неразрешённым
-9. Парижский колорит — 2-3 детали, делающие сцену именно Парижем 2010
+9. Колорит города — 2-3 детали, делающие сцену именно этим городом и временем
 
 Язык: русский. Стиль: готический нуар, VtM атмосфера.`;
 
@@ -1216,30 +1239,8 @@ ${content}
     const gen = await makeGenerationClient().catch(() => null);
     let scenarioText = '';
 
-    if (gen?.source === 'openrouter') {
-      const orResp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
-          'Content-Type': 'application/json',
-          'HTTP-Referer': 'http://localhost:3000',
-          'X-Title': 'VTM Chronicle Manager',
-        },
-        body: JSON.stringify({
-          model: gen.model,
-          max_tokens: 4000,
-          messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user',   content: userPrompt },
-          ],
-        }),
-      });
-      if (!orResp.ok) {
-        const err = await orResp.text();
-        return res.status(orResp.status).json({ ok: false, error: err });
-      }
-      const data = await orResp.json();
-      scenarioText = data.choices?.[0]?.message?.content?.trim() || '';
+    if (gen && _isOA(gen)) {
+      scenarioText = await _oaCall(gen)(gen.model, systemPrompt, userPrompt, [], 90000, 4000);
     } else if (gen?.client) {
       const msg = await gen.client.messages.create({
         model: 'claude-opus-4-8', max_tokens: 4000,
@@ -1259,53 +1260,59 @@ ${content}
     await fs.writeFile(scenarioPath, header + scenarioText + '\n', 'utf-8');
     console.log(`[fill-module] ${city}/${chr}/${mod}/scenario.md written`);
 
-    // ── Update main module file (.md) ─────────────────────────────────────
-    // Extract first location from scenario (line containing "📍 Локация:")
+    // (allLocs + char catalog already loaded above for the generation prompt)
+
+    // First location mentioned in scenario (for the main file's «Локация» cell)
     const locLineMatch = scenarioText.match(/(?:локация|место действия)[^\n:]*[:]\s*([^\n]+)/i);
     const firstLoc = locLineMatch ? locLineMatch[1].replace(/\*\*/g, '').trim() : '';
 
-    // Short summary from the user's idea (first 200 chars)
-    const shortSummary = content.trim().split('\n')[0].slice(0, 200);
+    // Patch <mod>.md WITHOUT destroying the concept/participants (so re-gen works)
+    await _patchModuleMain(modDir, mod, firstLoc)
+      .catch(e => console.warn('[fill-module] main patch:', e.message));
 
-    // Participants block
-    const pcLines  = pcs.map(n  => `- [${n}](../../../../characters/${(chars.find(c => c.name === n)?.lineageFolder || 'characters')}/${(chars.find(c => c.name === n)?.slug || slugify(n))}/${(chars.find(c => c.name === n)?.slug || slugify(n))}.md) — Персонаж игрока`).join('\n');
-    const npcLines = npcs.map(n => `- ${n} — НПС`).join('\n');
-    const partBlock = [pcLines, npcLines].filter(Boolean).join('\n');
+    // ── Classify NPCs: existing canonical (reuse) vs new modular ──────────
+    const npcCandidates = [...new Set(
+      [...npcs, ..._extractNpcNamesFromScenario(scenarioText)]
+        .map(s => String(s).trim()).filter(Boolean)
+    )];
+    const canonNpcs = [];   // { name, char }  — matched an existing card → reuse
+    const newNpcs   = [];   // { name }         — no match → generate modular card
+    for (const nm of npcCandidates) {
+      const hit = chars.find(c => _nameMatch(nm, c.name));
+      if (hit) { if (!canonNpcs.some(x => x.char.slug === hit.slug)) canonNpcs.push({ name: hit.name, char: hit }); }
+      else if (!newNpcs.some(x => _nameMatch(x.name, nm))) newNpcs.push({ name: nm });
+    }
 
-    const mainContent = [
-      `# ${mainTxt.match(/^#\s+(.+)$/m)?.[1] || modTitle}`,
-      '> Хроника | Vampire: The Masquerade V20 / Changeling: The Dreaming',
-      '',
-      '> 🔗 [Хроника](../../events.md) | [Сценарий](scenario.md)',
-      '',
-      '---',
-      '',
-      '| Параметр | Значение |',
-      '|---|---|',
-      `| **Тип** | Игровая сессия |`,
-      `| **Время** | ${mainTxt.match(/\|\s*\*\*Время\*\*\s*\|\s*([^|]+)\|/)?.[1]?.trim() || ''} |`,
-      `| **Локация** | ${firstLoc} |`,
-      '',
-      '---',
-      '',
-      shortSummary ? shortSummary : '*Краткое содержание — см. запись хроники.*',
-      '',
-      ...(partBlock ? ['---', '', '## 👥 Участники', '', partBlock, ''] : []),
-    ].join('\n');
+    // ── Classify locations: existing (reuse) vs new (generate card) ───────
+    // Reuse priority: (1) same name, (2) same TYPE already exists (don't multiply
+    // generic places — e.g. a metro station — when one is already in the city).
+    const reusedLocations = [];
+    const newLocNames     = [];
+    for (const ln of _extractLocNamesFromScenario(scenarioText)) {
+      const nameHit = allLocs.find(l => _nameMatch(ln, l.name));
+      if (nameHit) {
+        if (!reusedLocations.includes(nameHit.name)) reusedLocations.push(nameHit.name);
+        continue;
+      }
+      const type = _locType(ln);
+      if (type) {
+        const typeHit = allLocs.find(l => _locType(l.name) === type)
+                     || allLocs.find(l => _locType(l.slug) === type);
+        if (typeHit) {
+          if (!reusedLocations.includes(typeHit.name)) reusedLocations.push(typeHit.name);
+          console.log(`[fill-module] reuse by type «${type}»: "${ln}" → ${typeHit.name}`);
+          continue;
+        }
+      }
+      if (!newLocNames.some(x => _nameMatch(x, ln))) newLocNames.push(ln);
+    }
 
-    await fs.writeFile(path.join(modDir, `${mod}.md`), mainContent, 'utf-8');
-    console.log(`[fill-module] ${mod}.md updated`);
-
-    // ── Generate location cards (single AI call for all cards at once) ──────────
-    // Step 1: extract location names from scenario text via regex — no AI call.
-    // Step 2: if names found, one AI call returns all cards as JSON.
+    // ── Generate cards for NEW locations only (single AI call) ────────────
     const locSource = req.body?.locSource || null;
     const locModel  = req.body?.locModel  || null;
     const createdLocations = [];
     try {
-      const locNames = _extractLocNamesFromScenario(scenarioText);
-
-      if (locNames.length > 0) {
+      if (newLocNames.length > 0) {
         const locGen = await makeGenerationClient(locSource, locModel).catch(() => null);
         const portretRules = await fs.readFile(path.join(ROOT, 'system', 'rules', 'portret.md'), 'utf-8').catch(() => '');
 
@@ -1345,7 +1352,7 @@ ${portretRules.slice(0, 900)}
 Контекст модуля: ${modTitle}
 Сценарий (выдержка): ${scenarioText.slice(0, 350)}
 
-Создай карточки для КАЖДОЙ из ${locNames.length} локаций ниже.
+Создай карточки для КАЖДОЙ из ${newLocNames.length} локаций ниже.
 Верни СТРОГО JSON-массив без лишнего текста вне JSON:
 [{"name":"<название>","content":"<полная карточка markdown>"},...]
 
@@ -1353,22 +1360,16 @@ ${portretRules.slice(0, 900)}
 ${cardTemplate('«название»')}
 
 Локации:
-${locNames.map((n, i) => `${i + 1}. «${n}»`).join('\n')}
+${newLocNames.map((n, i) => `${i + 1}. «${n}»`).join('\n')}
 
 Язык: русский. Стиль: готический нуар VtM.`;
 
         let allLocsRaw = '';
-        if (locGen?.source === 'openrouter') {
-          const r = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-            method: 'POST',
-            headers: { 'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`, 'Content-Type': 'application/json', 'HTTP-Referer': 'http://localhost:3000' },
-            body: JSON.stringify({ model: locGen.model, max_tokens: locNames.length * 800 + 200, messages: [{ role: 'user', content: allCardsPrompt }] }),
-          });
-          const d = await r.json();
-          allLocsRaw = d.choices?.[0]?.message?.content || '';
+        if (locGen && _isOA(locGen)) {
+          allLocsRaw = await _oaCall(locGen)(locGen.model, '', allCardsPrompt, [], 90000, newLocNames.length * 800 + 200);
         } else if (locGen?.client) {
           const m = await locGen.client.messages.create({
-            model: 'claude-haiku-4-5-20251001', max_tokens: locNames.length * 800 + 200,
+            model: 'claude-haiku-4-5-20251001', max_tokens: newLocNames.length * 800 + 200,
             messages: [{ role: 'user', content: allCardsPrompt }],
           });
           allLocsRaw = m.content[0]?.text || '';
@@ -1395,9 +1396,144 @@ ${locNames.map((n, i) => `${i + 1}. «${n}»`).join('\n')}
       console.warn('[fill-module] location generation failed:', locErr.message);
     }
 
-    res.json({ ok: true, file: `chronicles/${chr}/modules/${mod}/scenario.md`, locations: createdLocations });
+    // ── Generate cards for NEW (modular) NPCs only (single AI call) ───────
+    const createdNpcs = [];
+    if (newNpcs.length > 0) {
+      try {
+        const npcRules  = await fs.readFile(path.join(ROOT, 'system', 'rules', 'npcs_city.md'), 'utf-8').catch(() => '');
+        const tmplM     = npcRules.match(/Шаблон Г[\s\S]*?```markdown\n([\s\S]*?)```/);
+        const gTemplate = tmplM ? tmplM[1].trim() : '';
+        const npcPrompt = `Создай карточки эпизодических (модульных, неканоничных) НПС для модуля «${modTitle}» — Vampire: The Masquerade V20, Париж 2010.
+
+Идея модуля:
+${content.slice(0, 800)}
+
+Сценарий (выдержка):
+${scenarioText.slice(0, 1200)}
+
+Для КАЖДОГО из ${newNpcs.length} НПС ниже создай карточку строго по шаблону.
+Заполни характеристики разумными значениями уровня НПС, роль в модуле, внешность (2–3 маркера) и промт для генерации изображения (на английском, 3 блока: Персонаж → Свет/Атмосфера → Стиль).
+
+Шаблон карточки (заменяй [...] значениями):
+${gTemplate || '(см. system/rules/npcs_city.md, Шаблон Г)'}
+
+НПС:
+${newNpcs.map((n, i) => `${i + 1}. ${n.name}`).join('\n')}
+
+Верни СТРОГО JSON-массив без лишнего текста вне JSON:
+[{"name":"<имя>","content":"<полная карточка markdown>"},...]
+
+Язык: русский. Стиль: готический нуар VtM.`;
+
+        let npcRaw = '';
+        if (gen && _isOA(gen)) {
+          npcRaw = await _oaCall(gen)(gen.model, '', npcPrompt, [], 90000, newNpcs.length * 900 + 300);
+        } else if (gen?.client) {
+          const m = await gen.client.messages.create({
+            model: 'claude-haiku-4-5-20251001', max_tokens: newNpcs.length * 900 + 300,
+            messages: [{ role: 'user', content: npcPrompt }],
+          });
+          npcRaw = m.content[0]?.text || '';
+        }
+
+        if (npcRaw) {
+          const npcCards = JSON.parse(npcRaw.match(/\[[\s\S]*\]/)?.[0] || '[]');
+          await Promise.all(npcCards.map(async ({ name, content: cardMd }) => {
+            if (!name || !cardMd) return;
+            const npcSlug = slugify(name);
+            if (!npcSlug) return;
+            const npcDir  = path.join(modDir, 'npc', npcSlug);
+            const npcFile = path.join(npcDir, `${npcSlug}.md`);
+            if (await fs.stat(npcFile).catch(() => null)) return; // already exists
+            await fs.mkdir(npcDir, { recursive: true });
+            await fs.writeFile(npcFile, cardMd.trim() + '\n', 'utf-8');
+            createdNpcs.push(name);
+            console.log(`[fill-module] modular NPC created: ${name}`);
+          }));
+        }
+      } catch (npcErr) {
+        console.warn('[fill-module] NPC generation failed:', npcErr.message);
+      }
+    }
+
+    // ── Write npc.md (ПК / Каноничные / Модульные) ────────────────────────
+    try {
+      await fs.writeFile(path.join(modDir, 'npc.md'),
+        _renderModuleNpcMd(modTitle, mod, pcs, canonNpcs, newNpcs, chars), 'utf-8');
+      console.log('[fill-module] npc.md written');
+    } catch (npcMdErr) {
+      console.warn('[fill-module] npc.md:', npcMdErr.message);
+    }
+
+    res.json({
+      ok: true,
+      file: `chronicles/${chr}/modules/${mod}/scenario.md`,
+      locations: createdLocations,
+      reusedLocations,
+      npcs: createdNpcs,
+      canonNpcs: canonNpcs.map(x => x.char.name),
+    });
   } catch (e) {
     console.error('[fill-module]', e.message);
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+// ── Append in-play session entry (Phase B) ─────────────────────────────────────
+
+app.post('/api/chronicles/:chr/modules/:mod/session', express.json(), async (req, res) => {
+  try {
+    const city = reqCity(req);
+    const { chr, mod } = req.params;
+    const modDir = path.join(chroniclesDir(city), chr, 'modules', mod);
+    if (!await fs.stat(modDir).catch(() => null))
+      return res.status(404).json({ ok: false, error: 'Модуль не найден' });
+
+    const date   = (req.body?.date   || '').trim();
+    const status = (req.body?.status || '').trim();
+    const scenes = (req.body?.scenes || '').trim();
+    const notes  = (req.body?.notes  || '').trim();
+    if (!notes && !scenes)
+      return res.status(400).json({ ok: false, error: 'Заполни «Что произошло» или «Сыграно сцен»' });
+
+    const raw = await fs.readFile(path.join(modDir, 'sessions.md'), 'utf-8').catch(() => '');
+    const sessions = _parseSessions(raw);
+    sessions.push({ date, scenes, status, body: notes });
+    await _writeSessionsFile(modDir, mod, sessions);
+    console.log(`[module-session] ${city}/${chr}/${mod} → session ${sessions.length}`);
+    res.json({ ok: true, n: sessions.length });
+  } catch (e) {
+    console.error('[module-session]', e.message);
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+// ── Edit an existing session entry (Phase B) ───────────────────────────────────
+
+app.put('/api/chronicles/:chr/modules/:mod/session/:idx', express.json(), async (req, res) => {
+  try {
+    const city = reqCity(req);
+    const { chr, mod, idx } = req.params;
+    const modDir = path.join(chroniclesDir(city), chr, 'modules', mod);
+    const raw = await fs.readFile(path.join(modDir, 'sessions.md'), 'utf-8').catch(() => '');
+    const sessions = _parseSessions(raw);
+    const i = parseInt(idx, 10);
+    if (!Number.isInteger(i) || i < 0 || i >= sessions.length)
+      return res.status(404).json({ ok: false, error: 'Запись сессии не найдена' });
+
+    const date   = (req.body?.date   || '').trim();
+    const status = (req.body?.status || '').trim();
+    const scenes = (req.body?.scenes || '').trim();
+    const notes  = (req.body?.notes  || '').trim();
+    if (!notes && !scenes)
+      return res.status(400).json({ ok: false, error: 'Заполни «Что произошло» или «Сыграно сцен»' });
+
+    sessions[i] = { date, scenes, status, body: notes };
+    await _writeSessionsFile(modDir, mod, sessions);
+    console.log(`[module-session] ${city}/${chr}/${mod} → edit session ${i + 1}`);
+    res.json({ ok: true, n: i + 1 });
+  } catch (e) {
+    console.error('[module-session-edit]', e.message);
     res.status(500).json({ ok: false, error: e.message });
   }
 });
@@ -1443,25 +1579,169 @@ app.delete('/api/chronicles/:chr/modules/:mod', express.json(), async (req, res)
       }
     }
 
-    // 4. Remove event block referencing this module from chronicle events.md
+    // 4. Remove WHOLE event blocks referencing this module from chronicle events.md
+    let removedEvents = 0;
     const evPath = path.join(chroniclesDir(city), chr, 'events.md');
     const evTxt  = await fs.readFile(evPath, 'utf-8').catch(() => null);
     if (evTxt) {
-      // Remove the `> 🔗 [Модуль](...mod...)` line from events
-      const cleaned = evTxt.split('\n').filter(l => !(l.includes('🔗') && l.includes(`modules/${mod}/`))).join('\n');
-      if (cleaned !== evTxt) await fs.writeFile(evPath, cleaned, 'utf-8');
+      const nl    = evTxt.replace(/\r\n/g, '\n');
+      const parts = nl.split(/\n(?=###\s*📅)/);          // header + per-event blocks
+      const modRe = new RegExp(`modules/${mod}/`);
+      const kept  = parts.filter((seg, i) => {
+        if (i === 0 && !/^###\s*📅/.test(seg.trim())) return true;   // file header
+        if (modRe.test(seg)) { removedEvents++; return false; }      // this module's event
+        return true;
+      });
+      const cleaned = kept.join('\n').replace(/\n{3,}/g, '\n\n');
+      if (cleaned !== nl) await fs.writeFile(evPath, cleaned, 'utf-8');
     }
 
-    // 5. Delete module directory
+    // 5. Delete module directory (its npc/ — modular NPCs — go with it)
     await rmdir(modDir);
     await syncChronicleModuleLinks(city, chr);
-    console.log(`[delete-module] ${city}/${chr}/modules/${mod} | cleaned: ${cleanedChars.join(', ') || '—'}`);
+
+    // 6. Rebuild the city's aggregate event index (archive/events.md)
+    if (removedEvents) {
+      await new Promise(resolve => {
+        const ps = spawn('node', [path.join(ROOT, 'tools', 'build_city_events.js'), city], { cwd: ROOT });
+        ps.on('close', () => resolve()); ps.on('error', () => resolve());
+      });
+    }
+    console.log(`[delete-module] ${city}/${chr}/modules/${mod} | events: ${removedEvents} | diaries: ${cleanedChars.join(', ') || '—'} | npcs: ${episodicSlugs.join(', ') || '—'}`);
 
     delete _cache[city];
-    res.json({ ok: true, mod, cleanedChars, episodicSlugs });
+    res.json({ ok: true, mod, removedEvents, cleanedChars, episodicSlugs });
   } catch (e) {
     console.error('[delete-module]', e.message);
     res.status(500).json({ error: e.message });
+  }
+});
+
+// ── Close module (Phase C — MODULE-close rules, not chronicle-close) ────────────
+
+app.post('/api/chronicles/:chr/modules/:mod/close', express.json(), async (req, res) => {
+  try {
+    const city = reqCity(req);
+    const { chr, mod } = req.params;
+    const modDir = path.join(chroniclesDir(city), chr, 'modules', mod);
+    if (!await fs.stat(modDir).catch(() => null))
+      return res.status(404).json({ ok: false, error: 'Модуль не найден' });
+
+    const mainTxt     = await fs.readFile(path.join(modDir, `${mod}.md`), 'utf-8').catch(() => '');
+    const scenario    = await fs.readFile(path.join(modDir, 'scenario.md'), 'utf-8').catch(() => '');
+    const sessionsRaw = await fs.readFile(path.join(modDir, 'sessions.md'), 'utf-8').catch(() => '');
+    const npcMd       = await fs.readFile(path.join(modDir, 'npc.md'), 'utf-8').catch(() => '');
+    const moduleRules = await fs.readFile(path.join(ROOT, 'system', 'rules', 'module_rules.md'), 'utf-8').catch(() => '');
+    const cityMd      = await fs.readFile(path.join(cityDir(city), 'city.md'), 'utf-8').catch(() => '');
+
+    const titleM   = mainTxt.match(/^#\s+(.+)$/m);
+    const modTitle = titleM ? titleM[1].replace(/[*[\]]/g, '').trim() : mod;
+    const sessions = _parseSessions(sessionsRaw);
+    const playLog  = sessions.map(s => `• ${s.title}${s.scenes ? ` [сцены: ${s.scenes}]` : ''}: ${s.body || ''}`).join('\n')
+                  || '(сессии не зафиксированы — опирайся на сценарий)';
+
+    const gen = await makeGenerationClient(req.body?.source || null, req.body?.model || null).catch(() => null);
+    if (!gen?.client && !(gen && _isOA(gen)))
+      return res.status(503).json({ ok: false, error: 'Нет доступного AI-провайдера. Настрой в Инструменты → Модели AI.' });
+
+    // Phase-C rules slice as context (MODULE-close, NOT chronicle-close)
+    const phaseC = (moduleRules.match(/Фаза C[\s\S]{0,700}/)?.[0]) || '';
+    const baseCtx = `Ты — Рассказчик Vampire: The Masquerade V20. Закрываешь МОДУЛЬ по правилам Фазы C из system/rules/module_rules.md — это НЕ закрытие хроники.
+
+# СЕТТИНГ ГОРОДА
+${cityMd.slice(0, 1500)}
+
+# ПРАВИЛА ЗАКРЫТИЯ МОДУЛЯ (Фаза C)
+${phaseC}`;
+
+    const runGen = async (system, user, maxTokens) => {
+      if (_isOA(gen)) {
+        return _oaCall(gen)(gen.model, system, user, [], 90000, maxTokens);
+      }
+      const m = await gen.client.messages.create({ model: 'claude-opus-4-8', max_tokens: maxTokens, system, messages: [{ role: 'user', content: user }] });
+      return m.content[0]?.text?.trim() || '';
+    };
+
+    // 1. finale.md — literary finale by what actually happened in play
+    let finale = false;
+    const finaleText = await runGen(baseCtx,
+`Напиши литературный финал (finale.md) модуля «${modTitle}».
+
+Сценарий (план):
+${scenario.slice(0, 2500)}
+
+Что реально произошло в игре (журнал сессий):
+${playLog}
+
+Напиши цельный литературный финал ПО ФАКТАМ ИГРЫ (если игра отступила от сценария — следуй игре). Русский, готический нуар. Верни только текст финала, без метаданных.`, 2500).catch(() => '');
+    if (finaleText) {
+      const header = `# ${modTitle} — Литературный финал\n\n> 🔗 [Модуль](${mod}.md) | [Хроника](../../events.md)\n\n---\n\n`;
+      await fs.writeFile(path.join(modDir, 'finale.md'), header + finaleText + '\n', 'utf-8');
+      finale = true;
+    }
+
+    // 2. Canonical event entry → chronicles/<chr>/events.md (transfer from sessions)
+    let event = false;
+    const eventBlock = await runGen(baseCtx,
+`Собери КАНОНИЧНУЮ запись события для хроники по итогам сыгранного модуля «${modTitle}».
+
+НПС/участники модуля:
+${npcMd.slice(0, 1200)}
+
+Журнал сессий (источник истины):
+${playLog}
+
+Формат записи СТРОГО:
+### 📅 <дата/время> — <краткое название>.
+
+- **📍 Локация:** <…>
+- **👥 Участники:**
+  - <Имя> — <роль>
+- **📋 События:**
+  <связный пересказ по фактам игры>
+- **⚖️ Последствия:**
+  - <…>
+
+Верни ТОЛЬКО блок записи, без пояснений. Русский.`, 2000).catch(() => '');
+    if (eventBlock && /###\s*📅/.test(eventBlock)) {
+      const evPath     = path.join(chroniclesDir(city), chr, 'events.md');
+      const finaleLink = finale ? ` | [Литературный финал](modules/${mod}/finale.md)` : '';
+      const block      = eventBlock.trim() + `\n\n> 🔗 [Модуль](modules/${mod}/${mod}.md)${finaleLink}\n`;
+      const evTxt      = (await fs.readFile(evPath, 'utf-8').catch(() => '')).replace(/\s*$/, '');
+      await fs.writeFile(evPath, evTxt + '\n\n' + block, 'utf-8');
+      event = true;
+    }
+
+    // 3. Mark the module status as closed in the main file
+    const today = new Date().toISOString().slice(0, 10);
+    let main = mainTxt.replace(/^﻿/, '');
+    if (/^-\s*\*\*Статус(?: модуля)?:\*\*/m.test(main))
+      main = main.replace(/^(-\s*\*\*Статус(?: модуля)?:\*\*\s*).*$/m, `$1🟢 Закрыт (${today})`);
+    else
+      main = main.replace(/^(>\s*🔗\s*\[Хроника\][^\n]*)$/m, `$1\n\n- **Статус модуля:** 🟢 Закрыт (${today})`);
+    await fs.writeFile(path.join(modDir, `${mod}.md`), main, 'utf-8');
+
+    // 4. Rebuild the aggregate event index
+    if (event) {
+      await new Promise(resolve => {
+        const ps = spawn('node', [path.join(ROOT, 'tools', 'build_city_events.js'), city], { cwd: ROOT });
+        ps.on('close', () => resolve()); ps.on('error', () => resolve());
+      });
+    }
+    delete _cache[city];
+
+    // 5. Remaining Phase-C steps needing per-character / manual attention
+    const reminders = [
+      'Дневники участников (journal/) — сгенерировать на вкладке персонажа',
+      'Открытые нити (open_threads.md) — внести новые',
+      'Модульные НПС — проверить условия продвижения в каноничные (module_rules.md)',
+      'tools/validate_links.ps1',
+    ];
+    console.log(`[close-module] ${city}/${chr}/${mod} | finale=${finale} event=${event}`);
+    res.json({ ok: true, finale, event, reminders });
+  } catch (e) {
+    console.error('[close-module]', e.message);
+    res.status(500).json({ ok: false, error: e.message });
   }
 });
 
@@ -1584,9 +1864,22 @@ app.get('/api/chronicles/:chr/modules/:mod/detail', async (req, res) => {
         if (fm) result[key] = fm[1].trim();
       }
 
-      // Description: text between last --- and first ## section (or end)
-      const descM = mc.match(/---\s*\n([\s\S]+?)(?=\n##|\s*$)/);
-      if (descM) result.description = descM[1].trim();
+      // Module status (bullet line written on close: «- **Статус модуля:** 🟢 Закрыт …»)
+      const stM = mc.match(/^-\s*\*\*Статус(?: модуля)?:\*\*\s*(.+)$/m);
+      if (stM) result.status = stM[1].trim();
+
+      // Description: prefer the «💡 Концепция» section (the module idea).
+      // Fall back to free text between a --- divider and the first ## section,
+      // but never surface the metadata table itself.
+      const conceptM = mc.match(/##\s*💡\s*Концепция\s*\n+([\s\S]*?)(?=\n##|\n---|\s*$)/);
+      if (conceptM && conceptM[1].trim()) {
+        result.description = conceptM[1].trim();
+      } else {
+        for (const m of mc.matchAll(/\n---\s*\n+([\s\S]+?)(?=\n##|\n---|\s*$)/g)) {
+          const block = m[1].trim();
+          if (block && !block.startsWith('|')) { result.description = block; break; }
+        }
+      }
 
       // Participants: ## 👥 Участники или Действующие лица section
       // Find the section header and extract content until next ##
@@ -1651,30 +1944,40 @@ app.get('/api/chronicles/:chr/modules/:mod/detail', async (req, res) => {
 
     // 3. NPC details from npc.md
     result.npcContent = await fs.readFile(path.join(modDir, 'npc.md'), 'utf-8').catch(() => '');
+    result.npcGroups  = _parseNpcMdGroups(result.npcContent);
 
-    // 4. Chronicle events (all events for the chronicle)
-    const evRaw = await fs.readFile(path.join(chroniclesDir(city), chr, 'events.md'), 'utf-8').catch(() => '');
-    if (evRaw) {
-      const ec = evRaw.replace(/^﻿/, '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-      ec.split(/\n(?=###\s*📅)/).filter(c => /^###\s*📅/.test(c.trim())).forEach(c => {
-        const ev = parseEvent(c.trim(), result.events.length);
-        ev.chronicle = chr;
-        result.events.push(ev);
-      });
-    }
+    // 3b. In-play session log (Phase B)
+    result.sessions = _parseSessions(
+      await fs.readFile(path.join(modDir, 'sessions.md'), 'utf-8').catch(() => ''));
 
-    // 5. Open threads (chronicle-level first, then city archive)
-    result.openThreads = await fs.readFile(path.join(chroniclesDir(city), chr, 'open_threads.md'), 'utf-8').catch(() => null)
-      ?? await fs.readFile(path.join(cityDir(city), 'archive', 'open_threads.md'), 'utf-8').catch(() => '');
-
-    // 6. Extract locations from scenario content (- **Name** — description pattern)
-    if (result.scenario) {
-      const locSec = result.scenario.match(/###?[^#\n]*[Лл]окаци[яи][^\n]*\n([\s\S]+?)(?=\n###|\n---|\s*$)/);
-      if (locSec) {
-        for (const m of locSec[1].matchAll(/[-*]\s+\*\*([^*]+)\*\*\s*[—–]\s*([^\n]+)/g))
-          result.locations.push({ name: m[1].trim(), description: m[2].trim() });
+    // 4. Events — prefer the module's own scenes («Сцены») from scenario.md;
+    //    fall back to the chronicle's events.md.
+    const scenes = _parseScenarioScenes(result.scenario);
+    result.scenes = scenes; // raw scenario scenes (for the session scene-picker)
+    if (scenes.length) {
+      result.events = scenes;
+    } else {
+      const evRaw = await fs.readFile(path.join(chroniclesDir(city), chr, 'events.md'), 'utf-8').catch(() => '');
+      if (evRaw) {
+        const ec = evRaw.replace(/^﻿/, '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+        ec.split(/\n(?=###\s*📅)/).filter(c => /^###\s*📅/.test(c.trim())).forEach(c => {
+          const ev = parseEvent(c.trim(), result.events.length);
+          ev.chronicle = chr;
+          result.events.push(ev);
+        });
       }
     }
+
+    // 5. Open threads — prefer the module's own «Открытые нити / Крючки» from
+    //    scenario.md; fall back to chronicle-level, then city archive.
+    const scenarioThreads = _extractScenarioSection(result.scenario, /Открыт|Крючк|Зацепк/i);
+    result.openThreads = scenarioThreads
+      || await fs.readFile(path.join(chroniclesDir(city), chr, 'open_threads.md'), 'utf-8').catch(() => null)
+      || await fs.readFile(path.join(cityDir(city), 'archive', 'open_threads.md'), 'utf-8').catch(() => '');
+
+    // 6. Locations — parse the «Локации» section of scenario.md (robust to
+    //    `- **Name** — desc`, `- Name → 🔗 …` and `### Name` subsection formats).
+    result.locations = _parseScenarioLocations(result.scenario);
 
     res.json(result);
   } catch (e) {
@@ -1811,11 +2114,11 @@ ${hint ? `Акцент/пожелание: ${hint}\n` : ''}Требования:
 - Верни ТОЛЬКО текст записи (без заголовков и markdown-полей).`;
 
     let text = '';
-    if (gen.source === 'openrouter') {
-      const models = [gen.model, ...OR_FALLBACK_MODELS.filter(m => m !== gen.model)];
+    if (_isOA(gen)) {
+      const models = _oaModels(gen);
       let lastErr;
       for (const m of models) {
-        try { text = await callOpenRouter(m, systemPrompt, userPrompt, []); if (m !== gen.model) console.log(`[diary-gen] fallback model: ${m}`); break; }
+        try { text = await _oaCall(gen)(m, systemPrompt, userPrompt, []); if (m !== gen.model) console.log(`[diary-gen] fallback model: ${m}`); break; }
         catch (e) {
           lastErr = e;
           const retry = e.status === 404 || e.status === 429 || (e.status === 400 && /not a valid model|No endpoints/i.test(e.message));
@@ -1834,6 +2137,62 @@ ${hint ? `Акцент/пожелание: ${hint}\n` : ''}Требования:
   } catch (e) {
     const status = e.status ?? 500;
     res.status(status >= 400 && status < 600 ? status : 500).json({ error: e.message ?? String(e) });
+  }
+});
+
+// ── NPC in-character dialogue (AI) — Voice field + clan style from diary_rules ──
+
+app.post('/api/characters/:name/dialogue', express.json(), async (req, res) => {
+  try {
+    const city = reqCity(req);
+    const name = decodeURIComponent(req.params.name);
+    const situation = String(req.body?.situation || '').trim();
+    const count = Math.min(Math.max(parseInt(req.body?.count, 10) || 4, 1), 8);
+    if (!situation) return res.status(400).json({ ok: false, error: 'Опиши ситуацию для реплик' });
+
+    const chars = await getAllCharacters(city);
+    let   char  = chars.find(c => c.name === name) || chars.find(c => _nameMatch(c.name, name));
+    let   card  = '';
+    let   clan  = '';
+    if (char) {
+      card = await fs.readFile(path.join(charsDir(city), char.lineageFolder, char.slug, `${char.slug}.md`), 'utf-8').catch(() => '');
+      clan = char.clan || '';
+    } else if (req.body?.chr && req.body?.mod) {
+      // Модульный (неканоничный) НПС — карточка лежит в папке npc/ модуля
+      const npcRoot = path.join(chroniclesDir(city), String(req.body.chr), 'modules', String(req.body.mod), 'npc');
+      const found = await _findModularNpcCard(npcRoot, name);
+      if (found) { card = found.card; clan = found.clan; }
+    }
+    if (!card) return res.status(404).json({ ok: false, error: 'Персонаж не найден' });
+
+    const diaryRules = await fs.readFile(path.join(ROOT, 'system', 'rules', 'diary_rules.md'), 'utf-8').catch(() => '');
+    const stylesM    = diaryRules.match(/##\s*🎭\s*Правила литературной стилизации[\s\S]*?(?=\n##\s|\s*$)/);
+    const styles     = stylesM ? stylesM[0] : diaryRules.slice(0, 2500);
+
+    const gen = await makeGenerationClient(req.body?.source || null, req.body?.model || null);
+    const systemPrompt = `Ты пишешь РЕПЛИКИ НПС в характере для Vampire: The Masquerade V20.
+Говори ГОЛОСОМ персонажа (поле «Голос» в карточке) и в КЛАНОВОМ СТИЛЕ — строка его клана «${clan || '—'}» в таблице ниже.
+Маскарад: вампирскую природу/дисциплины — только намёками и метафорами. Не выдумывай факты вне карточки. Русский язык.
+
+# КАРТОЧКА ПЕРСОНАЖА (голос, клан, характер, факты)
+${card.slice(0, 3000)}
+
+# КЛАНОВЫЕ / ТИПОВЫЕ СТИЛИ (diary_rules.md)
+${styles.slice(0, 2000)}`;
+
+    const userPrompt = `Ситуация: ${situation}
+
+Сгенерируй ${count} реплик(и) НПС «${name}» в этой ситуации — в его характере, голосе и клановом стиле.
+Каждая реплика с новой строки, в кавычках «…». Допустима краткая ремарка действия в скобках. Без нумерации, без пояснений вне реплик.`;
+
+    const out = await genTextWithRetry(gen, { system: systemPrompt, user: userPrompt, maxTokens: 900 });
+    res.json({ ok: true, text: out.text, source: out.source });
+  } catch (e) {
+    const status = e.status ?? 500;
+    const msg = status === 429
+      ? 'Лимит запросов исчерпан (Claude и резервный OpenRouter). Подожди минуту или выбери OpenRouter в «⚡ Назначение провайдеров → Генерация фраз».'
+      : (e.message ?? String(e));
+    res.status(status >= 400 && status < 600 ? status : 500).json({ ok: false, error: msg });
   }
 });
 
@@ -2224,6 +2583,74 @@ app.get('/api/integrity', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ── Canon consistency check (AI) — flags contradictions in a logged event ──────
+
+app.post('/api/canon-check', express.json(), async (req, res) => {
+  try {
+    const city = reqCity(req);
+    const text = String(req.body?.text || '').trim();
+    if (!text) return res.status(400).json({ ok: false, error: 'Пустой текст для проверки' });
+    if (text.length > 8000) return res.status(400).json({ ok: false, error: 'Слишком длинный текст (макс ~8000 символов)' });
+
+    const chars = await getAllCharacters(city);
+    const facts = chars.map(c => {
+      const st = (c.status && !/⚠️/.test(c.status)) ? c.status
+               : (c.statusDetails && !/⚠️/.test(c.statusDetails) ? c.statusDetails : (c.statusType || '—'));
+      const bits = [
+        c.clan && !/⚠️/.test(c.clan) ? c.clan : null,
+        c.embraceYear && !/⚠️|не указан/i.test(c.embraceYear) ? `обращён ${c.embraceYear}` : null,
+        (c.hierarchy && !/⚠️/.test(c.hierarchy)) ? c.hierarchy : ((c.role && !/⚠️/.test(c.role)) ? c.role : null),
+      ].filter(Boolean).join('; ');
+      return `- ${c.name} [${c.lineage}] — статус: ${st}${bits ? ` — ${bits}` : ''}`;
+    }).join('\n');
+
+    const gen = await makeGenerationClient(req.body?.source || null, req.body?.model || null);
+    const systemPrompt = `Ты — проверяющий непротиворечивость канона в Vampire: The Masquerade V20.
+Тебе дают ТЕКСТ логируемого события (сцена/сессия) и УСТАНОВЛЕННЫЕ ФАКТЫ о персонажах города.
+Найди ПРОТИВОРЕЧИЯ между фактами и текстом. Типы:
+- уничтоженный / в финальной смерти / в торпоре персонаж действует как живой активный участник;
+- участие до обращения или до прибытия в город (несовместимость дат);
+- статус/должность не соответствует (назван должностью, которой ещё или уже не имеет);
+- персонаж одновременно в двух местах / там, где быть не мог по фактам.
+
+ОСОБО проверяй ДАТЫ. Найди в тексте дату/год и сравни с датами в фактах:
+- участие РАНЬШЕ года обращения персонажа — противоречие;
+- должность с пометкой «с <месяц год>»: если дата текста РАНЬШЕ этой даты — персонаж ещё НЕ занимал должность, называть его так нельзя (противоречие);
+- статус «Уничтожен (<дата>)»: действие ПОСЛЕ даты уничтожения — противоречие.
+Пример: факт «Шериф (с ноября 2010)»; текст «декабрь 2009 … Шериф такой-то» → противоречие: в 2009 он ещё не Шериф.
+
+Сообщай ТОЛЬКО реальные противоречия с фактами. Догадки и стилистику не трогай. Если противоречий нет — пустой массив.
+
+# УСТАНОВЛЕННЫЕ ФАКТЫ (источник истины)
+${facts.slice(0, 7000)}`;
+
+    const userPrompt = `ТЕКСТ СОБЫТИЯ:
+${text}
+
+Верни СТРОГО JSON-массив без текста вне JSON:
+[{"severity":"high|medium|low","character":"<имя>","issue":"<что не сходится с фактом>","quote":"<короткая цитата из текста>"}]
+Если противоречий нет — верни [].`;
+
+    let raw = '';
+    if (_isOA(gen)) {
+      raw = await _oaCall(gen)(gen.model, systemPrompt, userPrompt, [], 75000, 1500);
+    } else {
+      const m = await gen.client.messages.create({
+        model: gen.model, max_tokens: 1500, system: systemPrompt,
+        messages: [{ role: 'user', content: userPrompt }],
+      });
+      raw = m.content[0]?.text?.trim() || '';
+    }
+    let issues = [];
+    try { issues = JSON.parse(raw.match(/\[[\s\S]*\]/)?.[0] || '[]'); } catch {}
+    if (!Array.isArray(issues)) issues = [];
+    res.json({ ok: true, issues, checked: chars.length });
+  } catch (e) {
+    const status = e.status ?? 500;
+    res.status(status >= 400 && status < 600 ? status : 500).json({ ok: false, error: e.message ?? String(e) });
+  }
+});
+
 // ── Run a PowerShell tool ─────────────────────────────────────────────────────
 
 // Switch params: passed as bare flags (-Name) without a value string.
@@ -2365,17 +2792,22 @@ app.put('/api/characters/:name/fields', express.json(), async (req, res) => {
     if (!char) return res.status(404).json({ error: 'Персонаж не найден' });
 
     const cardPath = path.join(charsDir(city), char.lineageFolder, char.slug, `${char.slug}.md`);
-    let card = await fs.readFile(cardPath, 'utf-8');
+    // Strip a leading UTF-8 BOM — otherwise the H1 line starts with ﻿ and the
+    // name-replacement regex (^#) never matches, so renames silently no-op.
+    let card = (await fs.readFile(cardPath, 'utf-8')).replace(/^﻿/, '');
 
     for (const [key, rawValue] of Object.entries(fields)) {
       // H1 display name — preserves emoji prefix
       if (key === 'name') {
         const newName = String(rawValue).replace(/\n+/g, ' ').trim();
         if (!newName) continue;
+        const before = card;
         card = card.replace(
           /^(#\s+[^\wЀ-ӿ]*)([\wЀ-ӿ].+)$/m,
           (_, prefix) => `${prefix}${newName}`
         );
+        if (card === before)  // H1 not found — fail loudly instead of silent no-op
+          return res.status(422).json({ error: 'Не найден заголовок (H1) карточки для переименования' });
         continue;
       }
       // imagePrompt / negativePrompt — multi-line indented block (character format)
@@ -2450,6 +2882,94 @@ app.put('/api/characters/:name/relations', express.json(), async (req, res) => {
   }
 });
 
+// ── Create a new character card (web form; vampire-aware, fills fields per rules) ─
+
+const _LIN_FOLDER = { vampire:'vampires', fairy:'fairies', mortal:'mortals', werewolf:'werewolves', mage:'mages', hunter:'hunters' };
+const _LIN_WOD    = { vampires:'Вампир', fairies:'Фея / Ченджлинг', mortals:'Смертный', werewolves:'Оборотень', mages:'Маг', hunters:'Охотник' };
+const _LIN_EMOJI  = { vampires:'🧛', fairies:'🧚', mortals:'🧑', werewolves:'🐺', mages:'🔮', hunters:'🏹' };
+
+app.post('/api/characters', express.json(), async (req, res) => {
+  try {
+    const city = reqCity(req);
+    const b    = req.body || {};
+    const name = String(b.name || '').trim();
+    const folder = _LIN_FOLDER[b.lineage] || 'mortals';
+    const isVamp = folder === 'vampires';
+    const clan = String(b.clan || '').trim();
+    const sect = String(b.sect || '').trim();
+
+    if (!name) return res.status(400).json({ error: 'Укажи имя персонажа' });
+    if (isVamp && !clan) return res.status(400).json({ error: 'Клан обязателен для вампира' });
+    if (isVamp && !sect) return res.status(400).json({ error: 'Секта обязательна для вампира' });
+
+    const slug = slugify(name);
+    if (!slug) return res.status(400).json({ error: 'Не удалось сформировать slug из имени' });
+    const dir = path.join(charsDir(city), folder, slug);
+    if (await fs.stat(dir).catch(() => null))
+      return res.status(409).json({ error: `Персонаж «${slug}» уже существует в ${folder}` });
+
+    // City display name from city.md H1
+    let cityName = city;
+    try {
+      const cm = (await fs.readFile(path.join(cityDir(city), 'city.md'), 'utf-8')).replace(/^﻿/, '');
+      const m = cm.match(/^#\s+(.+)$/m);
+      if (m) cityName = m[1].replace(/^[^\p{L}\p{N}]+/u, '').split(/[,—–-]/)[0].trim();
+    } catch {}
+
+    const one = v => String(v || '').replace(/\n+/g, ' ').trim();
+    const gen = one(b.generation), by = one(b.birthYear), ey = one(b.embraceYear), sire = one(b.sire);
+    const bio = one(b.biography), app_ = one(b.appearance);
+    const belonging = one(b.belonging) || 'Создатель НПС';
+
+    const fields = [
+      `- **Слаг:** ${slug}`,
+      `- **Родной город:** ${cityName}`,
+      `- **Линейка WoD:** ${_LIN_WOD[folder]}`,
+      `- **${isVamp ? 'Клан' : 'Клан / Раса'}:** ${clan || '⚠️ Требуется уточнение'}`,
+      `- **${isVamp ? 'Секта' : 'Секта / Двор'}:** ${sect || '⚠️ Требуется уточнение'}`,
+    ];
+    if (isVamp) {
+      fields.push(`- **Поколение:** ${gen || '⚠️ Не указано'}`);
+      fields.push(`- **Год рождения:** ${by || '⚠️ Не указан'}`);
+      fields.push(`- **Год обращения:** ${ey || '⚠️ Не указан'}`);
+      fields.push(`- **Сир:** ${sire || '⚠️ Не указан'}`);
+    }
+    fields.push(`- **Статус:** Жив`);
+    fields.push(`- **Принадлежность:** ${belonging}`);
+    fields.push(`- **Биография:** ${bio || '⚠️ Требуется уточнение'}`);
+    fields.push(`- **Внешность:** ${app_ || '⚠️ Требуется уточнение (3–5 визуальных маркеров)'}`);
+    fields.push(`- **Голос:** ⚠️ Требуется уточнение`);
+    fields.push(`- **Отношения:**\n  - —`);
+    fields.push(`- **🎨 Промт для генерации изображения:**\n  ⏳ Заполнить по system/rules/portret.md (3 блока)`);
+    fields.push(`- **🚫 Негативный промт:**\n  photorealistic photography, anime, cartoon, watermark, text, blurry, deformed anatomy, extra limbs, bright white background, 3D render, CGI.`);
+
+    const card = `# ${_LIN_EMOJI[folder]} ${name}\n\n> 🔗 [Все персонажи](../../../archive/characters_index.md)\n\n---\n\n${fields.join('\n')}\n\n---\n\n## 🖼️ Изображения\n- ⏳ Изображение не предоставлено\n`;
+
+    await fs.mkdir(path.join(dir, 'art'), { recursive: true });
+    await fs.writeFile(path.join(dir, 'art', '.gitkeep'), '');
+    await fs.mkdir(path.join(dir, 'journal'), { recursive: true });
+    await fs.writeFile(path.join(dir, 'journal', '.gitkeep'), '');
+    await fs.writeFile(path.join(dir, `${slug}.md`), card, 'utf-8');   // no BOM — clean cards
+
+    // Append to characters_index.md (preserve its BOM if present)
+    const idxPath = path.join(archiveDir(city), 'characters_index.md');
+    const idxRaw  = await fs.readFile(idxPath, 'utf-8').catch(() => null);
+    if (idxRaw !== null) {
+      const bom = idxRaw.charCodeAt(0) === 0xFEFF;
+      const body = (bom ? idxRaw.slice(1) : idxRaw).replace(/\s*$/, '') +
+        `\n- [${name}](../characters/${folder}/${slug}/${slug}.md) — ${_LIN_WOD[folder]}${clan ? `, ${clan}` : ''}\n`;
+      await fs.writeFile(idxPath, (bom ? '﻿' : '') + body, 'utf-8');
+    }
+
+    delete _cache[city];
+    console.log(`[create-character] ${city}/${folder}/${slug}`);
+    res.json({ ok: true, slug, name, lineage: folder });
+  } catch (e) {
+    console.error('[create-character]', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ── Generation client factory ─────────────────────────────────────────────────
 // Priority: OpenRouter (.env) → ANTHROPIC_API_KEY → Claude.ai OAuth
 
@@ -2459,26 +2979,34 @@ const CLAUDE_CREDS_PATH = path.join(
 );
 const VALID_MODELS = ['claude-opus-4-8', 'claude-sonnet-4-6', 'claude-haiku-4-5-20251001'];
 
-// preferSource: 'openrouter' | 'claude' | null (auto)
+// preferSource: 'openrouter' | 'openai' | 'claude' | null (auto)
 async function makeGenerationClient(preferSource = null, modelOverride = null) {
   const wantOR     = preferSource === 'openrouter';
+  const wantOpenAI = preferSource === 'openai' || preferSource === 'gpt';
   const wantClaude = preferSource === 'claude';
+  const wantNonClaude = wantOR || wantOpenAI;
 
   const orModel = () => modelOverride || process.env.OPENROUTER_MODEL || 'openrouter/free';
+  const oaModel = () => modelOverride || process.env.OPENAI_MODEL || 'gpt-4o-mini';
   const clModel = () => modelOverride || 'claude-opus-4-8';
 
+  // ── OpenAI (explicit) ─────────────────────────────────────────
+  if (wantOpenAI && process.env.OPENAI_API_KEY) {
+    return { source: 'openai', model: oaModel() };
+  }
+
   // ── OpenRouter ────────────────────────────────────────────────
-  if ((wantOR || (!wantClaude && !preferSource)) && process.env.OPENROUTER_API_KEY) {
+  if ((wantOR || (!wantClaude && !wantOpenAI && !preferSource)) && process.env.OPENROUTER_API_KEY) {
     return { source: 'openrouter', model: orModel() };
   }
 
   // ── Anthropic API key ─────────────────────────────────────────
-  if (!wantOR && process.env.ANTHROPIC_API_KEY) {
+  if (!wantNonClaude && process.env.ANTHROPIC_API_KEY) {
     return { source: 'api-key', client: new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY }), model: clModel() };
   }
 
   // ── Claude.ai OAuth (Claude Code login) ──────────────────────
-  if (!wantOR) {
+  if (!wantNonClaude) {
     try {
       const oauth = await _readOauthCached();
       if (oauth?.accessToken) {
@@ -2493,14 +3021,14 @@ async function makeGenerationClient(preferSource = null, modelOverride = null) {
     }
   }
 
-  // ── Fallback: try OpenRouter even if prefer=claude but nothing else works ──
-  if (!wantClaude && process.env.OPENROUTER_API_KEY) {
-    return { source: 'openrouter', model: orModel() };
-  }
+  // ── Fallbacks: requested provider has no key — use whatever is configured ──
+  if (process.env.OPENAI_API_KEY     && !wantOR && !wantClaude) return { source: 'openai',     model: oaModel() };
+  if (process.env.OPENROUTER_API_KEY && !wantClaude)            return { source: 'openrouter', model: orModel() };
 
   throw new Error(
     'Нет источника для генерации. Варианты:\n' +
     '• web/.env: OPENROUTER_API_KEY=sk-or-...\n' +
+    '• web/.env: OPENAI_API_KEY=sk-...\n' +
     '• ANTHROPIC_API_KEY в переменных окружения\n' +
     '• Запусти Claude Code для OAuth-авторизации'
   );
@@ -2515,7 +3043,27 @@ const OR_FALLBACK_MODELS = [
   'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free',
 ];
 
-async function callOpenRouter(model, systemPrompt, userPrompt, imageBuffers, timeoutMs = 75000) {
+// Provider routing for OpenAI-compatible APIs (OpenRouter & OpenAI share the schema).
+function _oaEndpoint(provider) {
+  if (provider === 'openai') {
+    return {
+      url: 'https://api.openai.com/v1/chat/completions',
+      headers: { 'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`, 'Content-Type': 'application/json' },
+    };
+  }
+  return {
+    url: 'https://openrouter.ai/api/v1/chat/completions',
+    headers: {
+      'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
+      'Content-Type':  'application/json',
+      'HTTP-Referer':  'http://localhost:3000',
+      'X-Title':       'VTM Chronicle Manager',
+    },
+  };
+}
+
+// Shared chat completion for OpenAI-compatible providers ('openrouter' | 'openai').
+async function _chatCompletion({ provider, model, systemPrompt, userPrompt, imageBuffers = [], timeoutMs = 75000, maxTokens = 1500 }) {
   const content = [
     ...imageBuffers.map(({ buf, mime }) => ({
       type: 'image_url',
@@ -2526,29 +3074,22 @@ async function callOpenRouter(model, systemPrompt, userPrompt, imageBuffers, tim
 
   const body = JSON.stringify({
     model,
-    max_tokens: 1500,
+    max_tokens: maxTokens,
     messages: [
       { role: 'system', content: systemPrompt },
       { role: 'user',   content },
     ],
   });
 
+  const { url, headers } = _oaEndpoint(provider);
+  const label = provider === 'openai' ? 'OpenAI' : 'OpenRouter';
+
   // Abort the request if the model never responds, so callers don't hang forever.
   const ctrl  = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   let resp;
   try {
-    resp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-      method:  'POST',
-      headers: {
-        'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
-        'Content-Type':  'application/json',
-        'HTTP-Referer':  'http://localhost:3000',
-        'X-Title':       'VTM Chronicle Manager',
-      },
-      body,
-      signal: ctrl.signal,
-    });
+    resp = await fetch(url, { method: 'POST', headers, body, signal: ctrl.signal });
   } catch (e) {
     if (e.name === 'AbortError') throw Object.assign(new Error(`Модель «${model}» не ответила за ${Math.round(timeoutMs / 1000)}с`), { status: 504 });
     throw e;
@@ -2570,9 +3111,59 @@ async function callOpenRouter(model, systemPrompt, userPrompt, imageBuffers, tim
     if (msg?.images?.length) {
       throw new Error(`Модель «${data.model}» — генератор изображений, а не текста. Выберите другую модель в настройках ИИ.`);
     }
-    throw new Error('OpenRouter вернул пустой ответ от модели «' + data.model + '»');
+    throw new Error(`${label} вернул пустой ответ от модели «${data.model || model}»`);
   }
   return text;
+}
+
+async function callOpenRouter(model, systemPrompt, userPrompt, imageBuffers, timeoutMs = 75000, maxTokens = 1500) {
+  return _chatCompletion({ provider: 'openrouter', model, systemPrompt, userPrompt, imageBuffers: imageBuffers || [], timeoutMs, maxTokens });
+}
+async function callOpenAI(model, systemPrompt, userPrompt, imageBuffers, timeoutMs = 75000, maxTokens = 1500) {
+  return _chatCompletion({ provider: 'openai', model, systemPrompt, userPrompt, imageBuffers: imageBuffers || [], timeoutMs, maxTokens });
+}
+
+// OpenAI-compatible providers (single call shape) vs Anthropic SDK.
+const _isOA     = gen => gen.source === 'openrouter' || gen.source === 'openai';
+const _oaCall   = gen => (gen.source === 'openai' ? callOpenAI : callOpenRouter);
+// OpenRouter gets curated free-model fallbacks; OpenAI uses just the chosen model.
+const _oaModels = gen => (gen.source === 'openai' ? [gen.model] : [gen.model, ...OR_FALLBACK_MODELS.filter(m => m !== gen.model)]);
+
+// Plain-text generation with 429/529 retry (Claude) + automatic OpenRouter fallback.
+// Anthropic subscription/API keys rate-limit aggressively; this keeps short generations
+// (NPC replies, etc.) from hard-failing — it backs off, then falls back to a free model.
+async function genTextWithRetry(gen, { system, user, maxTokens = 900, fallbackOR = true }) {
+  if (_isOA(gen)) {
+    return { text: await _oaCall(gen)(gen.model, system, user, [], 75000, maxTokens), source: gen.source, model: gen.model };
+  }
+  const delays = [1000, 3000, 6000];
+  for (let attempt = 0; ; attempt++) {
+    try {
+      const m = await gen.client.messages.create({
+        model: gen.model, max_tokens: maxTokens, system,
+        messages: [{ role: 'user', content: user }],
+      });
+      return { text: m.content[0]?.text?.trim() || '', source: gen.source, model: gen.model };
+    } catch (e) {
+      const code = e.status ?? e.statusCode;
+      const overloaded = code === 429 || code === 529;
+      if (overloaded && attempt < delays.length) {
+        const ra = Number(e.headers?.['retry-after']) * 1000;
+        await new Promise(r => setTimeout(r, ra > 0 ? ra : delays[attempt]));
+        continue;
+      }
+      // Out of retries — fall back so the user still gets output (OpenAI first, then a free OpenRouter model)
+      if (overloaded && fallbackOR && process.env.OPENAI_API_KEY) {
+        const m = process.env.OPENAI_MODEL || 'gpt-4o-mini';
+        return { text: await callOpenAI(m, system, user, [], 75000, maxTokens), source: 'openai-fallback', model: m };
+      }
+      if (overloaded && fallbackOR && process.env.OPENROUTER_API_KEY) {
+        const orModel = process.env.OPENROUTER_MODEL || 'openrouter/free';
+        return { text: await callOpenRouter(orModel, system, user, []), source: 'openrouter-fallback', model: orModel };
+      }
+      throw e;
+    }
+  }
 }
 
 // ── Auth status endpoint ──────────────────────────────────────────────────────
@@ -2586,6 +3177,11 @@ app.get('/api/auth-status', async (req, res) => {
         ok:     true,
         model:  process.env.OPENROUTER_MODEL || 'openrouter/free',
       });
+    }
+
+    // OpenAI / GPT
+    if (process.env.OPENAI_API_KEY) {
+      return res.json({ source: 'openai', ok: true, model: process.env.OPENAI_MODEL || 'gpt-4o-mini' });
     }
 
     // Anthropic API key
@@ -2654,14 +3250,14 @@ app.post('/api/characters/:name/generate-appearance', express.json(), async (req
 
     let appearance = '';
 
-    if (gen.source === 'openrouter') {
+    if (_isOA(gen)) {
       // Try primary model, then fallbacks if endpoint not found
-      const modelsToTry = [gen.model, ...OR_FALLBACK_MODELS.filter(m => m !== gen.model)];
+      const modelsToTry = _oaModels(gen);
       let lastErr;
       let allRateLimited = true;
       for (const m of modelsToTry) {
         try {
-          appearance = await callOpenRouter(m, systemPrompt, userPrompt, imageBuffers);
+          appearance = await _oaCall(gen)(m, systemPrompt, userPrompt, imageBuffers);
           if (m !== gen.model) console.log(`[generate-appearance] fallback model used: ${m}`);
           allRateLimited = false;
           break;
@@ -2764,19 +3360,12 @@ Requirements:
       negative = (parsed.negative || '').trim();
     };
 
-    if (gen.source === 'openrouter') {
-      const modelsToTry = [gen.model, ...OR_FALLBACK_MODELS.filter(m => m !== gen.model)];
+    if (_isOA(gen)) {
+      const modelsToTry = _oaModels(gen);
       let lastErr, allRateLimited = true;
       for (const m of modelsToTry) {
         try {
-          const r = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-            method: 'POST',
-            headers: { 'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`, 'Content-Type': 'application/json', 'HTTP-Referer': 'http://localhost:3000' },
-            body: JSON.stringify({ model: m, max_tokens: 600, messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: userPrompt }] }),
-          });
-          const d = await r.json();
-          if (!r.ok) { const e = new Error(d.error?.message || `HTTP ${r.status}`); e.status = r.status; throw e; }
-          parseResult(d.choices?.[0]?.message?.content || '');
+          parseResult(await _oaCall(gen)(m, systemPrompt, userPrompt, [], 75000, 600));
           allRateLimited = false;
           break;
         } catch (e) {
@@ -2983,23 +3572,320 @@ function diaryToneFor(c) {
 // Extract location names from generated scenario text (no AI call needed).
 // Looks for "### Name" headers inside the "Локации" section, falling back to
 // bold list items. Returns up to `max` names.
+// Clean a raw scenario location heading into a bare place name
+// e.g. "1. Станция Марселье (Line 13) — 23:47" → "Станция Марселье"
+function _cleanLocName(raw) {
+  return String(raw)
+    .replace(/[*_`[\]]/g, '')
+    .split(/\s+[—–]\s+/)[0]        // "Name — time/desc" → "Name"
+    .replace(/\([^)]*\)/g, ' ')    // drop "(Line 13)"
+    .replace(/^[\s\d.)]+/, '')     // drop leading "1. " numbering
+    .replace(/^[^\p{L}«»"]+/u, '') // drop leading emoji/symbols
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+// Coarse location "type" — used to avoid multiplying same-type places
+// (e.g. inventing a new metro station when one already exists).
+function _locType(name) {
+  const n = String(name).toLowerCase();
+  if (/метро|métro|\bmetro\b|перрон|перон|станци/.test(n)) return 'metro';
+  if (/катакомб|подземель/.test(n))                        return 'catacombs';
+  if (/кладбищ|cimeti|погост|пер-лашез/.test(n))           return 'cemetery';
+  return null;
+}
+// Location names mentioned in the scenario's «Локации» section (robust, bounded)
 function _extractLocNamesFromScenario(text, max = 5) {
-  // Primary: find a "Локации" section, collect its ### sub-headers
-  const secM = text.match(/(?:^|\n)#{1,3}[^#\n]*Локации[^\n]*\n([\s\S]*?)(?=\n#{1,3}\s+(?:\d+\.\s+)?(?:НПС|Завязка|Кульминация|Финал|Варианты|Открытые)|$)/i);
-  if (secM) {
-    const names = [...secM[1].matchAll(/^#{2,4}\s+(.+)$/gm)]
-      .map(m => m[1].replace(/[*_[\]🏛📍⚠💀🔴🟡🟢✦—]/g, '').trim())
-      .filter(n => n.length >= 4 && n.length <= 100 && !/^(нпс|завязка|кульм|финал|open|нить)/i.test(n));
-    if (names.length > 0) return names.slice(0, max);
+  return _parseScenarioLocations(text).map(l => l.name).filter(Boolean).slice(0, max);
+}
+
+// Normalize a name for fuzzy matching (lowercase, ё→е, drop punctuation/emoji)
+function _normName(s) {
+  return String(s).toLowerCase().replace(/ё/g, 'е')
+    .replace(/[^\p{L}\s]/gu, ' ').replace(/\s+/g, ' ').trim();
+}
+// True if two names plausibly refer to the same entity (token-subset on tokens ≥3 chars)
+function _nameMatch(a, b) {
+  const na = _normName(a), nb = _normName(b);
+  if (!na || !nb) return false;
+  if (na === nb) return true;
+  const ta = na.split(' ').filter(t => t.length >= 3);
+  const tb = nb.split(' ').filter(t => t.length >= 3);
+  if (!ta.length || !tb.length) return false;
+  const [short, long] = ta.length <= tb.length ? [ta, tb] : [tb, ta];
+  return short.every(t => long.includes(t));
+}
+// Pull NPC names from the scenario's «НПС» section
+function _extractNpcNamesFromScenario(text, max = 12) {
+  const secM = text.match(/(?:^|\n)#{1,4}[^\n]*НПС[^\n]*\n([\s\S]*?)(?=\n#{1,2}\s|\n---|\s*$)/i);
+  const block = secM ? secM[1] : '';
+  if (!block) return [];
+  const names = [];
+  const push = raw => {
+    let n = String(raw).replace(/[*_`[\]()«»"]/g, '').replace(/^[^\p{L}]+/u, '').trim();
+    n = n.split(/[—–:(]/)[0].trim();
+    if (n.length >= 2 && n.length <= 60 && !/^(нпс|роль|имя)$/i.test(n)
+        && !names.some(x => _nameMatch(x, n))) names.push(n);
+  };
+  for (const m of block.matchAll(/^\s*[-*•]\s*\*\*([^*\n]+?)\*\*/gm)) push(m[1]);
+  for (const m of block.matchAll(/^\s*[-*•]\s*([^—–\n*[]{2,60}?)\s*[—–]/gm)) push(m[1]);
+  for (const m of block.matchAll(/^#{2,4}\s+([^—–\n]{2,60}?)(?:\s*[—–]|$)/gm)) push(m[1]);
+  return names.slice(0, max);
+}
+// Render npc.md — ПК / Каноничные (reused) / Модульные (new)
+function _renderModuleNpcMd(modTitle, mod, pcs, canonNpcs, newNpcs, allChars) {
+  const charLink = ch => `../../../../characters/${ch.lineageFolder}/${ch.slug}/${ch.slug}.md`;
+  const pcLines = (pcs && pcs.length) ? pcs.map(nm => {
+    const ch = allChars.find(c => _nameMatch(nm, c.name));
+    return ch ? `- ${ch.name} — Персонаж игрока → 🔗 [Карточка](${charLink(ch)})`
+              : `- ${nm} — Персонаж игрока`;
+  }).join('\n') : '- —';
+  const canonLines = canonNpcs.length
+    ? canonNpcs.map(x => `- ${x.char.name} — ${x.role || 'роль в модуле'} → 🔗 [Карточка](${charLink(x.char)})`).join('\n')
+    : '- —';
+  const newLines = newNpcs.length
+    ? newNpcs.map(x => { const s = slugify(x.name); return `- ${x.name} — ${x.role || 'роль'} → 🔗 [Карточка](npc/${s}/${s}.md)`; }).join('\n')
+    : '- —';
+  return [
+    `# НПС модуля: ${modTitle}`, '',
+    `> 🔗 [Модуль](${mod}.md)`,
+    '> ℹ️ Каноничные НПС → ссылка на карточку в `characters/`. Модульные (неканоничные) → карточки в `npc/`.', '',
+    '---', '', '## 🎭 Игровые персонажи (ПК)', '', pcLines, '',
+    '---', '', '## 📚 Каноничные НПС', '', canonLines, '',
+    '---', '', '## 🆕 Модульные НПС (неканоничные)', '',
+    '> Карточки в `npc/`. Условия продвижения — `system/rules/module_rules.md`.', '', newLines, '',
+  ].join('\n');
+}
+// Compact per-character digest (status, role, date markers, relationships) for the
+// generation prompt — lets the AI reason about timeline compatibility & relations.
+function _charTimelineDigest(name, kind, card) {
+  const field = re => (card.match(re)?.[1] || '').replace(/\r/g, '').trim();
+  const status  = field(/\*\*Статус:\*\*\s*([^\n]+)/);
+  const det     = field(/\*\*Детали статуса:\*\*\s*([^\n]+)/);
+  const hier    = field(/\*\*Парижская иерархия:\*\*\s*([^\n]+)/) || field(/\*\*Иерархия в городе:\*\*\s*([^\n]+)/);
+  const role    = field(/\*\*Роль:\*\*\s*([^\n]+)/);
+  const embrace = field(/\*\*Год обращения:\*\*\s*([^\n]+)/);
+  const relM    = card.match(/\*\*Отношения:\*\*\s*\n([\s\S]*?)(?=\n-\s*\*\*|\n##\s|\n---)/);
+  const rels    = relM ? relM[1].replace(/\r/g, '').replace(/\s+$/g, '') : '';
+  const dates   = [...card.matchAll(/(?:[А-Яа-яЁё]+\s+)?\b(?:19|20)\d{2}\b/g)]
+    .map(m => m[0].trim()).filter((v, i, a) => a.indexOf(v) === i).slice(0, 10);
+  const L = [`### ${name} (${kind})`];
+  if (status)        L.push(`- Статус: ${status}${det ? ` — ${det}` : ''}`);
+  if (hier || role)  L.push(`- Роль/иерархия: ${[hier, role].filter(Boolean).join(' / ')}`);
+  if (embrace && !/не указан/i.test(embrace)) L.push(`- Год обращения: ${embrace}`);
+  if (dates.length)  L.push(`- Даты в карточке: ${dates.join(', ')}`);
+  if (rels.trim())   L.push(`- Связи:\n${rels.split('\n').filter(Boolean).map(l => '  ' + l.trim()).join('\n')}`);
+  return L.join('\n');
+}
+// Return the markdown body of a scenario section whose header matches headerRe,
+// up to the next header of the same or higher level. '' if not found.
+function _extractScenarioSection(text, headerRe) {
+  if (!text) return '';
+  const lines = text.replace(/\r\n/g, '\n').split('\n');
+  let start = -1, level = 0;
+  for (let i = 0; i < lines.length; i++) {
+    const h = lines[i].match(/^(#{1,4})\s+(.+)$/);
+    if (h && headerRe.test(h[2])) { start = i + 1; level = h[1].length; break; }
   }
-  // Fallback: bold bullet items under any mention of "Локации"
-  const boldM = text.match(/Локации[^\n]*\n([\s\S]{0,1500}?)(?=\n##|$)/i);
-  if (boldM) {
-    const names = [...boldM[1].matchAll(/^\s*[-*•]?\s*\*\*([^*]{4,80})\*\*/gm)]
-      .map(m => m[1].trim());
-    if (names.length > 0) return names.slice(0, max);
+  if (start === -1) return '';
+  const out = [];
+  for (let i = start; i < lines.length; i++) {
+    const h = lines[i].match(/^(#{1,4})\s+/);
+    if (h && h[1].length <= level) break;
+    if (/^-{3,}\s*$/.test(lines[i])) break;
+    out.push(lines[i]);
   }
-  return [];
+  return out.join('\n').trim();
+}
+// Parse the scenario's «Сцены» section into [{date, title, description}]
+function _parseScenarioScenes(text) {
+  const block = _extractScenarioSection(text, /Сцены/i);
+  if (!block) return [];
+  const out = [];
+  for (const part of block.split(/\n(?=#{2,4}\s)/)) {
+    const h = part.match(/^#{2,4}\s+(.+)$/m);
+    if (!h) continue;
+    let head = h[1].replace(/[*_`]/g, '').replace(/^[^\p{L}\d]+/u, '').trim();
+    let date = '', title = head;
+    const sm = head.match(/^((?:Сцена|Эпизод)\s*\d+)\s*[—–:.-]\s*(.+)$/i);
+    if (sm) { date = sm[1].trim(); title = sm[2].trim(); }
+    else { date = head.match(/^(?:Сцена|Эпизод)\s*\d+/i)?.[0] || ''; }
+    const body = part.slice(h[0].length).replace(/^\s+/, '').trim();
+    const desc = body.replace(/^\s*[-*•]\s*/gm, '').replace(/\*\*/g, '').trim();
+    if (title || desc) out.push({ date, title: title || date, description: desc });
+  }
+  return out;
+}
+// Parse the scenario's «Локации» section into [{name, description}]
+function _parseScenarioLocations(text) {
+  const block = _extractScenarioSection(text, /Локаци/i);
+  if (!block) return [];
+  const out = [], seen = new Set();
+  const add = (rawName, rawDesc) => {
+    const name = _cleanLocName(rawName);
+    if (!name || name.length < 2 || name.length > 100) return;
+    const key = name.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push({ name, description: String(rawDesc || '').replace(/[*_`]/g, '').trim() });
+  };
+  for (const line of block.split('\n')) {
+    const bm = line.trim().match(/^[-*•]\s+(.+)$/);
+    if (!bm) continue;
+    const parts = bm[1].split(/\s*(?:[—–]|→|🔗|\|)\s*/);
+    const desc = parts.slice(1).filter(p => p && !/^\[?Карточк/i.test(p)).join(' — ');
+    add(parts[0], desc);
+  }
+  for (const part of block.split(/\n(?=#{2,4}\s)/)) {
+    const h = part.match(/^#{2,4}\s+(.+)$/m);
+    if (!h) continue;
+    const body = part.slice(h[0].length).replace(/^\s+/, '')
+      .split('\n').map(l => l.replace(/^\s*[-*•]\s*/, '').trim()).filter(Boolean).slice(0, 2).join(' ');
+    add(h[1], body);
+  }
+  return out;
+}
+// Parse sessions.md (Phase B log) into [{title, date, scenes, status, body}]
+function _parseSessions(raw) {
+  if (!raw) return [];
+  const text = raw.replace(/\r\n/g, '\n');
+  const out = [];
+  for (const part of text.split(/\n(?=##\s+Сесси)/)) {
+    const h = part.match(/^##\s+(.+)$/m);
+    if (!h || !/Сесси/.test(h[1])) continue;
+    const head   = h[1].trim();
+    const scenes = (part.match(/\*\*Сыграно сцен:\*\*\s*([^\n]*)/)?.[1] || '').trim().replace(/^—$/, '');
+    const status = (part.match(/\*\*Статус модуля:\*\*\s*([^\n]*)/)?.[1] || '').trim();
+    let body = part.slice(part.indexOf(h[0]) + h[0].length)
+      .replace(/^\s*-\s*\*\*Сыграно сцен:\*\*[^\n]*\n?/m, '')
+      .replace(/^\s*-\s*\*\*Статус модуля:\*\*[^\n]*\n?/m, '')
+      .replace(/\n-{3,}\s*$/, '')
+      .trim();
+    if (/^\*\(без заметок\)\*$/.test(body)) body = '';
+    const date = (head.match(/[—–-]\s*(.+)$/)?.[1] || '').trim();
+    out.push({ title: head, date, scenes, status, body });
+  }
+  return out;
+}
+// Find a modular (non-canon) NPC card inside a module's npc/ folder by character name.
+async function _findModularNpcCard(npcRoot, name) {
+  const dirs = await fs.readdir(npcRoot, { withFileTypes: true }).catch(() => []);
+  for (const d of dirs) {
+    if (!d.isDirectory()) continue;
+    const card = await fs.readFile(path.join(npcRoot, d.name, `${d.name}.md`), 'utf-8').catch(() => '');
+    if (!card) continue;
+    // First heading of any level → strip emoji and «Карточка НПС:»-style prefixes, take part before « — »
+    const head = (card.match(/^#{1,6}\s+(.+)$/m)?.[1] || '')
+      .replace(/^[^\p{L}]+/u, '')
+      .replace(/^карточка\s+нпс\s*:?\s*/i, '')
+      .replace(/^нпс\s*:?\s*/i, '');
+    const cardName = head.split(/\s*[—–]\s*/)[0];      // «Гиль — модульный НПС» → «Гиль»
+    if (_nameMatch(cardName, name) || _nameMatch(head, name) || _normName(head).includes(_normName(name))) {
+      const clan = (card.match(/\*\*Клан(?:\s*\/\s*Раса)?:\*\*\s*([^\n|]+)/)?.[1]
+                 || card.match(/\|\s*\*\*Клан\*\*\s*\|\s*([^\n|]+)/)?.[1] || '').trim();
+      return { card, clan };
+    }
+  }
+  return null;
+}
+
+// Parse npc.md into structured groups for the module page «НПС» tab.
+// Groups: ПК / Каноничные / Модульные. Tolerates bullet, bold and «#### » subsection layouts.
+function _cleanNpcName(s) {
+  return String(s || '').replace(/^[\s>*]+/, '').replace(/^[^\p{L}]+/u, '').replace(/[\s*]+$/, '').trim();
+}
+function _npcCardHref(chunk) {
+  return (chunk.match(/\[Карточка\]\(([^)]+)\)/) || [])[1] || '';
+}
+function _parseNpcEntries(body) {
+  const entries = [];
+  // Format C — «#### Имя — роль» subsections (модульные НПС со встроенным мини-листом)
+  if (/^####\s+/m.test(body)) {
+    for (const part of body.split(/\n(?=####\s+)/)) {
+      const h = part.match(/^####\s+(.+)$/m);
+      if (!h) continue;
+      const [namePart, ...rest] = h[1].split(/\s*[—–]\s*/);
+      const name = _cleanNpcName(namePart);
+      if (!name) continue;
+      const after = part.slice(part.indexOf(h[0]) + h[0].length);
+      const descBits = [rest.join(' — ').trim()];
+      for (const ln of after.split('\n')) {
+        const t = ln.trim();
+        if (!t || /\[Карточка\]/.test(t)) continue;
+        descBits.push(t.replace(/^[-*]\s*/, ''));
+      }
+      entries.push({ name, desc: descBits.filter(Boolean).join(' — ').replace(/\*\*/g, '').trim(), cardHref: _npcCardHref(part) });
+    }
+    return entries;
+  }
+  // Formats A/B — one entry per line («- Имя — роль …» или «**Имя** — описание …»)
+  for (const ln of body.split('\n')) {
+    const t = ln.trim();
+    if (!t || /^>/.test(t)) continue;
+    if (!/\[Карточка\]/.test(t) && !/^\s*[-*]/.test(t) && !/^\*\*/.test(t)) continue;
+    let prefix = t
+      .replace(/[→➔➜]?\s*🔗?\s*\[Карточка\]\([^)]*\).*$/, '')   // drop «→ 🔗 [Карточка](…)» trailer
+      .replace(/^\s*-\s+/, '')                                   // strip leading «- » bullet
+      .replace(/\*\*/g, '')                                      // drop bold markers
+      .trim();
+    if (!prefix) continue;
+    const [namePart, ...rest] = prefix.split(/\s*[—–]\s*/);
+    const name = _cleanNpcName(namePart);
+    if (!name) continue;
+    entries.push({ name, desc: rest.join(' — ').trim(), cardHref: _npcCardHref(t) });
+  }
+  return entries;
+}
+function _parseNpcMdGroups(raw) {
+  if (!raw) return [];
+  const text = raw.replace(/^﻿/, '').replace(/\r\n/g, '\n');
+  const heads = [];
+  const re = /^##\s+(.+)$/gm;
+  let m;
+  while ((m = re.exec(text))) heads.push({ title: m[1].trim(), bodyStart: m.index + m[0].length, at: m.index });
+  const groups = [];
+  for (let i = 0; i < heads.length; i++) {
+    const body  = text.slice(heads[i].bodyStart, i + 1 < heads.length ? heads[i + 1].at : text.length);
+    const title = heads[i].title;
+    const kind  = /игров|\bпк\b|персонаж\w*\s+игрок/i.test(title) ? 'pc'
+                : /модульн|неканон/i.test(title) ? 'modular'
+                : 'canon';
+    const entries = _parseNpcEntries(body);
+    if (entries.length) groups.push({ title, kind, entries });
+  }
+  return groups;
+}
+// Render one session block for sessions.md
+function _renderSessionBlock(n, date, scenes, status, body) {
+  return [
+    '', '---', '',
+    `## Сессия ${n} — ${(date || '').trim() || new Date().toISOString().slice(0, 10)}`, '',
+    `- **Сыграно сцен:** ${(scenes || '').trim() || '—'}`,
+    `- **Статус модуля:** ${(status || '').trim() || '🟡 В процессе'}`, '',
+    (body || '').trim() || '*(без заметок)*', '',
+  ].join('\n');
+}
+// Rewrite the whole sessions.md from the session array (append & edit share this)
+async function _writeSessionsFile(modDir, mod, sessions) {
+  const titleM = (await fs.readFile(path.join(modDir, `${mod}.md`), 'utf-8').catch(() => '')).match(/^#\s+(.+)$/m);
+  const modTitle = titleM ? titleM[1].replace(/[*[\]]/g, '').trim() : mod;
+  const header = `# Журнал сессий: ${modTitle}\n\n> 🔗 [Модуль](${mod}.md) | [Сценарий](scenario.md)\n> Фаза B — ведение во время игры. Правила: system/rules/module_rules.md`;
+  const blocks = sessions.map((s, i) => _renderSessionBlock(i + 1, s.date, s.scenes, s.status, s.body)).join('');
+  await fs.writeFile(path.join(modDir, 'sessions.md'), header + blocks + '\n', 'utf-8');
+}
+// Patch <mod>.md after generation WITHOUT destroying its concept/participants
+async function _patchModuleMain(modDir, mod, firstLoc) {
+  const p = path.join(modDir, `${mod}.md`);
+  let txt = await fs.readFile(p, 'utf-8').catch(() => '');
+  if (!txt) return;
+  if (!/\[Сценарий\]\(scenario\.md\)/.test(txt)) {
+    txt = txt.replace(/^(>\s*🔗\s*\[Хроника\]\([^)]*\))(.*)$/m,
+      `$1 | [Сценарий](scenario.md) | [НПС](npc.md)$2`);
+  }
+  if (firstLoc) {
+    txt = txt.replace(/(\|\s*\*\*Локация\*\*\s*\|)([^|\n]*)\|/,
+      (m, pre, val) => val.trim() ? m : `${pre} ${firstLoc} |`);
+  }
+  await fs.writeFile(p, txt, 'utf-8');
 }
 
 // slug generation lives in lib/parsers.js (single source of truth — see import above)
@@ -3612,39 +4498,26 @@ ${eventsChunks.join('\n\n') || '(не найдены)'}`;
 STUB-ФАЙЛЫ:
 ${stubContents.map(s => `\n---\n## ${s.rel}\n${s.txt}`).join('\n')}`;
 
-    // Use makeGenerationClient for OpenRouter
-    if (!process.env.OPENROUTER_API_KEY) {
+    // Provider: OpenRouter (default) or OpenAI/GPT — both OpenAI-compatible
+    const useOpenAI = req.body?.source === 'openai' || req.body?.source === 'gpt';
+    if (useOpenAI && !process.env.OPENAI_API_KEY)
+      return res.status(503).json({ ok: false, error: 'OPENAI_API_KEY не задан. Настрой в Инструменты → Модели AI.' });
+    if (!useOpenAI && !process.env.OPENROUTER_API_KEY)
       return res.status(503).json({ ok: false, error: 'OPENROUTER_API_KEY не задан. Настрой в Инструменты → Модели AI.' });
+
+    const model = proseModel || (useOpenAI
+      ? (process.env.OPENAI_MODEL || 'gpt-4o-mini')
+      : (process.env.OPENROUTER_MODEL || 'google/gemma-4-26b-a4b-it:free'));
+
+    let text = '';
+    try {
+      text = useOpenAI
+        ? await callOpenAI(model, systemPrompt, userPrompt, [], 240000, 4000)
+        : await callOpenRouter(model, systemPrompt, userPrompt, [], 240000, 4000);
+    } catch (e) {
+      return res.status(e.status >= 400 && e.status < 600 ? e.status : 500).json({ ok: false, error: e.message });
     }
-
-    const model = proseModel || process.env.OPENROUTER_MODEL || 'google/gemma-4-26b-a4b-it:free';
-
-    const orResp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
-        'Content-Type':  'application/json',
-        'HTTP-Referer':  'http://localhost:3000',
-        'X-Title':       'VTM Chronicle Manager',
-      },
-      body: JSON.stringify({
-        model,
-        max_tokens: 4000,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user',   content: userPrompt },
-        ],
-      }),
-    });
-
-    if (!orResp.ok) {
-      const err = await orResp.text().catch(() => '');
-      return res.status(orResp.status).json({ ok: false, error: err || orResp.statusText });
-    }
-
-    const orData = await orResp.json();
-    const text   = orData.choices?.[0]?.message?.content?.trim() || '';
-    if (!text) return res.status(500).json({ ok: false, error: 'OpenRouter вернул пустой ответ.' });
+    if (!text) return res.status(500).json({ ok: false, error: `${useOpenAI ? 'OpenAI' : 'OpenRouter'} вернул пустой ответ.` });
 
     // Parse ===FILE: ...=== blocks
     const fileBlockRe = /===FILE:\s*(.+?)===\n([\s\S]*?)===ENDFILE===/g;
@@ -3820,17 +4693,29 @@ app.get('/api/settings', async (req, res) => {
       const m = line.match(/^([A-Z_][A-Z0-9_]*)\s*=\s*(.*)$/);
       if (m) env[m[1]] = m[2].trim();
     }
+    // Claude Code OAuth status (independent of OpenRouter priority in /api/auth-status)
+    const oauth = await _readOauthCached().catch(() => null);
+    const claudeOauth = oauth?.accessToken ? {
+      expired:      !!(oauth.expiresAt && Date.now() >= oauth.expiresAt),
+      subscription: oauth.subscriptionType || 'unknown',
+      expiresIn:    oauth.expiresAt ? Math.max(0, Math.round((oauth.expiresAt - Date.now()) / 60000)) : null,
+    } : null;
+
     res.json({
       OPENROUTER_API_KEY: env.OPENROUTER_API_KEY ? '***' : '',
       OPENROUTER_MODEL:   env.OPENROUTER_MODEL   || '',
       hasKey:             !!env.OPENROUTER_API_KEY,
+      OPENAI_MODEL:       env.OPENAI_MODEL       || '',
+      hasOpenAIKey:       !!env.OPENAI_API_KEY,
+      hasAnthropicKey:    !!env.ANTHROPIC_API_KEY,
+      claudeOauth,
     });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 app.post('/api/settings', express.json(), async (req, res) => {
   try {
-    const { OPENROUTER_API_KEY, OPENROUTER_MODEL } = req.body || {};
+    const { OPENROUTER_API_KEY, OPENROUTER_MODEL, OPENAI_API_KEY, OPENAI_MODEL, ANTHROPIC_API_KEY } = req.body || {};
 
     // Read current .env
     const raw = await fs.readFile(ENV_PATH, 'utf-8').catch(() => '');
@@ -3838,14 +4723,21 @@ app.post('/api/settings', express.json(), async (req, res) => {
     const env = {};
     for (const l of lines) { const m = l.match(/^([A-Z_][A-Z0-9_]*)\s*=\s*(.*)$/); if (m) env[m[1]] = m[2].trim(); }
 
-    // Update only provided fields (empty string = remove)
-    if (OPENROUTER_API_KEY !== undefined && OPENROUTER_API_KEY !== '***') {
-      if (OPENROUTER_API_KEY.trim()) env.OPENROUTER_API_KEY = OPENROUTER_API_KEY.trim();
-      else delete env.OPENROUTER_API_KEY;
-    }
+    // Update only provided fields (empty string = remove; '***' = unchanged sentinel)
+    const setKey = (name, val) => {
+      if (val === undefined || val === '***') return;
+      if (String(val).trim()) env[name] = String(val).trim(); else delete env[name];
+    };
+    setKey('OPENROUTER_API_KEY', OPENROUTER_API_KEY);
+    setKey('OPENAI_API_KEY',     OPENAI_API_KEY);
+    setKey('ANTHROPIC_API_KEY',  ANTHROPIC_API_KEY);
     if (OPENROUTER_MODEL !== undefined) {
       if (OPENROUTER_MODEL.trim()) env.OPENROUTER_MODEL = OPENROUTER_MODEL.trim();
       else delete env.OPENROUTER_MODEL;
+    }
+    if (OPENAI_MODEL !== undefined) {
+      if (OPENAI_MODEL.trim()) env.OPENAI_MODEL = OPENAI_MODEL.trim();
+      else delete env.OPENAI_MODEL;
     }
 
     const newContent = Object.entries(env).map(([k, v]) => `${k}=${v}`).join('\n') + '\n';
