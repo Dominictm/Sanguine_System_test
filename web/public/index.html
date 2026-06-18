@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Cinzel+Decorative:wght@700&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=Share+Tech+Mono&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css">
-<script src="https://d3js.org/d3.v7.min.js"></script>
+<script src="https://d3js.org/d3.v7.min.js" defer></script>
 </head>
 <body>
 <div id="app">
@@ -147,7 +147,7 @@
       <div id="graph-wrap">
         <svg id="graph-svg"></svg>
         <div id="info-panel">
-          <button class="info-close" id="info-close">✕</button>
+          <button class="info-close" id="info-close" aria-label="Закрыть панель">✕</button>
           <div id="info-content"></div>
         </div>
       </div>
@@ -249,7 +249,7 @@
           </div>
           <div class="chr-detail-header-btns">
             <button class="chp-create-btn" id="btn-create-module-in-chr" style="display:none">+ Модуль</button>
-            <button class="chr-detail-close" id="chr-detail-close">✕</button>
+            <button class="chr-detail-close" id="chr-detail-close" aria-label="Закрыть">✕</button>
           </div>
         </div>
         <div class="chr-detail-tabbar">
@@ -796,7 +796,7 @@
 <!-- ── Create Character Modal ── -->
 <div id="char-modal" class="modal-overlay">
   <div class="modal-box">
-    <button class="modal-close" id="modal-close">✕</button>
+    <button class="modal-close" id="modal-close" aria-label="Закрыть">✕</button>
 
     <!-- Step 1: выбор линейки -->
     <div id="modal-s1">
@@ -850,7 +850,7 @@
 <!-- ── Char Detail Modal ── -->
 <div id="char-detail-modal" class="modal-overlay">
   <div class="modal-box modal-detail">
-    <button class="modal-close" id="char-detail-close">✕</button>
+    <button class="modal-close" id="char-detail-close" aria-label="Закрыть">✕</button>
     <div id="char-detail-content"></div>
   </div>
 </div>
@@ -858,7 +858,7 @@
 <!-- ── Location Detail Modal ── -->
 <div id="loc-detail-modal" class="modal-overlay">
   <div class="modal-box modal-loc-detail">
-    <button class="modal-close" id="loc-detail-close">✕</button>
+    <button class="modal-close" id="loc-detail-close" aria-label="Закрыть">✕</button>
     <div id="loc-detail-content"></div>
   </div>
 </div>
@@ -866,16 +866,16 @@
 <!-- ── Module Detail Modal ── -->
 <div id="module-detail-modal" class="modal-overlay">
   <div class="modal-box modal-module-detail">
-    <button class="modal-close" id="module-detail-close">✕</button>
+    <button class="modal-close" id="module-detail-close" aria-label="Закрыть">✕</button>
     <div id="module-detail-content"></div>
   </div>
 </div>
 
 <!-- ── Image Lightbox ── -->
 <div id="img-lightbox" class="img-lightbox">
-  <button class="lightbox-close" id="lightbox-close">✕</button>
-  <button class="lightbox-nav prev" id="lightbox-prev">&#8249;</button>
-  <button class="lightbox-nav next" id="lightbox-next">&#8250;</button>
+  <button class="lightbox-close" id="lightbox-close" aria-label="Закрыть">✕</button>
+  <button class="lightbox-nav prev" id="lightbox-prev" aria-label="Предыдущее изображение">&#8249;</button>
+  <button class="lightbox-nav next" id="lightbox-next" aria-label="Следующее изображение">&#8250;</button>
   <img class="lightbox-img" id="lightbox-img" src="" alt="">
   <div class="lightbox-counter" id="lightbox-counter"></div>
 </div>

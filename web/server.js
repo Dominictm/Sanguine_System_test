@@ -1,4 +1,5 @@
 const express = require('express');
+const compression = require('compression');
 const path    = require('path');
 const fs      = require('fs').promises;
 const crypto  = require('crypto');
@@ -53,10 +54,13 @@ const CHARS_TTL = 15_000;
 // null = never validated; 0 = clean; N = N broken links remaining.
 let _brokenLinks = null;
 
+app.use(compression());
 app.use(express.json({ limit: '20mb' }));
-app.use(express.static(path.join(__dirname, 'public')));
+// maxAge lets the browser reuse the heavy app shell between loads; ETag/Last-Modified
+// still revalidate after it expires, so edits during development surface within minutes.
+app.use(express.static(path.join(__dirname, 'public'), { maxAge: '5m' }));
 // Serve images straight out of cities/<city>/… (characters/<lin>/<slug>/art/, locations/…)
-app.use('/city-img', express.static(CITIES_DIR));
+app.use('/city-img', express.static(CITIES_DIR, { maxAge: '1h' }));
 
 // ── Request logger ────────────────────────────────────────────────────────────
 const C = {
@@ -174,37 +178,48 @@ const LINEAGE_MAP = {
 async function getAllCharacters(city = DEFAULT_CITY) {
   const cc = _cache[city];
   if (cc && Date.now() - cc.ts < CHARS_TTL) return cc.chars;
-  const result = [];
-  for (const [folder, lineage] of Object.entries(LINEAGE_MAP)) {
-    const dir = path.join(charsDir(city), folder);
-    let entries;
-    try { entries = await fs.readdir(dir); } catch { continue; }
 
-    for (const entry of entries) {
-      if (entry === '.gitkeep') continue;
-      const charDir = path.join(dir, entry);
-      const mdPath  = path.join(charDir, `${entry}.md`);
-      try {
-        const content = await fs.readFile(mdPath, 'utf-8');
-        const char = parseCharacter(content, entry, lineage);
-        char.lineageFolder = folder;
-        char.slug = entry;
-        char.city = city;
-        char.hasSheet = await fs.access(path.join(charDir, `${entry}-sheet.md`)).then(() => true).catch(() => false);
+  // Load and enrich one character folder → char object (or null to skip).
+  const loadOne = async (folder, lineage, entry) => {
+    const charDir = path.join(charsDir(city), folder, entry);
+    const mdPath  = path.join(charDir, `${entry}.md`);
+    try {
+      const [content, hasSheet, artFiles] = await Promise.all([
+        fs.readFile(mdPath, 'utf-8'),
+        fs.access(path.join(charDir, `${entry}-sheet.md`)).then(() => true).catch(() => false),
+        fs.readdir(path.join(charDir, 'art')).catch(() => []),
+      ]);
+      const char = parseCharacter(content, entry, lineage);
+      char.lineageFolder = folder;
+      char.slug = entry;
+      char.city = city;
+      char.hasSheet = hasSheet;
 
-        // Images live in <slug>/art/. Prefer slug_NN.* (web upload), else first image.
-        const artFiles = await fs.readdir(path.join(charDir, 'art')).catch(() => []);
-        const slugRe   = new RegExp(`^${entry}_\\d+\\.[a-z]+$`, 'i');
-        const imgFile  = artFiles.filter(f => slugRe.test(f)).sort().at(-1)
-          || artFiles.find(f => /\.(jpg|jpeg|png|webp|gif)$/i.test(f));
-        if (imgFile) {
-          char.imageUrl = `/city-img/${city}/characters/${folder}/${encodeURIComponent(entry)}/art/${encodeURIComponent(imgFile)}`;
-        }
+      // Images live in <slug>/art/. Prefer slug_NN.* (web upload), else first image.
+      const slugRe  = new RegExp(`^${entry}_\\d+\\.[a-z]+$`, 'i');
+      const imgFile = artFiles.filter(f => slugRe.test(f)).sort().at(-1)
+        || artFiles.find(f => /\.(jpg|jpeg|png|webp|gif)$/i.test(f));
+      if (imgFile) {
+        char.imageUrl = `/city-img/${city}/characters/${folder}/${encodeURIComponent(entry)}/art/${encodeURIComponent(imgFile)}`;
+      }
+      return char;
+    } catch { return null; /* missing/invalid card → skip */ }
+  };
 
-        result.push(char);
-      } catch { /* skip */ }
-    }
-  }
+  // Per lineage: list the folder, then load all its characters in parallel.
+  // Order is preserved (lineage order, then readdir order) via map + flat.
+  const perLineage = await Promise.all(
+    Object.entries(LINEAGE_MAP).map(async ([folder, lineage]) => {
+      let entries;
+      try { entries = await fs.readdir(path.join(charsDir(city), folder)); } catch { return []; }
+      const loaded = await Promise.all(
+        entries.filter(e => e !== '.gitkeep').map(e => loadOne(folder, lineage, e))
+      );
+      return loaded.filter(Boolean);
+    })
+  );
+
+  const result = perLineage.flat();
   _cache[city] = { chars: result, ts: Date.now() };
   return result;
 }
@@ -218,6 +233,28 @@ async function countMdFiles(dir) {
     }
   } catch {}
   return n;
+}
+
+// Run `fn` over `items` with bounded concurrency; preserves input order.
+// Keeps bulk file reads parallel without exhausting file descriptors.
+async function mapLimit(items, limit, fn) {
+  const out = new Array(items.length);
+  let i = 0;
+  const worker = async () => {
+    while (i < items.length) { const idx = i++; out[idx] = await fn(items[idx], idx); }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return out;
+}
+
+// Extract a markdown table cell "| **Label** | value |" by label → trimmed value or null.
+// Memoizes the compiled regex per label (these run in tight label loops over many cards).
+const _tableCellRe = new Map();
+function tableCell(content, label) {
+  let re = _tableCellRe.get(label);
+  if (!re) { re = new RegExp(`\\|\\s*\\*\\*${label}\\*\\*\\s*\\|\\s*([^|\\n]+)\\|`); _tableCellRe.set(label, re); }
+  const m = content.match(re);
+  return m ? m[1].trim() : null;
 }
 
 // parseDiary lives in lib/parsers.js (single source of truth — see import above)
@@ -724,12 +761,11 @@ async function buildChronicleDeletePreview(city, slug) {
 
   // 3. All text in OTHER chronicles (to check exclusivity)
   const allChrs = await fs.readdir(chroniclesDir(city), { withFileTypes: true }).catch(() => []);
-  let otherText = '';
-  for (const c of allChrs) {
-    if (!c.isDirectory() || c.name === slug) continue;
-    const files = await findMdFiles(path.join(chroniclesDir(city), c.name));
-    for (const f of files) otherText += (await fs.readFile(f, 'utf-8').catch(() => '')) + '\n';
-  }
+  const otherDirs  = allChrs.filter(c => c.isDirectory() && c.name !== slug);
+  const otherLists = await Promise.all(otherDirs.map(c => findMdFiles(path.join(chroniclesDir(city), c.name))));
+  const otherFiles = otherLists.flat();
+  const otherTexts = await mapLimit(otherFiles, 24, f => fs.readFile(f, 'utf-8').catch(() => ''));
+  const otherText  = otherTexts.map(t => t + '\n').join('');
 
   // 4. Resolve names to character folders
   const chars = await getAllCharacters(city);
@@ -887,8 +923,8 @@ app.get('/api/modules', async (req, res) => {
           const hm = content.match(/^#\s+(.+)$/m);
           if (hm) mod.title = hm[1].replace(/[*[\]]/g, '').trim();
           for (const [label, key] of [['Тип','type'],['Формат','format'],['Время','time'],['Тон','tone']]) {
-            const fm = content.match(new RegExp(`\\|\\s*\\*\\*${label}\\*\\*\\s*\\|\\s*([^|\\n]+)\\|`));
-            if (fm) mod[key] = fm[1].trim();
+            const v = tableCell(content, label);
+            if (v != null) mod[key] = v;
           }
         }
       } catch {}
@@ -1039,8 +1075,8 @@ app.get('/api/chronicles/:slug/modules', async (req, res) => {
           const hm = content.match(/^#\s+(.+)$/m);
           if (hm) mod.title = hm[1].replace(/[*[\]]/g, '').trim();
           for (const [label, key] of [['Тип','type'],['Формат','format'],['Время','time'],['Тон','tone']]) {
-            const fm = content.match(new RegExp(`\\|\\s*\\*\\*${label}\\*\\*\\s*\\|\\s*([^|\\n]+)\\|`));
-            if (fm) mod[key] = fm[1].trim();
+            const v = tableCell(content, label);
+            if (v != null) mod[key] = v;
           }
         }
       } catch {}
@@ -1860,8 +1896,8 @@ app.get('/api/chronicles/:chr/modules/:mod/detail', async (req, res) => {
       if (hm) result.title = hm[1].replace(/[*[\]]/g, '').trim();
 
       for (const [label, key] of [['Тип','type'],['Формат','format'],['Время','time'],['Тон','tone'],['Локация','location']]) {
-        const fm = mc.match(new RegExp(`\\|\\s*\\*\\*${label}\\*\\*\\s*\\|\\s*([^|\\n]+)\\|`));
-        if (fm) result[key] = fm[1].trim();
+        const v = tableCell(mc, label);
+        if (v != null) result[key] = v;
       }
 
       // Module status (bullet line written on close: «- **Статус модуля:** 🟢 Закрыт …»)
@@ -2418,26 +2454,45 @@ app.get('/api/characters/:name/sheet', async (req, res) => {
 
 // ── V20 sheet generation / save (canonical chars + episodic module NPCs) ──────
 
-// Generate a full V20 sheet (markdown) from a character/NPC card, per the rules.
-async function _generateV20Sheet({ card, displayName, gen }) {
-  const sheetRules = await fs.readFile(path.join(ROOT, 'system', 'rules', 'character_sheet_v20.md'), 'utf-8').catch(() => '');
-  const systemPrompt = `Ты — Мастер Vampire: The Masquerade V20. Составляешь игромеханический лист персонажа СТРОГО по правилам и шаблону ниже.
+// Per-lineage sheet config: which rules doc, master role label, title suffix.
+// Keeps the prompt focused (only the relevant lineage's rules are sent).
+const _SHEET_LINEAGES = {
+  vampire:    { file: 'character_sheet_v20.md',        master: 'Vampire: The Masquerade V20', title: 'V20',        extras: 'клан, поколение, клановые дисциплины и слабость — по справочным таблицам' },
+  mortal:     { file: 'character_sheet_mortal.md',      master: 'Classic World of Darkness (смертные)', title: 'Смертный', extras: 'у смертного НЕТ дисциплин, запаса крови, поколения и Пути — только Человечность' },
+  changeling: { file: 'character_sheet_changeling.md',  master: 'Changeling: The Dreaming', title: 'Подменыш', extras: 'вместо дисциплин — Искусства и Сферы; вместо крови — Glamour/Banality; стартовые числа помечены как ориентир' },
+};
 
-# ПРАВИЛА ЛИСТА (character_sheet_v20.md)
-${sheetRules.slice(0, 8000)}`;
+// Map a lineage hint (folder name and/or card «Линейка WoD») to a config key.
+function _resolveSheetLineage(hint) {
+  const h = (hint || '').toLowerCase();
+  if (/mortal|смертн|гуль|ревенант|hunter|охотник/.test(h))                  return 'mortal';
+  if (/fair|fae|fey|ченджлинг|changeling|подменыш|фея|фейри|пак/.test(h))    return 'changeling';
+  return 'vampire';
+}
+
+// Generate a full sheet (markdown) from a character/NPC card, per the lineage rules.
+async function _generateV20Sheet({ card, displayName, gen, lineage }) {
+  const cardLine = (card || '').match(/Линейк[аи][^:\n]*WoD[^:\n]*:\s*([^\n]+)/i)?.[1] || '';
+  const cfg = _SHEET_LINEAGES[_resolveSheetLineage(`${lineage || ''} ${cardLine}`)];
+  const sheetRules = await fs.readFile(path.join(ROOT, 'system', 'rules', cfg.file), 'utf-8').catch(() => '');
+  const systemPrompt = `Ты — Мастер ${cfg.master}. Составляешь игромеханический лист персонажа СТРОГО по правилам и шаблону ниже.
+
+# ПРАВИЛА ЛИСТА (${cfg.file})
+${sheetRules.slice(0, 16000)}`;
   const userPrompt = `Составь ПОЛНЫЙ лист персонажа «${displayName}» по карточке ниже.
 
 # КАРТОЧКА ПЕРСОНАЖА
 ${(card || '').slice(0, 3500)}
 
 Требования:
-- Точно следуй СТРУКТУРЕ и ФОРМАТУ ШАБЛОНА из правил (заголовки «##», таблицы, точки «●○»).
-- ОБЯЗАТЕЛЬНО учитывай специфику и роль персонажа (Шаг 7): профильные способности — высокие, непрофильные — низкие. Стрелок хорошо стреляет, водитель водит, охотник — оккультизм/оружие и т.п.
-- Атрибуты 1–5, способности 0–5; клан, поколение, клановые дисциплины и слабость — по справочным таблицам.
-- Заполни ВСЕ разделы шаблона: концепция, атрибуты, способности, преимущества, производные, слабости, снаряжение, опыт.
-- Для КАЖДОЙ точечной характеристики (атрибуты, способности, дисциплины, предыстории, добродетели) указывай И точки, И число в формате «| Название | ●●●○○ | N |» — чтобы лист можно было редактировать.
-- Верни ТОЛЬКО markdown листа, начиная с «# 🎲 ${displayName} — Лист персонажа V20». Без пояснений и без \`\`\`.`;
-  const out = await genTextWithRetry(gen, { system: systemPrompt, user: userPrompt, maxTokens: 3500 });
+- Точно следуй СТРУКТУРЕ, ПОРЯДКУ и ФОРМАТУ ШАБЛОНА из правил (заголовки «##», таблицы, точки «●○»).
+- Используй ТОЛЬКО названия характеристик и разделов из ШАБЛОНА выше. Названия атрибутов/способностей — по бланку STV2098: Обаяние, Привлекательность; Бдительность, Драка, Красноречие, Уличное чутьё, Хитрость, Шестое чувство; Исполнение, Стрельба, Фехтование; Гуманитарные/Естественные науки, Информатика, Законы, Электроника; Факты биографии; Совесть/Решимость, Самоконтроль/Инстинкты, Смелость; Маска, Амплуа. НЕ используй старые синонимы (Харизма, Внешность, Рукопашный бой, Огнестрельное оружие и т.п.).
+- ОБЯЗАТЕЛЬНО учитывай специфику и роль персонажа (Шаг 7): профильные способности — высокие, непрофильные — низкие.
+- Характеристики 1–5, способности 0–5; ${cfg.extras}.
+- Заполни ВСЕ разделы шаблона. Поля без данных в карточке заполняй разумно по концепции или ставь «—». Разделы, помеченные «опционально/если есть», включай только при наличии данных.
+- Для КАЖДОЙ точечной черты (характеристики, способности, дисциплины/искусства/сферы, факты биографии, добродетели) указывай И точки, И число в формате «| Название | ●●●○○ | N |» — чтобы лист можно было редактировать.
+- Верни ТОЛЬКО markdown листа, начиная с «# 🎲 ${displayName} — Лист персонажа (${cfg.title})». Без пояснений и без \`\`\`.`;
+  const out = await genTextWithRetry(gen, { system: systemPrompt, user: userPrompt, maxTokens: 5000 });
   return (out.text || '').replace(/^```(?:markdown)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
 }
 
@@ -2461,7 +2516,7 @@ app.post('/api/characters/:name/sheet/generate', express.json(), async (req, res
     const card = await fs.readFile(path.join(dir, `${char.slug}.md`), 'utf-8').catch(() => '');
     if (!card) return res.status(404).json({ ok: false, error: 'Карточка персонажа не найдена' });
     const gen  = await makeGenerationClient(req.body?.source || null, req.body?.model || null);
-    const text = await _generateV20Sheet({ card, displayName: char.name, gen });
+    const text = await _generateV20Sheet({ card, displayName: char.name, gen, lineage: char.lineageFolder });
     if (!text) return res.status(500).json({ ok: false, error: 'ИИ вернул пустой лист' });
     await fs.writeFile(path.join(dir, `${char.slug}-sheet.md`), text + '\n', 'utf-8');
     await _ensureSheetLink(path.join(dir, `${char.slug}.md`), `${char.slug}-sheet.md`);
@@ -3106,6 +3161,122 @@ app.post('/api/characters', express.json(), async (req, res) => {
   }
 });
 
+// ── Character delete (soft: archive folder + de-link broken refs) ─────────────
+// Soft-delete moves the folder to characters/_deleted/<slug>/ (reversible, keeps
+// gitignored art). The _deleted folder is invisible to every subsystem because
+// lists/counts/linter all use a lineage allow-list. Structural path-links in
+// other files are de-linked (hyperlink dropped, name text kept) so nothing
+// breaks; narrative prose (diaries, event text) is left intact as chronicle history.
+
+async function _resolveChar(city, name) {
+  const chars = await getAllCharacters(city);
+  return chars.find(c => c.name === name) || chars.find(c => _nameMatch(c.name, name)) || null;
+}
+
+// Every .md under root, skipping dotfolders and any excluded absolute dir.
+async function _walkMd(root, excludeDirs = []) {
+  const ex = new Set(excludeDirs.map(d => path.resolve(d)));
+  const out = [];
+  async function rec(dir) {
+    let entries; try { entries = await fs.readdir(dir, { withFileTypes: true }); } catch { return; }
+    for (const e of entries) {
+      if (e.name.startsWith('.')) continue;
+      const full = path.join(dir, e.name);
+      if (e.isDirectory()) { if (!ex.has(path.resolve(full))) await rec(full); }
+      else if (e.name.endsWith('.md')) out.push(full);
+    }
+  }
+  await rec(root);
+  return out;
+}
+
+// Turn "[text](…/<slug>/<slug>.md…)" into plain "text" (drop the dangling link).
+function _delinkSlug(content, slug) {
+  const s = slug.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return content.replace(new RegExp(`\\[([^\\]]+)\\]\\(([^)]*${s}/${s}\\.md[^)]*)\\)`, 'g'), '$1');
+}
+
+app.get('/api/characters/:name/delete-preview', async (req, res) => {
+  try {
+    const city = reqCity(req);
+    const char = await _resolveChar(city, decodeURIComponent(req.params.name));
+    if (!char) return res.status(404).json({ error: 'Персонаж не найден' });
+    const { slug, lineageFolder } = char;
+    const charDir = path.join(charsDir(city), lineageFolder, slug);
+    const needle  = `${slug}/${slug}.md`;
+    const nameRe  = char.name ? new RegExp(char.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')) : null;
+
+    const structural = [];   // broken hyperlinks → will be de-linked
+    const prose = [];        // narrative name mentions → left intact
+    const walkFiles = await _walkMd(cityDir(city), [charDir]);
+    const scanned = await mapLimit(walkFiles, 24, async f => ({
+      rel: path.relative(cityDir(city), f).replace(/\\/g, '/'),
+      txt: await fs.readFile(f, 'utf-8').catch(() => ''),
+    }));
+    for (const { rel, txt } of scanned) {
+      if (txt.includes(needle)) {
+        if (!rel.endsWith('archive/characters_index.md')) structural.push(rel);
+      } else if (nameRe && nameRe.test(txt) && /(journal\/|events\.md|chronicle\.md|\/modules\/)/.test(rel)) {
+        prose.push(rel);
+      }
+    }
+    const art = await fs.readdir(path.join(charDir, 'art'))
+      .then(a => a.filter(x => /\.(png|jpe?g|webp|gif)$/i.test(x)).length).catch(() => 0);
+    const hasSheet = await fs.access(path.join(charDir, `${slug}-sheet.md`)).then(() => true).catch(() => false);
+    res.json({ name: char.name, slug, lineageFolder, art, hasSheet, structural, prose });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.delete('/api/characters/:name', express.json(), async (req, res) => {
+  try {
+    const city = reqCity(req);
+    const char = await _resolveChar(city, decodeURIComponent(req.params.name));
+    if (!char) return res.status(404).json({ error: 'Персонаж не найден' });
+    const { slug, lineageFolder } = char;
+    const srcDir = path.join(charsDir(city), lineageFolder, slug);
+    if (!await fs.stat(srcDir).catch(() => null))
+      return res.status(404).json({ error: 'Папка персонажа не найдена' });
+
+    // 1. Archive the folder (rename keeps gitignored art; reversible).
+    const trashRoot = path.join(charsDir(city), '_deleted');
+    await fs.mkdir(trashRoot, { recursive: true });
+    let dst = path.join(trashRoot, slug);
+    if (await fs.stat(dst).catch(() => null)) dst = path.join(trashRoot, `${slug}_${Date.now().toString().slice(-6)}`);
+    await fs.rename(srcDir, dst);
+
+    // 2. Remove the index line(s).
+    const idxPath = path.join(archiveDir(city), 'characters_index.md');
+    try {
+      const raw = await fs.readFile(idxPath, 'utf-8');
+      const bom = raw.charCodeAt(0) === 0xFEFF;
+      const kept = (bom ? raw.slice(1) : raw).split('\n')
+        .filter(l => !l.includes(`/${lineageFolder}/${slug}/`)).join('\n');
+      await fs.writeFile(idxPath, (bom ? '﻿' : '') + kept, 'utf-8');
+    } catch {}
+
+    // 3. De-link broken structural references (keep name text; leave prose).
+    const dlFiles = await _walkMd(cityDir(city), [trashRoot]);
+    const dlScan  = await mapLimit(dlFiles, 24, async f => {
+      if (path.basename(f) === 'characters_index.md') return null;
+      const txt = await fs.readFile(f, 'utf-8').catch(() => null);
+      if (txt == null || !txt.includes(`${slug}/${slug}.md`)) return null;
+      const out = _delinkSlug(txt, slug);
+      return out !== txt ? { f, out } : null;
+    });
+    const toDelink = dlScan.filter(Boolean);            // preserved walk order
+    await mapLimit(toDelink, 24, ({ f, out }) => fs.writeFile(f, out, 'utf-8'));
+    const delinked = toDelink.map(({ f }) => path.relative(cityDir(city), f).replace(/\\/g, '/'));
+
+    delete _cache[city];
+    runValidationBackground();
+    console.log(`[delete-character] ${city}/${lineageFolder}/${slug} → _deleted (${delinked.length} files de-linked)`);
+    res.json({ ok: true, slug, movedTo: `characters/_deleted/${path.basename(dst)}`, delinked });
+  } catch (e) {
+    console.error('[delete-character]', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ── Generation client factory ─────────────────────────────────────────────────
 // Priority: OpenRouter (.env) → ANTHROPIC_API_KEY → Claude.ai OAuth
 
@@ -3116,7 +3287,38 @@ const CLAUDE_CREDS_PATH = path.join(
 const VALID_MODELS = ['claude-opus-4-8', 'claude-sonnet-4-6', 'claude-haiku-4-5-20251001'];
 
 // preferSource: 'openrouter' | 'openai' | 'claude' | null (auto)
+// ── Test mock provider ────────────────────────────────────────────────────────
+// When AI_MOCK is set (automated tests only), generation returns deterministic
+// canned text instead of contacting any provider — no API keys, no cost, no
+// network. The mock is shaped like the Anthropic SDK response (`content[0].text`)
+// and uses source 'mock' so `_isOA` is false and every call site takes the
+// `gen.client.messages.create` branch we stub here.
+function _mockGenText(system = '', user = '') {
+  const s = `${system}\n${user}`;
+  if (/РЕПЛИКИ\s+НПС|реплик/i.test(s))
+    return '«Тише — у стен Элизиума длинные уши.» (поправляет манжету)\n«Приходи в полночь. Одна.»';
+  if (/непротиворечивост|канон/i.test(s))
+    return 'Противоречий не выявлено. []';
+  if (/лист|V20|атрибут|способност/i.test(s))
+    return '## Атрибуты\n\n- Сила ●●○○○\n- Ловкость ●●●○○\n- Выносливость ●●○○○\n\n## Способности\n\n- Бдительность ●●●○○\n- Драка ●●○○○\n';
+  if (/пересказ|ранее в хронике|рекап/i.test(s))
+    return 'Ранее в хронике: интрига вокруг убийства набрала ход, а Маскарад дал трещину.';
+  return 'MOCK_AI: текст-заглушка для автотестов.';
+}
+const _mockGenClient = {
+  messages: {
+    create: async ({ system = '', messages = [] } = {}) => {
+      const first = Array.isArray(messages) ? messages[0] : null;
+      const user  = first
+        ? (typeof first.content === 'string' ? first.content : JSON.stringify(first.content))
+        : '';
+      return { content: [{ type: 'text', text: _mockGenText(system, user) }] };
+    },
+  },
+};
+
 async function makeGenerationClient(preferSource = null, modelOverride = null) {
+  if (process.env.AI_MOCK) return { source: 'mock', model: 'mock-model', client: _mockGenClient };
   const wantOR     = preferSource === 'openrouter';
   const wantOpenAI = preferSource === 'openai' || preferSource === 'gpt';
   const wantClaude = preferSource === 'claude';

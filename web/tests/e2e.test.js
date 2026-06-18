@@ -91,7 +91,9 @@ describe('E2E — сквозной цикл хроники', () => {
   before(async () => {
     serverProc = spawn('node', [path.join(ROOT, 'web', 'server.js')], {
       cwd:   path.join(ROOT, 'web'),
-      env:   { ...process.env, PORT: String(E2E_PORT) },
+      // AI_MOCK → deterministic offline generation; the disposable test city is
+      // a safe sandbox for write-generation (sheets) since after() removes it.
+      env:   { ...process.env, PORT: String(E2E_PORT), AI_MOCK: '1' },
       stdio: ['ignore', 'pipe', 'pipe'],
     });
     serverProc.stdout.on('data', () => {});
@@ -160,6 +162,73 @@ describe('E2E — сквозной цикл хроники', () => {
       const r = await get(`/api/characters?city=${CITY}`);
       assert.ok(r.json.length >= 1);
       assert.ok(r.json.some(c => c.name === 'Виктор Ламбер'), 'персонаж не найден в API');
+    });
+  });
+
+  // ── 2b. AI-генерация (mock-провайдер: офлайн, детерминированно) ──────────────
+  // Пишущая генерация (лист V20) безопасна — всё внутри одноразового города.
+
+  describe('2b. AI-генерация (mock)', () => {
+    const VICTOR = encodeURIComponent('Виктор Ламбер');
+
+    it('POST sheet/generate создаёт и сохраняет лист V20', async () => {
+      const r = await post(`/api/characters/${VICTOR}/sheet/generate?city=${CITY}`, {});
+      assert.strictEqual(r.status, 200, `HTTP ${r.status}: ${r.raw}`);
+      assert.ok(r.json?.ok, `ok=false: ${r.raw}`);
+      assert.ok((r.json.content || '').length > 0, 'пустой лист');
+      assert.ok(fileExists(`cities/${CITY}/characters/vampires/viktor_lamber/viktor_lamber-sheet.md`),
+        'файл листа не создан');
+    });
+
+    it('GET sheet возвращает сохранённый лист', async () => {
+      const r = await get(`/api/characters/${VICTOR}/sheet?city=${CITY}`);
+      assert.strictEqual(r.status, 200);
+      assert.strictEqual(r.json?.exists, true, 'лист не виден после генерации');
+      assert.ok((r.json.content || '').length > 0);
+    });
+
+    it('POST dialogue возвращает реплики в характере', async () => {
+      const r = await post(`/api/characters/${VICTOR}/dialogue?city=${CITY}`,
+        { situation: 'Допрос в подвале клуба', count: 2 });
+      assert.strictEqual(r.status, 200, `HTTP ${r.status}: ${r.raw}`);
+      assert.ok(r.json?.ok && (r.json.text || '').length > 0, 'нет реплик');
+    });
+
+    it('POST canon-check возвращает массив issues', async () => {
+      const r = await post(`/api/canon-check?city=${CITY}`,
+        { text: 'Виктор Ламбер появился на премьере в Опере.' });
+      assert.strictEqual(r.status, 200, `HTTP ${r.status}: ${r.raw}`);
+      assert.ok(r.json?.ok && Array.isArray(r.json.issues), 'issues не массив');
+    });
+  });
+
+  // ── 2c. Удаление персонажа (мягкое: папка → characters/_deleted/) ────────────
+  describe('2c. Удаление персонажа', () => {
+    const DELNAME = 'Удаляемый Гуль';
+    const DELSLUG = 'udalyaemyy_gul';
+
+    it('new_npc создаёт одноразового персонажа', async () => {
+      const r = await tool('new_npc', [CITY, 'mortals', DELNAME]);
+      assert.ok(r.json?.ok, `ok=false: ${r.json?.output}`);
+      assert.ok(fileExists(`cities/${CITY}/characters/mortals/${DELSLUG}/${DELSLUG}.md`));
+    });
+
+    it('DELETE архивирует папку в _deleted', async () => {
+      const r = await httpReq('DELETE', `/api/characters/${encodeURIComponent(DELNAME)}?city=${CITY}`, null);
+      assert.strictEqual(r.status, 200, `HTTP ${r.status}: ${r.raw}`);
+      assert.ok(r.json?.ok, `ok=false: ${r.raw}`);
+      assert.ok(!fileExists(`cities/${CITY}/characters/mortals/${DELSLUG}/`), 'исходная папка осталась');
+      assert.ok(fileExists(`cities/${CITY}/characters/_deleted/${DELSLUG}/${DELSLUG}.md`), 'не перемещено в _deleted');
+    });
+
+    it('персонаж исчез из /api/characters', async () => {
+      const r = await get(`/api/characters?city=${CITY}`);
+      assert.ok(!r.json.some(c => c.name === DELNAME), 'удалённый всё ещё в списке');
+    });
+
+    it('строка реестра удалена', () => {
+      const idx = readFile(`cities/${CITY}/archive/characters_index.md`);
+      assert.ok(!new RegExp(`${DELSLUG}/${DELSLUG}\\.md`).test(idx), 'ссылка осталась в индексе');
     });
   });
 

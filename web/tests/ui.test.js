@@ -30,7 +30,8 @@ const UI_NAME = `Uiburg${TS}`;
 const { slugify } = require('../lib/parsers');  // single source of truth for RU→ASCII slugs
 const UI_CITY = slugify(UI_NAME);
 
-const NAV_PAGES = ['dashboard', 'chronicle', 'characters', 'graph', 'modules', 'threads', 'locations', 'tools'];
+const NAV_PAGES = ['dashboard', 'chronicle', 'characters', 'graph', 'factions',
+  'chronicles-page', 'modules', 'threads', 'rumors', 'locations', 'tools', 'search'];
 
 // ── HTTP helpers ──────────────────────────────────────────────────────────────
 function httpReq(method, urlPath, body) {
@@ -91,7 +92,7 @@ describe('UI — Selenium (Chrome)', () => {
   before(async () => {
     serverProc = spawn('node', [path.join(ROOT, 'web', 'server.js')], {
       cwd:   path.join(ROOT, 'web'),
-      env:   { ...process.env, PORT: String(UI_PORT) },
+      env:   { ...process.env, PORT: String(UI_PORT), AI_MOCK: '1' },
       stdio: ['ignore', 'pipe', 'pipe'],
     });
     serverProc.stdout.on('data', () => {});
@@ -257,6 +258,18 @@ describe('UI — Selenium (Chrome)', () => {
       await openTab('validate');
       await (await id_('btn-validate')).click();
       await waitOut('out-validate', /ссыл|битых|broken|✓|0/i, 40000);
+    });
+  });
+
+  // ── Настройки ИИ (вкладка «Модели AI») ───────────────────────────────────────
+
+  describe('Назначение провайдеров (вкладка «Модели AI»)', () => {
+    it('рендерит карточки фич с переключателями провайдера', async () => {
+      await navTo('tools');
+      await openTab('ai-settings');
+      await css('.ais-feat-card', 20000);
+      assert.ok(await count('.ais-feat-card')     >= 1, 'нет карточек назначения провайдеров');
+      assert.ok(await count('.ais-feat-prov-btn') >= 1, 'нет переключателей провайдера');
     });
   });
 

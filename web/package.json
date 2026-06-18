@@ -10,12 +10,14 @@
     "test": "node --test --test-reporter=spec --test-reporter-destination=stdout --test-reporter=./tests/reporter.js --test-reporter-destination=nul tests/all.test.js tests/e2e.test.js",
     "test:unit": "node --test --test-reporter=spec --test-reporter-destination=stdout --test-reporter=./tests/reporter.js --test-reporter-destination=nul tests/all.test.js",
     "test:e2e": "node --test --test-reporter=spec --test-reporter-destination=stdout --test-reporter=./tests/reporter.js --test-reporter-destination=nul tests/e2e.test.js",
+    "test:all": "node --test --test-reporter=spec --test-reporter-destination=stdout --test-reporter=./tests/reporter.js --test-reporter-destination=nul tests/all.test.js tests/e2e.test.js",
     "test:ui": "node --test --test-reporter=spec --test-reporter-destination=stdout --test-reporter=./tests/reporter.js --test-reporter-destination=nul tests/ui.test.js",
     "test:tap": "node --test --test-reporter=tap tests/all.test.js tests/e2e.test.js",
     "test:ci": "node --test --test-reporter=spec tests/all.test.js tests/e2e.test.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.102.0",
+    "compression": "^1.8.1",
     "express": "^4.18.2"
   },
   "devDependencies": {

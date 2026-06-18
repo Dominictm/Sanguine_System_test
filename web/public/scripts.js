@@ -124,8 +124,12 @@ const STATE = {
 
 function navigate(page) {
   STATE.page = page;
-  document.querySelectorAll('.nav-item').forEach(el =>
-    el.classList.toggle('active', el.dataset.page === page));
+  document.querySelectorAll('.nav-item').forEach(el => {
+    const on = el.dataset.page === page;
+    el.classList.toggle('active', on);
+    if (on) el.setAttribute('aria-current', 'page');
+    else    el.removeAttribute('aria-current');
+  });
   document.querySelectorAll('.page').forEach(el =>
     el.classList.toggle('active', el.id === `page-${page}`));
 
@@ -143,8 +147,20 @@ function navigate(page) {
   if (page === 'search')     loadSearch();
 }
 
-document.querySelectorAll('[data-page]').forEach(el =>
-  el.addEventListener('click', () => navigate(el.dataset.page)));
+document.querySelectorAll('[data-page]').forEach(el => {
+  el.addEventListener('click', () => navigate(el.dataset.page));
+  // These are <a> without href / clickable elements — make them keyboard-operable.
+  if (!el.hasAttribute('href')) {
+    if (!el.hasAttribute('role'))     el.setAttribute('role', 'link');
+    if (!el.hasAttribute('tabindex')) el.setAttribute('tabindex', '0');
+    el.addEventListener('keydown', e => {
+      if (e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar') {
+        e.preventDefault();
+        navigate(el.dataset.page);
+      }
+    });
+  }
+});
 
 // ═══════════════════════════════════════════════════════════════
 // Dashboard
@@ -184,39 +200,25 @@ function renderDashboard(s, container) {
       : `<span class="badge-integrity err">${blCount} битых ссылок</span>`;
 
   const LINEAGES = [
-    { key: 'vampires',   label: 'вампиров',   color: '#8B0000' },
-    { key: 'fairies',    label: 'фей',         color: '#5a9e40' },
-    { key: 'mortals',    label: 'смертных',    color: '#888888' },
-    { key: 'werewolves', label: 'оборотней',   color: '#8B6530' },
-    { key: 'mages',      label: 'магов',       color: '#3A5A9B' },
-    { key: 'hunters',    label: 'охотников',   color: '#7A6020' },
+    { key: 'vampires',   label: 'Вампиры',   sub: 'вампиров',   color: 'var(--accent)'     },
+    { key: 'fairies',    label: 'Феи',        sub: 'фей',        color: 'var(--c-fairy)'    },
+    { key: 'mortals',    label: 'Смертные',   sub: 'смертных',   color: 'var(--text3)'      },
+    { key: 'werewolves', label: 'Оборотни',   sub: 'оборотней',  color: 'var(--c-werewolf)' },
+    { key: 'mages',      label: 'Маги',       sub: 'магов',      color: 'var(--c-mage)'     },
+    { key: 'hunters',    label: 'Охотники',   sub: 'охотников',  color: 'var(--c-hunter)'   },
   ];
 
-  const lineageDetail = LINEAGES
-    .filter(l => (s[l.key] || 0) > 0)
-    .map(l => `${s[l.key]} ${l.label}`)
-    .join(' · ') || '—';
+  const activeLineages = LINEAGES.filter(l => (s[l.key] || 0) > 0);
 
-  const lineageSubstats = LINEAGES
-    .filter(l => (s[l.key] || 0) > 0)
-    .map(l => `<div class="substat">
-        <div class="substat-dot" style="background:${l.color}"></div>
-        <span>${s[l.key]} ${l.label}</span>
-      </div>`)
-    .join('');
+  const lineageCards = activeLineages.map(l => `
+      <div class="stat-card">
+        <div class="stat-label">${l.label}</div>
+        <div class="stat-value" id="sv-${l.key}" style="color:${l.color}">0</div>
+      </div>`).join('');
 
   container.innerHTML = `
     <div class="stats-grid">
-      <div class="stat-card">
-        <div class="stat-label">Персонажи</div>
-        <div class="stat-value accent" id="sv-chars">0</div>
-        <div class="stat-detail">${lineageDetail}</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">Активны</div>
-        <div class="stat-value" id="sv-active">0</div>
-        <div class="stat-detail">${s.torpor || 0} в торпоре</div>
-      </div>
+      ${lineageCards}
       <div class="stat-card">
         <div class="stat-label">Модули</div>
         <div class="stat-value gold" id="sv-modules">0</div>
@@ -240,25 +242,25 @@ function renderDashboard(s, container) {
     </div>
     <div class="substats">
       <div class="substat">
-        <div class="substat-dot" style="background:#7dce82"></div>
-        <span>${s.active || 0} активных персонажей</span>
+        <div class="substat-dot" style="background:var(--c-success)"></div>
+        <span>${s.active || 0} активных</span>
       </div>
       <div class="substat">
-        <div class="substat-dot" style="background:#8888cc"></div>
+        <div class="substat-dot" style="background:var(--c-lore)"></div>
         <span>${s.torpor || 0} в торпоре</span>
       </div>
-      ${lineageSubstats}
     </div>
     <div class="integrity-row">${blBadge}</div>
     <div id="integrity-panel" class="integrity-panel"></div>`;
 
-  animateValue(document.getElementById('sv-chars'), s.characters || 0);
-  animateValue(document.getElementById('sv-active'), s.active || 0);
+  activeLineages.forEach((l, i) => {
+    const el = document.getElementById(`sv-${l.key}`);
+    if (el) animateValue(el, s[l.key], 900 + i * 80);
+  });
   animateValue(document.getElementById('sv-modules'), s.modules || 0);
   animateValue(document.getElementById('sv-locations'), s.locations || 0);
   animateValue(document.getElementById('sv-events'), s.events || 0, 1100);
   animateValue(document.getElementById('sv-threads'), s.openThreads || 0, 1200);
-
 }
 
 // Click on "Настройки моделей" link in dashboard → go to AI tab
@@ -409,20 +411,22 @@ function renderChars() {
     const stLbl  = statusLabel(c);
     const linBadge = `<span class="badge badge-${c.lineage}">${LINEAGE_LABELS[c.lineage] || c.lineage}</span>`;
     const stBadge  = stType !== 'unknown' ? `<span class="badge badge-${stType}">${stLbl}</span>` : '';
+    const stRow    = stBadge ? `<div class="char-status-row">${stBadge}</div>` : '';
     const textBlock = `
       <div class="char-name">${escHtml(c.name)}</div>
       <div class="char-clan">${c.lineage === 'mortal' ? '' : escHtml(c.clan || c.lineageLabel || '—')}</div>
-      <div class="char-status-row">${stBadge}</div>
       <div class="char-badges">${linBadge}</div>`;
 
     if (c.imageUrl) {
       return `<div class="char-card has-art" data-name="${escHtml(c.name)}">
-        <img class="char-card-art" src="${c.imageUrl}" alt="${escHtml(c.name)}">
+        <img class="char-card-art" src="${c.imageUrl}" alt="${escHtml(c.name)}" loading="lazy" decoding="async">
         <div class="char-card-overlay">${textBlock}</div>
+        ${stRow}
       </div>`;
     }
     return `<div class="char-card" data-name="${escHtml(c.name)}">
       <span class="char-lineage-icon">${icon}</span>
+      ${stRow}
       ${textBlock}
     </div>`;
   }).join('');
@@ -1572,6 +1576,7 @@ async function loadChroniclesPage() {
 let _chrDetailSlug    = null;
 let _chrDetailDisplay = null;
 let _modDeleteTarget  = null; // { chr, mod }
+let _modDeleteSource  = 'chr-detail'; // 'chr-detail' | 'modules-page'
 let _modSlugEdited    = false;
 
 function renderModuleCardInChr(m, chrSlug) {
@@ -2056,15 +2061,24 @@ document.getElementById('mod-fill-generate').addEventListener('click', async () 
 // ── Delete module ─────────────────────────────────────────────────────────────
 
 document.addEventListener('click', e => {
-  const delBtn = e.target.closest('.chd-mod-del-btn');
+  const delBtn = e.target.closest('.chd-mod-del-btn') || e.target.closest('.module-del-btn');
   if (!delBtn) return;
-  _modDeleteTarget = { chr: delBtn.dataset.chr, mod: delBtn.dataset.mod };
+  _modDeleteSource  = e.target.closest('.module-del-btn') ? 'modules-page' : 'chr-detail';
+  _modDeleteTarget  = { chr: delBtn.dataset.chr, mod: delBtn.dataset.mod };
   const body    = document.getElementById('mod-delete-body');
   const confirm = document.getElementById('mod-delete-confirm');
   confirm.disabled = false;
   body.innerHTML = `
-    <div class="chr-modal-warn">Необратимое действие. Будет удалён модуль <b>${escHtml(_modDeleteTarget.mod)}</b>.</div>
-    <div class="chr-modal-section">Эпизодические НПС модуля будут удалены.<br>У каноничных персонажей — удалены ссылки на этот модуль в дневниках.</div>`;
+    <div class="chr-modal-warn">Необратимое действие — модуль <b>${escHtml(_modDeleteTarget.mod)}</b> будет удалён.</div>
+    <div class="chr-modal-section"><b>Будут удалены:</b>
+      <ul>
+        <li>Файлы модуля (сценарий, НПС, финал)</li>
+        <li>Эпизодические персонажи модуля</li>
+        <li>Связанные события из хроники</li>
+        <li>Ссылки на модуль в дневниках персонажей</li>
+      </ul>
+      Канонические персонажи <b>не затрагиваются</b>.
+    </div>`;
   document.getElementById('mod-delete-modal').style.display = 'flex';
 });
 
@@ -2098,7 +2112,11 @@ document.getElementById('mod-delete-confirm').addEventListener('click', async ()
       document.getElementById('mod-delete-modal').style.display = 'none';
       _modDeleteTarget = null;
       confirm.textContent = 'Удалить';
-      openChrDetail(chr, _chrDetailDisplay, 'modules');
+      if (_modDeleteSource === 'modules-page') {
+        loadModules();
+      } else {
+        openChrDetail(chr, _chrDetailDisplay, 'modules');
+      }
     }, 1500);
   } catch (err) {
     body.innerHTML = `<div style="color:var(--accent2)">Ошибка: ${escHtml(err.message)}</div>`;
@@ -2278,6 +2296,7 @@ async function loadModules() {
         </div>
         ${files ? `<div class="module-files">${files}</div>` : ''}
         <div class="module-slug">${escHtml(m.name)}</div>
+        <button class="module-del-btn" data-chr="${escHtml(m.chronicle || '')}" data-mod="${escHtml(m.name)}" title="Удалить модуль">🗑</button>
       </div>`;
     }).join('');
   } catch {
@@ -2288,6 +2307,7 @@ async function loadModules() {
 // ── Module card click → open detail page ────────────────────────────────────
 
 document.getElementById('modules-list').addEventListener('click', e => {
+  if (e.target.closest('.module-del-btn')) return;
   const card = e.target.closest('.module-card');
   if (!card) return;
   const name      = card.dataset.name;
@@ -3379,6 +3399,16 @@ function _initRumorCheckboxes(viewEl, type) {
   const table = viewEl.querySelector('table');
   if (!table) return;
 
+  // Add dedicated header for checkbox column (after D20)
+  const headerRow = table.querySelector('thead tr');
+  if (headerRow && !headerRow.querySelector('.rumor-cb-th')) {
+    const th = document.createElement('th');
+    th.className = 'rumor-cb-th';
+    th.title = 'Рассказан';
+    const firstTh = headerRow.querySelector('th:first-child');
+    if (firstTh) firstTh.after(th);
+  }
+
   table.querySelectorAll('tbody tr').forEach(row => {
     if (row.querySelector('.rumor-told-cb')) return; // already inited
     const firstTd = row.querySelector('td:first-child');
@@ -3387,15 +3417,21 @@ function _initRumorCheckboxes(viewEl, type) {
     const num = parseInt(rawTxt);
     if (isNaN(num)) return;
 
-    // Wrap number in span, add checkbox
+    // Clean D20 cell: only the number
     firstTd.innerHTML = `<span class="rumor-num">${num}</span>`;
+
+    // Dedicated checkbox cell inserted after D20
     const cb = document.createElement('input');
     cb.type = 'checkbox';
     cb.className = 'rumor-told-cb';
     cb.dataset.num = num;
     cb.title = 'Рассказан';
     cb.checked = told.has(num);
-    firstTd.appendChild(cb);
+
+    const cbTd = document.createElement('td');
+    cbTd.className = 'rumor-cb-cell';
+    cbTd.appendChild(cb);
+    firstTd.after(cbTd);
 
     row.classList.toggle('rumor-told', told.has(num));
 
@@ -4283,6 +4319,23 @@ function _diaryMsg(text, ok = true) {
 }
 
 // C4 — V20 sheet panel for canonical characters: toolbar (generate/regenerate/edit) + rendered sheet.
+// The sheet .md opens with a redundant title + nav blockquote
+// ("# … — Лист персонажа V20"  /  "> 🔗 Карточка персонажа | Все персонажи").
+// The modal already shows the name, links and tabs, so strip that leading block
+// for DISPLAY only — the file (and edit/save) keeps the header for standalone use.
+function _stripSheetHeader(md) {
+  const lines = String(md).split(/\r?\n/);
+  let first = 0;
+  while (first < lines.length && /^\s*$/.test(lines[first])) first++;
+  if (!/^#{1,3}\s+.*Лист персонажа/i.test(lines[first] || '')) return md;
+  let i = first + 1;
+  const skip = s => /^\s*$/.test(s)
+    || /^>\s*🔗?.*(Карточк|Все персонаж)/i.test(s)
+    || /^\s*-{3,}\s*$/.test(s);
+  while (i < lines.length && skip(lines[i])) i++;
+  return lines.slice(i).join('\n');
+}
+
 async function _loadCharSheet(charName) {
   const panel = document.getElementById('cdet-sheet-panel');
   if (!panel) return;
@@ -4300,7 +4353,7 @@ async function _loadCharSheet(charName) {
     : `<button class="cdet-sheet-btn primary" data-sheet-act="gen">📋 Сгенерировать лист</button>`;
   panel.innerHTML =
     `<div class="cdet-sheet-toolbar">${toolbar}</div>
-     <div class="cdet-sheet-body">${ has ? renderLoreMd(d.content) : '<div class="cdet-empty">Лист ещё не сгенерирован — нажми «Сгенерировать лист».</div>' }</div>`;
+     <div class="cdet-sheet-body">${ has ? renderLoreMd(_stripSheetHeader(d.content)) : '<div class="cdet-empty">Лист ещё не сгенерирован — нажми «Сгенерировать лист».</div>' }</div>`;
   panel.querySelectorAll('[data-sheet-act]').forEach(b => b.addEventListener('click', async () => {
     const act = b.dataset.sheetAct;
     if (act === 'edit') { openSheetOverlay(ctx, 'edit'); return; }
@@ -4452,7 +4505,7 @@ async function openSheetOverlay(ctx, mode) {
     ov.querySelector('#sheet-save').addEventListener('click', _saveSheetEdit);
   } else {
     _sheetEditState = null;
-    body.innerHTML = `<div class="sheet-view md-body">${mdToHtml(d.content)}</div>`;
+    body.innerHTML = `<div class="sheet-view md-body">${mdToHtml(_stripSheetHeader(d.content))}</div>`;
     actions.innerHTML = `<button class="sheet-btn" id="sheet-to-edit">✏ Редактировать</button>`;
     ov.querySelector('#sheet-to-edit').addEventListener('click', () => openSheetOverlay(ctx, 'edit'));
   }
@@ -4587,6 +4640,63 @@ async function loadDiaryEntry(charName, file) {
   }
 }
 
+// Soft-delete a character: preview affected refs, confirm, then DELETE.
+async function _confirmDeleteChar(name) {
+  let pv;
+  try { pv = await fetch(`/api/characters/${encodeURIComponent(name)}/delete-preview${location.search}`).then(r => r.json()); }
+  catch (e) { alert('Не удалось получить предпросмотр: ' + e.message); return; }
+  if (pv.error) { alert(pv.error); return; }
+
+  const list = arr => arr.length
+    ? `<ul>${arr.slice(0, 12).map(f => `<li>${escHtml(f)}</li>`).join('')}${arr.length > 12 ? `<li>…ещё ${arr.length - 12}</li>` : ''}</ul>`
+    : ' <i>—</i>';
+  const artNote = pv.art ? ` (арт: ${pv.art} — сохранится в архиве)` : '';
+
+  const ov = document.createElement('div');
+  ov.className = 'chr-modal-backdrop';
+  ov.innerHTML = `
+    <div class="chr-modal">
+      <div class="chr-modal-title">🗑 Удалить персонажа</div>
+      <div class="chr-modal-body">
+        <div class="chr-modal-warn">Папка <b>${escHtml(name)}</b> переедет в
+          <code>characters/_deleted/</code> — обратимо${escHtml(artNote)}. Из списков,
+          графа и реестра персонаж исчезнет.</div>
+        <div class="chr-modal-section"><b>Будут сняты битые ссылки</b> (${pv.structural.length}) —
+          имя-текст в этих файлах останется:${list(pv.structural)}</div>
+        <div class="chr-modal-section"><b>Проза дневников и событий не трогается</b> (${pv.prose.length}) —
+          история сохраняется:${list(pv.prose)}</div>
+      </div>
+      <div class="chr-modal-actions">
+        <button class="chr-modal-btn cancel" data-act="cancel">Отмена</button>
+        <button class="chr-modal-btn danger"  data-act="ok">Удалить</button>
+      </div>
+    </div>`;
+  document.body.appendChild(ov);
+  const close = () => ov.remove();
+  ov.addEventListener('click', e => { if (e.target === ov) close(); });
+  ov.querySelector('[data-act="cancel"]').addEventListener('click', close);
+  ov.querySelector('[data-act="ok"]').addEventListener('click', async () => {
+    const btn = ov.querySelector('[data-act="ok"]');
+    btn.disabled = true; btn.textContent = '⏳ Удаление…';
+    try {
+      const d = await fetch(`/api/characters/${encodeURIComponent(name)}${location.search}`, { method: 'DELETE' })
+        .then(r => r.json());
+      if (!d.ok) throw new Error(d.error || 'Ошибка');
+      close();
+      charDetailModal.classList.remove('open');
+      STATE.graph.inited = false;
+      fetch('/api/characters').then(r => r.json()).then(data => {
+        STATE.characters = Array.isArray(data) ? data : [];
+        if (STATE.page === 'characters') renderChars();
+        if (STATE.page === 'dashboard')  loadDashboard();
+      }).catch(() => { STATE.characters = []; });
+    } catch (e) {
+      btn.disabled = false; btn.textContent = 'Удалить';
+      alert('Ошибка удаления: ' + e.message);
+    }
+  });
+}
+
 function openCharDetail(name) {
   const c = STATE.characters.find(ch => ch.name === name);
   if (!c) return;
@@ -4652,6 +4762,7 @@ function openCharDetail(name) {
           ${stType !== 'unknown' ? `<span class="badge badge-${stType}">${stLbl}</span>` : ''}
         </div>
         ${c.statusDetails ? `<div class="cdet-status-details">${escHtml(c.statusDetails)}</div>` : ''}
+        <button class="cdet-delete-btn" id="cdet-delete-btn" data-char="${escHtml(c.name)}" title="Удалить персонажа">🗑</button>
       </div>
       <div class="cdet-tab-bar">
         <button class="cdet-tab active" data-tab="info">Информация</button>
@@ -4789,6 +4900,7 @@ document.getElementById('char-detail-content').addEventListener('click', e => {
   }
   if (e.target.closest('#cdet-carousel-prev')) { _carouselGoTo(_carouselIdx - 1, true); return; }
   if (e.target.closest('#cdet-carousel-next')) { _carouselGoTo(_carouselIdx + 1, true); return; }
+  if (e.target.closest('#cdet-delete-btn'))  { _confirmDeleteChar(e.target.closest('#cdet-delete-btn').dataset.char); return; }
   if (e.target.closest('#cdet-edit-btn'))    { _enterInfoEdit(e.target.closest('#cdet-edit-btn').dataset.char); return; }
   if (e.target.closest('#cdet-cancel-btn'))  { _exitInfoEdit(false); return; }
   if (e.target.closest('#cdet-save-btn'))    { _saveInfoFields(); return; }
@@ -5145,7 +5257,7 @@ async function _loadDescImages(charName) {
       ${images.map(url => {
         const filename = decodeURIComponent(url.split('/').pop());
         return `<div class="cdet-img-thumb-wrap">
-          <img class="cdet-img-thumb" src="${url}" alt="${escHtml(filename)}">
+          <img class="cdet-img-thumb" src="${url}" alt="${escHtml(filename)}" loading="lazy" decoding="async">
           <span class="cdet-img-thumb-name">${escHtml(filename)}</span>
           <button class="cdet-img-del-btn" data-char="${escHtml(charName)}" data-file="${escHtml(filename)}" title="Удалить">✕</button>
         </div>`;
@@ -5659,7 +5771,7 @@ function renderLocations() {
 
     if (loc.imageUrl) {
       return `<div class="loc-card has-art" data-slug="${escHtml(loc.slug)}">
-        <img class="loc-card-img" src="${loc.imageUrl}" alt="${escHtml(loc.title || loc.slug)}">
+        <img class="loc-card-img" src="${loc.imageUrl}" alt="${escHtml(loc.title || loc.slug)}" loading="lazy" decoding="async">
         <div class="loc-card-overlay">${textBlock}</div>
       </div>`;
     }
@@ -5779,7 +5891,7 @@ function openLocDetail(slug, keepTab) {
   const images = loc.imageUrls || (loc.imageUrl ? [loc.imageUrl] : []);
   const galleryHtml = images.length
     ? `<div class="locdet-img-gallery">${images.map(u =>
-        `<img class="locdet-thumb" src="${escHtml(u)}" alt="">`).join('')}</div>`
+        `<img class="locdet-thumb" src="${escHtml(u)}" alt="" loading="lazy" decoding="async">`).join('')}</div>`
     : '<div class="cdet-empty" style="margin-bottom:12px">Изображения не загружены</div>';
 
   // ── Helper: panel with edit button ────────────────────────────
@@ -6178,12 +6290,17 @@ const VAMPIRE_SECTS = [
 ];
 
 const LINEAGE_DEFS = {
-  vampire:  { label:'🧛 Вампир',          type:'vampire',
+  vampire:  { label:'🧛 Вампир',          type:'vampire', endpoint:'characters',
     fields:[
-      { param:'Name', label:'Имя',    required:true, placeholder:'Граф Лейрок' },
-      { param:'Clan', label:'Клан',   options:VAMPIRE_CLANS, placeholder:'Выберите или введите...' },
-      { param:'Sect', label:'Секта',  options:VAMPIRE_SECTS, placeholder:'Выберите или введите...' },
-      { param:'Role', label:'Роль',   placeholder:'Примоген, Шериф, Анцилла...' },
+      { param:'name',        label:'Имя',           required:true, placeholder:'Граф Лейрок' },
+      { param:'clan',        label:'Клан',          required:true, options:VAMPIRE_CLANS, placeholder:'Выберите или введите...' },
+      { param:'sect',        label:'Секта',         required:true, options:VAMPIRE_SECTS, placeholder:'Выберите или введите...' },
+      { param:'generation',  label:'Поколение',                    placeholder:'10-е' },
+      { param:'birthYear',   label:'Год рождения',                 placeholder:'1612' },
+      { param:'embraceYear', label:'Год обращения',                placeholder:'1640' },
+      { param:'sire',        label:'Сир',                          placeholder:'Имя сира' },
+      { param:'biography',   label:'Биография',     textarea:true, placeholder:'Краткая биография…' },
+      { param:'appearance',  label:'Внешность',     textarea:true, placeholder:'3–5 визуальных маркеров…' },
     ]},
   mortal:   { label:'🧑 Смертный',         type:'mortal',
     fields:[
@@ -6297,32 +6414,40 @@ document.querySelectorAll('.lineage-pick-btn').forEach(btn => {
       const datalist = f.options
         ? `<datalist id="${listId}">${f.options.map(o => `<option value="${escHtml(o)}">`).join('')}</datalist>`
         : '';
+      const control = f.textarea
+        ? `<textarea class="form-control" data-param="${f.param}" rows="3"
+            placeholder="${escHtml(f.placeholder || '')}"></textarea>`
+        : `<input class="form-control" data-param="${f.param}"
+            placeholder="${escHtml(f.placeholder || '')}"
+            type="text" ${f.required ? 'required' : ''}
+            ${listId ? `list="${listId}"` : ''}>`;
       return `
       <div class="form-group">
         <label class="form-label">${escHtml(f.label)}${f.required ? ' *' : ''}</label>
-        <input class="form-control" data-param="${f.param}"
-          placeholder="${escHtml(f.placeholder || '')}"
-          type="text" ${f.required ? 'required' : ''}
-          ${listId ? `list="${listId}"` : ''}>
+        ${control}
         ${datalist}
       </div>`;
     }).join('');
     showModalStep(2);
-    modalFields.querySelector('input').focus();
+    const firstField = modalFields.querySelector('input, textarea');
+    if (firstField) firstField.focus();
   });
 });
 
 modalSubmit.addEventListener('click', async () => {
   const def = LINEAGE_DEFS[modalLineage];
-  const params = { Type: def.type };
+  const params = {};
   let valid = true;
 
-  modalFields.querySelectorAll('input[data-param]').forEach(inp => {
-    const v = inp.value.trim();
-    if (inp.required && !v) { inp.style.borderColor = 'var(--crimson)'; valid = false; }
-    else { inp.style.borderColor = ''; if (v) params[inp.dataset.param] = v; }
+  modalFields.querySelectorAll('[data-param]').forEach(el => {
+    const v = el.value.trim();
+    if (el.required && !v) { el.style.borderColor = 'var(--crimson)'; valid = false; }
+    else { el.style.borderColor = ''; if (v) params[el.dataset.param] = v; }
   });
   if (!valid) return;
+
+  const charName = params.name || params.Name || '';
+  const qs = location.search;
 
   modalSubmit.disabled = true;
   modalSubmit.textContent = '⏳ Создаётся...';
@@ -6330,50 +6455,62 @@ modalSubmit.addEventListener('click', async () => {
   modalOut.className = 'output-area show';
   modalOut.textContent = '';
 
-  const TYPE_TO_LINEAGE = {
-    vampire: 'vampires', mortal: 'mortals', fairy: 'fairies',
-    werewolf: 'werewolves', mage: 'mages', hunter: 'hunters'
+  const reset = () => { modalSubmit.disabled = false; modalSubmit.textContent = 'Создать персонажа'; };
+  const fail  = msg => { modalOut.className = 'output-area show'; modalOut.textContent = '⚠ ' + msg; reset(); };
+
+  // Shared success: optional art upload → refresh list → close.
+  const onCreated = async (okMsg) => {
+    modalOut.className = 'output-area show ok';
+    modalOut.textContent = okMsg;
+    STATE.graph.inited = false;
+    if (modalImgB64 && charName) {
+      try {
+        const u = await fetch(`/api/characters/${encodeURIComponent(charName)}/upload-image${qs}`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ base64: modalImgB64, ext: modalImgExt })
+        }).then(r => r.json());
+        modalOut.textContent += (u && u.ok) ? '\n📷 Арт загружен' : '\n⚠ Арт не загружен';
+      } catch { /* не критично */ }
+    }
+    fetch('/api/characters').then(r => r.json()).then(data => {
+      STATE.characters = Array.isArray(data) ? data : [];
+      if (STATE.page === 'characters') renderChars();
+    }).catch(() => { STATE.characters = []; });
+    setTimeout(closeCharModal, 900);
   };
-  const lineageFolder = TYPE_TO_LINEAGE[def.type] || 'mortals';
-  const npcArgs = [CITY, lineageFolder, params.Name, params.Clan || '', params.Sect || '', params.Role || ''];
 
   try {
-    const r = await fetch('/api/tool/new_npc', {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ args: npcArgs })
-    });
-    const d = await r.json();
-    modalOut.textContent = d.output || '(нет вывода)';
-    if (d.ok) {
-      modalOut.classList.add('ok');
-      STATE.graph.inited = false;
-
-      if (modalImgB64) {
-        const nameInp = modalFields.querySelector('input[data-param="Name"]');
-        const charName = nameInp ? nameInp.value.trim() : null;
-        if (charName) {
-          try {
-            await fetch(`/api/characters/${encodeURIComponent(charName)}/upload-image`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ base64: modalImgB64, ext: modalImgExt })
-            });
-          } catch { /* не критично */ }
-        }
-      }
-
-      fetch('/api/characters').then(r => r.json()).then(data => {
-        STATE.characters = Array.isArray(data) ? data : [];
-        if (STATE.page === 'characters') renderChars();
-      }).catch(() => { STATE.characters = []; });
-      setTimeout(closeCharModal, 900);
+    if (def.endpoint === 'characters') {
+      // Rules-compliant card endpoint — fills clan/sect/generation/birth/embrace/sire/bio/appearance.
+      const payload = {
+        name: charName, lineage: def.type,
+        clan: params.clan || '', sect: params.sect || '',
+        generation: params.generation || '', birthYear: params.birthYear || '',
+        embraceYear: params.embraceYear || '', sire: params.sire || '',
+        biography: params.biography || '', appearance: params.appearance || '',
+      };
+      const d = await fetch('/api/characters' + qs, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      }).then(r => r.json());
+      if (!d.ok) return fail(d.error || 'Ошибка');
+      await onCreated(`✓ Создан: cities/${CITY}/characters/${d.lineage}/${d.slug}/${d.slug}.md`);
     } else {
-      modalSubmit.disabled = false;
-      modalSubmit.textContent = 'Создать персонажа';
+      // Other lineages → new_npc CLI tool (Name / Clan / Sect / Role positional args).
+      const TYPE_TO_LINEAGE = {
+        vampire: 'vampires', mortal: 'mortals', fairy: 'fairies',
+        werewolf: 'werewolves', mage: 'mages', hunter: 'hunters'
+      };
+      const folder = TYPE_TO_LINEAGE[def.type] || 'mortals';
+      const npcArgs = [CITY, folder, params.Name, params.Clan || '', params.Sect || '', params.Role || ''];
+      const d = await fetch('/api/tool/new_npc', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ args: npcArgs })
+      }).then(r => r.json());
+      if (!d.ok) { modalOut.textContent = d.output || '(нет вывода)'; reset(); return; }
+      await onCreated(d.output || '✓ Создан');
     }
-  } catch(e) {
-    modalOut.textContent = 'Ошибка: ' + e.message;
-    modalSubmit.disabled = false;
-    modalSubmit.textContent = 'Создать персонажа';
+  } catch (e) {
+    fail(e.message);
   }
 });

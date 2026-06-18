@@ -317,13 +317,14 @@ describe('Parsers — unit', () => {
   });
 
   describe('categorizeRel', () => {
-    it('family / sire / enemy / ally / romantic / neutral', () => {
+    it('family / sire / enemy / ally / romantic / acquaintance / neutral', () => {
       assert.equal(categorizeRel('старший брат'), 'family');
       assert.equal(categorizeRel('создал её'),    'sire');
       assert.equal(categorizeRel('заклятый враг'), 'enemy');
       assert.equal(categorizeRel('верный союзник'), 'ally');
       assert.equal(categorizeRel('тайная любовь'), 'romantic');
-      assert.equal(categorizeRel('просто знакомый'), 'neutral');
+      assert.equal(categorizeRel('просто знакомый'), 'acquaintance');
+      assert.equal(categorizeRel('деловой партнёр'), 'neutral');
     });
   });
 
@@ -566,6 +567,17 @@ describe('API — integration', () => {
 
   // ── Chronicles & modules ───────────────────────────────────────────────────
   describe('Chronicles & modules', () => {
+    // Discover a real chronicle+module from live data so these assertions don't
+    // depend on a hard-coded fixture slug that may be absent in the active city.
+    let chr = CHR, mod = MOD;
+    before(async () => {
+      const { body } = await apiJson(`/api/modules${CITY}`);
+      if (Array.isArray(body) && body.length) {
+        const m = body.find(x => x.chronicle && x.name) || body[0];
+        if (m.chronicle) chr = m.chronicle;
+        if (m.name)      mod = m.name;
+      }
+    });
     it('GET /api/chronicles → array with slug', async () => {
       const { status, body } = await apiJson(`/api/chronicles${CITY}`);
       assert.equal(status, 200);
@@ -577,14 +589,14 @@ describe('API — integration', () => {
       assert.equal(status, 200);
       assert.ok('exists' in body);
     });
-    it(`GET /api/chronicles/${CHR}/events → array`, async () => {
-      const { status, body } = await apiJson(`/api/chronicles/${CHR}/events${CITY}`);
+    it('GET /api/chronicles/:chr/events → array', async () => {
+      const { status, body } = await apiJson(`/api/chronicles/${chr}/events${CITY}`);
       assert.equal(status, 200);
       assert.ok(Array.isArray(body));
       if (body.length > 0) assert.ok('date' in body[0] || 'title' in body[0]);
     });
-    it(`GET /api/chronicles/${CHR}/modules → array`, async () => {
-      const { status, body } = await apiJson(`/api/chronicles/${CHR}/modules${CITY}`);
+    it('GET /api/chronicles/:chr/modules → array', async () => {
+      const { status, body } = await apiJson(`/api/chronicles/${chr}/modules${CITY}`);
       assert.equal(status, 200);
       assert.ok(Array.isArray(body));
     });
@@ -593,12 +605,12 @@ describe('API — integration', () => {
       assert.equal(status, 200);
       assert.ok(Array.isArray(body) && body.length > 0);
     });
-    it(`GET /api/chronicles/${CHR}/modules/${MOD}/detail → full object`, async () => {
+    it('GET /api/chronicles/:chr/modules/:mod/detail → full object', async () => {
       const { status, body } = await apiJson(
-        `/api/chronicles/${CHR}/modules/${MOD}/detail${CITY}`);
+        `/api/chronicles/${chr}/modules/${mod}/detail${CITY}`);
       assert.equal(status, 200);
-      assert.equal(body.name, MOD);
-      assert.equal(body.chronicle, CHR);
+      assert.equal(body.name, mod);
+      assert.equal(body.chronicle, chr);
       assert.ok(Array.isArray(body.pcs));
       assert.ok(Array.isArray(body.npcs));
       assert.ok(Array.isArray(body.events));
@@ -606,7 +618,7 @@ describe('API — integration', () => {
     });
     it('GET nonexistent module/detail → 404', async () => {
       const { status } = await apiJson(
-        `/api/chronicles/${CHR}/modules/__NOMOD__/detail${CITY}`);
+        `/api/chronicles/${chr}/modules/__NOMOD__/detail${CITY}`);
       assert.equal(status, 404);
     });
     it('POST recap — unknown chronicle (no events.md) → 404', async () => {
@@ -872,6 +884,127 @@ describe('API — integration', () => {
       const { status } = await apiJson(
         `/api/characters/${encodeURIComponent(CHAR_UNKNOWN)}/generate-appearance${CITY}`,
         { method: 'POST', body: JSON.stringify({}) });
+      assert.equal(status, 404);
+    });
+    it('POST dialogue — missing situation → 400 (before AI call)', async () => {
+      const { status } = await apiJson(
+        `/api/characters/${CHAR_GERSON}/dialogue${CITY}`,
+        { method: 'POST', body: JSON.stringify({}) });
+      assert.equal(status, 400);
+    });
+    it('POST dialogue — unknown char with situation → 404', async () => {
+      const { status } = await apiJson(
+        `/api/characters/${encodeURIComponent(CHAR_UNKNOWN)}/dialogue${CITY}`,
+        { method: 'POST', body: JSON.stringify({ situation: 'Сцена в Элизиуме' }) });
+      assert.equal(status, 404);
+    });
+    it('POST canon-check — empty text → 400', async () => {
+      const { status } = await apiJson(`/api/canon-check${CITY}`,
+        { method: 'POST', body: JSON.stringify({ text: '   ' }) });
+      assert.equal(status, 400);
+    });
+    it('POST canon-check — over-long text → 400', async () => {
+      const { status } = await apiJson(`/api/canon-check${CITY}`,
+        { method: 'POST', body: JSON.stringify({ text: 'я'.repeat(8001) }) });
+      assert.equal(status, 400);
+    });
+  });
+
+  // ── Character sheets (V20) — guards (lookup/empty checks precede AI) ──────────
+  describe('Character sheets — guards', () => {
+    it('POST sheet/generate — unknown char → 404', async () => {
+      const { status } = await apiJson(
+        `/api/characters/${encodeURIComponent(CHAR_UNKNOWN)}/sheet/generate${CITY}`,
+        { method: 'POST', body: JSON.stringify({}) });
+      assert.equal(status, 404);
+    });
+    it('PUT sheet — empty content → 400 (guard before write)', async () => {
+      const { status } = await apiJson(`/api/characters/${CHAR_GERSON}/sheet${CITY}`,
+        { method: 'PUT', body: JSON.stringify({ content: '' }) });
+      assert.equal(status, 400);
+    });
+    it('PUT sheet — unknown char → 404', async () => {
+      const { status } = await apiJson(
+        `/api/characters/${encodeURIComponent(CHAR_UNKNOWN)}/sheet${CITY}`,
+        { method: 'PUT', body: JSON.stringify({ content: 'непустой' }) });
+      assert.equal(status, 404);
+    });
+  });
+
+  // ── Module NPC sheets — guards (fictional path, never writes) ────────────────
+  describe('Module NPC sheets — guards', () => {
+    const NPC = '/api/chronicles/__nochron__/modules/__nomod__/npc/__nonpc__';
+    it('GET npc sheet — nonexistent → {exists:false}', async () => {
+      const { status, body } = await apiJson(`${NPC}/sheet${CITY}`);
+      assert.equal(status, 200);
+      assert.equal(body.exists, false);
+      assert.equal(body.content, '');
+    });
+    it('POST npc sheet/generate — missing card → 404', async () => {
+      const { status } = await apiJson(`${NPC}/sheet/generate${CITY}`,
+        { method: 'POST', body: JSON.stringify({}) });
+      assert.equal(status, 404);
+    });
+    it('PUT npc sheet — empty content → 400', async () => {
+      const { status } = await apiJson(`${NPC}/sheet${CITY}`,
+        { method: 'PUT', body: JSON.stringify({ content: '' }) });
+      assert.equal(status, 400);
+    });
+  });
+
+  // ── Module sessions — guards (unknown module rejected before any write) ──────
+  describe('Module sessions — guards', () => {
+    it('POST session — unknown module → 404', async () => {
+      const { status } = await apiJson(
+        '/api/chronicles/__nochron__/modules/__nomod__/session' + CITY,
+        { method: 'POST', body: JSON.stringify({ notes: 'что-то' }) });
+      assert.equal(status, 404);
+    });
+  });
+
+  // ── Claude OAuth status — read-only (local creds, no network) ────────────────
+  describe('Claude status', () => {
+    it('GET /api/claude/status → shape', async () => {
+      const { status, body } = await apiJson(`/api/claude/status${CITY}`);
+      assert.equal(status, 200);
+      assert.equal(body.ok, true);
+      assert.ok('claudeOauth' in body);
+      assert.equal(typeof body.hasAnthropicKey, 'boolean');
+    });
+  });
+
+  // ── AI generation — happy path (AI_MOCK provider: deterministic, offline,
+  //    non-writing endpoints only) ─────────────────────────────────────────────
+  describe('AI generation — happy path (mock)', () => {
+    it('POST dialogue — known char + situation → 200 with replies', async () => {
+      const { status, body } = await apiJson(
+        `/api/characters/${CHAR_GERSON}/dialogue${CITY}`,
+        { method: 'POST', body: JSON.stringify({ situation: 'Встреча в Элизиуме', count: 2 }) });
+      assert.equal(status, 200);
+      assert.equal(body.ok, true);
+      assert.equal(typeof body.text, 'string');
+      assert.ok(body.text.length > 0);
+      assert.equal(body.source, 'mock');
+    });
+    it('POST canon-check — valid text → 200 with issues array', async () => {
+      const { status, body } = await apiJson(`/api/canon-check${CITY}`,
+        { method: 'POST', body: JSON.stringify({ text: 'Герсон вошёл в Элизиум на закате.' }) });
+      assert.equal(status, 200);
+      assert.equal(body.ok, true);
+      assert.ok(Array.isArray(body.issues));
+    });
+  });
+
+  // ── Character delete — guards (only the 404 path; never deletes real data) ───
+  describe('Character delete — guards', () => {
+    it('GET delete-preview — unknown char → 404', async () => {
+      const { status } = await apiJson(
+        `/api/characters/${encodeURIComponent(CHAR_UNKNOWN)}/delete-preview${CITY}`);
+      assert.equal(status, 404);
+    });
+    it('DELETE — unknown char → 404', async () => {
+      const { status } = await apiJson(
+        `/api/characters/${encodeURIComponent(CHAR_UNKNOWN)}${CITY}`, { method: 'DELETE' });
       assert.equal(status, 404);
     });
   });

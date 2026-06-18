@@ -6,12 +6,12 @@ echo.
 echo  =======================================================
 echo   Sanguine System -- UI Selenium (Chrome)
 echo  =======================================================
-echo.
-echo  Requirements: Chrome must be installed.
+echo  Requirements: Chrome must be installed
+echo   (ChromeDriver is fetched automatically by Selenium Manager).
 echo  Set HEADLESS=1 to run without a browser window.
 echo.
 
-node --test --test-reporter=spec --test-reporter-destination=stdout --test-reporter=./tests/reporter.js --test-reporter-destination=nul tests/ui.test.js
+call npm run test:ui
 
 set CODE=%errorlevel%
 

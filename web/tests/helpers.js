@@ -14,7 +14,10 @@ let _proc = null;
 async function startServer() {
   return new Promise((resolve, reject) => {
     _proc = spawn(process.execPath, [path.join(__dirname, '../server.js')], {
-      env:   { ...process.env, PORT: String(TEST_PORT) },
+      // AI_MOCK makes all generation deterministic & offline so happy-path tests
+      // never contact a real provider. Guard tests still hit their 400/404 paths
+      // (those return before any generation client is built).
+      env:   { ...process.env, PORT: String(TEST_PORT), AI_MOCK: '1' },
       cwd:   path.join(__dirname, '..'),
       stdio: ['ignore', 'pipe', 'pipe'],
     });

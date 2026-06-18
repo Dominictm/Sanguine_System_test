@@ -240,15 +240,15 @@
 
 <div class="report-header">
   <h1>Vampire: The Masquerade</h1>
-  <p class="subtitle">CHRONICLE MANAGER · TEST REPORT · 15.06.2026, 11:03:16</p>
+  <p class="subtitle">CHRONICLE MANAGER · TEST REPORT · 17.06.2026, 12:53:00</p>
   <span class="status-badge good">ALL PASSED</span>
 </div>
 
 <div class="summary-bar">
-  <div class="stat-box s-total"><span class="val">21</span><span class="lbl">TOTAL</span></div>
-  <div class="stat-box s-pass"> <span class="val">21</span> <span class="lbl">PASSED</span></div>
+  <div class="stat-box s-total"><span class="val">181</span><span class="lbl">TOTAL</span></div>
+  <div class="stat-box s-pass"> <span class="val">181</span> <span class="lbl">PASSED</span></div>
   <div class="stat-box s-fail"> <span class="val">0</span> <span class="lbl">FAILED</span></div>
-  <div class="stat-box s-dur">  <span class="val">134.06s</span><span class="lbl">DURATION</span></div>
+  <div class="stat-box s-dur">  <span class="val">2.19s</span><span class="lbl">DURATION</span></div>
   <div class="stat-box s-pct">  <span class="val">100%</span><span class="lbl">PASS RATE</span></div>
 </div>
 <div class="progress-track"><div class="progress-fill"></div></div>
@@ -256,57 +256,389 @@
 <div class="results">
   
 <details class="suite suite-pass" open>
-  <summary><span class="suite-name">UI — Selenium (Chrome)</span><span class="suite-stat"><span class="s-pass">21✓</span></span></summary>
+  <summary><span class="suite-name">Parsers — unit</span><span class="suite-stat"><span class="s-pass">78✓</span></span></summary>
   <div class="suite-body">
 <details class="suite suite-pass" open>
-  <summary><span class="suite-name">Загрузка приложения</span><span class="suite-stat"><span class="s-pass">3✓</span></span></summary>
-  <div class="suite-body"><div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">SPA открывается, заголовок и сайдбар на месте</span></div>
-<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">domain-label прогружается (не «Загрузка»)</span></div>
-<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">заход без ?city= редиректит на активный город</span></div></div>
+  <summary><span class="suite-name">readPrompt — Format A (indented)</span><span class="suite-stat"><span class="s-pass">2✓</span></span></summary>
+  <div class="suite-body"><div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">reads image prompt</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">reads negative prompt</span></div></div>
 </details>
 
 <details class="suite suite-pass" open>
-  <summary><span class="suite-name">Навигация по разделам</span><span class="suite-stat"><span class="s-pass">8✓</span></span></summary>
-  <div class="suite-body"><div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">раздел «dashboard» открывается</span></div>
-<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">раздел «chronicle» открывается</span></div>
-<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">раздел «characters» открывается</span></div>
-<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">раздел «graph» открывается</span></div>
-<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">раздел «modules» открывается</span></div>
-<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">раздел «threads» открывается</span></div>
-<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">раздел «locations» открывается</span></div>
-<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">раздел «tools» открывается</span></div></div>
+  <summary><span class="suite-name">readPrompt — Format B (fenced)</span><span class="suite-stat"><span class="s-pass">2✓</span></span></summary>
+  <div class="suite-body"><div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">reads image prompt</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">reads negative prompt</span></div></div>
 </details>
 
 <details class="suite suite-pass" open>
-  <summary><span class="suite-name">Панель управления</span><span class="suite-stat"><span class="s-pass">2✓</span></span></summary>
-  <div class="suite-body"><div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">карточки статистики отрисованы</span></div>
-<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">счётчик персонажей — число</span></div></div>
+  <summary><span class="suite-name">readPrompt — absent blocks</span><span class="suite-stat"><span class="s-pass">3✓</span></span></summary>
+  <div class="suite-body"><div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">returns undefined when image block is missing</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">returns undefined when negative block is missing</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">returns undefined on empty string</span></div></div>
 </details>
 
 <details class="suite suite-pass" open>
-  <summary><span class="suite-name">Персонажи</span><span class="suite-stat"><span class="s-pass">2✓</span></span></summary>
-  <div class="suite-body"><div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">грид персонажей рендерится</span></div>
-<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">поиск фильтрует грид</span></div></div>
+  <summary><span class="suite-name">writePrompt — indented format</span><span class="suite-stat"><span class="s-pass">5✓</span></span></summary>
+  <div class="suite-body"><div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">replaces existing image block</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">replaces existing negative block</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">appends a bullet when image block is absent</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">appends a bullet when negative block is absent</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">inserts before the images section when present</span></div></div>
 </details>
 
 <details class="suite suite-pass" open>
-  <summary><span class="suite-name">Переключатель города</span><span class="suite-stat"><span class="s-pass">1✓</span></span></summary>
-  <div class="suite-body"><div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">в выпадашке есть города</span></div></div>
+  <summary><span class="suite-name">writePrompt — fenced format</span><span class="suite-stat"><span class="s-pass">5✓</span></span></summary>
+  <div class="suite-body"><div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">replaces existing image block</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">replaces existing negative block</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">appends new image section when absent</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">appends negative block after last fence when absent</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">appends both sections when card has no fences at all</span></div></div>
 </details>
 
 <details class="suite suite-pass" open>
-  <summary><span class="suite-name">Инструменты (Node-инструменты через UI)</span><span class="suite-stat"><span class="s-pass">5✓</span></span></summary>
-  <div class="suite-body"><div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">создание города через вкладку «Новый домен»</span></div>
-<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">создание НПС через вкладку «Новый НПС»</span></div>
-<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">создание локации во вкладке «🛠 Ещё»</span></div>
-<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">кнопка «Пересобрать индекс» отрабатывает</span></div>
-<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">кнопка «Проверить ссылки» возвращает вывод</span></div></div>
+  <summary><span class="suite-name">slugify</span><span class="suite-stat"><span class="s-pass">7✓</span></span></summary>
+  <div class="suite-body"><div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">transliterates Cyrillic → ASCII</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">collapses separators and trims underscores</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">drops soft/hard signs</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">handles digits</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">null / undefined → empty string</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">already-ASCII slug is stable</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">browser parity — public/scripts.js _NTR mirrors CYRILLIC_TR</span></div></div>
+</details>
+
+<details class="suite suite-pass" open>
+  <summary><span class="suite-name">periodLabel</span><span class="suite-stat"><span class="s-pass">8✓</span></span></summary>
+  <div class="suite-body"><div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">01 → Январь</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">11 → Ноябрь</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">12 → Декабрь</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">retrospective → label</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">unknown string → passthrough</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">null → empty string</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">undefined → empty string</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">empty string → empty</span></div></div>
+</details>
+
+<details class="suite suite-pass" open>
+  <summary><span class="suite-name">threadStatusKey</span><span class="suite-stat"><span class="s-pass">6✓</span></span></summary>
+  <div class="suite-body"><div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">🔴 → active</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">🟡 → background</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">🟢 → closed</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">⚫ → abandoned</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">unrecognised → unknown</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">empty → unknown</span></div></div>
+</details>
+
+<details class="suite suite-pass" open>
+  <summary><span class="suite-name">THREAD_STATUS round-trip</span><span class="suite-stat"><span class="s-pass">2✓</span></span></summary>
+  <div class="suite-body"><div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">all four keys defined</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">keys round-trip through threadStatusKey</span></div></div>
+</details>
+
+<details class="suite suite-pass" open>
+  <summary><span class="suite-name">parseDiary</span><span class="suite-stat"><span class="s-pass">7✓</span></span></summary>
+  <div class="suite-body"><div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">entry — format and title</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">entry — session / author / location / tone</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">entry — multi-line text de-indented</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">entry — cross refs parsed</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">retrospective — two dated sections</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">empty input → entry with no fields</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">strips UTF-8 BOM</span></div></div>
+</details>
+
+<details class="suite suite-pass" open>
+  <summary><span class="suite-name">parseThreadsContent</span><span class="suite-stat"><span class="s-pass">10✓</span></span></summary>
+  <div class="suite-body"><div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">parses 3 rows</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">row 1 — id / title / desc</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">row 1 — status active</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">row 1 — priority Высокий</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">row 2 — status closed</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">row 3 — status background</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">all rows have correct file</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">different file propagates</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">header-only → empty array</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">empty string → empty array</span></div></div>
+</details>
+
+<details class="suite suite-pass" open>
+  <summary><span class="suite-name">markdown helpers</span><span class="suite-stat"><span class="s-pass">5✓</span></span></summary>
+  <div class="suite-body"><div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">mdExtractLinks — text + href pairs</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">mdStripLinks — keeps link text, drops target</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">mdStripInline — strips links, bold and leading bullet</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">classifyChronicleLink — module link</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">classifyChronicleLink — finale / npc / other</span></div></div>
+</details>
+
+<details class="suite suite-pass" open>
+  <summary><span class="suite-name">categorizeRel</span><span class="suite-stat"><span class="s-pass">1✓</span></span></summary>
+  <div class="suite-body"><div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">family / sire / enemy / ally / romantic / acquaintance / neutral</span></div></div>
+</details>
+
+<details class="suite suite-pass" open>
+  <summary><span class="suite-name">parseCharacter</span><span class="suite-stat"><span class="s-pass">6✓</span></span></summary>
+  <div class="suite-body"><div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">reads H1 name without emoji</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">reads clan via "Клан / Раса"</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">appearance + statusType active</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">relationships parsed with categorisation, link text resolved</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">infers lineage from label when not given</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">dead status detected</span></div></div>
+</details>
+
+<details class="suite suite-pass" open>
+  <summary><span class="suite-name">parseLocation</span><span class="suite-stat"><span class="s-pass">3✓</span></span></summary>
+  <div class="suite-body"><div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">title + meta fields</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">atmosphere + masquerade level high</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">hooks parsed and de-numbered</span></div></div>
+</details>
+
+<details class="suite suite-pass" open>
+  <summary><span class="suite-name">parseEvent / parseChronicle</span><span class="suite-stat"><span class="s-pass">4✓</span></span></summary>
+  <div class="suite-body"><div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">chronicle title + worldState</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">one event with date / title parsed</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">event location link + participants + consequences</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">parseEvent standalone — assigns given id</span></div></div>
+</details>
+
+<details class="suite suite-pass" open>
+  <summary><span class="suite-name">parseChronicleParticipants</span><span class="suite-stat"><span class="s-pass">2✓</span></span></summary>
+  <div class="suite-body"><div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">collects names, skips anonymous</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">empty text → empty array</span></div></div>
+</details></div>
+</details>
+
+<details class="suite suite-pass" open>
+  <summary><span class="suite-name">API — integration</span><span class="suite-stat"><span class="s-pass">82✓</span></span></summary>
+  <div class="suite-body">
+<details class="suite suite-pass" open>
+  <summary><span class="suite-name">Health / system</span><span class="suite-stat"><span class="s-pass">5✓</span></span></summary>
+  <div class="suite-body"><div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">GET /api/status → counts</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">GET /api/cities → {cities[], default}</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">GET /api/auth-status → recognisable shape</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">GET /api/settings → object</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">GET /api/integrity → {totalIssues, checks[]}</span></div></div>
+</details>
+
+<details class="suite suite-pass" open>
+  <summary><span class="suite-name">Characters</span><span class="suite-stat"><span class="s-pass">8✓</span></span></summary>
+  <div class="suite-body"><div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">returns non-empty array</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">each char has name / lineage / status</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">each char has hasSheet boolean</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">each char has diaries array</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">GET /api/characters/all-images → plain object</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">GET /:name/sheet — no sheet → {exists: false}</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">GET unknown/sheet → 404</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">GET /:name/images → {images[]}</span></div></div>
+</details>
+
+<details class="suite suite-pass" open>
+  <summary><span class="suite-name">Locations</span><span class="suite-stat"><span class="s-pass">2✓</span></span></summary>
+  <div class="suite-body"><div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">GET /api/locations → array</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">each location has title and slug</span></div></div>
+</details>
+
+<details class="suite suite-pass" open>
+  <summary><span class="suite-name">Graph</span><span class="suite-stat"><span class="s-pass">2✓</span></span></summary>
+  <div class="suite-body"><div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">GET /api/graph → {nodes[], links[]}</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">each node has id field</span></div></div>
+</details>
+
+<details class="suite suite-pass" open>
+  <summary><span class="suite-name">Chronicles &amp; modules</span><span class="suite-stat"><span class="s-pass">8✓</span></span></summary>
+  <div class="suite-body"><div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">GET /api/chronicles → array with slug</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">GET /api/chronicle → {exists}</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">GET /api/chronicles/:chr/events → array</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">GET /api/chronicles/:chr/modules → array</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">GET /api/modules → non-empty array</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">GET /api/chronicles/:chr/modules/:mod/detail → full object</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">GET nonexistent module/detail → 404</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">POST recap — unknown chronicle (no events.md) → 404</span></div></div>
+</details>
+
+<details class="suite suite-pass" open>
+  <summary><span class="suite-name">Archive / lore</span><span class="suite-stat"><span class="s-pass">5✓</span></span></summary>
+  <div class="suite-body"><div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">GET /api/timeline → {exists, content}</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">GET /api/factions → {exists, content}</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">GET /api/visitors → {exists, content}</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">GET /api/rumors?type=elysium → {exists, content}</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">GET /api/rumors?type=dreaming → {exists, content}</span></div></div>
+</details>
+
+<details class="suite suite-pass" open>
+  <summary><span class="suite-name">Search</span><span class="suite-stat"><span class="s-pass">3✓</span></span></summary>
+  <div class="suite-body"><div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">short query (&lt; 3 chars) → empty results</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">returns expected shape for real query</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">character results have slug/name/lineage/excerpt</span></div></div>
+</details>
+
+<details class="suite suite-pass" open>
+  <summary><span class="suite-name">Threads — read</span><span class="suite-stat"><span class="s-pass">4✓</span></span></summary>
+  <div class="suite-body"><div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">returns non-empty array</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">each thread has id / title / status / file</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">file paths match whitelist pattern</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">status values are known keys</span></div></div>
+</details>
+
+<details class="suite suite-pass" open>
+  <summary><span class="suite-name">Threads — write round-trip</span><span class="suite-stat"><span class="s-pass">8✓</span></span></summary>
+  <div class="suite-body"><div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">POST missing title → 400</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">POST path traversal in file → 400</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">POST valid → 200 {ok, id}</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">GET after POST → thread appears</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">PATCH bad file path → 400</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">PATCH unknown status → 400</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">PATCH → closed / Низкий</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">GET after PATCH → shows closed / Низкий</span></div></div>
+</details>
+
+<details class="suite suite-pass" open>
+  <summary><span class="suite-name">Diary — validation</span><span class="suite-stat"><span class="s-pass">4✓</span></span></summary>
+  <div class="suite-body"><div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">GET without file param → 400</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">PUT invalid period → 400</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">PUT empty text → 400</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">GET unknown character → 404</span></div></div>
+</details>
+
+<details class="suite suite-pass" open>
+  <summary><span class="suite-name">Diary — write round-trip</span><span class="suite-stat"><span class="s-pass">4✓</span></span></summary>
+  <div class="suite-body"><div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">PUT creates diary → 200 {ok}</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">journal file exists on disk</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">card updated with diary link</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">GET reads back the diary</span></div></div>
+</details>
+
+<details class="suite suite-pass" open>
+  <summary><span class="suite-name">Security &amp; error handling</span><span class="suite-stat"><span class="s-pass">3✓</span></span></summary>
+  <div class="suite-body"><div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">path traversal in diary file → error status</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">invalid city slug sanitised → 200 (default city)</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">unknown API route → 404</span></div></div>
+</details>
+
+<details class="suite suite-pass" open>
+  <summary><span class="suite-name">AI generation — validation</span><span class="suite-stat"><span class="s-pass">6✓</span></span></summary>
+  <div class="suite-body"><div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">POST generate-prompt — unknown char → 404</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">POST generate-appearance — unknown char → 404</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">POST dialogue — missing situation → 400 (before AI call)</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">POST dialogue — unknown char with situation → 404</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">POST canon-check — empty text → 400</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">POST canon-check — over-long text → 400</span></div></div>
+</details>
+
+<details class="suite suite-pass" open>
+  <summary><span class="suite-name">Character sheets — guards</span><span class="suite-stat"><span class="s-pass">3✓</span></span></summary>
+  <div class="suite-body"><div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">POST sheet/generate — unknown char → 404</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">PUT sheet — empty content → 400 (guard before write)</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">PUT sheet — unknown char → 404</span></div></div>
+</details>
+
+<details class="suite suite-pass" open>
+  <summary><span class="suite-name">Module NPC sheets — guards</span><span class="suite-stat"><span class="s-pass">3✓</span></span></summary>
+  <div class="suite-body"><div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">GET npc sheet — nonexistent → {exists:false}</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">POST npc sheet/generate — missing card → 404</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">PUT npc sheet — empty content → 400</span></div></div>
+</details>
+
+<details class="suite suite-pass" open>
+  <summary><span class="suite-name">Module sessions — guards</span><span class="suite-stat"><span class="s-pass">1✓</span></span></summary>
+  <div class="suite-body"><div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">POST session — unknown module → 404</span></div></div>
+</details>
+
+<details class="suite suite-pass" open>
+  <summary><span class="suite-name">Claude status</span><span class="suite-stat"><span class="s-pass">1✓</span></span></summary>
+  <div class="suite-body"><div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">GET /api/claude/status → shape</span></div></div>
+</details>
+
+<details class="suite suite-pass" open>
+  <summary><span class="suite-name">AI generation — happy path (mock)</span><span class="suite-stat"><span class="s-pass">2✓</span></span></summary>
+  <div class="suite-body"><div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">POST dialogue — known char + situation → 200 with replies</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">POST canon-check — valid text → 200 with issues array</span></div></div>
+</details>
+
+<details class="suite suite-pass" open>
+  <summary><span class="suite-name">Image deletion — guards</span><span class="suite-stat"><span class="s-pass">3✓</span></span></summary>
+  <div class="suite-body"><div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">DELETE dotfile name → 400 (filename guard before lookup)</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">DELETE for unknown char → 404</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">DELETE missing file with no card reference → 404 (idempotent guard)</span></div></div>
+</details>
+
+<details class="suite suite-pass" open>
+  <summary><span class="suite-name">Locations — write guards</span><span class="suite-stat"><span class="s-pass">1✓</span></span></summary>
+  <div class="suite-body"><div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">PUT fields — unknown slug → 404</span></div></div>
+</details>
+
+<details class="suite suite-pass" open>
+  <summary><span class="suite-name">Archive docs — write validation</span><span class="suite-stat"><span class="s-pass">2✓</span></span></summary>
+  <div class="suite-body"><div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">PUT /api/timeline without content → 400</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">PUT /api/rumors without content → 400</span></div></div>
+</details>
+
+<details class="suite suite-pass" open>
+  <summary><span class="suite-name">Chronicles &amp; modules — write guards</span><span class="suite-stat"><span class="s-pass">3✓</span></span></summary>
+  <div class="suite-body"><div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">GET delete-preview — unknown chronicle → 404</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">DELETE — unknown chronicle → 404</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">POST module without name → 400</span></div></div>
+</details>
+
+<details class="suite suite-pass" open>
+  <summary><span class="suite-name">Rumors — write round-trip</span><span class="suite-stat"><span class="s-pass">1✓</span></span></summary>
+  <div class="suite-body"><div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">PUT writes content, GET reads it back</span></div></div>
+</details></div>
+</details>
+
+<details class="suite suite-pass" open>
+  <summary><span class="suite-name">E2E — сквозной цикл хроники</span><span class="suite-stat"><span class="s-pass">21✓</span></span></summary>
+  <div class="suite-body">
+<details class="suite suite-pass" open>
+  <summary><span class="suite-name">1. Город</span><span class="suite-stat"><span class="s-pass">3✓</span></span></summary>
+  <div class="suite-body"><div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">POST /api/tool/new_city создаёт город</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">город виден в /api/cities</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">/api/status отдаёт домен города</span></div></div>
+</details>
+
+<details class="suite suite-pass" open>
+  <summary><span class="suite-name">2. Персонаж и локация</span><span class="suite-stat"><span class="s-pass">4✓</span></span></summary>
+  <div class="suite-body"><div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">new_npc создаёт карточку вампира</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">карточка содержит обязательные поля</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">new_location создаёт карточку локации</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">/api/characters отдаёт созданного персонажа</span></div></div>
+</details>
+
+<details class="suite suite-pass" open>
+  <summary><span class="suite-name">2b. AI-генерация (mock)</span><span class="suite-stat"><span class="s-pass">4✓</span></span></summary>
+  <div class="suite-body"><div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">POST sheet/generate создаёт и сохраняет лист V20</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">GET sheet возвращает сохранённый лист</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">POST dialogue возвращает реплики в характере</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">POST canon-check возвращает массив issues</span></div></div>
+</details>
+
+<details class="suite suite-pass" open>
+  <summary><span class="suite-name">3. Логирование сессии</span><span class="suite-stat"><span class="s-pass">4✓</span></span></summary>
+  <div class="suite-body"><div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">предпросмотр (dryRun) возвращает previewHash и план</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">запись с устаревшим хэшем отклоняется (409)</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">запись (dryRun:false) с верным хэшем создаёт артефакты</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">инлайн-НПС записан как карточка-заготовка</span></div></div>
+</details>
+
+<details class="suite suite-pass" open>
+  <summary><span class="suite-name">4. Состояние после сессии</span><span class="suite-stat"><span class="s-pass">2✓</span></span></summary>
+  <div class="suite-body"><div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">/api/status отражает события, модуль и персонажей</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">/api/chronicles содержит созданную хронику</span></div></div>
+</details>
+
+<details class="suite suite-pass" open>
+  <summary><span class="suite-name">5. Закрытие хроники</span><span class="suite-stat"><span class="s-pass">3✓</span></span></summary>
+  <div class="suite-body"><div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">close_chronicle проставляет статус «Закрыта»</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">открытые нити закрыты после close_chronicle</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">build_city_events пересобирает индекс города</span></div></div>
+</details>
+
+<details class="suite suite-pass" open>
+  <summary><span class="suite-name">6. Целостность данных</span><span class="suite-stat"><span class="s-pass">1✓</span></span></summary>
+  <div class="suite-body"><div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">validate_cards --strict проходит без ошибок</span></div></div>
 </details></div>
 </details>
 </div>
 
 <div class="report-footer">
-  Generated by <span>VTM Chronicle Manager</span> test suite &mdash; 15.06.2026, 11:03:16
+  Generated by <span>Sanguine System</span> test suite &mdash; 17.06.2026, 12:53:00
 </div>
 
 </body>
