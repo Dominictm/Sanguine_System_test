@@ -19,6 +19,7 @@ const LINEAGES = {
   hunters:   /Охотник/i,
 };
 const STATUS = ['Жив', 'Жива', 'Торпор', 'Мёртв', 'Мертва', 'Уничтожен', 'Пропал', 'Неизвестно', 'Активен'];
+const GENDER = ['Мужской', 'Женский'];
 
 const isDir  = p => { try { return fs.statSync(p).isDirectory(); } catch { return false; } };
 const exists = p => { try { return fs.existsSync(p); } catch { return false; } };
@@ -73,6 +74,12 @@ for (const grp of discover()) {
     else if (!STATUS.some(s => st.startsWith(s))) E(`статус «${st}» вне enum`);
 
     if (!/##\s*🖼️?\s*Изображения/.test(c)) E('нет секции «## 🖼️ Изображения»');
+
+    // Новое поле — обязательно при создании, но в карточках до его введения отсутствует.
+    // Всегда WARNING (даже в --strict), пока не принято решение о массовом бэкфилле.
+    const gender = field(c, 'Пол');
+    if (!gender) W('нет поля «Пол»');
+    else if (!GENDER.includes(gender)) W(`пол «${gender}» вне enum (Мужской/Женский)`);
 
     const r = reg(grp.city);
     const h1 = (c.match(/^#\s+(.*)$/m) || [])[1] || slugDir;
