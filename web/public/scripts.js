@@ -45,6 +45,33 @@ const LINEAGE_LABELS = {
   werewolf: '🐺 Оборотень', mage: '🔮 Маг', hunter: '🏹 Охотник'
 };
 
+// Акцентный цвет клана для тонировки фона модалки персонажа (openCharDetail).
+// Подбор по мотивам цветокодировки клановых глав V20-корбука — не каноничен,
+// чисто оформительское решение.
+const CLAN_COLORS = {
+  'Асамиты':              '#b3001b',
+  'Бруха':                '#c2410c',
+  'Вентру':                '#2c5aa0',
+  'Гэнгрел':               '#8a6d3b',
+  'Джованни':              '#3d2b4f',
+  'Ласомбра':              '#2b1f4a',
+  'Малкавиан':             '#6a3d9a',
+  'Носферату':             '#4a5d3a',
+  'Равнос':                '#d2691e',
+  'Последователи Сета':    '#a67c00',
+  'Тореадор':              '#b5476b',
+  'Тремер':                '#5b2a6e',
+  'Тзимище':               '#7a1f2b',
+  // Кровные линии
+  'Баали':                 '#4a0e0e',
+  'Дочери Какофонии':      '#4a6a7a',
+  'Каппадокийцы':          '#5a5a52',
+  'Нагараджа':             '#8a4a1e',
+  'Салубри':               '#3a6a8a',
+  'Самеди':                '#3a1f3a',
+  'Серпанты Света':        '#6a7a1e',
+};
+
 const REL_COLORS = {
   family:     '#C94040',
   sire:       '#DC143C',
@@ -1416,15 +1443,17 @@ document.getElementById('btn-new-npc').addEventListener('click', async () => {
   const lineage = document.getElementById('npc-type').value;
   const isVamp  = lineage === 'vampire';
   const name = document.getElementById('npc-name').value.trim();
+  const gender = document.getElementById('npc-gender').value.trim();
   const clan = document.getElementById('npc-clan').value.trim();
   const sect = document.getElementById('npc-sect').value.trim();
   if (!name) { alert('Укажи имя'); return; }
+  if (!gender) { alert('Укажи пол'); return; }
   if (!CITY) { alert('Сначала выбери город в шапке'); return; }
   if (isVamp && !clan) { alert('Клан обязателен для вампира'); return; }
   if (isVamp && !sect) { alert('Секта обязательна для вампира'); return; }
 
   const payload = {
-    name, lineage, clan, sect,
+    name, lineage, gender, clan, sect,
     generation:  document.getElementById('npc-generation').value.trim(),
     birthYear:   document.getElementById('npc-birth').value.trim(),
     embraceYear: document.getElementById('npc-embrace').value.trim(),
@@ -1462,6 +1491,7 @@ document.getElementById('btn-new-npc').addEventListener('click', async () => {
 
     ['npc-name','npc-clan','npc-sect','npc-generation','npc-birth','npc-embrace','npc-sire','npc-bio','npc-appearance']
       .forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+    document.getElementById('npc-gender').value = '';
     const art = document.getElementById('npc-art'); if (art) art.value = '';
     STATE.characters = []; STATE.graph.inited = false;
     if (STATE.page === 'dashboard') loadDashboard();
@@ -4705,6 +4735,11 @@ function openCharDetail(name) {
   const stType = c.statusType || 'unknown';
   const stLbl  = statusLabel(c);
 
+  const clanTint = c.lineage === 'vampire' ? CLAN_COLORS[c.clan] : null;
+  const detailModalEl = document.getElementById('char-detail-modal');
+  if (clanTint) detailModalEl.style.setProperty('--clan-tint', clanTint);
+  else detailModalEl.style.removeProperty('--clan-tint');
+
   const infoFields = INFO_FIELDS
     .map(([k, lbl]) => {
       const raw = c[k];
@@ -5468,7 +5503,7 @@ function _enterInfoEdit(charName) {
       input = document.createElement('select');
       input.className = 'cdet-field-input';
       input.dataset.field = key;
-      ['Создатель НПС', 'Персонаж игрока', 'Эпизодический персонаж'].forEach(opt => {
+      ['Персонаж мастера', 'Персонаж игрока', 'Эпизодический персонаж'].forEach(opt => {
         const o = document.createElement('option');
         o.value = opt; o.textContent = opt;
         if (current === opt) o.selected = true;
@@ -6281,7 +6316,7 @@ const VAMPIRE_CLANS = [
   'Ласомбра', 'Малкавиан', 'Носферату', 'Равнос',
   'Последователи Сета', 'Тореадор', 'Тремер', 'Тзимище',
   // Кровные линии
-  'Баали', 'Дочери Какофонии', 'Кападокийцы', 'Нагараджа',
+  'Баали', 'Дочери Какофонии', 'Каппадокийцы', 'Нагараджа',
   'Салубри', 'Самеди', 'Серпанты Света',
 ];
 
@@ -6289,47 +6324,88 @@ const VAMPIRE_SECTS = [
   'Камарилья', 'Анархи', 'Шабаш', 'Независимый',
 ];
 
+// V20 архетипы Натуры/Маски — нет канонического списка в проекте, список авторский (рус. термин + англ. оригинал).
+const NATURE_DEMEANOR_ARCHETYPES = [
+  'Архитектор (Architect)', 'Автократ (Autocrat)', 'Бонвиван (Bon Vivant)', 'Хвастун (Bravo)',
+  'Опекун (Caregiver)', 'Кавалер (Cavalier)', 'Гуляка (Celebrant)', 'Конформист (Conformist)',
+  'Хитрец (Conniver)', 'Брюзга (Curmudgeon)', 'Удалец (Daredevil)', 'Девиант (Deviant)',
+  'Директор (Director)', 'Фанатик (Fanatic)', 'Галант (Gallant)', 'Судья (Judge)',
+  'Одиночка (Loner)', 'Мученик (Martyr)', 'Монстр (Monster)', 'Педагог (Pedagogue)',
+  'Перфекционист (Perfectionist)', 'Бунтарь (Rebel)', 'Выживальщик (Survivor)',
+  'Традиционалист (Traditionalist)', 'Визионер (Visionary)',
+];
+
+const CHANGELING_SEEMINGS = ['Дитя (Childling)', 'Вильдер (Wilder)', 'Гранд (Grump)'];
+const CHANGELING_COURTS   = ['Благой (Seelie)', 'Неблагой (Unseelie)'];
+const CHANGELING_KITHS = [
+  'Богган (Boggan)', 'Гилли Ду (Ghille Dhu)', 'Красная Шапка (Redcap)', 'Нокер (Nocker)',
+  'Пак (Pooka)', 'Сатир (Satyr)', 'Слуа (Sluagh)', 'Тролль (Troll)',
+  'Ши / Сидхе (Sidhe)', 'Эшу (Eshu)',
+];
+
+const GENDER_OPTIONS = ['Мужской', 'Женский'];
+
 const LINEAGE_DEFS = {
   vampire:  { label:'🧛 Вампир',          type:'vampire', endpoint:'characters',
     fields:[
       { param:'name',        label:'Имя',           required:true, placeholder:'Граф Лейрок' },
+      { param:'gender',      label:'Пол',           required:true, options:GENDER_OPTIONS, placeholder:'Выберите...' },
       { param:'clan',        label:'Клан',          required:true, options:VAMPIRE_CLANS, placeholder:'Выберите или введите...' },
       { param:'sect',        label:'Секта',         required:true, options:VAMPIRE_SECTS, placeholder:'Выберите или введите...' },
       { param:'generation',  label:'Поколение',                    placeholder:'10-е' },
       { param:'birthYear',   label:'Год рождения',                 placeholder:'1612' },
       { param:'embraceYear', label:'Год обращения',                placeholder:'1640' },
       { param:'sire',        label:'Сир',                          placeholder:'Имя сира' },
+      { param:'nature',      label:'Натура (архетип)',              options:NATURE_DEMEANOR_ARCHETYPES, placeholder:'Выберите или введите...' },
+      { param:'demeanor',    label:'Маска (архетип)',               options:NATURE_DEMEANOR_ARCHETYPES, placeholder:'Выберите или введите...' },
+      { param:'concept',     label:'Амплуа / Концепция',           placeholder:'Кто персонаж по роли' },
       { param:'biography',   label:'Биография',     textarea:true, placeholder:'Краткая биография…' },
       { param:'appearance',  label:'Внешность',     textarea:true, placeholder:'3–5 визуальных маркеров…' },
     ]},
-  mortal:   { label:'🧑 Смертный',         type:'mortal',
+  mortal:   { label:'🧑 Смертный',         type:'mortal', endpoint:'characters',
     fields:[
-      { param:'Name', label:'Имя',                  required:true,  placeholder:'Жан Дюбуа' },
-      { param:'Role', label:'Профессия / Роль',                    placeholder:'Полицейский, Журналист...' },
+      { param:'name',     label:'Имя',                  required:true,  placeholder:'Жан Дюбуа' },
+      { param:'gender',   label:'Пол',                  required:true,  options:GENDER_OPTIONS, placeholder:'Выберите...' },
+      { param:'nature',   label:'Натура (архетип)',                     options:NATURE_DEMEANOR_ARCHETYPES, placeholder:'Выберите или введите...' },
+      { param:'demeanor', label:'Маска (архетип)',                      options:NATURE_DEMEANOR_ARCHETYPES, placeholder:'Выберите или введите...' },
+      { param:'role',     label:'Профессия / Амплуа',                   placeholder:'Полицейский, Журналист...' },
+      { param:'biography', label:'Биография',           textarea:true, placeholder:'Краткая биография…' },
+      { param:'appearance', label:'Внешность',          textarea:true, placeholder:'3–5 визуальных маркеров…' },
     ]},
-  fairy:    { label:'🧚 Фея / Ченджлинг',  type:'fairy',
+  fairy:    { label:'🧚 Фея / Ченджлинг',  type:'fairy', endpoint:'characters',
     fields:[
-      { param:'Name', label:'Имя',                  required:true,  placeholder:'Сильвана' },
-      { param:'Clan', label:'Раса / Кит',                          placeholder:'Sidhe, Pooka, Sluagh...' },
-      { param:'Role', label:'Роль',                               placeholder:'Рыцарь, Лорд, Странник...' },
+      { param:'name',   label:'Имя',                  required:true,  placeholder:'Сильвана' },
+      { param:'gender', label:'Пол',                  required:true,  options:GENDER_OPTIONS, placeholder:'Выберите...' },
+      { param:'clan',   label:'Раса / Кит',                           options:CHANGELING_KITHS, placeholder:'Выберите или введите...' },
+      { param:'seeming', label:'Обличье (Seeming)',   required:true,  options:CHANGELING_SEEMINGS, placeholder:'Выберите...' },
+      { param:'court',  label:'Двор',                                 options:CHANGELING_COURTS, placeholder:'Выберите...' },
+      { param:'house',  label:'Дом (если Сидхе)',                     placeholder:'Дом, если применимо' },
+      { param:'nature',   label:'Натура (архетип)',                   options:NATURE_DEMEANOR_ARCHETYPES, placeholder:'Выберите или введите...' },
+      { param:'demeanor', label:'Маска (архетип)',                    options:NATURE_DEMEANOR_ARCHETYPES, placeholder:'Выберите или введите...' },
+      { param:'role',   label:'Роль',                                 placeholder:'Рыцарь, Лорд, Странник...' },
+      { param:'biography', label:'Биография',         textarea:true, placeholder:'Краткая биография…' },
+      { param:'appearance', label:'Внешность',         textarea:true, placeholder:'3–5 визуальных маркеров…' },
     ]},
   werewolf: { label:'🐺 Оборотень',        type:'werewolf',
     fields:[
-      { param:'Name', label:'Имя',                  required:true,  placeholder:'Буря-в-Ночи' },
+      { param:'Name',   label:'Имя',                  required:true,  placeholder:'Буря-в-Ночи' },
+      { param:'Gender', label:'Пол',                  required:true,  options:GENDER_OPTIONS, placeholder:'Выберите...' },
       { param:'Clan', label:'Племя',                               placeholder:'Bone Gnawers, Glass Walkers...' },
       { param:'Sect', label:'Аусписий',                           placeholder:'Рагабаш, Тали, Арун...' },
       { param:'Role', label:'Роль',                               placeholder:'Альфа, Разведчик...' },
     ]},
   mage:     { label:'🔮 Маг',             type:'mage',
     fields:[
-      { param:'Name', label:'Имя',                  required:true,  placeholder:'Мастер Элиас' },
+      { param:'Name',   label:'Имя',                  required:true,  placeholder:'Мастер Элиас' },
+      { param:'Gender', label:'Пол',                  required:true,  options:GENDER_OPTIONS, placeholder:'Выберите...' },
       { param:'Clan', label:'Традиция / Конвенция',                placeholder:'Verbena, Technocracy...' },
       { param:'Sect', label:'Орден',                              placeholder:'Просветлённые, Объединение...' },
       { param:'Role', label:'Роль',                               placeholder:'Наставник, Агент...' },
     ]},
   hunter:   { label:'🏹 Охотник',         type:'hunter',
     fields:[
-      { param:'Name', label:'Имя',                  required:true,  placeholder:'Конрад Вейс' },
+      { param:'Name',   label:'Имя',                  required:true,  placeholder:'Конрад Вейс' },
+      { param:'Gender', label:'Пол',                  required:true,  options:GENDER_OPTIONS, placeholder:'Выберите...' },
       { param:'Clan', label:'Организация',                        placeholder:'Инквизиция, ЦСА...' },
       { param:'Role', label:'Роль',                               placeholder:'Инквизитор, Агент...' },
     ]},
@@ -6481,12 +6557,15 @@ modalSubmit.addEventListener('click', async () => {
 
   try {
     if (def.endpoint === 'characters') {
-      // Rules-compliant card endpoint — fills clan/sect/generation/birth/embrace/sire/bio/appearance.
+      // Rules-compliant card endpoint — fills clan/sect/generation/birth/embrace/sire/nature/demeanor/concept/seeming/court/house/role/bio/appearance.
       const payload = {
-        name: charName, lineage: def.type,
+        name: charName, lineage: def.type, gender: params.gender || '',
         clan: params.clan || '', sect: params.sect || '',
         generation: params.generation || '', birthYear: params.birthYear || '',
         embraceYear: params.embraceYear || '', sire: params.sire || '',
+        nature: params.nature || '', demeanor: params.demeanor || '', concept: params.concept || '',
+        seeming: params.seeming || '', court: params.court || '', house: params.house || '',
+        role: params.role || '',
         biography: params.biography || '', appearance: params.appearance || '',
       };
       const d = await fetch('/api/characters' + qs, {
@@ -6502,7 +6581,7 @@ modalSubmit.addEventListener('click', async () => {
         werewolf: 'werewolves', mage: 'mages', hunter: 'hunters'
       };
       const folder = TYPE_TO_LINEAGE[def.type] || 'mortals';
-      const npcArgs = [CITY, folder, params.Name, params.Clan || '', params.Sect || '', params.Role || ''];
+      const npcArgs = [CITY, folder, params.Name, params.Gender, params.Clan || '', params.Sect || '', params.Role || ''];
       const d = await fetch('/api/tool/new_npc', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ args: npcArgs })

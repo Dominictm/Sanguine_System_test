@@ -919,7 +919,7 @@ app.get('/api/modules', async (req, res) => {
         const mainFile = names.includes(`${it.name}.md`) ? `${it.name}.md`
           : names.find(n => n.endsWith('.md') && !MOD_AUX(n));
         if (mainFile) {
-          const content = await fs.readFile(path.join(it.dir, mainFile), 'utf-8');
+          const content = (await fs.readFile(path.join(it.dir, mainFile), 'utf-8')).replace(/^﻿/, '');
           const hm = content.match(/^#\s+(.+)$/m);
           if (hm) mod.title = hm[1].replace(/[*[\]]/g, '').trim();
           for (const [label, key] of [['Тип','type'],['Формат','format'],['Время','time'],['Тон','tone']]) {
@@ -1019,7 +1019,8 @@ ${digest}`;
         } catch (e) {
           lastErr = e;
           const is429 = e.status === 429;
-          const retryable = e.status === 404 || is429 || (e.status === 400 && /not a valid model|No endpoints/i.test(e.message));
+          const retryable = e.status === 404 || is429 || (e.status === 400 && /not a valid model|No endpoints/i.test(e.message))
+            || (e.status === 403 && /moderation|flagged/i.test(e.message));
           if (!retryable) { allRateLimited = false; throw e; }
           if (!is429) allRateLimited = false;
           if (is429) await new Promise(r => setTimeout(r, 800));
@@ -1071,7 +1072,7 @@ app.get('/api/chronicles/:slug/modules', async (req, res) => {
         mod.hasNpc      = names.includes('npc.md');
         const mainFile  = names.includes(`${e.name}.md`) ? `${e.name}.md` : names.find(n => n.endsWith('.md') && !MOD_AUX(n));
         if (mainFile) {
-          const content = await fs.readFile(path.join(dir, mainFile), 'utf-8');
+          const content = (await fs.readFile(path.join(dir, mainFile), 'utf-8')).replace(/^﻿/, '');
           const hm = content.match(/^#\s+(.+)$/m);
           if (hm) mod.title = hm[1].replace(/[*[\]]/g, '').trim();
           for (const [label, key] of [['Тип','type'],['Формат','format'],['Время','time'],['Тон','tone']]) {
@@ -3075,6 +3076,7 @@ app.put('/api/characters/:name/relations', express.json(), async (req, res) => {
 
 // ── Create a new character card (web form; vampire-aware, fills fields per rules) ─
 
+const GENDER = ['Мужской', 'Женский'];
 const _LIN_FOLDER = { vampire:'vampires', fairy:'fairies', mortal:'mortals', werewolf:'werewolves', mage:'mages', hunter:'hunters' };
 const _LIN_WOD    = { vampires:'Вампир', fairies:'Фея / Ченджлинг', mortals:'Смертный', werewolves:'Оборотень', mages:'Маг', hunters:'Охотник' };
 const _LIN_EMOJI  = { vampires:'🧛', fairies:'🧚', mortals:'🧑', werewolves:'🐺', mages:'🔮', hunters:'🏹' };
@@ -3088,10 +3090,14 @@ app.post('/api/characters', express.json(), async (req, res) => {
     const isVamp = folder === 'vampires';
     const clan = String(b.clan || '').trim();
     const sect = String(b.sect || '').trim();
+    const gender = String(b.gender || '').trim();
 
     if (!name) return res.status(400).json({ error: 'Укажи имя персонажа' });
+    if (!GENDER.includes(gender)) return res.status(400).json({ error: 'Укажи пол персонажа (Мужской/Женский)' });
     if (isVamp && !clan) return res.status(400).json({ error: 'Клан обязателен для вампира' });
     if (isVamp && !sect) return res.status(400).json({ error: 'Секта обязательна для вампира' });
+    if (folder === 'fairies' && !String(b.seeming || '').trim())
+      return res.status(400).json({ error: 'Обличье (Seeming) обязательно для феи' });
 
     const slug = slugify(name);
     if (!slug) return res.status(400).json({ error: 'Не удалось сформировать slug из имени' });
@@ -3109,13 +3115,18 @@ app.post('/api/characters', express.json(), async (req, res) => {
 
     const one = v => String(v || '').replace(/\n+/g, ' ').trim();
     const gen = one(b.generation), by = one(b.birthYear), ey = one(b.embraceYear), sire = one(b.sire);
+    const nature = one(b.nature), demeanor = one(b.demeanor), concept = one(b.concept);
+    const seeming = one(b.seeming), court = one(b.court), house = one(b.house), role = one(b.role);
     const bio = one(b.biography), app_ = one(b.appearance);
-    const belonging = one(b.belonging) || 'Создатель НПС';
+    const belonging = one(b.belonging) || 'Персонаж мастера';
+    const isFairy = folder === 'fairies';
+    const hasNatureDemeanor = isVamp || folder === 'mortals' || isFairy;
 
     const fields = [
       `- **Слаг:** ${slug}`,
       `- **Родной город:** ${cityName}`,
       `- **Линейка WoD:** ${_LIN_WOD[folder]}`,
+      `- **Пол:** ${gender}`,
       `- **${isVamp ? 'Клан' : 'Клан / Раса'}:** ${clan || '⚠️ Требуется уточнение'}`,
       `- **${isVamp ? 'Секта' : 'Секта / Двор'}:** ${sect || '⚠️ Требуется уточнение'}`,
     ];
@@ -3125,6 +3136,17 @@ app.post('/api/characters', express.json(), async (req, res) => {
       fields.push(`- **Год обращения:** ${ey || '⚠️ Не указан'}`);
       fields.push(`- **Сир:** ${sire || '⚠️ Не указан'}`);
     }
+    if (isFairy) {
+      fields.push(`- **Обличье:** ${seeming || '⚠️ Не указано'}`);
+      if (court) fields.push(`- **Двор:** ${court}`);
+      if (house) fields.push(`- **Дом:** ${house}`);
+    }
+    if (hasNatureDemeanor) {
+      fields.push(`- **Натура:** ${nature || '⚠️ Не указана'}`);
+      fields.push(`- **Маска:** ${demeanor || '⚠️ Не указана'}`);
+    }
+    if (isVamp) fields.push(`- **Амплуа:** ${concept || '⚠️ Не указано'}`);
+    if (!isVamp && role) fields.push(`- **Роль:** ${role}`);
     fields.push(`- **Статус:** Жив`);
     fields.push(`- **Принадлежность:** ${belonging}`);
     fields.push(`- **Биография:** ${bio || '⚠️ Требуется уточнение'}`);
@@ -3444,7 +3466,9 @@ async function _chatCompletion({ provider, model, systemPrompt, userPrompt, imag
 
   if (!resp.ok) {
     const errText = await resp.text().catch(() => '');
-    throw Object.assign(new Error(errText || resp.statusText), { status: resp.status });
+    let msg = errText || resp.statusText;
+    try { msg = JSON.parse(errText)?.error?.message || msg; } catch { /* not JSON — keep raw text */ }
+    throw Object.assign(new Error(msg), { status: resp.status });
   }
 
   const data  = await resp.json();
@@ -3734,7 +3758,8 @@ app.post('/api/characters/:name/generate-appearance', express.json(), async (req
           lastErr = e;
           const is429 = e.status === 429;
           const retryable = e.status === 404 || is429
-            || (e.status === 400 && /not a valid model|No endpoints/i.test(e.message));
+            || (e.status === 400 && /not a valid model|No endpoints/i.test(e.message))
+            || (e.status === 403 && /moderation|flagged/i.test(e.message));
           if (!retryable) { allRateLimited = false; throw e; }
           if (!is429) allRateLimited = false;
           console.warn(`[generate-appearance] model ${m} unavailable (${e.status}), trying next...`);
@@ -3823,7 +3848,7 @@ Requirements:
 
     const parseResult = (text) => {
       const match = text.match(/\{[\s\S]*\}/);
-      if (!match) return;
+      if (!match) throw new Error('Модель не вернула JSON с промтом.');
       const parsed = JSON.parse(match[0]);
       positive = (parsed.positive || '').trim();
       negative = (parsed.negative || '').trim();
@@ -3834,13 +3859,16 @@ Requirements:
       let lastErr, allRateLimited = true;
       for (const m of modelsToTry) {
         try {
-          parseResult(await _oaCall(gen)(m, systemPrompt, userPrompt, [], 75000, 600));
+          // Free OpenRouter routing often lands on reasoning models that burn most of the
+          // budget on chain-of-thought before any content — give it enough headroom to finish.
+          parseResult(await _oaCall(gen)(m, systemPrompt, userPrompt, [], 75000, 2500));
           allRateLimited = false;
           break;
         } catch (e) {
           lastErr = e;
           const is429 = e.status === 429;
-          const retryable = e.status === 404 || is429 || (e.status === 400 && /not a valid model|No endpoints/i.test(e.message));
+          const retryable = e.status === 404 || is429 || (e.status === 400 && /not a valid model|No endpoints/i.test(e.message))
+            || (e.status === 403 && /moderation|flagged/i.test(e.message));
           if (!retryable) { allRateLimited = false; throw e; }
           if (!is429) allRateLimited = false;
           console.warn(`[generate-prompt] model ${m} unavailable (${e.status}), trying next...`);
@@ -3864,8 +3892,8 @@ Requirements:
 
     res.json({ ok: true, positive, negative, source: gen.source });
   } catch (e) {
-    const status = e.status ?? 500;
-    const msg    = e.error?.error?.message ?? e.message ?? String(e);
+    const status = e?.status ?? 500;
+    const msg    = e?.error?.error?.message ?? e?.message ?? String(e);
     console.error(`[generate-prompt] ${status}`, msg);
     res.status(status >= 400 && status < 600 ? status : 500).json({ error: msg });
   }
@@ -4335,7 +4363,7 @@ function _renderSessionBlock(n, date, scenes, status, body) {
 }
 // Rewrite the whole sessions.md from the session array (append & edit share this)
 async function _writeSessionsFile(modDir, mod, sessions) {
-  const titleM = (await fs.readFile(path.join(modDir, `${mod}.md`), 'utf-8').catch(() => '')).match(/^#\s+(.+)$/m);
+  const titleM = (await fs.readFile(path.join(modDir, `${mod}.md`), 'utf-8').catch(() => '')).replace(/^﻿/, '').match(/^#\s+(.+)$/m);
   const modTitle = titleM ? titleM[1].replace(/[*[\]]/g, '').trim() : mod;
   const header = `# Журнал сессий: ${modTitle}\n\n> 🔗 [Модуль](${mod}.md) | [Сценарий](scenario.md)\n> Фаза B — ведение во время игры. Правила: system/rules/module_rules.md`;
   const blocks = sessions.map((s, i) => _renderSessionBlock(i + 1, s.date, s.scenes, s.status, s.body)).join('');
@@ -4574,7 +4602,7 @@ function renderMinimalNpcCard(name, slug, lineageFolder, lineageRu, cityDisplay)
   const emoji = { vampires: '🧛', fairies: '🧚', mortals: '🧑', werewolves: '🐺', mages: '🔮', hunters: '🏹' }[lineageFolder] || '👤';
   return `# ${emoji} ${name}\n\n> 🔗 [Все персонажи](../../../archive/characters_index.md)\n\n---\n\n` +
     `- **Слаг:** ${slug}\n- **Родной город:** ${cityDisplay}\n- **Линейка WoD:** ${lineageRu}\n- **Статус:** Жив\n` +
-    `- **Роль:** ⚠️ Требуется уточнение\n- **Принадлежность:** Создатель НПС\n- **Биография:** ⚠️ Требуется уточнение\n- **Внешность:** ⚠️ Требуется уточнение\n\n---\n\n` +
+    `- **Роль:** ⚠️ Требуется уточнение\n- **Принадлежность:** Персонаж мастера\n- **Биография:** ⚠️ Требуется уточнение\n- **Внешность:** ⚠️ Требуется уточнение\n\n---\n\n` +
     `## 🖼️ Изображения\n- ⏳ Изображение не предоставлено\n`;
 }
 

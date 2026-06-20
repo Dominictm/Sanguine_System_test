@@ -2,9 +2,9 @@
 'use strict';
 // Создаёт карточку персонажа в cities/<city>/characters/<lineage>/<slug>/<slug>.md
 // со всеми обязательными полями (контракт system/schema/card_schema.md).
-// Запуск:  node tools/new_npc.js <city> <lineage> "<Имя>" ["<Клан/Раса>"]
+// Запуск:  node tools/new_npc.js <city> <lineage> "<Имя>" <Мужской|Женский> ["<Клан/Раса>"]
 //   lineage ∈ vampires|fairies|mortals|werewolves|mages|hunters
-//   пример: node tools/new_npc.js london vampires "Эдвард Грей" "Вентру"
+//   пример: node tools/new_npc.js london vampires "Эдвард Грей" Мужской "Вентру"
 
 const fs = require('fs'), path = require('path'), ROOT = path.resolve(__dirname, '..');
 const { slugify } = require('../web/lib/parsers');  // single source of truth for RU→ASCII slugs
@@ -13,14 +13,15 @@ const LINEAGE = {
   vampires: 'Вампир', fairies: 'Фея / Ченджлинг', mortals: 'Смертный',
   werewolves: 'Оборотень', mages: 'Маг', hunters: 'Охотник'
 };
+const GENDER = ['Мужской', 'Женский'];
 
-const [city, lineage, name, clan, sect, role, belonging] = [
-  process.argv[2], process.argv[3], process.argv[4],
-  process.argv[5] || '', process.argv[6] || '', process.argv[7] || '',
-  process.argv[8] || 'Создатель НПС'
+const [city, lineage, name, gender, clan, sect, role, belonging] = [
+  process.argv[2], process.argv[3], process.argv[4], process.argv[5],
+  process.argv[6] || '', process.argv[7] || '', process.argv[8] || '',
+  process.argv[9] || 'Персонаж мастера'
 ];
-if (!city || !LINEAGE[lineage] || !name) {
-  console.error('Использование: node tools/new_npc.js <city> <vampires|fairies|mortals|werewolves|mages|hunters> "<Имя>" ["<Клан>"] ["<Секта>"] ["<Роль>"]');
+if (!city || !LINEAGE[lineage] || !name || !GENDER.includes(gender)) {
+  console.error('Использование: node tools/new_npc.js <city> <vampires|fairies|mortals|werewolves|mages|hunters> "<Имя>" <Мужской|Женский> ["<Клан>"] ["<Секта>"] ["<Роль>"]');
   process.exit(1);
 }
 const cityDir = path.join(ROOT, 'cities', city);
@@ -49,6 +50,7 @@ const card = `# ${emoji} ${name}
 - **Слаг:** ${slug}
 - **Родной город:** ${cityName}
 - **Линейка WoD:** ${LINEAGE[lineage]}
+- **Пол:** ${gender}
 - **Клан / Раса:** ${clan || '⚠️ Требуется уточнение'}
 - **Секта / Двор:** ${sect || '⚠️ Требуется уточнение'}
 - **Статус:** Жив

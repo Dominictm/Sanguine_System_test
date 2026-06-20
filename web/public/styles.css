@@ -59,8 +59,9 @@
   --fs-3xs: 10px;
   --fs-2xs: 11px;
   --fs-xs:  12px;
-  --fs-sm:  13px;
+  --fs-sm:  17px;
   --fs-md:  14px;
+  --fs-nav: 13px; /* боковое меню навигации — отдельный токен, не завязан на --fs-sm */
   --fs-base: 16px;
   --fs-lg:  15px;
   --fs-xl:  22px;
@@ -200,9 +201,9 @@ body {
   display: flex;
   align-items: center;
   gap: 11px;
-  padding: 11px 20px;
+  padding: 5px 20px;
   font-family: var(--f-heading);
-  font-size: var(--fs-sm);
+  font-size: 13px;
   letter-spacing: .18em;
   text-transform: uppercase;
   color: var(--text2);
@@ -1635,7 +1636,7 @@ select.form-control {
     min-height: 44px;
   }
 
-  .modal-close, .info-close, .chr-detail-close, .lightbox-close {
+  .modal-close, .info-close, .chr-detail-close, .lightbox-close, .cdet-delete-btn {
     min-width: 44px;
     min-height: 44px;
   }
@@ -1903,6 +1904,7 @@ a:focus-visible {
   height: min(82vh, 754px);
   padding: 0;
   overflow: hidden;
+  background: color-mix(in srgb, var(--clan-tint, var(--accent)) 10%, var(--bg2));
 }
 
 #char-detail-content {
@@ -1918,7 +1920,7 @@ a:focus-visible {
   flex-shrink: 0;
   height: 100%;
   overflow: hidden;
-  background: var(--bg3);
+  background: color-mix(in srgb, var(--clan-tint, var(--accent)) 16%, var(--bg3));
   position: relative;
 }
 
@@ -1937,7 +1939,9 @@ a:focus-visible {
   align-items: center;
   justify-content: center;
   font-size: 80px;
-  background: linear-gradient(180deg, var(--bg3) 0%, var(--bg2) 100%);
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--clan-tint, var(--accent)) 20%, var(--bg3)) 0%,
+    color-mix(in srgb, var(--clan-tint, var(--accent)) 12%, var(--bg2)) 100%);
 }
 
 /* ── Carousel ── */
@@ -2040,8 +2044,8 @@ a:focus-visible {
 /* Sticky name + status header */
 .cdet-sticky-header {
   flex-shrink: 0;
-  padding: 24px 52px 20px 28px;
-  background: var(--bg2);
+  padding: 24px 104px 20px 28px;
+  background: color-mix(in srgb, var(--clan-tint, var(--accent)) 12%, var(--bg2));
   border-bottom: 1px solid var(--border);
   box-shadow: 0 6px 20px rgba(0, 0, 0, .4);
   position: relative;
@@ -2051,7 +2055,7 @@ a:focus-visible {
 /* Tab bar */
 .cdet-tab-bar {
   display: flex;
-  background: var(--bg3);
+  background: color-mix(in srgb, var(--clan-tint, var(--accent)) 10%, var(--bg3));
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
 }
@@ -2280,24 +2284,23 @@ a:focus-visible {
   transition: border-color .15s, color .15s;
 }
 
-/* Delete-character button in the detail sticky header (left of the ✕ close) */
+/* Delete-character button in the detail sticky header (left of the ✕ close).
+   Same box model as .modal-close (top/padding/font-size/line-height) so the
+   two icon buttons share height and vertical center; only position/color differ. */
 .cdet-delete-btn {
   position: absolute;
-  top: 14px; right: 54px;
-  background: transparent;
-  border: 1px solid rgba(139,0,0,.4);
+  top: 16px; right: 58px;
+  z-index: var(--z-sticky);
+  background: none;
+  border: none;
   color: var(--accent2);
-  font-family: var(--f-heading);
-  font-size: var(--fs-xs);
-  letter-spacing: .1em;
-  text-transform: uppercase;
+  font-size: var(--fs-xl);
   line-height: 1;
-  padding: 5px 9px;
-  border-radius: 2px;
+  padding: 4px 8px;
   cursor: pointer;
-  transition: background .15s, color .15s, border-color .15s;
+  transition: color .2s;
 }
-.cdet-delete-btn:hover { border-color: var(--c-danger); color: var(--c-danger-text); background: rgba(139,0,0,.12); }
+.cdet-delete-btn:hover { color: var(--c-danger-text); }
 
 .cdet-edit-btn:hover {
   border-color: var(--gold);
@@ -3390,6 +3393,7 @@ a:focus-visible {
   text-transform: uppercase;
   color: var(--text);
   margin-bottom: 5px;
+  overflow-wrap: anywhere;
 }
 
 .module-time {
@@ -3427,6 +3431,7 @@ a:focus-visible {
   font-size: var(--fs-sm);
   color: var(--text3);
   opacity: .6;
+  overflow-wrap: anywhere;
 }
 
 /* ── Threads page ─────────────────────────────────────────── */
