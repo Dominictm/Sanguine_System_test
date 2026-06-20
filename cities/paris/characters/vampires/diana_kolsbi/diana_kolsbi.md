@@ -7,6 +7,7 @@
 - **Слаг:** diana_kolsbi
 - **Родной город:** Париж
 - **Линейка WoD:** Вампир
+- **Пол:** Женский
 - **Клан:** Малкавиан
 - **Секта:** Камарилья
 - **Год рождения:** 1663
@@ -16,7 +17,7 @@
 - **Парижская иерархия:** Без официальной должности — анцилла, сестра Примогена
 - **Роль:** Сестра Тома Бошена
 - **Статус:** Жива
-- **Внешность:** Тёмные волосы убраны наверх с украшением-диадемой. Бледная кожа. Тёмно-красные губы. Малкавианка XVII века, застрявшая в барочной эстетике: чёрный корсет, кружевные детали, разрез. Чёрные чулки. Избыточность образа — маскировка: слишком театральна, чтобы быть настоящей угрозой. Именно поэтому опасна.
+- **Внешность:** Диана Колсби — аристократка с оттенком ночи. Её лицо высечено на льняной стыденьевой ткани: подтянут лоб, глаза цвета тлеющего угля, губы — рубин. Волосы в упруго собраном пучке, причёсанные так, чтобы скрыть лицо. Кожа бледная, как цвет хрусталя, с едва уловимым синеватым блеском на шее. Образ завершают офф-горе ветерка с вырезом в груди, обтягивающий корпус, до полу доходящая юбка с разрезом выше бедра. На шее — необычный аксессуар, сделанный из острых металлических лепестков. Глаза подчёркнуты чёрным ржавчиной, выделены надписью «D-COLS-BI» в тёмноблюдском кратописе на перьевании фанеры. Характерный фрагмент: на подворотне — расщечинный черavar, надвдавленный в шею шарфиком с узором из малых точек.
 - **Дисциплины:** Auspex, Dominate, Obfuscate (клановые Малкавиан; предположительно)
 - **Голос:** Театральная, избыточная. Говорит красиво — маскировка. За барочными оборотами скрывается точный холодный ум; когда маска слегка съезжает, это страшнее прямой угрозы.
 - **Отношения:**
@@ -25,18 +26,17 @@
   - [Госпожа Бубенчик](../gospozha_bubenchik/gospozha_bubenchik.md) — старый знакомый; точная природа связи не установлена
   - [Ви](../vi/vi.md) — знакомая Бубенчик; Диана провела её на Элизиум (декабрь 2010)
 - **🎨 Промт для генерации изображения:**
-  [Блок 1] Cinematic dark fantasy portrait, female Malkavian vampire of the XVII century, three-quarter view, dark hair in elaborate baroque updo with ornate tiara, pale skin, deep crimson lips, black structured corset with white lace trim, layered gothic jewelry — pearl drops, long earrings, dark necklaces, posed theatricality that is itself a concealment — too ornate to be the real danger, which is exactly why she is
-  [Блок 2] Deep red candlelight from below, crimson rim-light from behind and the left, theatrical shadows, deep crimson-black painterly background with abstract swirling brushstroke textures, bloodsmoke and crimson haze
-  [Блок 3] Dark fantasy digital painting, visible painterly brushstrokes, textured oil-paint effect, cinematic composition, moody gothic atmosphere, Vampire the Masquerade aesthetic, concept art quality, painterly realism, artstation quality, masterpiece
+  [Блок 1] A pale aristocratic woman with sharp, angular facial features and ember-red eyes gazing with unsettling intensity. Her hair is pulled severely back into a tight updo, revealing high cheekbones and an ice-white complexion with subtle blue undertones visible on the neck. She wears an elegant off-shoulder black gown with a deep neckline hugging her form, extending to floor length with a dramatic thigh-high slit. Around her neck sits an ornate collar made of razor-sharp metallic petals arranged in a threatening botanical pattern. Her gaze is accentuated by heavy dark eyeliner. Her posture is regal yet predatory, exuding cold aristocratic menace and barely contained otherness.
+  [Блок 2] Dim gothic chamber lit by flickering candlelight and deep shadow, cool blue-grey tones dominating the ambient light. Shadows pool beneath her eyes and collarbones, emphasizing otherworldly pallor. Background is softly blurred Victorian architecture—stone walls, velvet drapes. Atmosphere is claustrophobic, supernatural, thick with the weight of centuries and hidden madness.
+  [Блок 3] Dark fantasy character card art, oil painting with fine brushwork, dramatic chiaroscuro lighting, Vampire: The Masquerade aesthetic, intricate digital painting, concept art masterpiece quality, artstation professional illustration, moody gothic realism
 - **🚫 Негативный промт:**
-  photorealistic photography, digital art, anime, cartoon, illustration, watermark, text overlay, blurry, low quality, artifacts, deformed anatomy, extra limbs, oversaturated colors, bright white background, 3D render, CGI.
+  photorealistic photography, 3D render, CGI, anime, cartoon, watercolor, sketch, blurry, low quality, deformed faces, mutated features, blood, gore, wounds, injuries, cuts, violence, bruises, Asian features, male, smiling, cheerful, bright colors, sunlit, exposed fangs, gaunt skeletal appearance, poorly drawn, distorted proportions
 - **Поколение:** 8
 - **Иерархия в городе:** Без официальной должности — анцилла, сестра Примогена
-- **Принадлежность:** Создатель НПС
+- **Принадлежность:** Персонаж мастера
 
 ---
 
 ## 🖼️ Изображения
 
-- [Образ 1](art/diana_kolsbi_01.jpg)
 

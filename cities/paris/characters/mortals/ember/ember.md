@@ -1,4 +1,4 @@
-﻿# 👤 Эмбер
+# 👤 Эмбер
 
 > 🔗 [Все персонажи](../../../archive/characters_index.md)
 
@@ -7,6 +7,7 @@
 - **Слаг:** ember
 - **Родной город:** Париж
 - **Линейка WoD:** Смертный
+- **Пол:** Женский
 - **Родственники:** Приёмная мать — Агата; биологическая мать — Мэриам Дэвис
 - **Профессия:** Школьница
 - **Статус:** Жива
@@ -19,15 +20,14 @@
   - Мэриам Дэвис — биологическая мать; вампир, Эмбер Дэвис этого не знает
   - Пьер-Ив Оде — хозяин убежища; живут в его доме
 - **🎨 Промт для генерации изображения:**
-  [Блок 1] Cinematic dark fantasy portrait, mortal girl who appears eight to ten years old, three-quarter view, East Asian features, wavy dark hair with a fringe to the shoulders, large attentive dark eyes wide open with watchful clarity, simple black-and-white striped dress, small frame appearing younger than her age, expression still and quiet and unnervingly watchful — seeing more than children should
-  [Блок 2] Soft diffuse grey light from above, pale blue-grey rim-light, gentle shadows, soft dark blue-grey painterly background with abstract swirling brushstroke textures, pale smoke and quiet atmosphere
-  [Блок 3] Dark fantasy digital painting, visible painterly brushstrokes, textured oil-paint effect, cinematic composition, moody gothic atmosphere, Vampire the Masquerade aesthetic, concept art quality, painterly realism, artstation quality, masterpiece
+  [Блок 1] A young girl appearing 8–10 years old with East Asian facial features, large dark attentive eyes with an open, watchful gaze. Dark wavy hair with bangs falling to her shoulders. Wearing a black and white striped dress. Delicate, quiet presence, appearing smaller and more fragile than her years. Standing in a composed, observant pose with hands at her sides, slight forward lean suggesting wariness.
+  [Блок 2] Cinematic gothic lighting with deep shadows and cool undertones, dim candlelight or moonlight casting sharp contrasts across her face, emphasizing the depth of her dark eyes. Background shrouded in darkness with hints of Victorian architecture, velvet textures, ancient wooden furnishings barely visible in shadow. Atmosphere of quiet unease, mystery, and watchful tension without overt threat.
+  [Блок 3] Dark fantasy digital painting, painterly brushstrokes, Vampire: The Masquerade aesthetic, concept art quality, artstation masterpiece, professional character card illustration, moody and atmospheric rendering, rich color grading with desaturated tones, high detail, intricate facial features, dramatic chiaroscuro lighting
 - **🚫 Негативный промт:**
-  photorealistic photography, digital art, anime, cartoon, illustration, watermark, text overlay, blurry, low quality, artifacts, deformed anatomy, extra limbs, oversaturated colors, bright white background, 3D render, CGI.
+  photorealistic photography, 3D render, CGI, anime, cartoon, manga, blurry, low quality, deformed, distorted face, blood, gore, wounds, injuries, violence, smiling, happy expression, bright colors, daylight, cheerful, cute, childish artstyle, oversaturated, glowing effects, unrealistic proportions, malformed hands
 
 ---
 
 ## 🖼️ Изображения
 
-- [Образ 1](art/ember_01.jpg)
 

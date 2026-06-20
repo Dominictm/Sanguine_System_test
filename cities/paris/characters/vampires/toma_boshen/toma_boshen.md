@@ -1,13 +1,16 @@
-﻿# 🃛 Тома Бошен (Генри Колсби)
+# 🃛 Тома Бошен
 
 > 🔗 [Все персонажи](../../../archive/characters_index.md)
 
 ---
 
 - **Слаг:** toma_boshen
+**Имя под которым его знают:** Тома Бошен
+-**Имя:** Генри Колсби
 - **Родной город:** Париж
 - **Алиасы:** Генри Колсби
 - **Линейка WoD:** Вампир
+- **Пол:** Мужской
 - **Клан:** Малкавиан
 - **Секта:** Камарилья
 - **Год рождения:** 1650
@@ -26,15 +29,14 @@
   - [Ева](../eva/eva.md) — подопечная; поручился за неё после гибели её сира, де-факто удочерил
 
 - **🎨 Промт для генерации изображения:**
-  [Блок 1] Cinematic dark fantasy portrait, elderly male vampire primogen of clan Malkavian, three-quarter view, silver hair, white beard, face aged and frozen in place, small round wire-frame spectacles from the XIX century, dark coat buttoned to the collar, hands folded with clinical stillness, three hundred years of psychiatry in the expression — fine cracks radiating from the corners of the eyes and across the forehead
-  [Блок 2] Cold grey clinical light from above, pale silver rim-light from the left, deep ash-grey shadows, grey-black painterly background with abstract swirling brushstroke textures, cold fog and absolute quiet
-  [Блок 3] Dark fantasy digital painting, visible painterly brushstrokes, textured oil-paint effect, cinematic composition, moody gothic atmosphere, Vampire the Masquerade aesthetic, concept art quality, painterly realism, artstation quality, masterpiece
+  [Блок 1] An elderly male vampire with frost-pale skin, grey hair, and a full white beard showing the weight of three centuries. Sharp, penetrating grey eyes behind circular wire-rimmed spectacles in nineteenth-century style, perfectly preserved and never replaced. Severe clinical expression of absolute emotional detachment, forged through three hundred years of psychiatric practice. Dressed in a high-collared dark frock coat, completely buttoned, tailored and austere. Seated with composed posture, hands folded with surgical precision. The skin around his eyes and forehead bears subtle fractal-like patterns of pale luminescence—manifestations of his Malkavian curse that emerge during moments of terrible vision.
+  [Блок 2] Dimly lit Victorian study or psychiatric asylum office, deep shadows pooling in corners, a single source of candlelight or gas lamp casting sharp chiaroscuro across the aged features. Vintage medical instruments visible but blurred in background. Gothic architecture suggested in shadowed archways. Atmosphere of profound isolation, ancient knowledge, and restrained madness barely contained behind clinical composure. Temperature of the scene rendered through cold, desaturated tones.
+  [Блок 3] Dark fantasy character portrait, painterly digital painting style, Vampire: The Masquerade aesthetic, concept art quality, artstation masterpiece, dramatic gothic lighting, moody atmosphere, Victorian gothic setting, dramatic contrast, occult fantasy illustration, professional character design
 - **🚫 Негативный промт:**
-  photorealistic photography, digital art, anime, cartoon, illustration, watermark, text overlay, blurry, low quality, artifacts, deformed anatomy, extra limbs, oversaturated colors, bright white background, 3D render, CGI.
+  photorealistic photography, 3D render, CGI, anime, cartoon, blurry, low quality, deformed, blood, gore, wounds, injuries, violence, young appearance, smile, happy expression, colorful, bright lighting, modern clothing, Asian features, female, muscular, scars, bandages
 
 ---
 
 ## 🖼️ Изображения
 
-- [Образ 1](art/toma_boshen_01.jpg)
 

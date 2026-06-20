@@ -1,4 +1,4 @@
-﻿# 🌸 Мэви
+# 🌸 Мэви
 
 > 🔗 [Все персонажи](../../../archive/characters_index.md)
 
@@ -7,6 +7,7 @@
 - **Слаг:** mevi
 - **Родной город:** Париж
 - **Линейка WoD:** Фея
+- **Пол:** Женский
 - **Раса:** Фэйри (Ченджлинг)
 - **Род:** Красная Шапка
 - **Двор:** Теневой Двор (Unseelie)
@@ -31,11 +32,11 @@
   - Ши (возлюбленный, 1592–1624) — предатель; объект клятвы мести
 - **📖 Дневники:** [Ретроспектива](journal/retrospective.md)
 - **🎨 Промт для генерации изображения:**
-  [Блок 1] Cinematic dark fantasy portrait, ancient fae shaman in the body of a child who appears six, three-quarter view, dark hair, simple worn plain dress, wooden rune tokens on a knotted cord around the neck — the only constant object across all her incarnations, unnaturally still posture for her apparent age, expression of ancient terrible patience looking out from a child's face
-  [Блок 2] Cold dark forest light from above, deep forest-shadow rim-light, heavy darkness at the edges, forest-green-black painterly background with abstract swirling brushstroke textures, dead leaves and cold air
-  [Блок 3] Dark fantasy digital painting, visible painterly brushstrokes, textured oil-paint effect, cinematic composition, moody gothic atmosphere, Vampire the Masquerade aesthetic, concept art quality, painterly realism, artstation quality, masterpiece
+  [Блок 1] A girl appearing six years old with an unnaturally grave, watchful expression beyond her years. She has delicate, pale features with an ethereal quality suggesting otherworldly nature. Wearing a crimson hooded cloak over simple dark clothing. Around her neck hangs a cord strung with wooden runes carved with arcane symbols—the only artifact remaining unchanged across all veils. Her posture is perfectly still and composed, eyes ancient and knowing despite her youthful frame. Fair skin, dark hair visible beneath the hood, poised with preternatural calm.
+  [Блок 2] Dimly lit interior space with candlelight casting long, dancing shadows across her small figure. Moody atmospheric lighting emphasizing the contrast between soft golden illumination and deep surrounding darkness. Gothic architectural elements visible in background—stone walls, ornate shadows. Air thick with mystery and unseen presence. Theatrical, intimate framing creating sense of dread and enchantment.
+  [Блок 3] Dark fantasy digital painting, painterly brushstrokes, Vampire: The Masquerade aesthetic, gothic horror concept art, artstation masterpiece, highly detailed, cinematic composition, professional illustration, atmospheric and moody rendering, rich color palette dominated by deep crimsons and shadows, museum quality
 - **🚫 Негативный промт:**
-  photorealistic photography, digital art, anime, cartoon, illustration, watermark, text overlay, blurry, low quality, artifacts, deformed anatomy, extra limbs, oversaturated colors, bright white background, 3D render, CGI.
+  photorealistic photography, 3D render, CGI, anime, cartoon, blurry, low quality, deformed, blood, gore, wounds, injuries, violence, happy expression, bright cheerful colors, cute, innocent, anime style, digital art flattened, chibi proportions, smiling, outdoors daylight, modern clothing, toys, toys
 
 ---
 

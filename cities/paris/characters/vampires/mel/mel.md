@@ -10,6 +10,7 @@
 - **Родной город:** Вейстренд
 - **Алиасы:** Тод Джеймсон, Аня *(вторая личность — образ умершей сестры; не путать с [Аней Грос](../../mortals/anya_gros/anya_gros.md), гулем Жонсьер)*
 - **Линейка WoD:** Вампир
+- **Пол:** Мужской
 - **Клан:** Малкавиан
 - **Секта:** Камарилья
 - **Год рождения:** 1950
@@ -43,7 +44,7 @@
   photorealistic photography, digital art, anime, cartoon, illustration, watermark, text overlay, blurry, low quality, artifacts, deformed anatomy, extra limbs, oversaturated colors, bright white background, 3D render, CGI.
 - **Поколение:** 9
 - **Иерархия в городе:** Без официальной должности — анцилла Камарильи
-- **Принадлежность:** Создатель НПС
+- **Принадлежность:** Персонаж мастера
 
 ---
 

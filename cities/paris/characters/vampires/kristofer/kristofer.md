@@ -7,6 +7,7 @@
 - **Слаг:** kristofer
 - **Родной город:** Париж
 - **Линейка WoD:** Вампир
+- **Пол:** Мужской
 - **Клан:** Сетиты
 - **Секта:** Независимые
 - **Поколение:** 11-е
@@ -30,7 +31,7 @@
 - **🚫 Негативный промт:**
   photorealistic photography, digital art, anime, cartoon, illustration, watermark, text overlay, blurry, low quality, artifacts, deformed anatomy, extra limbs, oversaturated colors, bright white background, 3D render, CGI.
 - **Иерархия в городе:** н/п — гость; в Париже не имеет официального статуса
-- **Принадлежность:** Создатель НПС
+- **Принадлежность:** Персонаж мастера
 
 ---
 

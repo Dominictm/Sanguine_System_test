@@ -1,4 +1,4 @@
-﻿# 🏛️ Ален Дюбуа
+# 🏛️ Ален Дюбуа
 
 > 🔗 [Все персонажи](../../../archive/characters_index.md)
 
@@ -7,6 +7,7 @@
 - **Слаг:** alen_dyubua
 - **Родной город:** Париж
 - **Линейка WoD:** Вампир
+- **Пол:** Мужской
 - **Клан:** Вентру
 - **Секта:** Камарилья
 - **Год рождения:** 1620
@@ -17,15 +18,15 @@
 - **Парижская иерархия:** Примоген (Вентру)
 - **Роль:** Примаген Вентру
 - **Статус:** Жив
-- **Внешность:** Тёмная кожа. Волосы острижены коротко, с едва заметным красноватым оттенком. Зелёные глаза — внимательные, без эмоций. Тёмный костюм с орнаментальным узором: не украшение, а знак ранга. Лавандовая рубашка, тёмный галстук с золотой булавкой. Золотой перстень. Руки всегда сложены перед собой — поза человека, которому не нужно торопить события: результат придёт сам. Выражение лица неизменно: холодная концентрация трёх с половиной веков вентруского контроля.
+- **Внешность:** У Алена Дюбуа высокая скуловая кость заградила всё лицо, усыпанное тёмными, резвыми глазами и волосистой под afro-причёской. Кожаныйmaterial-бомбер контрастирует с бессмертным блеском пончикового кольца на свободе волосатых gross-обрыве. Его выражение — зан knjôt, словно размышляют о непонятных временах. Запах ночного mcstermona и благородный элегантный гардероб превращают персонажа в трогательного мечтателя.
 - **Дисциплины:** Dominate, Fortitude, Presence (клановые Вентру; предположительно)
 - **Голос:** Контролируемый, аналитический. Чёткая структура — тезис, аргумент, вывод. Оценивает риски вслух. Никогда не перебивает; ответ готов ещё до паузы.
 - **🎨 Промт для генерации изображения:**
-  [Блок 1] Cinematic dark fantasy portrait, male vampire primogen of clan Ventrue, three-quarter formal view, dark complexion, short hair with faint reddish tint, attentive green eyes without emotion, ornate dark patterned suit, lavender dress shirt, dark tie with gold pin, gold signet ring, hands folded before him — the posture of a man who has no need to hurry, cold concentration of three and a half centuries
-  [Блок 2] Cold formal overhead lighting, subtle dark gold rim-light from the right, deep shadows beneath the chin and at the edges, dark red-black painterly background with abstract swirling brushstroke textures, power atmosphere, heavy air
-  [Блок 3] Dark fantasy digital painting, visible painterly brushstrokes, textured oil-paint effect, cinematic composition, moody gothic atmosphere, Vampire the Masquerade aesthetic, concept art quality, painterly realism, artstation quality, masterpiece
+  [Блок 1] A tall Ventrue vampire with sharp, angular cheekbones commanding his entire face. Dark, piercing eyes set deep beneath a prominent brow. Distinctive afro-textured hair crowning his head. Wearing a fitted black leather bomber jacket that emphasizes his aristocratic frame. Adorable golden signet ring catching light on his ring finger, resting against dark skin. His expression thoughtful and distant, as if contemplating secrets across centuries. Poised with restrained nobility and quiet power.
+  [Блок 2] Moody nocturnal ambiance with deep shadows and moonlit highlights. Atmospheric background shrouded in darkness, suggesting an elegant Gothic interior or shadowed urban setting. Rim lighting catching his features, emphasizing the supernatural pallor and intensity of his gaze. Cool, aristocratic color palette of blacks, deep purples, and silver accents.
+  [Блок 3] Dark fantasy digital painting in the Vampire: The Masquerade aesthetic. Painterly brushstrokes with realistic portraiture. High-quality concept art style. Artstation masterpiece. Cinematic character portrait. Moody gothic RPG card illustration. Professional oil painting technique with dramatic chiaroscuro lighting.
 - **🚫 Негативный промт:**
-  photorealistic photography, digital art, anime, cartoon, illustration, watermark, text overlay, blurry, low quality, artifacts, deformed anatomy, extra limbs, oversaturated colors, bright white background, 3D render, CGI.
+  photorealistic photography, 3D render, CGI, anime, cartoon, watercolor, sketchy, blurry, low quality, deformed faces, ugly, blood, gore, wounds, injuries, violence, scars, aggression, bright colors, smiling, cheerful, cartoonish, poorly detailed, amateur, distorted proportions
 
 ---
 
