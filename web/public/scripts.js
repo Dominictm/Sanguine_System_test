@@ -4539,8 +4539,23 @@ function _v20Empty(lineage = 'vampires') {
     bloodPool: Array(20).fill(false), bloodPerTurn: 1,
     health: { bruised: false, hurt: false, injured: false, wounded: false, mauled: false, crippled: false, incapacitated: false },
     flaw: '', experience: { total: 0, spent: 0 },
+    // ── Page 2 ──
+    specializations: Array.from({ length: 6 }, () => ({ ability: '', spec: '' })),
+    otherTraits: Array.from({ length: 6 }, () => ({ name: '', val: 0 })),
+    rituals: Array.from({ length: 6 }, () => ({ name: '', level: '' })),
+    history: '', goals: '',
+    description: { birthDate: '', apparentAge: '', deathDate: '', gender: '', race: '', hair: '', eyes: '', heightWeight: '', build: '', nationality: '' },
+    allies: '', possessions: '',
+    combat: Array.from({ length: 4 }, () => ({ weapon: '', diff: '', damage: '', range: '', rate: '', clip: '', size: '' })),
   };
 }
+
+const _v20PadPairs = (arr, n, keys) => {
+  const blank = () => Object.fromEntries(keys.map(k => [k, '']));
+  const out = Array.from({ length: n }, blank);
+  if (Array.isArray(arr)) arr.slice(0, n).forEach((x, i) => { const o = blank(); for (const k of keys) o[k] = String(x?.[k] || ''); out[i] = o; });
+  return out;
+};
 
 function _v20PickClamped(o, max) {
   const r = {};
@@ -4579,6 +4594,16 @@ function _v20Normalize(m) {
   Object.assign(e.health, m.health || {});
   if (typeof m.flaw === 'string') e.flaw = m.flaw;
   if (m.experience) { e.experience.total = _num(m.experience.total, 0); e.experience.spent = _num(m.experience.spent, 0); }
+  // ── Page 2 ──
+  e.specializations = _v20PadPairs(m.specializations, 6, ['ability', 'spec']);
+  e.otherTraits = _v20PadSlots(m.otherTraits, 6);
+  e.rituals = _v20PadPairs(m.rituals, 6, ['name', 'level']);
+  if (typeof m.history === 'string') e.history = m.history;
+  if (typeof m.goals === 'string') e.goals = m.goals;
+  Object.assign(e.description, m.description || {});
+  if (typeof m.allies === 'string') e.allies = m.allies;
+  if (typeof m.possessions === 'string') e.possessions = m.possessions;
+  e.combat = _v20PadPairs(m.combat, 4, ['weapon', 'diff', 'damage', 'range', 'rate', 'clip', 'size']);
   return e;
 }
 
@@ -4589,10 +4614,17 @@ function _v20ParseMd(md, lineage) {
   const lines = md.replace(/\r\n/g, '\n').split('\n');
   let sec = '', sub = '', mm;
   const rows = [];
+  const secText = {};   // section title → raw prose lines (non-table, non-heading)
   for (const ln of lines) {
     if ((mm = ln.match(/^##\s+(.+)$/)))  { sec = mm[1].replace(/[#*]/g, '').trim().toLowerCase(); sub = ''; continue; }
     if ((mm = ln.match(/^###\s+(.+)$/))) { sub = mm[1].replace(/[#*]/g, '').trim().toLowerCase(); continue; }
-    if (!/^\s*\|/.test(ln) || /\|\s*:?-{3,}/.test(ln)) continue;
+    const isTable = /^\s*\|/.test(ln);
+    if (!isTable) {
+      const t = ln.trim();
+      if (t && !/^-{3,}$/.test(t) && !/^>/.test(t)) (secText[sec] ??= []).push(t);
+      continue;
+    }
+    if (/\|\s*:?-{3,}/.test(ln)) continue;
     const cells = ln.split('|').slice(1, -1).map(c => c.trim());
     if (cells.length < 2) continue;
     const name = cells[0].replace(/\*\*/g, '').trim();
@@ -4646,6 +4678,40 @@ function _v20ParseMd(md, lineage) {
     else if (/(запас крови|blood pool)/.test(r.nameLow) && n != null) m.bloodPool = _fillBoxes(20, Math.min(20, n));
     else if (/(предел траты|blood\/turn)/.test(r.nameLow) && n != null) m.bloodPerTurn = n;
   }
+
+  // ── Page 2 ──
+  const clean = s => String(s || '').replace(/\*\*/g, '').trim();
+  const notDash = s => { const v = clean(s); return v && v !== '—' && !/^⚠️?/.test(v) ? v : ''; };
+  const secProse = re => { const k = Object.keys(secText).find(key => re.test(key)); return k ? secText[k].join('\n') : ''; };
+  const afterLabel = (text, re) => { const ln = text.split('\n').find(l => re.test(l)); return ln ? notDash(ln.replace(/^[^:]*:\s*/, '')) : ''; };
+
+  // Specializations (Способность | Специализация)
+  const specs = rows.filter(r => /специализаци/.test(r.sec) && notDash(r.cells[0]) && notDash(r.cells[1]));
+  specs.slice(0, 6).forEach((r, i) => { m.specializations[i] = { ability: clean(r.cells[0]), spec: clean(r.cells[1]) }; });
+
+  // Other traits (Параметр | ● | Значение, 3 cols) and Rituals (Ритуал | Уровень, 2 cols)
+  // share one «Другие параметры и ритуалы» section → tell them apart by column count.
+  const ot = rows.filter(r => /(другие параметры|ритуал)/.test(r.sec) && r.cells.length >= 3 && r.val != null && notDash(r.name));
+  ot.slice(0, 6).forEach((r, i) => { m.otherTraits[i] = { name: clean(r.name), val: r.val }; });
+  const rit = rows.filter(r => /(другие параметры|ритуал)/.test(r.sec) && r.cells.length === 2 && notDash(r.name) && notDash(r.cells[1]));
+  rit.slice(0, 6).forEach((r, i) => { m.rituals[i] = { name: clean(r.name), level: clean(r.cells[1]) }; });
+
+  // Description (Поле | Значение)
+  const dmap = { 'дата рождения': 'birthDate', 'видимый возраст': 'apparentAge', 'дата смерти': 'deathDate', 'пол': 'gender', 'раса': 'race', 'волосы': 'hair', 'глаза': 'eyes', 'рост/вес': 'heightWeight', 'телосложение': 'build', 'национальность': 'nationality' };
+  for (const r of rows) { if (!/описание/.test(r.sec)) continue; const key = dmap[r.nameNorm]; if (key) m.description[key] = notDash(r.cells[1]); }
+
+  // Combat (weapon | diff | damage | range | rate | clip | size)
+  const ckeys = ['weapon', 'diff', 'damage', 'range', 'rate', 'clip', 'size'];
+  const cmb = rows.filter(r => /боевые столкновения/.test(r.sec) && r.cells.some(c => notDash(c)));
+  cmb.slice(0, 4).forEach((r, i) => { const o = {}; ckeys.forEach((k, j) => o[k] = clean(r.cells[j] || '')); m.combat[i] = o; });
+
+  // Prose sections
+  const histText = secProse(/история/);
+  m.history = afterLabel(histText, /истори/i) || (notDash(histText) && !/цел/i.test(histText) ? histText : '');
+  m.goals = afterLabel(histText, /цел/i);
+  m.allies = secProse(/союзники/).split('\n').map(l => l.replace(/^[-*]\s*/, '')).filter(s => notDash(s)).join('\n');
+  m.possessions = secProse(/имущество/).split('\n').map(l => l.replace(/^[-*]\s*/, '')).filter(s => notDash(s)).join('\n');
+
   return m;
 }
 
@@ -4766,13 +4832,54 @@ function _v20RenderSheet(panel, charName) {
       </div>
     </div>`;
 
+  const specRows = m.specializations.map((s, i) =>
+    `<div class="v20-pair-row"><input class="v20-line-input" data-tpath="specializations.${i}.ability" value="${escAttr(s.ability)}" placeholder="способность"><input class="v20-line-input" data-tpath="specializations.${i}.spec" value="${escAttr(s.spec)}" placeholder="специализация"></div>`).join('');
+  const otRows = m.otherTraits.map((t, i) => _v20NamedDotRow(`otherTraits.${i}.name`, t.name, `otherTraits.${i}.val`, t.val)).join('');
+  const ritRows = m.rituals.map((r, i) =>
+    `<div class="v20-pair-row"><input class="v20-line-input" data-tpath="rituals.${i}.name" value="${escAttr(r.name)}" placeholder="ритуал"><input class="v20-line-input v20-ritual-lvl" data-tpath="rituals.${i}.level" value="${escAttr(r.level)}" placeholder="ур."></div>`).join('');
+  const V20_DESC = [['birthDate', 'Дата рождения'], ['apparentAge', 'Видимый возраст'], ['deathDate', 'Дата смерти'], ['gender', 'Пол'], ['race', 'Раса'], ['hair', 'Волосы'], ['eyes', 'Глаза'], ['heightWeight', 'Рост/Вес'], ['build', 'Телосложение'], ['nationality', 'Национальность']];
+  const descFields = V20_DESC.map(([k, l]) => _v20Field(l, `description.${k}`, m.description[k])).join('');
+  const V20_COMBAT_COLS = ['weapon', 'diff', 'damage', 'range', 'rate', 'clip', 'size'];
+  const combatHead = `<div class="v20-combat-row v20-combat-head"><span>Оружие/атака</span><span>Сложн.</span><span>Урон</span><span>Дальн.</span><span>Скор.</span><span>Магазин</span><span>Размер</span></div>`;
+  const combatRows = m.combat.map((c, i) =>
+    `<div class="v20-combat-row">${V20_COMBAT_COLS.map(k => `<input class="v20-line-input" data-tpath="combat.${i}.${k}" value="${escAttr(c[k])}">`).join('')}</div>`).join('');
+
+  const page2 = `
+    <div class="v20-band">Специализации · параметры${isVamp ? ' · ритуалы' : ''}</div>
+    <div class="v20-grid3">
+      <div class="v20-col"><div class="v20-col-title">Специализации</div>${specRows}</div>
+      <div class="v20-col"><div class="v20-col-title">Другие параметры</div>${otRows}</div>
+      ${isVamp ? `<div class="v20-col"><div class="v20-col-title">Ритуалы</div>${ritRows}</div>` : '<div class="v20-col"></div>'}
+    </div>
+    <div class="v20-band">История и описание</div>
+    <div class="v20-grid3">
+      <div class="v20-col">
+        <div class="v20-col-title">История</div>
+        <textarea class="v20-textarea" data-tpath="history" rows="5" placeholder="История персонажа…">${escHtml(m.history)}</textarea>
+        <div class="v20-col-title" style="margin-top:12px">Цели</div>
+        <textarea class="v20-textarea" data-tpath="goals" rows="3" placeholder="Цели…">${escHtml(m.goals)}</textarea>
+      </div>
+      <div class="v20-col">
+        <div class="v20-col-title">Описание</div>
+        <div class="v20-desc-fields">${descFields}</div>
+      </div>
+      <div class="v20-col">
+        <div class="v20-col-title">Союзники и контакты</div>
+        <textarea class="v20-textarea" data-tpath="allies" rows="4" placeholder="По строке на пункт…">${escHtml(m.allies)}</textarea>
+        <div class="v20-col-title" style="margin-top:12px">Имущество и снаряжение</div>
+        <textarea class="v20-textarea" data-tpath="possessions" rows="4" placeholder="По строке на пункт…">${escHtml(m.possessions)}</textarea>
+      </div>
+    </div>
+    <div class="v20-band">Боевые столкновения</div>
+    <div class="v20-combat">${combatHead}${combatRows}</div>`;
+
   panel.innerHTML = `
     <div class="cdet-sheet-toolbar">
       <button class="cdet-sheet-btn primary" id="v20-save" disabled>💾 Сохранено</button>
       <button class="cdet-sheet-btn" id="v20-regen">♻ Перегенерировать ИИ</button>
       <span class="v20-status" id="v20-status"></span>
     </div>
-    <div class="v20-sheet">${header}${attributes}${abilities}${advantages}${bottom}</div>
+    <div class="v20-sheet">${header}${attributes}${abilities}${advantages}${bottom}${page2}</div>
     <div class="v20-foot">Создание: Характеристики 7/5/3 · Способности 13/9/5 · Дисциплины 3 · Факты биографии 5 · Добродетели 7 · Свободные пункты 15</div>`;
 
   document.getElementById('v20-save').addEventListener('click', _v20Save);

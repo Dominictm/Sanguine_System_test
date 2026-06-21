@@ -6991,6 +6991,58 @@ a.md-link-loc:hover {
   }
 }
 
+/* Page 2: pair rows, description fields, combat table */
+.v20-pair-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 0;
+}
+
+.v20-pair-row .v20-line-input {
+  font-size: var(--fs-md);
+}
+
+.v20-ritual-lvl {
+  flex: 0 0 44px;
+  text-align: center;
+}
+
+.v20-desc-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.v20-combat {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  overflow-x: auto;
+}
+
+.v20-combat-row {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr 1fr 1fr 1fr 1fr;
+  gap: 8px;
+  align-items: center;
+  min-width: 540px;
+}
+
+.v20-combat-row .v20-line-input {
+  font-size: var(--fs-md);
+}
+
+.v20-combat-head {
+  font-family: var(--f-head);
+  font-size: var(--fs-2xs);
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--text3);
+  padding-bottom: 2px;
+  border-bottom: 1px solid rgba(184, 134, 11, 0.2);
+}
+
 @media (pointer: coarse) {
   .v20-dot { width: 18px; height: 18px; }
   .v20-box { width: 20px; height: 20px; }
