@@ -565,6 +565,53 @@ app.get('/api/cities', async (req, res) => {
   catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// Card-friendly summary of every city in cities/ — used by the «Домены» tab.
+app.get('/api/cities/summary', async (req, res) => {
+  try {
+    const slugs = await listCities();
+    const out = await Promise.all(slugs.map(async slug => {
+      let display = slug, year = '';
+      try {
+        const cm = (await fs.readFile(path.join(cityDir(slug), 'city.md'), 'utf-8')).replace(/^﻿/, '');
+        const hm = cm.match(/^#\s+(.+?)\s*$/m);
+        if (hm) {
+          const m2 = hm[1].match(/^(.*?),\s*(\S+)\s*—\s*сеттинг города/i);
+          if (m2) { display = m2[1].trim(); year = m2[2].trim(); }
+          else display = hm[1].replace(/\s*—\s*сеттинг города/i, '').trim();
+        }
+      } catch {}
+      let characters = 0;
+      try { characters = (await getAllCharacters(slug)).length; } catch {}
+      let modules = 0;
+      try { modules = (await listModules(slug)).length; } catch {}
+      let locations = 0;
+      try { locations = await countMdFiles(locsDir(slug)); } catch {}
+      return { slug, display, year, characters, modules, locations };
+    }));
+    out.sort((a, b) => a.display.localeCompare(b.display, 'ru'));
+    res.json(out);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Full city.md + stats for one city — used by the city detail modal.
+app.get('/api/cities/:slug/detail', async (req, res) => {
+  try {
+    const slug = req.params.slug;
+    if (!(await listCities()).includes(slug)) return res.status(404).json({ error: 'Город не найден' });
+
+    const cityMd = (await fs.readFile(path.join(cityDir(slug), 'city.md'), 'utf-8').catch(() => '')).replace(/^﻿/, '');
+
+    let characters = 0;
+    try { characters = (await getAllCharacters(slug)).length; } catch {}
+    let modules = 0;
+    try { modules = (await listModules(slug)).length; } catch {}
+    let locations = 0;
+    try { locations = await countMdFiles(locsDir(slug)); } catch {}
+
+    res.json({ slug, cityMd, characters, modules, locations });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 app.get('/api/chronicles', async (req, res) => {
   try {
     const city = reqCity(req);
@@ -2538,6 +2585,43 @@ app.put('/api/characters/:name/sheet', express.json(), async (req, res) => {
     const dir = path.join(charsDir(city), char.lineageFolder, char.slug);
     await fs.writeFile(path.join(dir, `${char.slug}-sheet.md`), content.replace(/\s*$/, '') + '\n', 'utf-8');
     await _ensureSheetLink(path.join(dir, `${char.slug}.md`), `${char.slug}-sheet.md`);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
+// ── Structured V20 sheet data (JSON sidecar) ──────────────────────────────────
+// Source of truth for the interactive blank on the «Лист V20» tab. Falls back to
+// parsing the AI markdown sheet (client-side) when no JSON exists yet, or when
+// ?fromMd=1 forces a reseed after an AI (re)generation.
+app.get('/api/characters/:name/sheet-data', async (req, res) => {
+  try {
+    const city  = reqCity(req);
+    const name  = decodeURIComponent(req.params.name);
+    const chars = await getAllCharacters(city);
+    const char  = chars.find(c => c.name === name);
+    if (!char) return res.status(404).json({ error: 'Персонаж не найден' });
+    const dir   = path.join(charsDir(city), char.lineageFolder, char.slug);
+    const fromMd = req.query.fromMd === '1';
+    if (!fromMd) {
+      const raw = await fs.readFile(path.join(dir, `${char.slug}-sheet.json`), 'utf-8').catch(() => null);
+      if (raw) { try { return res.json({ exists: true, source: 'json', lineage: char.lineageFolder, data: JSON.parse(raw) }); } catch { /* corrupt → fall through to md */ } }
+    }
+    const md = await fs.readFile(path.join(dir, `${char.slug}-sheet.md`), 'utf-8').catch(() => null);
+    res.json({ exists: md !== null, source: md ? 'md' : 'empty', lineage: char.lineageFolder, md: md || '' });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.put('/api/characters/:name/sheet-data', express.json({ limit: '1mb' }), async (req, res) => {
+  try {
+    const city  = reqCity(req);
+    const name  = decodeURIComponent(req.params.name);
+    const data  = req.body?.data;
+    if (!data || typeof data !== 'object') return res.status(400).json({ ok: false, error: 'Нет данных листа' });
+    const chars = await getAllCharacters(city);
+    const char  = chars.find(c => c.name === name);
+    if (!char) return res.status(404).json({ ok: false, error: 'Персонаж не найден' });
+    const dir   = path.join(charsDir(city), char.lineageFolder, char.slug);
+    await fs.writeFile(path.join(dir, `${char.slug}-sheet.json`), JSON.stringify(data, null, 2), 'utf-8');
     res.json({ ok: true });
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });

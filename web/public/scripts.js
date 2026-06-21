@@ -172,6 +172,7 @@ function navigate(page) {
   if (page === 'factions')   loadFactions();
   if (page === 'rumors')     loadRumors();
   if (page === 'search')     loadSearch();
+  if (page === 'tools')      loadCitiesGrid();
 }
 
 document.querySelectorAll('[data-page]').forEach(el => {
@@ -309,6 +310,7 @@ document.addEventListener('click', e => {
     document.querySelectorAll(`#page-${page} .tab-panel`).forEach(p =>
       p.classList.toggle('active', p.id === `tab-${tab}`));
     if (tab === 'ai-settings') loadAiSettings();
+    if (tab === 'new-city')    loadCitiesGrid();
   }
 });
 
@@ -843,6 +845,7 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
     document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.id === `tab-${tab}`));
     if (tab === 'ai-settings') loadAiSettings();
+    if (tab === 'new-city')    loadCitiesGrid();
   });
 });
 
@@ -1304,15 +1307,18 @@ async function runNodeTool(name, args, outId, btn) {
   const out = document.getElementById(outId);
   btn.disabled = true; btn.textContent = '⏳ Выполняется...';
   out.className = 'output-area show'; out.textContent = `$ node tools/${name}.js\n\n`;
+  let ok = false;
   try {
     const data = await fetch('/api/tool/' + name, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ args }) }).then(r => r.json());
-    const cls = data.ok ? 'ok' : 'err';
+    ok = !!data.ok;
+    const cls = ok ? 'ok' : 'err';
     out.innerHTML = `$ node tools/${name}.js\n\n<span class="${cls}">${escHtml(data.output || '(нет вывода)')}</span>`;
-    if (data.ok) { STATE.characters = []; STATE.graph.inited = false; if (STATE.page === 'dashboard') loadDashboard(); }
+    if (ok) { STATE.characters = []; STATE.graph.inited = false; if (STATE.page === 'dashboard') loadDashboard(); }
   } catch (e) {
     out.innerHTML = `<span class="err">⚠ Ошибка соединения\n${e.message}</span>`;
   }
   btn.disabled = false; btn.textContent = getOrigLabel(btn.id) || 'Готово';
+  return ok;
 }
 
 function escHtml(s) {
@@ -1420,11 +1426,30 @@ function getOrigLabel(id) {
   }[id] || 'Выполнить';
 }
 
-document.getElementById('btn-new-city').addEventListener('click', () => {
-  const city = document.getElementById('city-name').value.trim();
+const cityNameInput = document.getElementById('city-name');
+const citySlugPreview = document.getElementById('city-slug-preview');
+cityNameInput.addEventListener('input', () => {
+  citySlugPreview.textContent = slugifyJS(cityNameInput.value.trim()) || '—';
+});
+
+document.getElementById('btn-new-city').addEventListener('click', async () => {
+  const city = cityNameInput.value.trim();
   const year = document.getElementById('city-year').value.trim();
   if (!city) { alert('Укажите название города'); return; }
-  runNodeTool('new_city', [slugifyJS(city), city, year || ''], 'out-new-city', document.getElementById('btn-new-city'));
+  if (!year) { alert('Укажите год'); return; }
+  const slug = slugifyJS(city);
+  const args = [
+    slug, city, year,
+    document.getElementById('city-political').value.trim(),
+    document.getElementById('city-locations').value.trim(),
+    document.getElementById('city-leitmotif').value.trim(),
+    document.getElementById('city-specifics').value.trim(),
+    document.getElementById('city-avoid').value.trim(),
+    document.getElementById('city-sources').value.trim(),
+    document.getElementById('city-districts').value.trim(),
+  ];
+  const ok = await runNodeTool('new_city', args, 'out-new-city', document.getElementById('btn-new-city'));
+  if (ok) setTimeout(() => { location.search = 'city=' + encodeURIComponent(slug); }, 900);
 });
 
 // Vampire-only fields visible / clan+sect required only for vampires
@@ -1598,6 +1623,105 @@ async function loadChroniclesPage() {
     el.innerHTML = '<div class="loading-state" style="color:var(--accent3)">⚠ Не удалось загрузить</div>';
   }
 }
+
+// ═══════════════════════════════════════════════════════════════
+// Cities grid (Tools → «Домены»)
+// ═══════════════════════════════════════════════════════════════
+
+function renderCityCard(c) {
+  const active = c.slug === CITY;
+  const meta = [
+    c.year       ? `<span class="chp-meta-item">📅 ${escHtml(c.year)}</span>` : '',
+    c.characters ? `<span class="chp-meta-item">🎭 ${c.characters} персонажей</span>` : '',
+    c.modules    ? `<span class="chp-meta-item">📖 ${c.modules} модулей</span>` : '',
+    c.locations  ? `<span class="chp-meta-item">📍 ${c.locations} локаций</span>` : '',
+  ].filter(Boolean).join('');
+  return `
+    <div class="city-card" data-slug="${escHtml(c.slug)}" title="Подробнее о городе">
+      <div class="chp-card-header">
+        <div class="chp-card-name">${escHtml(c.display)}</div>
+        ${active ? '<span class="chp-status chp-status-active">Активен</span>' : ''}
+      </div>
+      ${meta ? `<div class="chp-card-meta">${meta}</div>` : ''}
+    </div>`;
+}
+
+async function loadCitiesGrid() {
+  const el = document.getElementById('cities-grid');
+  if (!el) return;
+  el.innerHTML = SPINNER;
+  try {
+    const cities = await fetch('/api/cities/summary').then(r => r.json());
+    if (!Array.isArray(cities) || !cities.length) {
+      el.innerHTML = '<div class="loading-state" style="height:120px">Городов пока нет — создайте первый ниже</div>';
+      return;
+    }
+    el.innerHTML = `<div class="chp-grid">${cities.map(renderCityCard).join('')}</div>`;
+  } catch {
+    el.innerHTML = '<div class="loading-state" style="color:var(--accent3)">⚠ Не удалось загрузить</div>';
+  }
+}
+
+document.getElementById('cities-grid')?.addEventListener('click', e => {
+  const card = e.target.closest('.city-card');
+  if (!card) return;
+  openCityDetail(card.dataset.slug);
+});
+
+// ═══════════════════════════════════════════════════════════════
+// City Detail Modal
+// ═══════════════════════════════════════════════════════════════
+
+async function openCityDetail(slug) {
+  const modal   = document.getElementById('city-detail-modal');
+  const content = document.getElementById('city-detail-content');
+  content.innerHTML = `<div class="mod-loading">${SPINNER}</div>`;
+  modal.classList.add('open');
+
+  let d;
+  try { d = await fetch(`/api/cities/${encodeURIComponent(slug)}/detail`).then(r => r.json()); }
+  catch { content.innerHTML = '<div class="cdet-empty" style="padding:40px">⚠ Не удалось загрузить город</div>'; return; }
+  if (d.error) { content.innerHTML = `<div class="cdet-empty" style="padding:40px">${escHtml(d.error)}</div>`; return; }
+
+  const hm      = d.cityMd.match(/^#\s+(.+?)\s*$/m);
+  const display = hm ? hm[1].replace(/\s*—\s*сеттинг города/i, '').trim() : slug;
+  const body    = d.cityMd.replace(/^#\s+.+\n+/, ''); // заголовок уже показан в шапке модалки
+
+  const meta = [
+    d.characters ? `<span class="chp-meta-item">🎭 ${d.characters} персонажей</span>` : '',
+    d.modules    ? `<span class="chp-meta-item">📖 ${d.modules} модулей</span>` : '',
+    d.locations  ? `<span class="chp-meta-item">📍 ${d.locations} локаций</span>` : '',
+  ].filter(Boolean).join('');
+
+  const active = slug === CITY;
+
+  content.innerHTML = `
+    <div class="cdet-info-col mod-info-col">
+      <div class="cdet-sticky-header">
+        <div class="cdet-name">${escHtml(display)}</div>
+        <div class="mod-modal-slug-row">
+          ${meta ? `<div class="chp-card-meta">${meta}</div>` : ''}
+          ${active
+            ? '<span class="chp-status chp-status-active">Активен</span>'
+            : `<button class="mod-gen-scenario-btn" data-switch-city="${escHtml(slug)}">Переключиться на этот город</button>`}
+        </div>
+      </div>
+      <div class="cdet-panels">
+        <div class="cdet-panel active"><div class="md-body">${mdToHtml(body)}</div></div>
+      </div>
+    </div>`;
+}
+
+document.getElementById('city-detail-content').addEventListener('click', e => {
+  const btn = e.target.closest('[data-switch-city]');
+  if (!btn) return;
+  location.search = 'city=' + encodeURIComponent(btn.dataset.switchCity);
+});
+
+const cityDetailModal = document.getElementById('city-detail-modal');
+document.getElementById('city-detail-close').addEventListener('click', () => cityDetailModal.classList.remove('open'));
+cityDetailModal.addEventListener('click', e => { if (e.target === cityDetailModal) cityDetailModal.classList.remove('open'); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') cityDetailModal.classList.remove('open'); });
 
 // ═══════════════════════════════════════════════════════════════
 // Chronicle detail modal (modules list + create/delete module)
@@ -4366,30 +4490,401 @@ function _stripSheetHeader(md) {
   return lines.slice(i).join('\n');
 }
 
+// ═══════════════════ Structured V20 sheet (STV2099 blank reproduction) ═══════════════════
+// Source of truth = <slug>-sheet.json (sidecar). Falls back to parsing the AI
+// markdown sheet. Dots = radio-style (fill 1..k); boxes = solid checkboxes.
+
+const V20_ATTRS = {
+  physical: [['strength', 'Сила'], ['dexterity', 'Ловкость'], ['stamina', 'Выносливость']],
+  social:   [['charisma', 'Обаяние'], ['manipulation', 'Манипуляция'], ['appearance', 'Привлекательность']],
+  mental:   [['perception', 'Восприятие'], ['intelligence', 'Интеллект'], ['wits', 'Смекалка']],
+};
+const V20_ATTR_GROUP_LABELS = { physical: 'Физические', social: 'Социальные', mental: 'Ментальные' };
+const V20_ABILITIES = {
+  talents:    ['Атлетика', 'Бдительность', 'Драка', 'Запугивание', 'Красноречие', 'Лидерство', 'Уличное чутьё', 'Хитрость', 'Шестое чувство', 'Эмпатия'],
+  skills:     ['Вождение', 'Воровство', 'Выживание', 'Исполнение', 'Обращение с животными', 'Ремесло', 'Скрытность', 'Стрельба', 'Фехтование', 'Этикет'],
+  knowledges: ['Гуманитарные науки', 'Естественные науки', 'Законы', 'Информатика', 'Медицина', 'Оккультизм', 'Политика', 'Расследование', 'Финансы', 'Электроника'],
+};
+const V20_ABILITY_GROUP_LABELS = { talents: 'Таланты', skills: 'Навыки', knowledges: 'Знания' };
+const V20_HEALTH = [
+  ['bruised', 'Помят', ''], ['hurt', 'Легко ранен', '−1'], ['injured', 'Ранен', '−1'],
+  ['wounded', 'Серьёзно ранен', '−2'], ['mauled', 'Тяжело ранен', '−2'],
+  ['crippled', 'Едва жив', '−5'], ['incapacitated', 'При смерти', ''],
+];
+
+const _clamp = (v, a, b) => { const n = Number(v); return Number.isFinite(n) ? Math.max(a, Math.min(b, Math.round(n))) : a; };
+const _clamp05 = v => _clamp(v, 0, 5);
+const _num = (v, d) => { const n = Number(v); return Number.isFinite(n) ? n : d; };
+const _boolArr = (a, n) => Array.from({ length: n }, (_, i) => !!(a && a[i]));
+const _fillBoxes = (n, k) => Array.from({ length: n }, (_, i) => i < k);
+const _v20Norm = s => String(s || '').replace(/\*\*/g, '').toLowerCase().split('(')[0].trim();
+
+function _v20Empty(lineage = 'vampires') {
+  const ab = g => V20_ABILITIES[g].map(n => ({ name: n, val: 0, fixed: true })).concat([{ name: '', val: 0 }, { name: '', val: 0 }]);
+  return {
+    lineage,
+    header: { name: '', player: '', chronicle: '', nature: '', demeanor: '', concept: '', clan: '', generation: '', sire: '' },
+    attributes: {
+      physical: { strength: 1, dexterity: 1, stamina: 1 },
+      social:   { charisma: 1, manipulation: 1, appearance: 1 },
+      mental:   { perception: 1, intelligence: 1, wits: 1 },
+    },
+    abilities: { talents: ab('talents'), skills: ab('skills'), knowledges: ab('knowledges') },
+    disciplines: Array.from({ length: 6 }, () => ({ name: '', val: 0 })),
+    backgrounds: Array.from({ length: 6 }, () => ({ name: '', val: 0 })),
+    virtues: { conscience: 1, selfcontrol: 1, courage: 1 },
+    meritsFlaws: '',
+    humanity: 7, path: 'Человечность',
+    willpower: { permanent: 1, temp: Array(10).fill(false) },
+    bloodPool: Array(20).fill(false), bloodPerTurn: 1,
+    health: { bruised: false, hurt: false, injured: false, wounded: false, mauled: false, crippled: false, incapacitated: false },
+    flaw: '', experience: { total: 0, spent: 0 },
+  };
+}
+
+function _v20PickClamped(o, max) {
+  const r = {};
+  if (o && typeof o === 'object') for (const k in o) r[k] = _clamp(o[k], 0, max);
+  return r;
+}
+function _v20PadSlots(arr, n) {
+  const out = Array.from({ length: n }, () => ({ name: '', val: 0 }));
+  if (Array.isArray(arr)) arr.slice(0, n).forEach((x, i) => { out[i] = { name: String(x?.name || ''), val: _clamp05(x?.val) }; });
+  return out;
+}
+
+// Fill a fresh default with whatever a (possibly partial / legacy) model provides.
+function _v20Normalize(m) {
+  const e = _v20Empty(m?.lineage || 'vampires');
+  if (!m || typeof m !== 'object') return e;
+  if (m.lineage) e.lineage = m.lineage;
+  Object.assign(e.header, m.header || {});
+  for (const g of ['physical', 'social', 'mental']) Object.assign(e.attributes[g], _v20PickClamped(m.attributes?.[g], 5));
+  for (const g of ['talents', 'skills', 'knowledges']) {
+    const src = Array.isArray(m.abilities?.[g]) ? m.abilities[g] : [];
+    e.abilities[g] = e.abilities[g].map((slot, i) => {
+      const s = src[i];
+      return { name: slot.fixed ? slot.name : String(s?.name || ''), val: _clamp05(s?.val ?? slot.val), fixed: slot.fixed };
+    });
+  }
+  e.disciplines = _v20PadSlots(m.disciplines, 6);
+  e.backgrounds = _v20PadSlots(m.backgrounds, 6);
+  Object.assign(e.virtues, _v20PickClamped(m.virtues, 5));
+  if (typeof m.meritsFlaws === 'string') e.meritsFlaws = m.meritsFlaws;
+  if (m.humanity != null) e.humanity = _clamp(m.humanity, 0, 10);
+  if (m.path) e.path = m.path;
+  if (m.willpower) { e.willpower.permanent = _clamp(m.willpower.permanent, 0, 10); e.willpower.temp = _boolArr(m.willpower.temp, 10); }
+  if (m.bloodPool) e.bloodPool = _boolArr(m.bloodPool, 20);
+  if (m.bloodPerTurn != null) e.bloodPerTurn = _num(m.bloodPerTurn, 1);
+  Object.assign(e.health, m.health || {});
+  if (typeof m.flaw === 'string') e.flaw = m.flaw;
+  if (m.experience) { e.experience.total = _num(m.experience.total, 0); e.experience.spent = _num(m.experience.spent, 0); }
+  return e;
+}
+
+// Best-effort parse of the AI markdown sheet into the structured model.
+function _v20ParseMd(md, lineage) {
+  const m = _v20Empty(lineage || 'vampires');
+  if (!md) return m;
+  const lines = md.replace(/\r\n/g, '\n').split('\n');
+  let sec = '', sub = '', mm;
+  const rows = [];
+  for (const ln of lines) {
+    if ((mm = ln.match(/^##\s+(.+)$/)))  { sec = mm[1].replace(/[#*]/g, '').trim().toLowerCase(); sub = ''; continue; }
+    if ((mm = ln.match(/^###\s+(.+)$/))) { sub = mm[1].replace(/[#*]/g, '').trim().toLowerCase(); continue; }
+    if (!/^\s*\|/.test(ln) || /\|\s*:?-{3,}/.test(ln)) continue;
+    const cells = ln.split('|').slice(1, -1).map(c => c.trim());
+    if (cells.length < 2) continue;
+    const name = cells[0].replace(/\*\*/g, '').trim();
+    if (!name) continue;
+    // Skip table header rows — their «●» header cell would parse as a rating of 1.
+    if (/^(способност|характеристик|атрибут|дисциплин|факт биографии|backgrounds|предыстор|добродетел|параметр|ритуал|оружие|уровень|значение|название|поле)/i.test(name)) continue;
+    const rating = _parseRatingCells(cells);
+    rows.push({ sec, sub, name, nameNorm: _v20Norm(name), nameLow: name.toLowerCase(), val: rating ? rating.value : null, cells });
+  }
+  const findRow = ru => { const t = ru.toLowerCase(); return rows.find(r => r.nameNorm === t || r.nameNorm.startsWith(t)); };
+
+  // Header
+  const hmap = { 'имя': 'name', 'игрок': 'player', 'хроника': 'chronicle', 'натура': 'nature', 'маска': 'demeanor', 'амплуа': 'concept', 'клан': 'clan', 'поколение': 'generation', 'сир': 'sire' };
+  for (const r of rows) {
+    const key = hmap[r.nameNorm];
+    if (key) { const v = (r.cells[1] || '').replace(/\*\*/g, '').trim(); if (v && v !== '—') m.header[key] = v; }
+  }
+  // Attributes
+  for (const g of ['physical', 'social', 'mental']) for (const [k, ru] of V20_ATTRS[g]) { const r = findRow(ru); if (r && r.val != null) m.attributes[g][k] = r.val; }
+  // Abilities (fixed + up to 2 custom extras per group)
+  const groupRe = { talents: /талант/, skills: /навык/, knowledges: /знани/ };
+  for (const g of ['talents', 'skills', 'knowledges']) {
+    const used = new Set();
+    V20_ABILITIES[g].forEach((ru, i) => { const r = findRow(ru); if (r) { used.add(r); if (r.val != null) m.abilities[g][i].val = r.val; } });
+    const extras = rows.filter(r => groupRe[g].test(r.sub) && r.val != null && !used.has(r)
+      && !V20_ABILITIES[g].some(ru => _v20Norm(ru) === r.nameNorm));
+    let ei = 10;
+    for (const r of extras) { if (ei > 11) break; m.abilities[g][ei] = { name: r.name.replace(/\*\*/g, '').trim(), val: r.val }; ei++; }
+  }
+  // Disciplines / Backgrounds (ordered, name + dots)
+  const disc = rows.filter(r => /дисциплин/.test(r.sub) && r.val != null).slice(0, 6);
+  disc.forEach((r, i) => { m.disciplines[i] = { name: r.name.replace(/\*\*/g, '').trim(), val: r.val }; });
+  const bg = rows.filter(r => /(факт биографии|backgrounds|предыстор)/.test(r.sub) && r.val != null).slice(0, 6);
+  bg.forEach((r, i) => { m.backgrounds[i] = { name: r.name.replace(/\*\*/g, '').trim(), val: r.val }; });
+  // Virtues
+  for (const r of rows) {
+    if (!/добродетел/.test(r.sub) || r.val == null) continue;
+    if (/совесть|решимост/.test(r.nameNorm)) m.virtues.conscience = r.val;
+    else if (/самоконтрол|инстинкт/.test(r.nameNorm)) m.virtues.selfcontrol = r.val;
+    else if (/смелост|courage/.test(r.nameNorm)) m.virtues.courage = r.val;
+  }
+  // Derived (numbers may exceed 5 → read the numeric cell directly)
+  for (const r of rows) {
+    if (!/производные/.test(r.sec)) continue;
+    const numC = r.cells.find((c, idx) => idx > 0 && /^\d+$/.test(c));
+    const n = numC != null ? parseInt(numC, 10) : null;
+    if (/столп/.test(r.nameLow)) { const v = (r.cells[1] || '').trim(); if (v && v !== '—') m.path = v; }
+    else if (/человечност|путь/.test(r.nameLow) && n != null) m.humanity = Math.min(10, n);
+    else if (/постоянн/.test(r.nameLow) && n != null) m.willpower.permanent = Math.min(10, n);
+    else if (/временн/.test(r.nameLow) && n != null) m.willpower.temp = _fillBoxes(10, Math.min(10, n));
+    else if (/(запас крови|blood pool)/.test(r.nameLow) && n != null) m.bloodPool = _fillBoxes(20, Math.min(20, n));
+    else if (/(предел траты|blood\/turn)/.test(r.nameLow) && n != null) m.bloodPerTurn = n;
+  }
+  return m;
+}
+
+function _v20ModelFrom(d) {
+  if (d && d.source === 'json' && d.data) { const m = _v20Normalize(d.data); m.lineage = d.lineage || m.lineage; return m; }
+  if (d && d.source === 'md') return _v20ParseMd(d.md, d.lineage);
+  return _v20Empty(d?.lineage || 'vampires');
+}
+
+// ── Path get/set helpers (dotted, array-index aware) ──────────────────────────
+function _v20Get(obj, path) { return path.split('.').reduce((o, k) => (o == null ? o : o[k]), obj); }
+function _v20Set(obj, path, val) {
+  const keys = path.split('.'); const last = keys.pop();
+  const tgt = keys.reduce((o, k) => (o[k] ??= {}), obj);
+  tgt[last] = val;
+}
+
+// ── Render fragments ──────────────────────────────────────────────────────────
+function _v20DotsHtml(dpath, val, max = 5) {
+  let s = `<span class="v20-dots" data-dpath="${dpath}" data-max="${max}">`;
+  for (let dd = 1; dd <= max; dd++) s += `<span class="v20-dot${dd <= val ? ' on' : ''}" data-d="${dd}" role="radio" aria-checked="${dd === val}" tabindex="0"></span>`;
+  return s + `<span class="v20-dot-num">${val}</span></span>`;
+}
+function _v20DotRow(label, dpath, val, max = 5) {
+  return `<div class="v20-row"><span class="v20-row-name">${escHtml(label)}</span>${_v20DotsHtml(dpath, val, max)}</div>`;
+}
+function _v20NamedDotRow(namePath, nameVal, dpath, val) {
+  return `<div class="v20-row v20-named"><input class="v20-line-input" data-tpath="${namePath}" value="${escAttr(nameVal)}" placeholder="…">${_v20DotsHtml(dpath, val)}</div>`;
+}
+function _v20BoxesHtml(bpath, arr) {
+  return `<span class="v20-boxes">${arr.map((on, i) => `<input type="checkbox" class="v20-box" data-bpath="${bpath}" data-i="${i}"${on ? ' checked' : ''}>`).join('')}</span>`;
+}
+function _v20Field(label, tpath, val, extra = '') {
+  return `<label class="v20-field"><span class="v20-field-lbl">${escHtml(label)}</span><input class="v20-field-input" data-tpath="${tpath}" value="${escAttr(val || '')}"${extra}></label>`;
+}
+
+function _v20RenderSheet(panel, charName) {
+  const m = _v20Model;
+  const isVamp = (m.lineage || '') === 'vampires';
+
+  const attrCol = g => `<div class="v20-col"><div class="v20-col-title">${V20_ATTR_GROUP_LABELS[g]}</div>${V20_ATTRS[g].map(([k, ru]) => _v20DotRow(ru, `attributes.${g}.${k}`, m.attributes[g][k])).join('')}</div>`;
+  const abilCol = g => {
+    const rows = m.abilities[g].map((slot, i) => slot.fixed
+      ? _v20DotRow(slot.name, `abilities.${g}.${i}.val`, slot.val)
+      : _v20NamedDotRow(`abilities.${g}.${i}.name`, slot.name, `abilities.${g}.${i}.val`, slot.val)).join('');
+    return `<div class="v20-col"><div class="v20-col-title">${V20_ABILITY_GROUP_LABELS[g]}</div>${rows}</div>`;
+  };
+
+  const header = `
+    <div class="v20-header">
+      ${_v20Field('Имя', 'header.name', m.header.name)}
+      ${_v20Field('Натура', 'header.nature', m.header.nature)}
+      ${isVamp ? _v20Field('Клан', 'header.clan', m.header.clan) : _v20Field('Концепция', 'header.concept', m.header.concept)}
+      ${_v20Field('Игрок', 'header.player', m.header.player)}
+      ${_v20Field('Маска', 'header.demeanor', m.header.demeanor)}
+      ${isVamp ? _v20Field('Поколение', 'header.generation', m.header.generation) : _v20Field('—', 'header._x1', '')}
+      ${_v20Field('Хроника', 'header.chronicle', m.header.chronicle)}
+      ${_v20Field('Амплуа', 'header.concept', m.header.concept)}
+      ${isVamp ? _v20Field('Сир', 'header.sire', m.header.sire) : _v20Field('—', 'header._x2', '')}
+    </div>`;
+
+  const attributes = `
+    <div class="v20-band">Характеристики</div>
+    <div class="v20-grid3">${attrCol('physical')}${attrCol('social')}${attrCol('mental')}</div>`;
+
+  const abilities = `
+    <div class="v20-band">Способности</div>
+    <div class="v20-grid3">${abilCol('talents')}${abilCol('skills')}${abilCol('knowledges')}</div>`;
+
+  const discCol = `<div class="v20-col"><div class="v20-col-title">Дисциплины</div>${m.disciplines.map((d, i) => _v20NamedDotRow(`disciplines.${i}.name`, d.name, `disciplines.${i}.val`, d.val)).join('')}</div>`;
+  const bgCol = `<div class="v20-col"><div class="v20-col-title">Факты биографии</div>${m.backgrounds.map((b, i) => _v20NamedDotRow(`backgrounds.${i}.name`, b.name, `backgrounds.${i}.val`, b.val)).join('')}</div>`;
+  const virtCol = `<div class="v20-col"><div class="v20-col-title">Добродетели</div>
+      ${_v20DotRow('Совесть/Решимость', 'virtues.conscience', m.virtues.conscience)}
+      ${_v20DotRow('Самоконтроль/Инстинкты', 'virtues.selfcontrol', m.virtues.selfcontrol)}
+      ${_v20DotRow('Смелость', 'virtues.courage', m.virtues.courage)}</div>`;
+  const advantages = `
+    <div class="v20-band">Преимущества</div>
+    <div class="v20-grid3">${isVamp ? discCol : ''}${bgCol}${virtCol}</div>`;
+
+  const healthRows = V20_HEALTH.map(([k, ru, pen]) =>
+    `<label class="v20-health-row"><input type="checkbox" class="v20-box" data-bpath="health.${k}"${m.health[k] ? ' checked' : ''}><span class="v20-health-name">${escHtml(ru)}</span><span class="v20-health-pen">${escHtml(pen)}</span></label>`).join('');
+
+  const bottom = `
+    <div class="v20-band">Преимущества и состояние</div>
+    <div class="v20-grid3 v20-bottom">
+      <div class="v20-col">
+        <div class="v20-col-title">Достоинства и недостатки</div>
+        <textarea class="v20-textarea" data-tpath="meritsFlaws" rows="6" placeholder="По строке на пункт…">${escHtml(m.meritsFlaws)}</textarea>
+        <div class="v20-col-title" style="margin-top:12px">Изъян</div>
+        <input class="v20-field-input" data-tpath="flaw" value="${escAttr(m.flaw)}">
+      </div>
+      <div class="v20-col">
+        <div class="v20-stat-block">
+          <div class="v20-stat-title">Человечность / Путь</div>
+          ${_v20DotsHtml('humanity', m.humanity, 10)}
+          <input class="v20-line-input v20-path" data-tpath="path" value="${escAttr(m.path)}" placeholder="Столп (Путь)">
+        </div>
+        <div class="v20-stat-block">
+          <div class="v20-stat-title">Воля</div>
+          ${_v20DotsHtml('willpower.permanent', m.willpower.permanent, 10)}
+          ${_v20BoxesHtml('willpower.temp', m.willpower.temp)}
+        </div>
+        ${isVamp ? `<div class="v20-stat-block">
+          <div class="v20-stat-title">Запас крови</div>
+          ${_v20BoxesHtml('bloodPool', m.bloodPool)}
+          <label class="v20-inline-field">Предел траты в ход <input class="v20-mini-input" data-tpath="bloodPerTurn" value="${escAttr(m.bloodPerTurn)}"></label>
+        </div>` : ''}
+      </div>
+      <div class="v20-col">
+        <div class="v20-col-title">Здоровье</div>
+        <div class="v20-health">${healthRows}</div>
+        <div class="v20-stat-block" style="margin-top:12px">
+          <div class="v20-stat-title">Опыт</div>
+          <label class="v20-inline-field">Всего <input class="v20-mini-input" data-tpath="experience.total" data-exp value="${escAttr(m.experience.total)}"></label>
+          <label class="v20-inline-field">Потрачено <input class="v20-mini-input" data-tpath="experience.spent" data-exp value="${escAttr(m.experience.spent)}"></label>
+          <label class="v20-inline-field">Остаток <span class="v20-exp-remain" id="v20-exp-remain">${_num(m.experience.total, 0) - _num(m.experience.spent, 0)}</span></label>
+        </div>
+      </div>
+    </div>`;
+
+  panel.innerHTML = `
+    <div class="cdet-sheet-toolbar">
+      <button class="cdet-sheet-btn primary" id="v20-save" disabled>💾 Сохранено</button>
+      <button class="cdet-sheet-btn" id="v20-regen">♻ Перегенерировать ИИ</button>
+      <span class="v20-status" id="v20-status"></span>
+    </div>
+    <div class="v20-sheet">${header}${attributes}${abilities}${advantages}${bottom}</div>
+    <div class="v20-foot">Создание: Характеристики 7/5/3 · Способности 13/9/5 · Дисциплины 3 · Факты биографии 5 · Добродетели 7 · Свободные пункты 15</div>`;
+
+  document.getElementById('v20-save').addEventListener('click', _v20Save);
+  document.getElementById('v20-regen').addEventListener('click', e => _v20Regen(e.currentTarget));
+  _v20BindPanel(panel);
+}
+
+function _v20RebuildDots(span, val) {
+  const max = +span.dataset.max || 5;
+  span.querySelectorAll('.v20-dot').forEach(dot => {
+    const d = +dot.dataset.d;
+    dot.classList.toggle('on', d <= val);
+    dot.setAttribute('aria-checked', d === val);
+  });
+  const num = span.querySelector('.v20-dot-num');
+  if (num) num.textContent = val;
+}
+
+function _v20BindPanel(panel) {
+  if (panel._v20Bound) return;
+  panel._v20Bound = true;
+  const onDot = dot => {
+    const span = dot.closest('.v20-dots'); if (!span) return;
+    const dpath = span.dataset.dpath, d = +dot.dataset.d;
+    const cur = _v20Get(_v20Model, dpath) || 0;
+    const nv = (cur === d) ? d - 1 : d;     // click filled max → step down; else set to d
+    _v20Set(_v20Model, dpath, nv);
+    _v20RebuildDots(span, nv);
+    _v20MarkDirty();
+  };
+  panel.addEventListener('click', e => { const dot = e.target.closest('.v20-dot'); if (dot) onDot(dot); });
+  panel.addEventListener('keydown', e => {
+    const dot = e.target.closest('.v20-dot');
+    if (dot && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); onDot(dot); }
+  });
+  panel.addEventListener('change', e => {
+    const box = e.target.closest('.v20-box'); if (!box) return;
+    const bp = box.dataset.bpath;
+    if (box.dataset.i !== undefined) { const arr = _v20Get(_v20Model, bp) || []; arr[+box.dataset.i] = box.checked; _v20Set(_v20Model, bp, arr); }
+    else _v20Set(_v20Model, bp, box.checked);
+    _v20MarkDirty();
+  });
+  panel.addEventListener('input', e => {
+    const t = e.target.closest('[data-tpath]'); if (!t) return;
+    _v20Set(_v20Model, t.dataset.tpath, t.value);
+    if (t.dataset.exp !== undefined) {
+      const el = document.getElementById('v20-exp-remain');
+      if (el) el.textContent = _num(_v20Model.experience.total, 0) - _num(_v20Model.experience.spent, 0);
+    }
+    _v20MarkDirty();
+  });
+}
+
+function _v20MarkDirty() {
+  _v20DirtyFlag = true;
+  const btn = document.getElementById('v20-save');
+  const st = document.getElementById('v20-status');
+  if (btn) { btn.disabled = false; btn.textContent = '💾 Сохранить'; }
+  if (st) { st.textContent = '● Не сохранено'; st.className = 'v20-status dirty'; }
+}
+
+async function _v20Save() {
+  const btn = document.getElementById('v20-save'), st = document.getElementById('v20-status');
+  btn.disabled = true; const old = btn.textContent; btn.textContent = '⏳ Сохранение…';
+  // Coerce numeric text fields before persisting
+  _v20Model.experience.total = _num(_v20Model.experience.total, 0);
+  _v20Model.experience.spent = _num(_v20Model.experience.spent, 0);
+  _v20Model.bloodPerTurn = _num(_v20Model.bloodPerTurn, 0);
+  try {
+    const r = await fetch(`/api/characters/${encodeURIComponent(_v20Ctx.name)}/sheet-data${location.search}`,
+      { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ data: _v20Model }) }
+    ).then(r => r.json());
+    if (!r.ok) throw new Error(r.error || 'не удалось');
+    _v20DirtyFlag = false;
+    btn.textContent = '💾 Сохранено'; btn.disabled = true;
+    if (st) { st.textContent = '✓ Сохранено'; st.className = 'v20-status ok'; }
+  } catch (e) {
+    btn.disabled = false; btn.textContent = old;
+    if (st) { st.textContent = '✗ ' + e.message; st.className = 'v20-status err'; }
+  }
+}
+
+async function _v20Regen(btn) {
+  if (_v20DirtyFlag && !confirm('Есть несохранённые правки. Перегенерировать числа из ИИ-листа и потерять их?')) return;
+  if (!confirm('Перегенерировать числа из ИИ-листа? Текущие значения формы будут заменены.')) return;
+  const old = btn.textContent; btn.disabled = true; btn.textContent = '⏳ ИИ…';
+  try {
+    const ok = await _generateSheet({ scope: 'character', name: _v20Ctx.name }, null);
+    if (!ok) throw new Error('генерация не удалась');
+    const q = location.search ? location.search + '&fromMd=1' : '?fromMd=1';
+    const d = await fetch(`/api/characters/${encodeURIComponent(_v20Ctx.name)}/sheet-data${q}`).then(r => r.json());
+    _v20Model = _v20ModelFrom(d);
+    _v20DirtyFlag = false;
+    _v20RenderSheet(document.getElementById('cdet-sheet-panel'), _v20Ctx.name);
+  } catch (e) {
+    alert('Ошибка: ' + e.message);
+    btn.disabled = false; btn.textContent = old;
+  }
+}
+
+let _v20Model = null, _v20Ctx = null, _v20DirtyFlag = false;
 async function _loadCharSheet(charName) {
   const panel = document.getElementById('cdet-sheet-panel');
   if (!panel) return;
   panel.dataset.loaded = '1';
   panel.innerHTML = '<div class="loading-state"><div class="spinner"></div>Загрузка листа…</div>';
+  _v20Ctx = { name: charName }; _v20DirtyFlag = false;
   let d;
-  try { d = await fetch(`/api/characters/${encodeURIComponent(charName)}/sheet${location.search}`).then(r => r.json()); }
+  try { d = await fetch(`/api/characters/${encodeURIComponent(charName)}/sheet-data${location.search}`).then(r => r.json()); }
   catch (e) { panel.innerHTML = `<div class="cdet-empty">Ошибка загрузки: ${escHtml(e.message)}</div>`; return; }
-
-  const has = d.exists && d.content;
-  const ctx = { scope: 'character', name: charName, onSaved: () => _loadCharSheet(charName) };
-  const toolbar = has
-    ? `<button class="cdet-sheet-btn" data-sheet-act="regen">♻ Перегенерировать</button>
-       <button class="cdet-sheet-btn" data-sheet-act="edit">✏ Редактировать</button>`
-    : `<button class="cdet-sheet-btn primary" data-sheet-act="gen">📋 Сгенерировать лист</button>`;
-  panel.innerHTML =
-    `<div class="cdet-sheet-toolbar">${toolbar}</div>
-     <div class="cdet-sheet-body">${ has ? renderLoreMd(_stripSheetHeader(d.content)) : '<div class="cdet-empty">Лист ещё не сгенерирован — нажми «Сгенерировать лист».</div>' }</div>`;
-  panel.querySelectorAll('[data-sheet-act]').forEach(b => b.addEventListener('click', async () => {
-    const act = b.dataset.sheetAct;
-    if (act === 'edit') { openSheetOverlay(ctx, 'edit'); return; }
-    if (act === 'regen' && !confirm('Перегенерировать лист? Текущий будет перезаписан.')) return;
-    await _generateSheet(ctx, b);
-  }));
+  _v20Model = _v20ModelFrom(d);
+  _v20RenderSheet(panel, charName);
 }
 
 // ═══════════════════ V20 sheet: generate · view · edit (dot-radio) ═══════════════════
@@ -4404,7 +4899,7 @@ function _sheetApi(ctx) {
   return { get: base + qs, gen: base + '/generate' + qs, put: base + qs };
 }
 
-const _SHEET_EDIT_SECTIONS = /атрибут|способност|преимуществ|дисциплин|предыстор|добродетел/i;
+const _SHEET_EDIT_SECTIONS = /атрибут|способност|преимуществ|дисциплин|предыстор|добродетел|(?<!производные )характеристик/i;
 function _sheetDots(v) { v = Math.max(0, Math.min(5, v | 0)); return '●'.repeat(v) + '○'.repeat(5 - v); }
 
 // Find which cells of a table row carry a 0–5 rating (dots / number / combined).

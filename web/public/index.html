@@ -23,7 +23,10 @@
     </div>
 
     <div class="city-switch">
-      <label for="city-select">🏙️ Город</label>
+      <div class="city-switch-head">
+        <label for="city-select">🏙️ Город</label>
+        <button type="button" class="city-switch-add" id="btn-city-add" title="Новый город" data-nav="tools" data-tab="new-city">+</button>
+      </div>
       <select id="city-select"></select>
     </div>
 
@@ -498,7 +501,7 @@
       </div>
 
       <div class="tab-bar">
-        <button class="tab-btn active" data-tab="new-city">Новый домен</button>
+        <button class="tab-btn active" data-tab="new-city">Домены</button>
         <button class="tab-btn" data-tab="new-npc">Новый НПС</button>
         <button class="tab-btn" data-tab="new-module">Модуль</button>
         <button class="tab-btn" data-tab="log-session">📓 Сессия</button>
@@ -507,22 +510,52 @@
         <button class="tab-btn" data-tab="ai-settings">🤖 Модели AI</button>
       </div>
 
-      <!-- New City -->
+      <!-- Cities -->
       <div class="tab-panel active" id="tab-new-city">
+        <div id="cities-grid" class="cities-grid">
+          <div class="loading-state"><div class="spinner"></div>Загрузка...</div>
+        </div>
+
+        <h2 class="tools-section-title">Создать новый домен</h2>
         <div class="form-row">
           <div class="form-group">
-            <label class="form-label">Город *</label>
+            <label class="form-label">Город *<span class="field-tip" tabindex="0" data-tip="Название города на русском — станет заголовком city.md. Папка cities/&lt;slug&gt;/ создаётся автоматически транслитерацией названия.">ⓘ</span></label>
             <input class="form-control" id="city-name" placeholder="Берлин" type="text">
+            <p class="form-hint">Слаг папки: <code id="city-slug-preview">—</code></p>
           </div>
           <div class="form-group">
-            <label class="form-label">Год *</label>
+            <label class="form-label">Год *<span class="field-tip" tabindex="0" data-tip="Год, в котором разворачивается хроника (например 2010). Используется в заголовках city.md и карточек персонажей/локаций — на механику не влияет.">ⓘ</span></label>
             <input class="form-control" id="city-year" placeholder="2010" type="text" maxlength="4">
           </div>
         </div>
         <div class="form-group">
+          <label class="form-label">Политический ландшафт<span class="field-tip" tabindex="0" data-tip="Кто реально держит власть: Князь/Принц, Примогены, Шериф, оппозиция. Баланс сил и тлеющие конфликты между фракциями — то, с чем Рассказчик сверяется перед каждой сценой. Один пункт на строку.">ⓘ</span></label>
+          <textarea class="form-control" id="city-political" rows="3" placeholder="Кто правит, баланс фракций, ключевые конфликты (по строке на пункт)"></textarea>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Ключевые локации<span class="field-tip" tabindex="0" data-tip="Элизиум и другие места силы, опасные и нейтральные территории — площадки, которые стоит держать в уме при выборе мест для сцен. Один пункт на строку.">ⓘ</span></label>
+          <textarea class="form-control" id="city-locations" rows="3" placeholder="Элизиум, опасные/нейтральные территории"></textarea>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Лейтмотивы и атмосфера<span class="field-tip" tabindex="0" data-tip="2–3 детали, которые делают сцену именно этим городом, а не «городом в Европе»: архитектура, погода, общее настроение хроники. Один пункт на строку.">ⓘ</span></label>
+          <textarea class="form-control" id="city-leitmotif" rows="3" placeholder="Что делает этот город именно этим городом"></textarea>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Специфика ответа<span class="field-tip" tabindex="0" data-tip="Язык общения НПС, имена Князей и других ключевых фигур, местные обычаи и сленг — то, что должно проявляться в любой сцене этого города. Один пункт на строку.">ⓘ</span></label>
+          <textarea class="form-control" id="city-specifics" rows="3" placeholder="Язык, имена Князей, локальные обычаи"></textarea>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Чего избегать<span class="field-tip" tabindex="0" data-tip="Табу и нежелательные клише именно для этого домена: где канон неоднозначен, какие сюжеты не подходят сеттингу. Один пункт на строку.">ⓘ</span></label>
+          <textarea class="form-control" id="city-avoid" rows="3" placeholder="Табу, нежелательные клише"></textarea>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Источники<span class="field-tip" tabindex="0" data-tip="На какие книги или материалы опираться при сверке канона для этого домена (например V20, конкретные сплэтбуки). Один пункт на строку.">ⓘ</span></label>
+          <textarea class="form-control" id="city-sources" rows="2" placeholder="На что опираться при сверке канона"></textarea>
+        </div>
+        <div class="form-group">
           <label class="form-label">Районы (через запятую)</label>
           <input class="form-control" id="city-districts" placeholder="Митте, Кройцберг, Прензлауэр Берг">
-          <p class="form-hint">Будут созданы папки в locations/ для каждого района</p>
+          <p class="form-hint">Создаст пустые папки district_NN/&lt;район&gt;/ в locations/</p>
         </div>
         <button class="btn-submit" id="btn-new-city">Создать домен</button>
         <pre class="output-area" id="out-new-city"></pre>
@@ -878,6 +911,14 @@
   <div class="modal-box modal-module-detail">
     <button class="modal-close" id="module-detail-close" aria-label="Закрыть">✕</button>
     <div id="module-detail-content"></div>
+  </div>
+</div>
+
+<!-- ── City Detail Modal ── -->
+<div id="city-detail-modal" class="modal-overlay">
+  <div class="modal-box modal-module-detail">
+    <button class="modal-close" id="city-detail-close" aria-label="Закрыть">✕</button>
+    <div id="city-detail-content"></div>
   </div>
 </div>
 

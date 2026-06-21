@@ -1,14 +1,17 @@
 #!/usr/bin/env node
 'use strict';
 // Создаёт каркас нового города в cities/<slug>/ (нейтральный, без привязки к домену).
-// Запуск:  node tools/new_city.js <slug> "<Название>" [год]
+// Запуск:  node tools/new_city.js <slug> "<Название>" [год] [политика] [локации] [лейтмотивы] [специфика] [избегать] [источники] [районы]
 //   slug — ASCII [a-z0-9_]; пример:  node tools/new_city.js london "Лондон" 2010
+//   текстовые поля — многострочные (по строке на пункт), районы — список через запятую.
 
 const fs = require('fs'), path = require('path'), ROOT = path.resolve(__dirname, '..');
+const { slugify } = require('../web/lib/parsers');
 
 const slug = (process.argv[2] || '').toLowerCase();
 const display = process.argv[3] || slug;
 const year = process.argv[4] || '20XX';
+const [political, locationsTxt, leitmotif, specifics, avoid, sources, districtsCsv] = process.argv.slice(5);
 if (!/^[a-z0-9_]+$/.test(slug)) {
   console.error('Использование: node tools/new_city.js <slug:[a-z0-9_]> "<Название>" [год]');
   process.exit(1);
@@ -19,21 +22,35 @@ if (fs.existsSync(base)) { console.error(`Город "${slug}" уже сущес
 const W = (rel, txt) => { const a = path.join(base, rel); fs.mkdirSync(path.dirname(a), { recursive: true }); fs.writeFileSync(a, txt, 'utf8'); };
 const KEEP = rel => { const a = path.join(base, rel, '.gitkeep'); fs.mkdirSync(path.dirname(a), { recursive: true }); fs.writeFileSync(a, ''); };
 
+// Многострочный ввод из формы → маркированный список; пусто → плейсхолдер.
+const section = txt => {
+  const lines = (txt || '').split('\n').map(l => l.trim()).filter(Boolean);
+  return lines.length ? lines.map(l => l.startsWith('-') ? l : `- ${l}`).join('\n') : '- …';
+};
+
 W('city.md',
 `# ${display}, ${year} — сеттинг города
 
-> Шаблон. Опиши здесь свой домен: политический ландшафт, ключевые фракции и локации,
-> атмосферу, лейтмотивы, чего избегать, источники. Этот файл — то, с чем сверяется
-> Рассказчик перед сценой (см. CLAUDE.md → «Активный город»).
+> Опиши здесь свой домен — то, с чем сверяется Рассказчик перед сценой
+> (см. CLAUDE.md → «Активный город»).
 
 ## Политический ландшафт
-- …
+${section(political)}
 
 ## Ключевые локации
-- …
+${section(locationsTxt)}
+
+## Лейтмотивы и атмосфера
+${section(leitmotif)}
+
+## Специфика ответа
+${section(specifics)}
 
 ## Чего избегать
-- …
+${section(avoid)}
+
+## Источники
+${section(sources)}
 `);
 
 W('archive/events.md',
@@ -88,8 +105,17 @@ W('archive/visitors.md',
 
 for (const lin of ['vampires', 'fairies', 'mortals', 'werewolves', 'mages', 'hunters']) KEEP(`characters/${lin}`);
 KEEP('chronicles');
-KEEP('locations');
 KEEP('rules');
+
+const districts = (districtsCsv || '').split(',').map(d => d.trim()).filter(Boolean);
+if (districts.length) {
+  districts.forEach((d, i) => {
+    const num = String(i + 1).padStart(2, '0');
+    KEEP(`locations/district_${num}/${slugify(d) || `rayon_${num}`}`);
+  });
+} else {
+  KEEP('locations');
+}
 
 console.log(`✓ Город «${display}» создан: cities/${slug}/`);
 console.log(`  Дальше: опиши cities/${slug}/city.md, добавь персонажей (system/rules/npcs_city.md),`);
