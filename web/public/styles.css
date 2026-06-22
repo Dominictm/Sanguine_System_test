@@ -1712,7 +1712,8 @@ select.form-control {
   .mod-fill-add-btn, .chd-recap-btn, .chr-modal-btn, .modp-back-btn,
   .modp-gen-btn, .modp-close-btn, .modp-del-btn, .chr-delete-btn,
   .chp-create-btn, .btn-create-char, .filter-select, .filter-input,
-  .form-control, .ais-input, .ais-select, .chr-form-input {
+  .form-control, .ais-input, .ais-select, .chr-form-input,
+  .city-edit-btn, .city-del-btn, .mod-gen-scenario-btn {
     min-height: 44px;
   }
 
@@ -1980,7 +1981,7 @@ a:focus-visible {
 
 /* ── Char Detail Modal ─────────────────────────────────────── */
 .modal-detail {
-  width: min(1000px, 96vw);
+  width: min(1300px, 96vw);
   height: min(82vh, 754px);
   padding: 0;
   overflow: hidden;
@@ -2758,6 +2759,57 @@ a:focus-visible {
   border-color: rgba(139, 0, 0, .35);
   background: rgba(139, 0, 0, .07);
 }
+
+/* ── City edit / delete (city detail modal) ── */
+.city-detail-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+.city-edit-btn,
+.city-del-btn {
+  font-family: var(--f-heading);
+  font-size: var(--fs-2xs);
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  padding: 6px 12px;
+  border-radius: 2px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background .15s, border-color .15s, color .15s;
+}
+.city-edit-btn {
+  background: rgba(184, 134, 11, .12);
+  border: 1px solid rgba(184, 134, 11, .4);
+  color: var(--gold);
+}
+.city-edit-btn:hover { background: rgba(184, 134, 11, .24); border-color: var(--gold2); }
+.city-del-btn {
+  background: transparent;
+  border: 1px solid rgba(139, 0, 0, .4);
+  color: var(--accent2);
+}
+.city-del-btn:hover { background: rgba(139, 0, 0, .14); border-color: var(--c-danger); color: var(--c-danger-text); }
+
+.city-edit-tabs { margin-top: 12px; }
+.city-edit-panel { display: none; padding: 20px 23px; }
+.city-edit-panel.active { display: block; }
+.city-md-editor {
+  width: 100%;
+  font-family: var(--f-mono);
+  font-size: var(--fs-sm);
+  line-height: 1.55;
+  resize: vertical;
+}
+.city-edit-footer {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 23px 18px;
+  border-top: 1px solid var(--border);
+}
+.city-edit-footer .btn-submit { width: auto; margin: 0; }
+.city-edit-status { font-size: var(--fs-sm); color: var(--accent2); }
 
 .chp-status-paused {
   color: var(--gold);

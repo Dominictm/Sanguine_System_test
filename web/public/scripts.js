@@ -1439,19 +1439,33 @@ document.getElementById('btn-new-city').addEventListener('click', async () => {
   const year = document.getElementById('city-year').value.trim();
   if (!city) { alert('Укажите название города'); return; }
   if (!year) { alert('Укажите год'); return; }
-  const slug = slugifyJS(city);
-  const args = [
-    slug, city, year,
-    document.getElementById('city-political').value.trim(),
-    document.getElementById('city-locations').value.trim(),
-    document.getElementById('city-leitmotif').value.trim(),
-    document.getElementById('city-specifics').value.trim(),
-    document.getElementById('city-avoid').value.trim(),
-    document.getElementById('city-sources').value.trim(),
-    document.getElementById('city-districts').value.trim(),
-  ];
-  const ok = await runNodeTool('new_city', args, 'out-new-city', document.getElementById('btn-new-city'));
-  if (ok) setTimeout(() => { location.search = 'city=' + encodeURIComponent(slug); }, 900);
+  const btn = document.getElementById('btn-new-city');
+  const out = document.getElementById('out-new-city');
+  const payload = {
+    name: city, year,
+    political:  document.getElementById('city-political').value.trim(),
+    locations:  document.getElementById('city-locations').value.trim(),
+    leitmotif:  document.getElementById('city-leitmotif').value.trim(),
+    specifics:  document.getElementById('city-specifics').value.trim(),
+    avoid:      document.getElementById('city-avoid').value.trim(),
+    sources:    document.getElementById('city-sources').value.trim(),
+    districts:  document.getElementById('city-districts').value.trim(),
+  };
+  btn.disabled = true; btn.textContent = '⏳ Создание...';
+  if (out) { out.className = 'output-area show'; out.textContent = ''; }
+  try {
+    const d = await fetch('/api/cities', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    }).then(r => r.json());
+    if (!d.ok) { if (out) out.innerHTML = `<span class="err">⚠ ${escHtml(d.error || 'Ошибка')}</span>`; return; }
+    if (out) out.innerHTML = `<span class="ok">✓ Создан: cities/${escHtml(d.slug)}/ — переключаюсь…</span>`;
+    setTimeout(() => { location.search = 'city=' + encodeURIComponent(d.slug); }, 900);
+  } catch (e) {
+    if (out) out.innerHTML = `<span class="err">⚠ ${escHtml(e.message)}</span>`;
+  } finally {
+    btn.disabled = false; btn.textContent = 'Создать домен';
+  }
 });
 
 // Vampire-only fields visible / clan+sect required only for vampires
@@ -1674,6 +1688,24 @@ document.getElementById('cities-grid')?.addEventListener('click', e => {
 // City Detail Modal
 // ═══════════════════════════════════════════════════════════════
 
+// Канонические секции city.md — зеркало CITY_SECTIONS в web/lib/parsers.js.
+const CITY_SECTION_DEFS = [
+  ['political',  'Политический ландшафт'],
+  ['locations',  'Ключевые локации'],
+  ['leitmotif',  'Лейтмотивы и атмосфера'],
+  ['specifics',  'Специфика ответа'],
+  ['avoid',      'Чего избегать'],
+  ['sources',    'Источники'],
+];
+let _cityDetail = null;  // { slug, cityMd, parsed, characters, modules, locations, active }
+
+// У города есть секции вне стандартного набора (рукописный city.md, как у Парижа)?
+function _cityHasCustomSections(cityMd) {
+  const known = new Set(CITY_SECTION_DEFS.map(([, h]) => h.toLowerCase()));
+  const headings = [...String(cityMd).matchAll(/^##\s+(.+?)\s*$/gm)].map(m => m[1].trim().toLowerCase());
+  return headings.some(h => !known.has(h));
+}
+
 async function openCityDetail(slug) {
   const modal   = document.getElementById('city-detail-modal');
   const content = document.getElementById('city-detail-content');
@@ -1685,17 +1717,22 @@ async function openCityDetail(slug) {
   catch { content.innerHTML = '<div class="cdet-empty" style="padding:40px">⚠ Не удалось загрузить город</div>'; return; }
   if (d.error) { content.innerHTML = `<div class="cdet-empty" style="padding:40px">${escHtml(d.error)}</div>`; return; }
 
-  const hm      = d.cityMd.match(/^#\s+(.+?)\s*$/m);
-  const display = hm ? hm[1].replace(/\s*—\s*сеттинг города/i, '').trim() : slug;
-  const body    = d.cityMd.replace(/^#\s+.+\n+/, ''); // заголовок уже показан в шапке модалки
+  _cityDetail = { ...d, slug, active: slug === CITY };
+  _renderCityView();
+}
+
+function _renderCityView() {
+  const d = _cityDetail;
+  const content = document.getElementById('city-detail-content');
+  const display = (d.parsed && d.parsed.display) || d.slug;
+  const body    = d.cityMd.replace(/^#\s+.+\n+/, ''); // заголовок уже в шапке модалки
 
   const meta = [
+    d.parsed && d.parsed.year ? `<span class="chp-meta-item">📅 ${escHtml(d.parsed.year)}</span>` : '',
     d.characters ? `<span class="chp-meta-item">🎭 ${d.characters} персонажей</span>` : '',
     d.modules    ? `<span class="chp-meta-item">📖 ${d.modules} модулей</span>` : '',
     d.locations  ? `<span class="chp-meta-item">📍 ${d.locations} локаций</span>` : '',
   ].filter(Boolean).join('');
-
-  const active = slug === CITY;
 
   content.innerHTML = `
     <div class="cdet-info-col mod-info-col">
@@ -1703,9 +1740,13 @@ async function openCityDetail(slug) {
         <div class="cdet-name">${escHtml(display)}</div>
         <div class="mod-modal-slug-row">
           ${meta ? `<div class="chp-card-meta">${meta}</div>` : ''}
-          ${active
+          ${d.active
             ? '<span class="chp-status chp-status-active">Активен</span>'
-            : `<button class="mod-gen-scenario-btn" data-switch-city="${escHtml(slug)}">Переключиться на этот город</button>`}
+            : `<button class="mod-gen-scenario-btn" data-switch-city="${escHtml(d.slug)}">Переключиться на этот город</button>`}
+        </div>
+        <div class="city-detail-actions">
+          <button class="city-edit-btn" data-city-edit>✏ Редактировать</button>
+          <button class="city-del-btn" data-city-delete title="Удалить домен">🗑 Удалить</button>
         </div>
       </div>
       <div class="cdet-panels">
@@ -1714,11 +1755,134 @@ async function openCityDetail(slug) {
     </div>`;
 }
 
-document.getElementById('city-detail-content').addEventListener('click', e => {
-  const btn = e.target.closest('[data-switch-city]');
-  if (!btn) return;
-  location.search = 'city=' + encodeURIComponent(btn.dataset.switchCity);
+function _renderCityEdit() {
+  const d = _cityDetail;
+  const content = document.getElementById('city-detail-content');
+  const sec = (d.parsed && d.parsed.sections) || {};
+  const custom = _cityHasCustomSections(d.cityMd);
+
+  const fieldRows = CITY_SECTION_DEFS.map(([key, heading]) => `
+    <div class="form-group">
+      <label class="form-label">${escHtml(heading)}</label>
+      <textarea class="form-control" data-city-field="${key}" rows="3"
+        placeholder="По строке на пункт…">${escHtml(sec[key] || '')}</textarea>
+    </div>`).join('');
+
+  content.innerHTML = `
+    <div class="cdet-info-col mod-info-col">
+      <div class="cdet-sticky-header">
+        <div class="cdet-name">Редактирование: ${escHtml((d.parsed && d.parsed.display) || d.slug)}</div>
+        <div class="cdet-tab-bar city-edit-tabs">
+          <button class="cdet-tab ${custom ? '' : 'active'}" data-city-tab="fields" ${custom ? 'disabled title="У города есть кастомные секции — правьте через Markdown, иначе они потеряются"' : ''}>Поля</button>
+          <button class="cdet-tab ${custom ? 'active' : ''}" data-city-tab="markdown">Markdown</button>
+        </div>
+      </div>
+      <div class="cdet-panels">
+        <div class="cdet-panel city-edit-panel ${custom ? '' : 'active'}" data-city-pane="fields">
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Название *</label>
+              <input class="form-control" data-city-field="display" type="text" value="${escAttr((d.parsed && d.parsed.display) || '')}">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Год</label>
+              <input class="form-control" data-city-field="year" type="text" maxlength="9" value="${escAttr((d.parsed && d.parsed.year) || '')}">
+            </div>
+          </div>
+          ${fieldRows}
+        </div>
+        <div class="cdet-panel city-edit-panel ${custom ? 'active' : ''}" data-city-pane="markdown">
+          ${custom ? '<div class="canon-warn" style="margin-bottom:10px">У этого города есть нестандартные секции — редактируйте полный markdown, чтобы ничего не потерять.</div>' : ''}
+          <textarea class="form-control city-md-editor" data-city-field="cityMd" rows="20" spellcheck="false">${escHtml(d.cityMd)}</textarea>
+        </div>
+      </div>
+      <div class="city-edit-footer">
+        <button class="btn-submit" data-city-save>✓ Сохранить</button>
+        <button class="mod-gen-scenario-btn" data-city-cancel>Отмена</button>
+        <span class="city-edit-status" data-city-status></span>
+      </div>
+    </div>`;
+}
+
+document.getElementById('city-detail-content').addEventListener('click', async e => {
+  const sw = e.target.closest('[data-switch-city]');
+  if (sw) { location.search = 'city=' + encodeURIComponent(sw.dataset.switchCity); return; }
+
+  if (e.target.closest('[data-city-edit]'))   { _renderCityEdit(); return; }
+  if (e.target.closest('[data-city-cancel]')) { _renderCityView(); return; }
+
+  const tab = e.target.closest('[data-city-tab]');
+  if (tab && !tab.disabled) {
+    const which = tab.dataset.cityTab;
+    document.querySelectorAll('[data-city-tab]').forEach(b => b.classList.toggle('active', b === tab));
+    document.querySelectorAll('[data-city-pane]').forEach(p => p.classList.toggle('active', p.dataset.cityPane === which));
+    return;
+  }
+
+  if (e.target.closest('[data-city-save]'))   { await _saveCityEdit(); return; }
+  if (e.target.closest('[data-city-delete]')) { await _deleteCity(); return; }
 });
+
+async function _saveCityEdit() {
+  const d = _cityDetail;
+  const statusEl = document.querySelector('[data-city-status]');
+  const activePane = document.querySelector('[data-city-pane].active')?.dataset.cityPane || 'fields';
+  const q = v => document.querySelector(`[data-city-field="${v}"]`);
+
+  let payload;
+  if (activePane === 'markdown') {
+    const cityMd = q('cityMd').value;
+    if (!/^#\s+\S/m.test(cityMd)) { if (statusEl) statusEl.textContent = '⚠ city.md должен начинаться с # …'; return; }
+    payload = { cityMd };
+  } else {
+    const display = q('display').value.trim();
+    if (!display) { if (statusEl) statusEl.textContent = '⚠ Укажите название'; return; }
+    const fields = { display, year: q('year').value.trim() };
+    for (const [key] of CITY_SECTION_DEFS) fields[key] = q(key).value.trim();
+    payload = { fields };
+  }
+
+  const btn = document.querySelector('[data-city-save]');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Сохранение...'; }
+  try {
+    const r = await fetch(`/api/cities/${encodeURIComponent(d.slug)}`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    }).then(r => r.json());
+    if (!r.ok) { if (statusEl) statusEl.textContent = '⚠ ' + (r.error || 'Ошибка'); return; }
+    // Перечитываем детально и возвращаемся в просмотр; обновляем грид доменов.
+    const fresh = await fetch(`/api/cities/${encodeURIComponent(d.slug)}/detail`).then(r => r.json());
+    _cityDetail = { ...fresh, slug: d.slug, active: d.slug === CITY };
+    _renderCityView();
+    if (document.getElementById('cities-grid')) loadCitiesGrid();
+  } catch (err) {
+    if (statusEl) statusEl.textContent = '⚠ ' + err.message;
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '✓ Сохранить'; }
+  }
+}
+
+async function _deleteCity() {
+  const d = _cityDetail;
+  const what = [d.characters && `${d.characters} персонажей`, d.modules && `${d.modules} модулей`,
+    d.locations && `${d.locations} локаций`].filter(Boolean).join(', ');
+  const msg = `Удалить домен «${(d.parsed && d.parsed.display) || d.slug}»?` +
+    (what ? `\n\nВнутри: ${what}.` : '') +
+    `\n\nГород переедет в cities/_deleted/ (обратимо, картинки не стираются).`;
+  if (!confirm(msg)) return;
+
+  try {
+    const r = await fetch(`/api/cities/${encodeURIComponent(d.slug)}`, { method: 'DELETE' }).then(r => r.json());
+    if (!r.ok) { alert('Ошибка удаления: ' + (r.error || 'неизвестная')); return; }
+    document.getElementById('city-detail-modal').classList.remove('open');
+    if (d.active) {
+      // Удалили активный город — переключаемся на любой оставшийся.
+      const { cities = [] } = await fetch('/api/cities').then(r => r.json());
+      if (cities.length) { location.search = 'city=' + encodeURIComponent(cities[0]); return; }
+    }
+    if (document.getElementById('cities-grid')) loadCitiesGrid();
+  } catch (err) { alert('Ошибка удаления: ' + err.message); }
+}
 
 const cityDetailModal = document.getElementById('city-detail-modal');
 document.getElementById('city-detail-close').addEventListener('click', () => cityDetailModal.classList.remove('open'));

@@ -137,7 +137,7 @@ describe('E2E — сквозной цикл хроники', () => {
 
   describe('2. Персонаж и локация', () => {
     it('new_npc создаёт карточку вампира', async () => {
-      const r = await tool('new_npc', [CITY, 'vampires', 'Виктор Ламбер', 'Тореадор']);
+      const r = await tool('new_npc', [CITY, 'vampires', 'Виктор Ламбер', 'Мужской', 'Тореадор']);
       assert.ok(r.json?.ok, `ok=false: ${r.json?.output}`);
       assert.ok(fileExists(`cities/${CITY}/characters/vampires/viktor_lamber/viktor_lamber.md`));
     });
@@ -208,7 +208,7 @@ describe('E2E — сквозной цикл хроники', () => {
     const DELSLUG = 'udalyaemyy_gul';
 
     it('new_npc создаёт одноразового персонажа', async () => {
-      const r = await tool('new_npc', [CITY, 'mortals', DELNAME]);
+      const r = await tool('new_npc', [CITY, 'mortals', DELNAME, 'Женский']);
       assert.ok(r.json?.ok, `ok=false: ${r.json?.output}`);
       assert.ok(fileExists(`cities/${CITY}/characters/mortals/${DELSLUG}/${DELSLUG}.md`));
     });
