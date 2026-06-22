@@ -16,10 +16,75 @@ const CYRILLIC_TR = {
   л:'l',м:'m',н:'n',о:'o',п:'p',р:'r',с:'s',т:'t',у:'u',ф:'f',х:'h',ц:'ts',
   ч:'ch',ш:'sh',щ:'sch',ъ:'',ы:'y',ь:'',э:'e',ю:'yu',я:'ya',
 };
+// Latin letters that DON'T decompose under NFKD (so the diacritic strip can't reach
+// them) — folded explicitly so international city names slug cleanly (Düsseldorf→
+// dusseldorf, Şanlıurfa→sanliurfa, Malmö→malmo). Mirrored in scripts.js (_LATIN_TR).
+const LATIN_TR = { ø:'o', ł:'l', đ:'d', ı:'i', ß:'ss', æ:'ae', œ:'oe', þ:'th', ð:'d' };
 function slugify(s) {
   return String(s == null ? '' : s).toLowerCase()
+    // Cyrillic first (NFKD would split й→и+◌̆ and corrupt it), then fold Latin diacritics.
     .split('').map(c => CYRILLIC_TR[c] !== undefined ? CYRILLIC_TR[c] : c).join('')
+    .normalize('NFKD').replace(/[̀-ͯ]/g, '')
+    .split('').map(c => LATIN_TR[c] !== undefined ? LATIN_TR[c] : c).join('')
     .replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').replace(/_+/g, '_');
+}
+
+// ── city.md ──────────────────────────────────────────────────────────────────
+// Single source of truth for the city.md section layout, shared by tools/new_city.js,
+// POST/PUT /api/cities and the edit form. Order = order rendered in the file.
+const CITY_SECTIONS = [
+  ['political',  'Политический ландшафт'],
+  ['locations',  'Ключевые локации'],
+  ['leitmotif',  'Лейтмотивы и атмосфера'],
+  ['specifics',  'Специфика ответа'],
+  ['avoid',      'Чего избегать'],
+  ['sources',    'Источники'],
+];
+
+// Multi-line textarea → markdown bullet list; empty → placeholder.
+function _citySection(txt) {
+  const lines = String(txt == null ? '' : txt).split('\n').map(l => l.trim()).filter(Boolean);
+  return lines.length ? lines.map(l => l.startsWith('-') ? l : `- ${l}`).join('\n') : '- …';
+}
+
+// Build city.md from form fields: { display, year, political, locations, leitmotif, specifics, avoid, sources }
+function buildCityMd(fields = {}) {
+  const display = String(fields.display || '').trim() || 'Город';
+  const year    = String(fields.year || '').trim() || '20XX';
+  const body = CITY_SECTIONS.map(([key, heading]) => `## ${heading}\n${_citySection(fields[key])}`).join('\n\n');
+  return `# ${display}, ${year} — сеттинг города
+
+> Опиши здесь свой домен — то, с чем сверяется Рассказчик перед сценой
+> (см. CLAUDE.md → «Активный город»).
+
+${body}
+`;
+}
+
+// Parse city.md back into { display, year, sections:{...} } for the edit form and for
+// robust display/year labels (no longer dependent on the exact H1 suffix matching).
+function parseCityMd(raw) {
+  const text = String(raw == null ? '' : raw).replace(/^﻿/, '').replace(/\r\n/g, '\n');
+  let display = '', year = '';
+  const hm = text.match(/^#\s+(.+?)\s*$/m);
+  if (hm) {
+    const h1 = hm[1].replace(/\s*—\s*сеттинг города\s*$/i, '').trim();
+    const m2 = h1.match(/^(.*?),\s*([^,]+?)\s*$/);
+    if (m2) { display = m2[1].trim(); year = m2[2].trim(); }
+    else display = h1;
+  }
+  const headingToKey = new Map(CITY_SECTIONS.map(([k, h]) => [h.toLowerCase(), k]));
+  const sections = {};
+  for (const part of text.split(/^##\s+/m).slice(1)) {
+    const nl = part.indexOf('\n');
+    const heading = (nl === -1 ? part : part.slice(0, nl)).trim().toLowerCase();
+    const key = headingToKey.get(heading);
+    if (!key) continue;
+    const bodyTxt = nl === -1 ? '' : part.slice(nl + 1);
+    sections[key] = bodyTxt.split('\n').map(l => l.replace(/^\s*-\s?/, '').trim())
+      .filter(l => l && l !== '…').join('\n');
+  }
+  return { display, year, sections };
 }
 
 // Thread status display strings keyed by slug
@@ -554,7 +619,11 @@ module.exports = {
   RU_MONTHS_NOM,
   THREAD_STATUS,
   CYRILLIC_TR,
+  LATIN_TR,
   slugify,
+  CITY_SECTIONS,
+  buildCityMd,
+  parseCityMd,
   parseDiary,
   readPrompt,
   writePrompt,

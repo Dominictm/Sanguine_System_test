@@ -6,7 +6,7 @@
 //   текстовые поля — многострочные (по строке на пункт), районы — список через запятую.
 
 const fs = require('fs'), path = require('path'), ROOT = path.resolve(__dirname, '..');
-const { slugify } = require('../web/lib/parsers');
+const { slugify, buildCityMd } = require('../web/lib/parsers');
 
 const slug = (process.argv[2] || '').toLowerCase();
 const display = process.argv[3] || slug;
@@ -22,36 +22,11 @@ if (fs.existsSync(base)) { console.error(`Город "${slug}" уже сущес
 const W = (rel, txt) => { const a = path.join(base, rel); fs.mkdirSync(path.dirname(a), { recursive: true }); fs.writeFileSync(a, txt, 'utf8'); };
 const KEEP = rel => { const a = path.join(base, rel, '.gitkeep'); fs.mkdirSync(path.dirname(a), { recursive: true }); fs.writeFileSync(a, ''); };
 
-// Многострочный ввод из формы → маркированный список; пусто → плейсхолдер.
-const section = txt => {
-  const lines = (txt || '').split('\n').map(l => l.trim()).filter(Boolean);
-  return lines.length ? lines.map(l => l.startsWith('-') ? l : `- ${l}`).join('\n') : '- …';
-};
-
-W('city.md',
-`# ${display}, ${year} — сеттинг города
-
-> Опиши здесь свой домен — то, с чем сверяется Рассказчик перед сценой
-> (см. CLAUDE.md → «Активный город»).
-
-## Политический ландшафт
-${section(political)}
-
-## Ключевые локации
-${section(locationsTxt)}
-
-## Лейтмотивы и атмосфера
-${section(leitmotif)}
-
-## Специфика ответа
-${section(specifics)}
-
-## Чего избегать
-${section(avoid)}
-
-## Источники
-${section(sources)}
-`);
+// city.md — собирается общим билдером (единый шаблон с веб-формой, см. web/lib/parsers.js).
+W('city.md', buildCityMd({
+  display, year,
+  political, locations: locationsTxt, leitmotif, specifics, avoid, sources,
+}));
 
 W('archive/events.md',
 `# 📖 Хроника «${display}» — События

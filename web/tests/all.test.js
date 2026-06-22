@@ -10,7 +10,7 @@ const { startServer, stopServer, apiJson } = require('./helpers');
 const {
   readPrompt, writePrompt, periodLabel,
   threadStatusKey, parseThreadsContent, THREAD_STATUS,
-  slugify, CYRILLIC_TR, parseDiary,
+  slugify, CYRILLIC_TR, LATIN_TR, parseDiary,
   mdExtractLinks, mdStripLinks, mdStripInline, classifyChronicleLink,
   categorizeRel, parseCharacter, parseLocation, parseEvent, parseChronicle,
   parseChronicleParticipants,
@@ -171,6 +171,23 @@ describe('Parsers — unit', () => {
       const browserMap = (new Function(`return (${m[1]})`))();
       assert.deepEqual(browserMap, CYRILLIC_TR,
         'browser _NTR has diverged from canonical CYRILLIC_TR — keep them in sync');
+    });
+
+    it('browser parity — public/scripts.js _LATIN_TR mirrors LATIN_TR', () => {
+      const src = require('fs').readFileSync(
+        path.join(__dirname, '../public/scripts.js'), 'utf-8');
+      const m = src.match(/const _LATIN_TR\s*=\s*(\{[^}]*\})/);
+      assert.ok(m, '_LATIN_TR literal not found in scripts.js');
+      // eslint-disable-next-line no-new-func
+      const browserMap = (new Function(`return (${m[1]})`))();
+      assert.deepEqual(browserMap, LATIN_TR,
+        'browser _LATIN_TR has diverged from canonical LATIN_TR — keep them in sync');
+    });
+
+    it('non-Cyrillic diacritics fold (Düsseldorf→dusseldorf, Şanlıurfa→sanliurfa)', () => {
+      assert.equal(slugify('Düsseldorf'), 'dusseldorf');
+      assert.equal(slugify('Şanlıurfa'), 'sanliurfa');
+      assert.equal(slugify('Майкоп'), 'maykop');  // Cyrillic й survives (NFKD must run after the map)
     });
   });
 

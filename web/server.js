@@ -7,6 +7,7 @@ const { spawn } = require('child_process');
 const Anthropic = require('@anthropic-ai/sdk');
 const {
   RU_MONTHS_NOM, THREAD_STATUS, slugify, parseDiary, readPrompt, writePrompt,
+  buildCityMd, parseCityMd,
   periodLabel, threadStatusKey, parseThreadsContent,
   mdExtractLinks, mdStripLinks, mdStripInline, classifyChronicleLink,
   categorizeRel, parseCharacter, parseLocation, parseChronicleLocation,
@@ -29,7 +30,7 @@ const ROOT = path.join(__dirname, '..');
 
 // ── City layer (cities/<city>/…) ───────────────────────────────────────────────
 const CITIES_DIR   = path.join(ROOT, 'cities');
-function _firstCity() { try { return (require('fs').readdirSync(CITIES_DIR, { withFileTypes: true }).find(e => e.isDirectory() && !e.name.startsWith('.')) || {}).name || ''; } catch { return ''; } }
+function _firstCity() { try { return (require('fs').readdirSync(CITIES_DIR, { withFileTypes: true }).find(e => e.isDirectory() && !/^[._]/.test(e.name)) || {}).name || ''; } catch { return ''; } }
 const DEFAULT_CITY = process.env.CITY || _firstCity() || '';   // нейтрально: первый существующий город
 const cityDir       = c => path.join(CITIES_DIR, c || DEFAULT_CITY);
 const charsDir      = c => path.join(cityDir(c), 'characters');
@@ -43,7 +44,8 @@ const reqCity = req => {
 async function listCities() {
   try {
     const es = await fs.readdir(CITIES_DIR, { withFileTypes: true });
-    return es.filter(e => e.isDirectory() && !e.name.startsWith('.')).map(e => e.name);
+    // Skip dot-dirs and the _deleted soft-delete bin (and any _-prefixed internal dir).
+    return es.filter(e => e.isDirectory() && !/^[._]/.test(e.name)).map(e => e.name);
   } catch { return []; }
 }
 
@@ -592,13 +594,10 @@ app.get('/api/cities/summary', async (req, res) => {
     const out = await Promise.all(slugs.map(async slug => {
       let display = slug, year = '';
       try {
-        const cm = (await fs.readFile(path.join(cityDir(slug), 'city.md'), 'utf-8')).replace(/^﻿/, '');
-        const hm = cm.match(/^#\s+(.+?)\s*$/m);
-        if (hm) {
-          const m2 = hm[1].match(/^(.*?),\s*(\S+)\s*—\s*сеттинг города/i);
-          if (m2) { display = m2[1].trim(); year = m2[2].trim(); }
-          else display = hm[1].replace(/\s*—\s*сеттинг города/i, '').trim();
-        }
+        const cm = await fs.readFile(path.join(cityDir(slug), 'city.md'), 'utf-8');
+        const p  = parseCityMd(cm);
+        if (p.display) display = p.display;
+        year = p.year || '';
       } catch {}
       let characters = 0;
       try { characters = (await getAllCharacters(slug)).length; } catch {}
@@ -620,6 +619,7 @@ app.get('/api/cities/:slug/detail', async (req, res) => {
     if (!(await listCities()).includes(slug)) return res.status(404).json({ error: 'Город не найден' });
 
     const cityMd = (await fs.readFile(path.join(cityDir(slug), 'city.md'), 'utf-8').catch(() => '')).replace(/^﻿/, '');
+    const parsed = parseCityMd(cityMd);   // { display, year, sections } — для предзаполнения формы
 
     let characters = 0;
     try { characters = (await getAllCharacters(slug)).length; } catch {}
@@ -628,8 +628,120 @@ app.get('/api/cities/:slug/detail', async (req, res) => {
     let locations = 0;
     try { locations = await countMdFiles(locsDir(slug)); } catch {}
 
-    res.json({ slug, cityMd, characters, modules, locations });
+    res.json({ slug, cityMd, parsed, characters, modules, locations });
   } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── City create / edit / delete ────────────────────────────────────────────────
+
+// POST /api/cities — create a city directly (no CLI spawn). Body: { name, year, political,
+// locations, leitmotif, specifics, avoid, sources, districts }. Builds the same scaffold
+// as tools/new_city.js using the shared buildCityMd template.
+app.post('/api/cities', express.json(), async (req, res) => {
+  try {
+    const b = req.body || {};
+    const display = String(b.name || '').trim();
+    if (!display) return res.status(400).json({ error: 'Укажи название города' });
+    const slug = slugify(display);
+    if (!slug) return res.status(400).json({ error: 'Не удалось сформировать слаг из названия' });
+    if ((await listCities()).includes(slug))
+      return res.status(409).json({ error: `Город «${slug}» уже существует` });
+
+    const base = cityDir(slug);
+    const year = String(b.year || '').trim() || '20XX';
+    const cityMd = buildCityMd({
+      display, year,
+      political: b.political, locations: b.locations, leitmotif: b.leitmotif,
+      specifics: b.specifics, avoid: b.avoid, sources: b.sources,
+    });
+
+    const W    = (rel, txt) => fs.mkdir(path.dirname(path.join(base, rel)), { recursive: true })
+      .then(() => writeFileAtomic(path.join(base, rel), txt, 'utf-8'));
+    const KEEP = rel => fs.mkdir(path.join(base, rel), { recursive: true })
+      .then(() => writeFileAtomic(path.join(base, rel, '.gitkeep'), ''));
+
+    await W('city.md', cityMd);
+    await W('archive/events.md',
+      `# 📖 Хроника «${display}» — События\n\n> 🔗 Все персонажи — [characters_index.md](characters_index.md)\n> 🔗 Протокол записей — [chronicle.md](../../../system/rules/chronicle.md)\n\n---\n\n## 🌍 Состояние мира\n\n> Обновляется после каждой сессии.\n> Последнее обновление: **—**.\n\n---\n\n## 📋 Сводная хроника событий\n\n> Агрегат из \`chronicles/<хроника>/events.md\`. Индекс генерируется \`tools/build_city_events.js\` — вручную не править.\n\n<!-- AUTO:events-index -->\n<!-- /AUTO:events-index -->\n`);
+    await W('archive/political_state.md',
+      `# Карта фракций — ${display}, ${year}\n\n> Шаблон. Кто контролирует домен, иерархия, ключевые NPC, конфликты.\n\n| Должность | Персонаж | Клан | Примечание |\n|---|---|---|---|\n|  |  |  |  |\n`);
+    await W('archive/characters_index.md',
+      `# Персонажи — ${display}\n\n> Сводник. Добавляется при создании карточек (по \`system/rules/npcs_city.md\`).\n`);
+    await W('archive/visitors.md',
+      `# Гости из других городов — ${display}\n\n> Персонажи с \`Родной город\` ≠ ${display}, присутствующие здесь.\n\n| Персонаж | Родной город | Появление |\n|---|---|---|\n|  |  |  |\n`);
+
+    for (const lin of ['vampires', 'fairies', 'mortals', 'werewolves', 'mages', 'hunters']) await KEEP(`characters/${lin}`);
+    await KEEP('chronicles');
+    await KEEP('rules');
+
+    const districts = String(b.districts || '').split(',').map(d => d.trim()).filter(Boolean);
+    if (districts.length) {
+      for (let i = 0; i < districts.length; i++) {
+        const num = String(i + 1).padStart(2, '0');
+        await KEEP(`locations/district_${num}/${slugify(districts[i]) || `rayon_${num}`}`);
+      }
+    } else await KEEP('locations');
+
+    delete _cache[slug];
+    console.log(`[create-city] ${slug} («${display}», ${year})`);
+    res.json({ ok: true, slug, display, year });
+  } catch (e) {
+    console.error('[create-city]', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// PUT /api/cities/:slug — edit city.md. Body: { cityMd } (raw, full replace — preserves
+// custom/hand-written sections) OR { fields:{display,year,...} } (rebuild from template).
+app.put('/api/cities/:slug', express.json(), async (req, res) => {
+  try {
+    const slug = req.params.slug;
+    if (!/^[a-z0-9_]+$/.test(slug)) return res.status(400).json({ error: 'Недопустимый слаг города' });
+    if (!(await listCities()).includes(slug)) return res.status(404).json({ error: 'Город не найден' });
+
+    const b = req.body || {};
+    let cityMd;
+    if (typeof b.cityMd === 'string' && b.cityMd.trim()) {
+      cityMd = b.cityMd.replace(/^﻿/, '');
+    } else if (b.fields && typeof b.fields === 'object') {
+      cityMd = buildCityMd(b.fields);
+    } else {
+      return res.status(400).json({ error: 'Нужно передать cityMd (markdown) или fields' });
+    }
+    if (!/^#\s+\S/m.test(cityMd)) return res.status(400).json({ error: 'city.md должен начинаться с заголовка # …' });
+
+    await writeFileAtomic(path.join(cityDir(slug), 'city.md'), cityMd, 'utf-8');
+    delete _cache[slug];
+    console.log(`[edit-city] ${slug}`);
+    res.json({ ok: true, slug, parsed: parseCityMd(cityMd) });
+  } catch (e) {
+    console.error('[edit-city]', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// DELETE /api/cities/:slug — soft-delete (move to cities/_deleted/<slug>), reversible and
+// image-safe (gitignored art is moved, not erased). Refuses to delete the last city.
+app.delete('/api/cities/:slug', async (req, res) => {
+  try {
+    const slug = req.params.slug;
+    if (!/^[a-z0-9_]+$/.test(slug)) return res.status(400).json({ error: 'Недопустимый слаг города' });
+    const cities = await listCities();
+    if (!cities.includes(slug)) return res.status(404).json({ error: 'Город не найден' });
+    if (cities.length <= 1) return res.status(409).json({ error: 'Нельзя удалить единственный город' });
+
+    const deletedDir = path.join(CITIES_DIR, '_deleted');
+    await fs.mkdir(deletedDir, { recursive: true });
+    const dest = path.join(deletedDir, `${slug}_${Date.now()}`);
+    await fs.rename(cityDir(slug), dest);
+
+    delete _cache[slug];
+    console.log(`[delete-city] ${slug} → ${path.relative(ROOT, dest)}`);
+    res.json({ ok: true, slug, movedTo: path.relative(ROOT, dest).replace(/\\/g, '/') });
+  } catch (e) {
+    console.error('[delete-city]', e.message);
+    res.status(500).json({ error: e.message });
+  }
 });
 
 app.get('/api/chronicles', async (req, res) => {
