@@ -47,6 +47,26 @@ async function listCities() {
   } catch { return []; }
 }
 
+// ── Atomic file write ──────────────────────────────────────────────────────────
+// Write to a temp file in the SAME directory, then rename() over the target.
+// rename() is atomic on one filesystem, so a crash/kill mid-write can never leave a
+// half-written (truncated) card — readers see either the old file or the new one,
+// never a partial one. (A truncated <slug>-sheet.md is exactly how a card got
+// corrupted before this guard existed.) The dot-prefixed temp name is ignored by
+// every directory scanner in this server (all skip names starting with '.').
+const _rawWriteFile = require('fs').promises.writeFile;
+async function writeFileAtomic(filePath, data, enc) {
+  const tmp = path.join(path.dirname(filePath),
+    `.${path.basename(filePath)}.${process.pid}.${Date.now()}.tmp`);
+  try {
+    await _rawWriteFile(tmp, data, enc);
+    await fs.rename(tmp, filePath);
+  } catch (e) {
+    await fs.unlink(tmp).catch(() => {});
+    throw e;
+  }
+}
+
 let _cache = {};            // city → { chars, ts }
 const CHARS_TTL = 15_000;
 
@@ -727,7 +747,7 @@ async function syncChronicleModuleLinks(city, chr) {
     updated = raw.trimEnd() + '\n' + modsSection;
   }
 
-  if (updated !== raw) await fs.writeFile(chrMdPath, updated, 'utf-8');
+  if (updated !== raw) await writeFileAtomic(chrMdPath, updated, 'utf-8');
 }
 
 app.post('/api/chronicles', express.json(), async (req, res) => {
@@ -747,13 +767,13 @@ app.post('/api/chronicles', express.json(), async (req, res) => {
 
     await fs.mkdir(path.join(chrDir, 'modules'), { recursive: true });
 
-    await fs.writeFile(path.join(chrDir, 'chronicle.md'),
+    await writeFileAtomic(path.join(chrDir, 'chronicle.md'),
       renderChronicleMd(display, slug, city, mood?.trim() || '', []), 'utf-8');
 
-    await fs.writeFile(path.join(chrDir, 'events.md'),
+    await writeFileAtomic(path.join(chrDir, 'events.md'),
       renderChronicleEventsSkeleton(display), 'utf-8');
 
-    await fs.writeFile(path.join(chrDir, 'open_threads.md'),
+    await writeFileAtomic(path.join(chrDir, 'open_threads.md'),
       renderOpenThreadsSkeleton(display), 'utf-8');
 
     console.log(`[create-chronicle] ${city}/${slug}: «${display}»`);
@@ -895,7 +915,7 @@ app.delete('/api/chronicles/:slug', express.json(), async (req, res) => {
         idx = idx.replace(/\s*$/, '') +
           `\n- [${ch.name}](../characters/nps_time/${ch.slug}/${ch.slug}.md) — Временный НПС (из хроники ${slug})\n`;
       }
-      await fs.writeFile(idxPath, idx, 'utf-8');
+      await writeFileAtomic(idxPath, idx, 'utf-8');
     } catch {}
 
     // 3. Delete chronicle directory
@@ -1199,7 +1219,7 @@ app.post('/api/chronicles/:slug/modules', express.json(), async (req, res) => {
       ]),
     ].join('\n');
 
-    await fs.writeFile(path.join(modDir, `${modSlug}.md`), mainContent, 'utf-8');
+    await writeFileAtomic(path.join(modDir, `${modSlug}.md`), mainContent, 'utf-8');
     await syncChronicleModuleLinks(city, chr);
     console.log(`[create-module] ${city}/${chr}/modules/${modSlug}`);
     res.json({ ok: true, slug: modSlug, title: name.trim() });
@@ -1341,7 +1361,7 @@ ${content}
     // Save as scenario.md
     const scenarioPath = path.join(modDir, 'scenario.md');
     const header = `# Сценарий: ${modTitle}\n\n> 🔗 [Модуль](${mod}.md) | [Хроника](../../events.md)\n\n---\n\n`;
-    await fs.writeFile(scenarioPath, header + scenarioText + '\n', 'utf-8');
+    await writeFileAtomic(scenarioPath, header + scenarioText + '\n', 'utf-8');
     console.log(`[fill-module] ${city}/${chr}/${mod}/scenario.md written`);
 
     // (allLocs + char catalog already loaded above for the generation prompt)
@@ -1470,7 +1490,7 @@ ${newLocNames.map((n, i) => `${i + 1}. «${n}»`).join('\n')}
             const locFile = path.join(locDir, `${locSlug}.md`);
             if (await fs.stat(locFile).catch(() => null)) return; // already exists
             await fs.mkdir(locDir, { recursive: true });
-            await fs.writeFile(locFile, content.trim() + '\n', 'utf-8');
+            await writeFileAtomic(locFile, content.trim() + '\n', 'utf-8');
             createdLocations.push(name);
             console.log(`[fill-module] location created: ${name}`);
           }));
@@ -1530,7 +1550,7 @@ ${newNpcs.map((n, i) => `${i + 1}. ${n.name}`).join('\n')}
             const npcFile = path.join(npcDir, `${npcSlug}.md`);
             if (await fs.stat(npcFile).catch(() => null)) return; // already exists
             await fs.mkdir(npcDir, { recursive: true });
-            await fs.writeFile(npcFile, cardMd.trim() + '\n', 'utf-8');
+            await writeFileAtomic(npcFile, cardMd.trim() + '\n', 'utf-8');
             createdNpcs.push(name);
             console.log(`[fill-module] modular NPC created: ${name}`);
           }));
@@ -1542,7 +1562,7 @@ ${newNpcs.map((n, i) => `${i + 1}. ${n.name}`).join('\n')}
 
     // ── Write npc.md (ПК / Каноничные / Модульные) ────────────────────────
     try {
-      await fs.writeFile(path.join(modDir, 'npc.md'),
+      await writeFileAtomic(path.join(modDir, 'npc.md'),
         _renderModuleNpcMd(modTitle, mod, pcs, canonNpcs, newNpcs, chars), 'utf-8');
       console.log('[fill-module] npc.md written');
     } catch (npcMdErr) {
@@ -1657,7 +1677,7 @@ app.delete('/api/chronicles/:chr/modules/:mod', express.json(), async (req, res)
         // Remove lines that link to this module
         const cleaned = txt.split('\n').filter(l => !modLinkPat.test(l)).join('\n');
         if (cleaned !== txt) {
-          await fs.writeFile(fp, cleaned, 'utf-8');
+          await writeFileAtomic(fp, cleaned, 'utf-8');
           cleanedChars.push(`${ch.name}/${f}`);
         }
       }
@@ -1677,7 +1697,7 @@ app.delete('/api/chronicles/:chr/modules/:mod', express.json(), async (req, res)
         return true;
       });
       const cleaned = kept.join('\n').replace(/\n{3,}/g, '\n\n');
-      if (cleaned !== nl) await fs.writeFile(evPath, cleaned, 'utf-8');
+      if (cleaned !== nl) await writeFileAtomic(evPath, cleaned, 'utf-8');
     }
 
     // 5. Delete module directory (its npc/ — modular NPCs — go with it)
@@ -1760,7 +1780,7 @@ ${playLog}
 Напиши цельный литературный финал ПО ФАКТАМ ИГРЫ (если игра отступила от сценария — следуй игре). Русский, готический нуар. Верни только текст финала, без метаданных.`, 2500).catch(() => '');
     if (finaleText) {
       const header = `# ${modTitle} — Литературный финал\n\n> 🔗 [Модуль](${mod}.md) | [Хроника](../../events.md)\n\n---\n\n`;
-      await fs.writeFile(path.join(modDir, 'finale.md'), header + finaleText + '\n', 'utf-8');
+      await writeFileAtomic(path.join(modDir, 'finale.md'), header + finaleText + '\n', 'utf-8');
       finale = true;
     }
 
@@ -1792,7 +1812,7 @@ ${playLog}
       const finaleLink = finale ? ` | [Литературный финал](modules/${mod}/finale.md)` : '';
       const block      = eventBlock.trim() + `\n\n> 🔗 [Модуль](modules/${mod}/${mod}.md)${finaleLink}\n`;
       const evTxt      = (await fs.readFile(evPath, 'utf-8').catch(() => '')).replace(/\s*$/, '');
-      await fs.writeFile(evPath, evTxt + '\n\n' + block, 'utf-8');
+      await writeFileAtomic(evPath, evTxt + '\n\n' + block, 'utf-8');
       event = true;
     }
 
@@ -1803,7 +1823,7 @@ ${playLog}
       main = main.replace(/^(-\s*\*\*Статус(?: модуля)?:\*\*\s*).*$/m, `$1🟢 Закрыт (${today})`);
     else
       main = main.replace(/^(>\s*🔗\s*\[Хроника\][^\n]*)$/m, `$1\n\n- **Статус модуля:** 🟢 Закрыт (${today})`);
-    await fs.writeFile(path.join(modDir, `${mod}.md`), main, 'utf-8');
+    await writeFileAtomic(path.join(modDir, `${mod}.md`), main, 'utf-8');
 
     // 4. Rebuild the aggregate event index
     if (event) {
@@ -1886,7 +1906,7 @@ app.post('/api/threads', express.json(), async (req, res) => {
     let insertAt = headerIdx + 2; // skip header + separator
     while (insertAt < lines.length && lines[insertAt].trimStart().startsWith('|')) insertAt++;
     lines.splice(insertAt, 0, row);
-    await fs.writeFile(abs, lines.join('\n'), 'utf-8');
+    await writeFileAtomic(abs, lines.join('\n'), 'utf-8');
     res.json({ ok: true, id: nextId });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -1918,7 +1938,7 @@ app.patch('/api/threads/:id', express.json(), async (req, res) => {
       break;
     }
     if (!done) return res.status(404).json({ error: 'Нить не найдена' });
-    await fs.writeFile(abs, lines.join('\n'), 'utf-8');
+    await writeFileAtomic(abs, lines.join('\n'), 'utf-8');
     res.json({ ok: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -2131,7 +2151,7 @@ async function ensureDiaryLink(city, char, period, label) {
     if (lastM) { const pos = lastM.index + lastM[0].length; card = card.slice(0, pos) + '\n' + line + card.slice(pos); }
     else return;
   }
-  await fs.writeFile(cardPath, card, 'utf-8');
+  await writeFileAtomic(cardPath, card, 'utf-8');
 }
 
 // Create or append a diary entry (journal/<period>.md), then link it from the card.
@@ -2160,7 +2180,7 @@ app.put('/api/characters/:name/diary', express.json(), async (req, res) => {
     const out = (existing === null || mode === 'create')
       ? `# 📖 Дневник ${char.name} — ${periodLabel(per)}\n\n---\n\n${section}`
       : existing.replace(/\s*$/, '') + `\n\n---\n\n${section}`;
-    await fs.writeFile(file, out, 'utf-8');
+    await writeFileAtomic(file, out, 'utf-8');
 
     await ensureDiaryLink(city, char, per, periodLabel(per));
     delete _cache[city];
@@ -2378,7 +2398,7 @@ app.put('/api/locations/:slug/fields', express.json(), async (req, res) => {
       }
     }
 
-    await fs.writeFile(mdPath, card, 'utf-8');
+    await writeFileAtomic(mdPath, card, 'utf-8');
     res.json({ ok: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -2403,7 +2423,7 @@ app.post('/api/locations/:slug/upload-image', express.json({ limit: '20mb' }), a
     const nextNum  = (nums.length ? Math.max(...nums) : 0) + 1;
     const filename = `${slug}_${String(nextNum).padStart(2, '0')}.${safeExt}`;
 
-    await fs.writeFile(path.join(artDir, filename), Buffer.from(base64, 'base64'));
+    await writeFileAtomic(path.join(artDir, filename), Buffer.from(base64, 'base64'));
 
     let card = await fs.readFile(mdPath, 'utf-8').catch(() => null);
     if (card) {
@@ -2415,7 +2435,7 @@ app.post('/api/locations/:slug/upload-image', express.json({ limit: '20mb' }), a
           return `${hdr}${body.replace(/\n+$/, '')}\n${newLine}\n${tail}`;
         });
       }
-      await fs.writeFile(mdPath, card, 'utf-8');
+      await writeFileAtomic(mdPath, card, 'utf-8');
     }
 
     const locRoot  = locsDir(city);
@@ -2465,7 +2485,7 @@ const _writeArchiveDoc = (file) => async (req, res) => {
     if (typeof content !== 'string') return res.status(400).json({ error: 'content required' });
     const dir = archiveDir(city);
     await fs.mkdir(dir, { recursive: true });
-    await fs.writeFile(path.join(dir, file), content, 'utf-8');
+    await writeFileAtomic(path.join(dir, file), content, 'utf-8');
     res.json({ ok: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 };
@@ -2481,7 +2501,7 @@ app.put('/api/rumors', express.json(), async (req, res) => {
     const file = type === 'dreaming' ? 'rumors_dreaming.md' : 'rumors_elysium.md';
     const dir  = archiveDir(city);
     await fs.mkdir(dir, { recursive: true });
-    await fs.writeFile(path.join(dir, file), content, 'utf-8');
+    await writeFileAtomic(path.join(dir, file), content, 'utf-8');
     res.json({ ok: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -2549,7 +2569,7 @@ async function _ensureSheetLink(cardPath, sheetRel) {
   let txt = await fs.readFile(cardPath, 'utf-8').catch(() => '');
   if (!txt || txt.includes(`(${sheetRel})`)) return;
   txt = txt.replace(/^(﻿?#\s+.+\n)/, `$1\n> 🎲 [Лист персонажа](${sheetRel})\n`);
-  await fs.writeFile(cardPath, txt, 'utf-8');
+  await writeFileAtomic(cardPath, txt, 'utf-8');
 }
 
 // Generate (or regenerate) a canonical character's sheet
@@ -2566,7 +2586,7 @@ app.post('/api/characters/:name/sheet/generate', express.json(), async (req, res
     const gen  = await makeGenerationClient(req.body?.source || null, req.body?.model || null);
     const text = await _generateV20Sheet({ card, displayName: char.name, gen, lineage: char.lineageFolder });
     if (!text) return res.status(500).json({ ok: false, error: 'ИИ вернул пустой лист' });
-    await fs.writeFile(path.join(dir, `${char.slug}-sheet.md`), text + '\n', 'utf-8');
+    await writeFileAtomic(path.join(dir, `${char.slug}-sheet.md`), text + '\n', 'utf-8');
     await _ensureSheetLink(path.join(dir, `${char.slug}.md`), `${char.slug}-sheet.md`);
     res.json({ ok: true, content: text });
   } catch (e) { res.status(e.status >= 400 && e.status < 600 ? e.status : 500).json({ ok: false, error: e.message }); }
@@ -2583,7 +2603,7 @@ app.put('/api/characters/:name/sheet', express.json(), async (req, res) => {
     const char  = chars.find(c => c.name === name);
     if (!char) return res.status(404).json({ ok: false, error: 'Персонаж не найден' });
     const dir = path.join(charsDir(city), char.lineageFolder, char.slug);
-    await fs.writeFile(path.join(dir, `${char.slug}-sheet.md`), content.replace(/\s*$/, '') + '\n', 'utf-8');
+    await writeFileAtomic(path.join(dir, `${char.slug}-sheet.md`), content.replace(/\s*$/, '') + '\n', 'utf-8');
     await _ensureSheetLink(path.join(dir, `${char.slug}.md`), `${char.slug}-sheet.md`);
     res.json({ ok: true });
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
@@ -2621,7 +2641,7 @@ app.put('/api/characters/:name/sheet-data', express.json({ limit: '1mb' }), asyn
     const char  = chars.find(c => c.name === name);
     if (!char) return res.status(404).json({ ok: false, error: 'Персонаж не найден' });
     const dir   = path.join(charsDir(city), char.lineageFolder, char.slug);
-    await fs.writeFile(path.join(dir, `${char.slug}-sheet.json`), JSON.stringify(data, null, 2), 'utf-8');
+    await writeFileAtomic(path.join(dir, `${char.slug}-sheet.json`), JSON.stringify(data, null, 2), 'utf-8');
     res.json({ ok: true });
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
@@ -2652,7 +2672,7 @@ app.post('/api/chronicles/:chr/modules/:mod/npc/:slug/sheet/generate', express.j
     const gen  = await makeGenerationClient(req.body?.source || null, req.body?.model || null);
     const text = await _generateV20Sheet({ card, displayName, gen });
     if (!text) return res.status(500).json({ ok: false, error: 'ИИ вернул пустой лист' });
-    await fs.writeFile(p.sheet, text + '\n', 'utf-8');
+    await writeFileAtomic(p.sheet, text + '\n', 'utf-8');
     await _ensureSheetLink(p.card, `${decodeURIComponent(slug)}-sheet.md`);
     res.json({ ok: true, content: text });
   } catch (e) { res.status(e.status >= 400 && e.status < 600 ? e.status : 500).json({ ok: false, error: e.message }); }
@@ -2665,7 +2685,7 @@ app.put('/api/chronicles/:chr/modules/:mod/npc/:slug/sheet', express.json(), asy
     if (!content.trim()) return res.status(400).json({ ok: false, error: 'Пустой лист' });
     const p = _npcSheetPaths(reqCity(req), chr, mod, decodeURIComponent(slug));
     if (!await fs.stat(p.dir).catch(() => null)) return res.status(404).json({ ok: false, error: 'Папка НПС не найдена' });
-    await fs.writeFile(p.sheet, content.replace(/\s*$/, '') + '\n', 'utf-8');
+    await writeFileAtomic(p.sheet, content.replace(/\s*$/, '') + '\n', 'utf-8');
     res.json({ ok: true });
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
@@ -3113,7 +3133,7 @@ app.put('/api/characters/:name/fields', express.json(), async (req, res) => {
       }
     }
 
-    await fs.writeFile(cardPath, card, 'utf-8');
+    await writeFileAtomic(cardPath, card, 'utf-8');
     delete _cache[city];
     res.json({ ok: true });
   } catch (e) {
@@ -3150,7 +3170,7 @@ app.put('/api/characters/:name/relations', express.json(), async (req, res) => {
       }
     }
 
-    await fs.writeFile(cardPath, card, 'utf-8');
+    await writeFileAtomic(cardPath, card, 'utf-8');
     delete _cache[city];
     res.json({ ok: true });
   } catch (e) {
@@ -3243,10 +3263,10 @@ app.post('/api/characters', express.json(), async (req, res) => {
     const card = `# ${_LIN_EMOJI[folder]} ${name}\n\n> 🔗 [Все персонажи](../../../archive/characters_index.md)\n\n---\n\n${fields.join('\n')}\n\n---\n\n## 🖼️ Изображения\n- ⏳ Изображение не предоставлено\n`;
 
     await fs.mkdir(path.join(dir, 'art'), { recursive: true });
-    await fs.writeFile(path.join(dir, 'art', '.gitkeep'), '');
+    await writeFileAtomic(path.join(dir, 'art', '.gitkeep'), '');
     await fs.mkdir(path.join(dir, 'journal'), { recursive: true });
-    await fs.writeFile(path.join(dir, 'journal', '.gitkeep'), '');
-    await fs.writeFile(path.join(dir, `${slug}.md`), card, 'utf-8');   // no BOM — clean cards
+    await writeFileAtomic(path.join(dir, 'journal', '.gitkeep'), '');
+    await writeFileAtomic(path.join(dir, `${slug}.md`), card, 'utf-8');   // no BOM — clean cards
 
     // Append to characters_index.md (preserve its BOM if present)
     const idxPath = path.join(archiveDir(city), 'characters_index.md');
@@ -3255,7 +3275,7 @@ app.post('/api/characters', express.json(), async (req, res) => {
       const bom = idxRaw.charCodeAt(0) === 0xFEFF;
       const body = (bom ? idxRaw.slice(1) : idxRaw).replace(/\s*$/, '') +
         `\n- [${name}](../characters/${folder}/${slug}/${slug}.md) — ${_LIN_WOD[folder]}${clan ? `, ${clan}` : ''}\n`;
-      await fs.writeFile(idxPath, (bom ? '﻿' : '') + body, 'utf-8');
+      await writeFileAtomic(idxPath, (bom ? '﻿' : '') + body, 'utf-8');
     }
 
     delete _cache[city];
@@ -3357,7 +3377,7 @@ app.delete('/api/characters/:name', express.json(), async (req, res) => {
       const bom = raw.charCodeAt(0) === 0xFEFF;
       const kept = (bom ? raw.slice(1) : raw).split('\n')
         .filter(l => !l.includes(`/${lineageFolder}/${slug}/`)).join('\n');
-      await fs.writeFile(idxPath, (bom ? '﻿' : '') + kept, 'utf-8');
+      await writeFileAtomic(idxPath, (bom ? '﻿' : '') + kept, 'utf-8');
     } catch {}
 
     // 3. De-link broken structural references (keep name text; leave prose).
@@ -3370,7 +3390,7 @@ app.delete('/api/characters/:name', express.json(), async (req, res) => {
       return out !== txt ? { f, out } : null;
     });
     const toDelink = dlScan.filter(Boolean);            // preserved walk order
-    await mapLimit(toDelink, 24, ({ f, out }) => fs.writeFile(f, out, 'utf-8'));
+    await mapLimit(toDelink, 24, ({ f, out }) => writeFileAtomic(f, out, 'utf-8'));
     const delinked = toDelink.map(({ f }) => path.relative(cityDir(city), f).replace(/\\/g, '/'));
 
     delete _cache[city];
@@ -3694,7 +3714,7 @@ async function _writeClaudeOauth(tokenData, prevRefresh = null) {
   if (!creds || typeof creds !== 'object') creds = {};
   creds.claudeAiOauth = oauth;
   await fs.mkdir(path.dirname(CLAUDE_CREDS_PATH), { recursive: true }).catch(() => {});
-  await fs.writeFile(CLAUDE_CREDS_PATH, JSON.stringify(creds, null, 2), 'utf-8');
+  await writeFileAtomic(CLAUDE_CREDS_PATH, JSON.stringify(creds, null, 2), 'utf-8');
   _oauthCredsCache = oauth; _oauthCredsCacheAt = Date.now();
   return oauth;
 }
@@ -4029,7 +4049,7 @@ app.post('/api/characters/:name/upload-image', express.json({ limit: '20mb' }), 
     const nextNum  = (nums.length ? Math.max(...nums) : 0) + 1;
     const filename = `${char.slug}_${String(nextNum).padStart(2, '0')}.${safeExt}`;
 
-    await fs.writeFile(path.join(artDir, filename), Buffer.from(base64, 'base64'));
+    await writeFileAtomic(path.join(artDir, filename), Buffer.from(base64, 'base64'));
 
     // Update ## 🖼️ Изображения section in the card
     const cardPath = path.join(charsDir(city), char.lineageFolder, char.slug, `${char.slug}.md`);
@@ -4045,7 +4065,7 @@ app.post('/api/characters/:name/upload-image', express.json({ limit: '20mb' }), 
           return `${hdr}${trimmed}\n${newLine}\n${tail}`;
         });
       }
-      await fs.writeFile(cardPath, card, 'utf-8');
+      await writeFileAtomic(cardPath, card, 'utf-8');
     }
 
     delete _cache[city];
@@ -4099,7 +4119,7 @@ app.delete('/api/characters/:name/images/:filename', async (req, res) => {
         /(## 🖼️ Изображения\n)(\s*\n)((?!- ))/,
         '$1\n- ⏳ Изображение не предоставлено\n$3'
       );
-      if (card !== before) { await fs.writeFile(cardPath, card, 'utf-8'); refRemoved = true; }
+      if (card !== before) { await writeFileAtomic(cardPath, card, 'utf-8'); refRemoved = true; }
     }
 
     // Genuine 404 only when the file was absent AND nothing referenced it.
@@ -4451,7 +4471,7 @@ async function _writeSessionsFile(modDir, mod, sessions) {
   const modTitle = titleM ? titleM[1].replace(/[*[\]]/g, '').trim() : mod;
   const header = `# Журнал сессий: ${modTitle}\n\n> 🔗 [Модуль](${mod}.md) | [Сценарий](scenario.md)\n> Фаза B — ведение во время игры. Правила: system/rules/module_rules.md`;
   const blocks = sessions.map((s, i) => _renderSessionBlock(i + 1, s.date, s.scenes, s.status, s.body)).join('');
-  await fs.writeFile(path.join(modDir, 'sessions.md'), header + blocks + '\n', 'utf-8');
+  await writeFileAtomic(path.join(modDir, 'sessions.md'), header + blocks + '\n', 'utf-8');
 }
 // Patch <mod>.md after generation WITHOUT destroying its concept/participants
 async function _patchModuleMain(modDir, mod, firstLoc) {
@@ -4466,7 +4486,7 @@ async function _patchModuleMain(modDir, mod, firstLoc) {
     txt = txt.replace(/(\|\s*\*\*Локация\*\*\s*\|)([^|\n]*)\|/,
       (m, pre, val) => val.trim() ? m : `${pre} ${firstLoc} |`);
   }
-  await fs.writeFile(p, txt, 'utf-8');
+  await writeFileAtomic(p, txt, 'utf-8');
 }
 
 // slug generation lives in lib/parsers.js (single source of truth — see import above)
@@ -4909,7 +4929,7 @@ app.post('/api/log-session', async (req, res) => {
       // npc/ dir for new modules (modular NPC cards)
       if (c.rel.endsWith('/npc.md')) await fs.mkdir(path.join(path.dirname(abs), 'npc'), { recursive: true }).catch(() => {});
       const text = c.after.replace(/\r\n/g, '\n');     // LF, matches migrated files
-      await fs.writeFile(abs, text, 'utf-8');
+      await writeFileAtomic(abs, text, 'utf-8');
       written.push({ rel: c.rel, action: c.action });
     }
     delete _cache[plan.summary.city];
@@ -5112,7 +5132,7 @@ ${stubContents.map(s => `\n---\n## ${s.rel}\n${s.txt}`).join('\n')}`;
       if (!abs.startsWith(ROOT + path.sep)) { failed.push(relPath); continue; }
       try {
         await fs.mkdir(path.dirname(abs), { recursive: true });
-        await fs.writeFile(abs, content + '\n', 'utf-8');
+        await writeFileAtomic(abs, content + '\n', 'utf-8');
         written.push(relPath);
       } catch (e) {
         failed.push(relPath);
@@ -5323,7 +5343,7 @@ app.post('/api/settings', express.json(), async (req, res) => {
     }
 
     const newContent = Object.entries(env).map(([k, v]) => `${k}=${v}`).join('\n') + '\n';
-    await fs.writeFile(ENV_PATH, newContent, 'utf-8');
+    await writeFileAtomic(ENV_PATH, newContent, 'utf-8');
 
     const needsRestart = req.body?.restart !== false;
     res.json({ ok: true, needsRestart, supervised: SUPERVISED });
@@ -5357,6 +5377,30 @@ app.post('/api/restart', (req, res) => {
     message: SUPERVISED ? 'Перезапуск...' : 'Сервер запущен без wrapper.js — перезапустите вручную.',
   });
   scheduleRestart('[restart]');
+});
+
+// ── Global error net ───────────────────────────────────────────────────────────
+// Express 4-arg error middleware: catches synchronous throws inside route handlers
+// and anything passed to next(err), so a handler bug becomes a clean 500 instead of
+// a hung request. Must be registered AFTER all routes. The client gets a safe
+// message; the full stack stays in the server log.
+app.use((err, req, res, next) => {
+  console.error(`${C.red}[unhandled]${C.reset} ${req.method} ${req.url}:`, err?.stack || err);
+  if (res.headersSent) return next(err);
+  res.status(err?.status && err.status >= 400 && err.status < 600 ? err.status : 500)
+     .json({ error: 'Внутренняя ошибка сервера. Подробности — в логе сервера.' });
+});
+
+// Last-resort process guards. A throw in an async callback that escapes every
+// try/catch used to take the whole server down (e.g. the generate-prompt crash).
+// Now: log it; under wrapper.js (SUPERVISED) restart cleanly since state may be
+// corrupt, otherwise stay up so the GM doesn't lose their only running instance.
+process.on('unhandledRejection', reason => {
+  console.error(`${C.red}[unhandledRejection]${C.reset}`, reason?.stack || reason);
+});
+process.on('uncaughtException', err => {
+  console.error(`${C.red}[uncaughtException]${C.reset}`, err?.stack || err);
+  if (SUPERVISED) scheduleRestart('[uncaughtException]', 100);
 });
 
 app.listen(PORT, () => {
