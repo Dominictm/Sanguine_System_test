@@ -15,6 +15,7 @@ const fs       = require('fs');
 const path     = require('path');
 const http     = require('http');
 const { spawn, spawnSync } = require('child_process');
+const { slugify } = require('../lib/parsers');
 
 const ROOT     = path.resolve(__dirname, '../..');
 const E2E_PORT = Number(process.env.E2E_PORT || 3097);
@@ -130,6 +131,80 @@ describe('E2E — сквозной цикл хроники', () => {
       assert.strictEqual(r.json.city, CITY);
       assert.match(r.json.domain, /Тестополис/);
       assert.strictEqual(r.json.characters, 0, 'новый город должен быть без персонажей');
+    });
+  });
+
+  // ── 1b. CRUD городов через прямые эндпоинты (POST/PUT/DELETE /api/cities) ─────
+  describe('1b. CRUD городов (API)', () => {
+    const CRUD = slugify('Крудтест');   // отдельный город, не задевает основной e2e CITY
+
+    after(() => {
+      rmTestCity(CRUD);                 // на случай, если DELETE-тест не отработал
+      // убрать артефакт мягкого удаления cities/_deleted/krudtest_<ts> (только свой)
+      try {
+        const bin = path.join(ROOT, 'cities', '_deleted');
+        for (const n of fs.readdirSync(bin))
+          if (n.startsWith(CRUD + '_')) fs.rmSync(path.join(bin, n), { recursive: true, force: true });
+        if (!fs.readdirSync(bin).length) fs.rmdirSync(bin);
+      } catch {}
+    });
+
+    it('POST /api/cities создаёт город из полей', async () => {
+      const r = await post('/api/cities', { name: 'Крудтест', year: '2012',
+        political: 'Камарилья правит\nАнархи на окраинах', locations: 'Элизиум — Ратуша' });
+      assert.strictEqual(r.status, 200, `HTTP ${r.status}`);
+      assert.ok(r.json?.ok, `ok=false: ${JSON.stringify(r.json)}`);
+      assert.strictEqual(r.json.slug, slugify('Крудтест'));
+      assert.ok(fileExists(`cities/${r.json.slug}/city.md`));
+    });
+
+    it('POST с уже существующим слагом → 409', async () => {
+      const r = await post('/api/cities', { name: 'Крудтест', year: '2012' });
+      assert.strictEqual(r.status, 409, `ожидался 409, получен ${r.status}`);
+    });
+
+    it('POST без названия → 400', async () => {
+      const r = await post('/api/cities', { year: '2012' });
+      assert.strictEqual(r.status, 400);
+    });
+
+    it('GET detail отдаёт parsed.display/year/секции', async () => {
+      const r = await get(`/api/cities/${slugify('Крудтест')}/detail`);
+      assert.strictEqual(r.json.parsed.display, 'Крудтест');
+      assert.strictEqual(r.json.parsed.year, '2012');
+      assert.match(r.json.parsed.sections.political, /Камарилья правит/);
+    });
+
+    it('PUT (fields) переписывает display', async () => {
+      const slug = slugify('Крудтест');
+      const r = await httpReq('PUT', `/api/cities/${slug}`, { fields: { display: 'Крудтест-2', year: '2013' } });
+      assert.strictEqual(r.status, 200, `HTTP ${r.status}`);
+      const d = await get(`/api/cities/${slug}/detail`);
+      assert.strictEqual(d.json.parsed.display, 'Крудтест-2');
+      assert.strictEqual(d.json.parsed.year, '2013');
+    });
+
+    it('PUT (raw cityMd) сохраняет произвольный markdown', async () => {
+      const slug = slugify('Крудтест');
+      const md = `# Крудтест-3, 2014 — сеттинг города\n\n## Своя секция\n- кастомный контент\n`;
+      const r = await httpReq('PUT', `/api/cities/${slug}`, { cityMd: md });
+      assert.strictEqual(r.status, 200, `HTTP ${r.status}`);
+      const raw = readFile(`cities/${slug}/city.md`);
+      assert.match(raw, /Своя секция/, 'кастомная секция не сохранилась');
+    });
+
+    it('PUT без cityMd/fields → 400', async () => {
+      const r = await httpReq('PUT', `/api/cities/${slugify('Крудтест')}`, {});
+      assert.strictEqual(r.status, 400);
+    });
+
+    it('DELETE мягко удаляет (город пропадает из /api/cities)', async () => {
+      const slug = slugify('Крудтест');
+      const r = await httpReq('DELETE', `/api/cities/${slug}`, null);
+      assert.strictEqual(r.status, 200, `HTTP ${r.status}`);
+      assert.ok(r.json?.ok);
+      const list = await get('/api/cities');
+      assert.ok(!list.json.cities.includes(slug), 'удалённый город всё ещё в списке');
     });
   });
 

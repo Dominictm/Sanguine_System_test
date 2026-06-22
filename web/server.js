@@ -97,6 +97,15 @@ const C = {
   gray:   '\x1b[90m',
 };
 
+// Unified 500 response. Always logs the full error (many per-route catches previously
+// returned e.message to the client WITHOUT logging it), and returns a stable envelope
+// instead of leaking internal messages/paths/stacks. Intentional user-facing errors
+// stay as their own explicit res.status(...).json({error: '…'}) calls.
+function serverError(res, e) {
+  console.error(`${C.red}[error]${C.reset}`, e?.stack || e?.message || e);
+  if (!res.headersSent) res.status(500).json({ error: 'Внутренняя ошибка сервера — подробности в логе сервера.' });
+}
+
 // Human-readable action descriptions for API routes
 const ACTION_MAP = {
   'GET /api/status':                          () => 'Дашборд — загрузка статистики',
@@ -574,17 +583,17 @@ app.get('/api/status', async (req, res) => {
       events,
       brokenLinks: _brokenLinks   // null = never validated, 0 = clean, N = broken
     });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { serverError(res, e); }
 });
 
 app.get('/api/characters', async (req, res) => {
   try { res.json(await getAllCharacters(reqCity(req))); }
-  catch (e) { res.status(500).json({ error: e.message }); }
+  catch (e) { serverError(res, e); }
 });
 
 app.get('/api/cities', async (req, res) => {
   try { res.json({ cities: await listCities(), default: DEFAULT_CITY }); }
-  catch (e) { res.status(500).json({ error: e.message }); }
+  catch (e) { serverError(res, e); }
 });
 
 // Card-friendly summary of every city in cities/ — used by the «Домены» tab.
@@ -609,7 +618,7 @@ app.get('/api/cities/summary', async (req, res) => {
     }));
     out.sort((a, b) => a.display.localeCompare(b.display, 'ru'));
     res.json(out);
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { serverError(res, e); }
 });
 
 // Full city.md + stats for one city — used by the city detail modal.
@@ -629,7 +638,7 @@ app.get('/api/cities/:slug/detail', async (req, res) => {
     try { locations = await countMdFiles(locsDir(slug)); } catch {}
 
     res.json({ slug, cityMd, parsed, characters, modules, locations });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { serverError(res, e); }
 });
 
 // ── City create / edit / delete ────────────────────────────────────────────────
@@ -687,7 +696,7 @@ app.post('/api/cities', express.json(), async (req, res) => {
     res.json({ ok: true, slug, display, year });
   } catch (e) {
     console.error('[create-city]', e.message);
-    res.status(500).json({ error: e.message });
+    serverError(res, e);
   }
 });
 
@@ -716,7 +725,7 @@ app.put('/api/cities/:slug', express.json(), async (req, res) => {
     res.json({ ok: true, slug, parsed: parseCityMd(cityMd) });
   } catch (e) {
     console.error('[edit-city]', e.message);
-    res.status(500).json({ error: e.message });
+    serverError(res, e);
   }
 });
 
@@ -740,7 +749,7 @@ app.delete('/api/cities/:slug', async (req, res) => {
     res.json({ ok: true, slug, movedTo: path.relative(ROOT, dest).replace(/\\/g, '/') });
   } catch (e) {
     console.error('[delete-city]', e.message);
-    res.status(500).json({ error: e.message });
+    serverError(res, e);
   }
 });
 
@@ -802,7 +811,7 @@ app.get('/api/chronicles', async (req, res) => {
     });
 
     res.json(out);
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { serverError(res, e); }
 });
 
 // ── Chronicle create ──────────────────────────────────────────────────────────
@@ -893,7 +902,7 @@ app.post('/api/chronicles', express.json(), async (req, res) => {
     res.json({ ok: true, slug, display });
   } catch (e) {
     console.error('[create-chronicle]', e.message);
-    res.status(500).json({ error: e.message });
+    serverError(res, e);
   }
 });
 
@@ -983,7 +992,7 @@ app.get('/api/chronicles/:slug/delete-preview', async (req, res) => {
       filesToDelete: preview.toDelete.map(f => path.relative(ROOT, f)),
       tempChars: preview.tempChars,
     });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { serverError(res, e); }
 });
 
 // ── Chronicle delete ──────────────────────────────────────────────────────────
@@ -1041,7 +1050,7 @@ app.delete('/api/chronicles/:slug', express.json(), async (req, res) => {
     res.json({ ok: true, slug, moved });
   } catch (e) {
     console.error('[delete-chronicle]', e.message);
-    res.status(500).json({ error: e.message });
+    serverError(res, e);
   }
 });
 
@@ -1080,7 +1089,7 @@ app.get('/api/graph', async (req, res) => {
     }
 
     res.json({ nodes, links });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { serverError(res, e); }
 });
 
 app.get('/api/modules', async (req, res) => {
@@ -1110,7 +1119,7 @@ app.get('/api/modules', async (req, res) => {
       mods.push(mod);
     }
     res.json(mods);
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { serverError(res, e); }
 });
 
 // ── Events for one chronicle ──────────────────────────────────────────────────
@@ -1131,7 +1140,7 @@ app.get('/api/chronicles/:slug/events', async (req, res) => {
     events.sort((a, b) => eventDateScore(b.date) - eventDateScore(a.date));
     events.forEach((ev, i) => { ev.id = i; });
     res.json(events);
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { serverError(res, e); }
 });
 
 // ── "Ранее в хронике…" — AI recap of the most recent events ────────────────────
@@ -1263,7 +1272,7 @@ app.get('/api/chronicles/:slug/modules', async (req, res) => {
       mods.push(mod);
     }
     res.json(mods);
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { serverError(res, e); }
 });
 
 // ── Create module in chronicle ────────────────────────────────────────────────
@@ -1337,7 +1346,7 @@ app.post('/api/chronicles/:slug/modules', express.json(), async (req, res) => {
     res.json({ ok: true, slug: modSlug, title: name.trim() });
   } catch (e) {
     console.error('[create-module]', e.message);
-    res.status(500).json({ error: e.message });
+    serverError(res, e);
   }
 });
 
@@ -1829,7 +1838,7 @@ app.delete('/api/chronicles/:chr/modules/:mod', express.json(), async (req, res)
     res.json({ ok: true, mod, removedEvents, cleanedChars, episodicSlugs });
   } catch (e) {
     console.error('[delete-module]', e.message);
-    res.status(500).json({ error: e.message });
+    serverError(res, e);
   }
 });
 
@@ -1984,13 +1993,13 @@ app.get('/api/modules/:name', async (req, res) => {
       if (hm) out.title = hm[1].replace(/[*[\]]/g, '').trim();
     }
     res.json(out);
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { serverError(res, e); }
 });
 
 app.get('/api/threads', async (req, res) => {
   try {
     res.json(await readThreadsStructured(reqCity(req)));
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { serverError(res, e); }
 });
 
 // Create a new thread (appends a table row). Default target: archive/open_threads.md.
@@ -2020,7 +2029,7 @@ app.post('/api/threads', express.json(), async (req, res) => {
     lines.splice(insertAt, 0, row);
     await writeFileAtomic(abs, lines.join('\n'), 'utf-8');
     res.json({ ok: true, id: nextId });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { serverError(res, e); }
 });
 
 // Update a thread's status and/or priority in its source file.
@@ -2052,7 +2061,7 @@ app.patch('/api/threads/:id', express.json(), async (req, res) => {
     if (!done) return res.status(404).json({ error: 'Нить не найдена' });
     await writeFileAtomic(abs, lines.join('\n'), 'utf-8');
     res.json({ ok: true });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { serverError(res, e); }
 });
 
 // ── Module detail ─────────────────────────────────────────────────────────────
@@ -2220,7 +2229,7 @@ app.get('/api/chronicles/:chr/modules/:mod/detail', async (req, res) => {
     res.json(result);
   } catch (e) {
     console.error('[module-detail]', e.message);
-    res.status(500).json({ error: e.message });
+    serverError(res, e);
   }
 });
 
@@ -2242,7 +2251,7 @@ app.get('/api/characters/:name/diary', async (req, res) => {
 
     const content = await fs.readFile(filePath, 'utf-8');
     res.json(parseDiary(content));
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { serverError(res, e); }
 });
 
 // Add a [label](journal/<period>.md) link to the card's "📖 Дневники" field if absent.
@@ -2297,7 +2306,7 @@ app.put('/api/characters/:name/diary', express.json(), async (req, res) => {
     await ensureDiaryLink(city, char, per, periodLabel(per));
     delete _cache[city];
     res.json({ ok: true, file: `journal/${per}.md` });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { serverError(res, e); }
 });
 
 // AI-generate diary prose for a character + period (not saved — returned for review).
@@ -2436,7 +2445,7 @@ ${styles.slice(0, 2000)}`;
 
 app.get('/api/locations', async (req, res) => {
   try { res.json(await getAllLocations(reqCity(req))); }
-  catch (e) { res.status(500).json({ error: e.message }); }
+  catch (e) { serverError(res, e); }
 });
 
 app.get('/api/locations/:slug/images', async (req, res) => {
@@ -2447,7 +2456,7 @@ app.get('/api/locations/:slug/images', async (req, res) => {
     const loc  = locs.find(l => l.slug === slug);
     if (!loc) return res.status(404).json({ error: 'not found' });
     res.json({ images: loc.imageUrls || (loc.imageUrl ? [loc.imageUrl] : []) });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { serverError(res, e); }
 });
 
 app.put('/api/locations/:slug/fields', express.json(), async (req, res) => {
@@ -2512,7 +2521,7 @@ app.put('/api/locations/:slug/fields', express.json(), async (req, res) => {
 
     await writeFileAtomic(mdPath, card, 'utf-8');
     res.json({ ok: true });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { serverError(res, e); }
 });
 
 app.post('/api/locations/:slug/upload-image', express.json({ limit: '20mb' }), async (req, res) => {
@@ -2554,7 +2563,7 @@ app.post('/api/locations/:slug/upload-image', express.json({ limit: '20mb' }), a
     const relParts = path.relative(locRoot, locFolder).split(path.sep);
     const url = `/city-img/${city}/locations/` + relParts.map(p => encodeURIComponent(p)).join('/') + '/art/' + encodeURIComponent(filename);
     res.json({ success: true, filename, url });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { serverError(res, e); }
 });
 
 app.get('/api/chronicle', async (req, res) => {
@@ -2566,7 +2575,7 @@ app.get('/api/chronicle', async (req, res) => {
     const parsed = parseChronicle(raw);          // title + World State from archive/events.md
     parsed.events = await aggregateEvents(city); // full events from chronicles/<chr>/events.md
     res.json({ exists: true, ...parsed });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { serverError(res, e); }
 });
 
 // Raw markdown archive docs — rendered client-side with the lore renderer.
@@ -2574,7 +2583,7 @@ const archiveDoc = file => async (req, res) => {
   try {
     const content = await fs.readFile(path.join(archiveDir(reqCity(req)), file), 'utf-8').catch(() => null);
     res.json({ exists: content !== null, content: content || '' });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { serverError(res, e); }
 };
 app.get('/api/timeline', archiveDoc('timeline.md'));          // historical lore (B3)
 app.get('/api/factions', archiveDoc('political_state.md'));   // C1 — faction map
@@ -2586,7 +2595,7 @@ app.get('/api/rumors', async (req, res) => {
     const which = req.query.type === 'dreaming' ? 'rumors_dreaming.md' : 'rumors_elysium.md';
     const content = await fs.readFile(path.join(archiveDir(reqCity(req)), which), 'utf-8').catch(() => null);
     res.json({ exists: content !== null, content: content || '', type: req.query.type === 'dreaming' ? 'dreaming' : 'elysium' });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { serverError(res, e); }
 });
 
 // PUT — write archive docs back to disk
@@ -2599,7 +2608,7 @@ const _writeArchiveDoc = (file) => async (req, res) => {
     await fs.mkdir(dir, { recursive: true });
     await writeFileAtomic(path.join(dir, file), content, 'utf-8');
     res.json({ ok: true });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { serverError(res, e); }
 };
 app.put('/api/timeline', express.json(), _writeArchiveDoc('timeline.md'));
 app.put('/api/factions', express.json(), _writeArchiveDoc('political_state.md'));
@@ -2615,7 +2624,7 @@ app.put('/api/rumors', express.json(), async (req, res) => {
     await fs.mkdir(dir, { recursive: true });
     await writeFileAtomic(path.join(dir, file), content, 'utf-8');
     res.json({ ok: true });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { serverError(res, e); }
 });
 
 // C4 — V20 character sheet (<slug>-sheet.md next to the card)
@@ -2629,7 +2638,7 @@ app.get('/api/characters/:name/sheet', async (req, res) => {
     const file = path.join(charsDir(city), char.lineageFolder, char.slug, `${char.slug}-sheet.md`);
     const content = await fs.readFile(file, 'utf-8').catch(() => null);
     res.json({ exists: content !== null, content: content || '' });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { serverError(res, e); }
 });
 
 // ── V20 sheet generation / save (canonical chars + episodic module NPCs) ──────
@@ -2740,7 +2749,7 @@ app.get('/api/characters/:name/sheet-data', async (req, res) => {
     }
     const md = await fs.readFile(path.join(dir, `${char.slug}-sheet.md`), 'utf-8').catch(() => null);
     res.json({ exists: md !== null, source: md ? 'md' : 'empty', lineage: char.lineageFolder, md: md || '' });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { serverError(res, e); }
 });
 
 app.put('/api/characters/:name/sheet-data', express.json({ limit: '1mb' }), async (req, res) => {
@@ -2770,7 +2779,7 @@ app.get('/api/chronicles/:chr/modules/:mod/npc/:slug/sheet', async (req, res) =>
     const { sheet } = _npcSheetPaths(reqCity(req), chr, mod, decodeURIComponent(slug));
     const content = await fs.readFile(sheet, 'utf-8').catch(() => null);
     res.json({ exists: content !== null, content: content || '' });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { serverError(res, e); }
 });
 
 app.post('/api/chronicles/:chr/modules/:mod/npc/:slug/sheet/generate', express.json(), async (req, res) => {
@@ -2907,7 +2916,7 @@ app.get('/api/search', async (req, res) => {
 
     const total = characters.length + locations.length + modules.length + events.length + archive.length;
     res.json({ query: q, results: { characters, locations, modules, events, archive }, total });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { serverError(res, e); }
 });
 
 app.get('/api/integrity', async (req, res) => {
@@ -2988,7 +2997,7 @@ app.get('/api/integrity', async (req, res) => {
 
     const totalIssues = checks.reduce((n, c) => n + c.items.length, 0);
     res.json({ brokenLinks: _brokenLinks, totalIssues, checks });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { serverError(res, e); }
 });
 
 // ── Canon consistency check (AI) — flags contradictions in a logged event ──────
@@ -3164,7 +3173,7 @@ app.get('/api/characters/all-images', async (req, res) => {
       if (images.length > 1) result[char.name] = images;
     }));
     res.json(result);
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { serverError(res, e); }
 });
 
 // ── Update editable fields in a character card ────────────────────────────────
@@ -3249,7 +3258,7 @@ app.put('/api/characters/:name/fields', express.json(), async (req, res) => {
     delete _cache[city];
     res.json({ ok: true });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    serverError(res, e);
   }
 });
 
@@ -3286,7 +3295,7 @@ app.put('/api/characters/:name/relations', express.json(), async (req, res) => {
     delete _cache[city];
     res.json({ ok: true });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    serverError(res, e);
   }
 });
 
@@ -3395,7 +3404,7 @@ app.post('/api/characters', express.json(), async (req, res) => {
     res.json({ ok: true, slug, name, lineage: folder });
   } catch (e) {
     console.error('[create-character]', e.message);
-    res.status(500).json({ error: e.message });
+    serverError(res, e);
   }
 });
 
@@ -3462,7 +3471,7 @@ app.get('/api/characters/:name/delete-preview', async (req, res) => {
       .then(a => a.filter(x => /\.(png|jpe?g|webp|gif)$/i.test(x)).length).catch(() => 0);
     const hasSheet = await fs.access(path.join(charDir, `${slug}-sheet.md`)).then(() => true).catch(() => false);
     res.json({ name: char.name, slug, lineageFolder, art, hasSheet, structural, prose });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { serverError(res, e); }
 });
 
 app.delete('/api/characters/:name', express.json(), async (req, res) => {
@@ -3511,7 +3520,7 @@ app.delete('/api/characters/:name', express.json(), async (req, res) => {
     res.json({ ok: true, slug, movedTo: `characters/_deleted/${path.basename(dst)}`, delinked });
   } catch (e) {
     console.error('[delete-character]', e.message);
-    res.status(500).json({ error: e.message });
+    serverError(res, e);
   }
 });
 
@@ -3790,7 +3799,7 @@ app.get('/api/auth-status', async (req, res) => {
 
     res.json({ source: 'none', ok: false });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    serverError(res, e);
   }
 });
 
@@ -4134,7 +4143,7 @@ app.get('/api/characters/:name/images', async (req, res) => {
 
     res.json({ images });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    serverError(res, e);
   }
 });
 
@@ -4187,7 +4196,7 @@ app.post('/api/characters/:name/upload-image', express.json({ limit: '20mb' }), 
       url: `/city-img/${city}/characters/${char.lineageFolder}/${encodeURIComponent(char.slug)}/art/${encodeURIComponent(filename)}`
     });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    serverError(res, e);
   }
 });
 
@@ -4242,7 +4251,7 @@ app.delete('/api/characters/:name/images/:filename', async (req, res) => {
     delete _cache[city];
     res.json({ ok: true, filename, fileWasMissing });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    serverError(res, e);
   }
 });
 
@@ -5424,7 +5433,7 @@ app.get('/api/settings', async (req, res) => {
       hasAnthropicKey:    !!env.ANTHROPIC_API_KEY,
       claudeOauth,
     });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { serverError(res, e); }
 });
 
 app.post('/api/settings', express.json(), async (req, res) => {
@@ -5462,7 +5471,7 @@ app.post('/api/settings', express.json(), async (req, res) => {
     if (needsRestart) scheduleRestart('[settings]');
   } catch (e) {
     console.error('[settings]', e.message);
-    res.status(500).json({ error: e.message });
+    serverError(res, e);
   }
 });
 
