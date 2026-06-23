@@ -111,14 +111,14 @@ const ACTION_MAP = {
   'GET /api/status':                          () => 'Дашборд — загрузка статистики',
   'GET /api/characters':                      req => `Персонажи — загрузка (город: ${reqCity(req)})`,
   'GET /api/characters/all-images':           req => `Карусель — загрузка всех артов (${reqCity(req)})`,
-  'GET /api/characters/:name/images':         req => `Арты персонажа: ${decodeURIComponent(req.params.name)}`,
-  'GET /api/characters/:name/diary':          req => `Дневник: ${decodeURIComponent(req.params.name)} → ${req.query.file || '?'}`,
-  'PUT /api/characters/:name/fields':         req => `✏  Редактирование полей: ${decodeURIComponent(req.params.name)}`,
-  'PUT /api/characters/:name/relations':      req => `✏  Редактирование отношений: ${decodeURIComponent(req.params.name)}`,
-  'POST /api/characters/:name/upload-image':  req => `📷 Загрузка изображения → ${decodeURIComponent(req.params.name)}`,
-  'POST /api/characters/:name/generate-appearance': req => `🤖 Генерация внешности: ${decodeURIComponent(req.params.name)}`,
-  'POST /api/characters/:name/generate-prompt':    req => `🎨 Генерация промта: ${decodeURIComponent(req.params.name)}`,
-  'DELETE /api/characters/:name/images/:filename':  req => `🗑 Удаление изображения: ${decodeURIComponent(req.params.filename)} ← ${decodeURIComponent(req.params.name)}`,
+  'GET /api/characters/:slug/images':         req => `Арты персонажа: ${decodeURIComponent(req.params.slug)}`,
+  'GET /api/characters/:slug/diary':          req => `Дневник: ${decodeURIComponent(req.params.slug)} → ${req.query.file || '?'}`,
+  'PUT /api/characters/:slug/fields':         req => `✏  Редактирование полей: ${decodeURIComponent(req.params.slug)}`,
+  'PUT /api/characters/:slug/relations':      req => `✏  Редактирование отношений: ${decodeURIComponent(req.params.slug)}`,
+  'POST /api/characters/:slug/upload-image':  req => `📷 Загрузка изображения → ${decodeURIComponent(req.params.slug)}`,
+  'POST /api/characters/:slug/generate-appearance': req => `🤖 Генерация внешности: ${decodeURIComponent(req.params.slug)}`,
+  'POST /api/characters/:slug/generate-prompt':    req => `🎨 Генерация промта: ${decodeURIComponent(req.params.slug)}`,
+  'DELETE /api/characters/:slug/images/:filename':  req => `🗑 Удаление изображения: ${decodeURIComponent(req.params.filename)} ← ${decodeURIComponent(req.params.slug)}`,
   'GET /api/locations':                       req => `Локации — загрузка (${reqCity(req)})`,
   'GET /api/locations/:slug/images':          req => `Арты локации: ${decodeURIComponent(req.params.slug)}`,
   'PUT /api/locations/:slug/fields':          req => `✏  Редактирование локации: ${decodeURIComponent(req.params.slug)}`,
@@ -1207,7 +1207,7 @@ ${digest}`;
         } catch (e) {
           lastErr = e;
           const is429 = e.status === 429;
-          const retryable = e.status === 404 || is429 || (e.status === 400 && /not a valid model|No endpoints/i.test(e.message))
+          const retryable = e.status === 404 || e.status === 502 || is429 || (e.status === 400 && /not a valid model|No endpoints/i.test(e.message))
             || (e.status === 403 && /moderation|flagged/i.test(e.message));
           if (!retryable) { allRateLimited = false; throw e; }
           if (!is429) allRateLimited = false;
@@ -2233,15 +2233,15 @@ app.get('/api/chronicles/:chr/modules/:mod/detail', async (req, res) => {
   }
 });
 
-app.get('/api/characters/:name/diary', async (req, res) => {
+app.get('/api/characters/:slug/diary', async (req, res) => {
   try {
-    const name = decodeURIComponent(req.params.name);
+    const slug = decodeURIComponent(req.params.slug);
     const file = req.query.file;
     if (!file) return res.status(400).json({ error: 'file param required' });
 
     const city  = reqCity(req);
     const chars = await getAllCharacters(city);
-    const char  = chars.find(c => c.name === name);
+    const char  = chars.find(c => c.slug === slug);
     if (!char) return res.status(404).json({ error: 'Персонаж не найден' });
 
     const charDir  = path.resolve(charsDir(city), char.lineageFolder, char.slug);
@@ -2276,17 +2276,17 @@ async function ensureDiaryLink(city, char, period, label) {
 }
 
 // Create or append a diary entry (journal/<period>.md), then link it from the card.
-app.put('/api/characters/:name/diary', express.json(), async (req, res) => {
+app.put('/api/characters/:slug/diary', express.json(), async (req, res) => {
   try {
     const city = reqCity(req);
-    const name = decodeURIComponent(req.params.name);
+    const slug = decodeURIComponent(req.params.slug);
     const { period, session = '', text = '', mode = 'append' } = req.body || {};
     const per = String(period || '').trim();
     if (!/^(\d{4}-\d{2}|retrospective)$/.test(per)) return res.status(400).json({ error: 'Период: ГГГГ-ММ или retrospective' });
     if (!String(text).trim()) return res.status(400).json({ error: 'Пустой текст записи' });
 
     const chars = await getAllCharacters(city);
-    const char  = chars.find(c => c.name === name);
+    const char  = chars.find(c => c.slug === slug);
     if (!char) return res.status(404).json({ error: 'Персонаж не найден' });
 
     const jdir = path.join(charsDir(city), char.lineageFolder, char.slug, 'journal');
@@ -2310,14 +2310,14 @@ app.put('/api/characters/:name/diary', express.json(), async (req, res) => {
 });
 
 // AI-generate diary prose for a character + period (not saved — returned for review).
-app.post('/api/characters/:name/diary/generate', express.json(), async (req, res) => {
+app.post('/api/characters/:slug/diary/generate', express.json(), async (req, res) => {
   try {
     const city = reqCity(req);
-    const name = decodeURIComponent(req.params.name);
+    const slug = decodeURIComponent(req.params.slug);
     const { period = '', session = '', hint = '', orModel = null, preferSource = null } = req.body || {};
 
     const chars = await getAllCharacters(city);
-    const char  = chars.find(c => c.name === name);
+    const char  = chars.find(c => c.slug === slug);
     if (!char) return res.status(404).json({ error: 'Персонаж не найден' });
 
     const gen = await makeGenerationClient(preferSource, orModel);
@@ -2368,7 +2368,7 @@ ${hint ? `Акцент/пожелание: ${hint}\n` : ''}Требования:
         try { text = await _oaCall(gen)(m, systemPrompt, userPrompt, []); if (m !== gen.model) console.log(`[diary-gen] fallback model: ${m}`); break; }
         catch (e) {
           lastErr = e;
-          const retry = e.status === 404 || e.status === 429 || (e.status === 400 && /not a valid model|No endpoints/i.test(e.message));
+          const retry = e.status === 404 || e.status === 429 || e.status === 502 || (e.status === 400 && /not a valid model|No endpoints/i.test(e.message));
           if (!retry) throw e;
         }
       }
@@ -2389,16 +2389,19 @@ ${hint ? `Акцент/пожелание: ${hint}\n` : ''}Требования:
 
 // ── NPC in-character dialogue (AI) — Voice field + clan style from diary_rules ──
 
-app.post('/api/characters/:name/dialogue', express.json(), async (req, res) => {
+// :id accepts either a real character's slug or a module-only NPC's display name
+// (module-listed NPCs have no slug — see _findModularNpcCard fallback below).
+app.post('/api/characters/:id/dialogue', express.json(), async (req, res) => {
   try {
     const city = reqCity(req);
-    const name = decodeURIComponent(req.params.name);
+    const id   = decodeURIComponent(req.params.id);
+    const name = id;
     const situation = String(req.body?.situation || '').trim();
     const count = Math.min(Math.max(parseInt(req.body?.count, 10) || 4, 1), 8);
     if (!situation) return res.status(400).json({ ok: false, error: 'Опиши ситуацию для реплик' });
 
     const chars = await getAllCharacters(city);
-    let   char  = chars.find(c => c.name === name) || chars.find(c => _nameMatch(c.name, name));
+    let   char  = chars.find(c => c.slug === id) || chars.find(c => c.name === id) || chars.find(c => _nameMatch(c.name, id));
     let   card  = '';
     let   clan  = '';
     if (char) {
@@ -2628,12 +2631,12 @@ app.put('/api/rumors', express.json(), async (req, res) => {
 });
 
 // C4 — V20 character sheet (<slug>-sheet.md next to the card)
-app.get('/api/characters/:name/sheet', async (req, res) => {
+app.get('/api/characters/:slug/sheet', async (req, res) => {
   try {
     const city  = reqCity(req);
-    const name  = decodeURIComponent(req.params.name);
+    const slug  = decodeURIComponent(req.params.slug);
     const chars = await getAllCharacters(city);
-    const char  = chars.find(c => c.name === name);
+    const char  = chars.find(c => c.slug === slug);
     if (!char) return res.status(404).json({ error: 'Персонаж не найден' });
     const file = path.join(charsDir(city), char.lineageFolder, char.slug, `${char.slug}-sheet.md`);
     const content = await fs.readFile(file, 'utf-8').catch(() => null);
@@ -2694,12 +2697,12 @@ async function _ensureSheetLink(cardPath, sheetRel) {
 }
 
 // Generate (or regenerate) a canonical character's sheet
-app.post('/api/characters/:name/sheet/generate', express.json(), async (req, res) => {
+app.post('/api/characters/:slug/sheet/generate', express.json(), async (req, res) => {
   try {
     const city  = reqCity(req);
-    const name  = decodeURIComponent(req.params.name);
+    const slug  = decodeURIComponent(req.params.slug);
     const chars = await getAllCharacters(city);
-    const char  = chars.find(c => c.name === name);
+    const char  = chars.find(c => c.slug === slug);
     if (!char) return res.status(404).json({ ok: false, error: 'Персонаж не найден' });
     const dir  = path.join(charsDir(city), char.lineageFolder, char.slug);
     const card = await fs.readFile(path.join(dir, `${char.slug}.md`), 'utf-8').catch(() => '');
@@ -2714,14 +2717,14 @@ app.post('/api/characters/:name/sheet/generate', express.json(), async (req, res
 });
 
 // Save an edited canonical sheet (raw markdown from the editor)
-app.put('/api/characters/:name/sheet', express.json(), async (req, res) => {
+app.put('/api/characters/:slug/sheet', express.json(), async (req, res) => {
   try {
     const city  = reqCity(req);
-    const name  = decodeURIComponent(req.params.name);
+    const slug  = decodeURIComponent(req.params.slug);
     const content = String(req.body?.content || '');
     if (!content.trim()) return res.status(400).json({ ok: false, error: 'Пустой лист' });
     const chars = await getAllCharacters(city);
-    const char  = chars.find(c => c.name === name);
+    const char  = chars.find(c => c.slug === slug);
     if (!char) return res.status(404).json({ ok: false, error: 'Персонаж не найден' });
     const dir = path.join(charsDir(city), char.lineageFolder, char.slug);
     await writeFileAtomic(path.join(dir, `${char.slug}-sheet.md`), content.replace(/\s*$/, '') + '\n', 'utf-8');
@@ -2734,12 +2737,12 @@ app.put('/api/characters/:name/sheet', express.json(), async (req, res) => {
 // Source of truth for the interactive blank on the «Лист V20» tab. Falls back to
 // parsing the AI markdown sheet (client-side) when no JSON exists yet, or when
 // ?fromMd=1 forces a reseed after an AI (re)generation.
-app.get('/api/characters/:name/sheet-data', async (req, res) => {
+app.get('/api/characters/:slug/sheet-data', async (req, res) => {
   try {
     const city  = reqCity(req);
-    const name  = decodeURIComponent(req.params.name);
+    const slug  = decodeURIComponent(req.params.slug);
     const chars = await getAllCharacters(city);
-    const char  = chars.find(c => c.name === name);
+    const char  = chars.find(c => c.slug === slug);
     if (!char) return res.status(404).json({ error: 'Персонаж не найден' });
     const dir   = path.join(charsDir(city), char.lineageFolder, char.slug);
     const fromMd = req.query.fromMd === '1';
@@ -2752,14 +2755,14 @@ app.get('/api/characters/:name/sheet-data', async (req, res) => {
   } catch (e) { serverError(res, e); }
 });
 
-app.put('/api/characters/:name/sheet-data', express.json({ limit: '1mb' }), async (req, res) => {
+app.put('/api/characters/:slug/sheet-data', express.json({ limit: '1mb' }), async (req, res) => {
   try {
     const city  = reqCity(req);
-    const name  = decodeURIComponent(req.params.name);
+    const slug  = decodeURIComponent(req.params.slug);
     const data  = req.body?.data;
     if (!data || typeof data !== 'object') return res.status(400).json({ ok: false, error: 'Нет данных листа' });
     const chars = await getAllCharacters(city);
-    const char  = chars.find(c => c.name === name);
+    const char  = chars.find(c => c.slug === slug);
     if (!char) return res.status(404).json({ ok: false, error: 'Персонаж не найден' });
     const dir   = path.join(charsDir(city), char.lineageFolder, char.slug);
     await writeFileAtomic(path.join(dir, `${char.slug}-sheet.json`), JSON.stringify(data, null, 2), 'utf-8');
@@ -3198,14 +3201,14 @@ const EDITABLE_FIELD_MAP = {
   voice:        'Голос',
 };
 
-app.put('/api/characters/:name/fields', express.json(), async (req, res) => {
+app.put('/api/characters/:slug/fields', express.json(), async (req, res) => {
   try {
-    const name   = decodeURIComponent(req.params.name);
+    const slug   = decodeURIComponent(req.params.slug);
     const city   = reqCity(req);
     const fields = req.body.fields || {};
 
     const chars = await getAllCharacters(city);
-    const char  = chars.find(c => c.name === name);
+    const char  = chars.find(c => c.slug === slug);
     if (!char) return res.status(404).json({ error: 'Персонаж не найден' });
 
     const cardPath = path.join(charsDir(city), char.lineageFolder, char.slug, `${char.slug}.md`);
@@ -3264,14 +3267,14 @@ app.put('/api/characters/:name/fields', express.json(), async (req, res) => {
 
 // ── Update relations block ─────────────────────────────────────────────────────
 
-app.put('/api/characters/:name/relations', express.json(), async (req, res) => {
+app.put('/api/characters/:slug/relations', express.json(), async (req, res) => {
   try {
-    const name   = decodeURIComponent(req.params.name);
+    const slug   = decodeURIComponent(req.params.slug);
     const city   = reqCity(req);
     const lines  = req.body.lines || []; // array of strings "Имя — описание"
 
     const chars = await getAllCharacters(city);
-    const char  = chars.find(c => c.name === name);
+    const char  = chars.find(c => c.slug === slug);
     if (!char) return res.status(404).json({ error: 'Персонаж не найден' });
 
     const cardPath = path.join(charsDir(city), char.lineageFolder, char.slug, `${char.slug}.md`);
@@ -3415,9 +3418,9 @@ app.post('/api/characters', express.json(), async (req, res) => {
 // other files are de-linked (hyperlink dropped, name text kept) so nothing
 // breaks; narrative prose (diaries, event text) is left intact as chronicle history.
 
-async function _resolveChar(city, name) {
+async function _resolveChar(city, slug) {
   const chars = await getAllCharacters(city);
-  return chars.find(c => c.name === name) || chars.find(c => _nameMatch(c.name, name)) || null;
+  return chars.find(c => c.slug === slug) || null;
 }
 
 // Every .md under root, skipping dotfolders and any excluded absolute dir.
@@ -3443,10 +3446,10 @@ function _delinkSlug(content, slug) {
   return content.replace(new RegExp(`\\[([^\\]]+)\\]\\(([^)]*${s}/${s}\\.md[^)]*)\\)`, 'g'), '$1');
 }
 
-app.get('/api/characters/:name/delete-preview', async (req, res) => {
+app.get('/api/characters/:slug/delete-preview', async (req, res) => {
   try {
     const city = reqCity(req);
-    const char = await _resolveChar(city, decodeURIComponent(req.params.name));
+    const char = await _resolveChar(city, decodeURIComponent(req.params.slug));
     if (!char) return res.status(404).json({ error: 'Персонаж не найден' });
     const { slug, lineageFolder } = char;
     const charDir = path.join(charsDir(city), lineageFolder, slug);
@@ -3474,10 +3477,10 @@ app.get('/api/characters/:name/delete-preview', async (req, res) => {
   } catch (e) { serverError(res, e); }
 });
 
-app.delete('/api/characters/:name', express.json(), async (req, res) => {
+app.delete('/api/characters/:slug', express.json(), async (req, res) => {
   try {
     const city = reqCity(req);
-    const char = await _resolveChar(city, decodeURIComponent(req.params.name));
+    const char = await _resolveChar(city, decodeURIComponent(req.params.slug));
     if (!char) return res.status(404).json({ error: 'Персонаж не найден' });
     const { slug, lineageFolder } = char;
     const srcDir = path.join(charsDir(city), lineageFolder, slug);
@@ -3703,9 +3706,9 @@ async function _chatCompletion({ provider, model, systemPrompt, userPrompt, imag
   if (!text) {
     // Image-generation models return images[], not text
     if (msg?.images?.length) {
-      throw new Error(`Модель «${data.model}» — генератор изображений, а не текста. Выберите другую модель в настройках ИИ.`);
+      throw Object.assign(new Error(`Модель «${data.model}» — генератор изображений, а не текста. Выберите другую модель в настройках ИИ.`), { status: 502 });
     }
-    throw new Error(`${label} вернул пустой ответ от модели «${data.model || model}»`);
+    throw Object.assign(new Error(`${label} вернул пустой ответ от модели «${data.model || model}»`), { status: 502 });
   }
   return text;
 }
@@ -3929,13 +3932,13 @@ app.get('/api/claude/status', async (req, res) => {
 
 // ── Generate appearance from art images via Vision API ────────────────────────
 
-app.post('/api/characters/:name/generate-appearance', express.json(), async (req, res) => {
+app.post('/api/characters/:slug/generate-appearance', express.json(), async (req, res) => {
   try {
     // Validate cheap inputs BEFORE constructing a generation client (no API call needed to 404/400).
-    const name = decodeURIComponent(req.params.name);
+    const slug = decodeURIComponent(req.params.slug);
     const city = reqCity(req);
     const chars = await getAllCharacters(city);
-    const char  = chars.find(c => c.name === name);
+    const char  = chars.find(c => c.slug === slug);
     if (!char) return res.status(404).json({ error: 'Персонаж не найден' });
 
     const artDir = path.join(charsDir(city), char.lineageFolder, char.slug, 'art');
@@ -3982,7 +3985,7 @@ app.post('/api/characters/:name/generate-appearance', express.json(), async (req
         } catch (e) {
           lastErr = e;
           const is429 = e.status === 429;
-          const retryable = e.status === 404 || is429
+          const retryable = e.status === 404 || e.status === 502 || is429
             || (e.status === 400 && /not a valid model|No endpoints/i.test(e.message))
             || (e.status === 403 && /moderation|flagged/i.test(e.message));
           if (!retryable) { allRateLimited = false; throw e; }
@@ -4021,13 +4024,40 @@ app.post('/api/characters/:name/generate-appearance', express.json(), async (req
 
 // ── Generate image prompt for a character ─────────────────────────────────────
 
-app.post('/api/characters/:name/generate-prompt', express.json(), async (req, res) => {
+// English color-family phrases for the AI prompt's lighting/background accent (Block 2),
+// keyed by clan. Mirrors the hex identity of CLAN_COLORS in web/public/scripts.js (the
+// decorative modal-tint palette) so a clan reads as the same color in the UI and in the
+// generated portrait — not canonical, purely a visual-consistency device across all images.
+const CLAN_PROMPT_ACCENT = {
+  'Асамиты':              'deep blood-red',
+  'Бруха':                'burnt rust-orange',
+  'Вентру':                'deep steel-blue',
+  'Гэнгрел':               'earthy ochre-brown',
+  'Джованни':              'dark muted plum-grey',
+  'Ласомбра':              'deep indigo-black',
+  'Малкавиан':             'vivid violet-purple',
+  'Носферату':             'murky olive-green',
+  'Равнос':                'warm amber-orange',
+  'Последователи Сета':    'golden mustard-amber',
+  'Тореадор':              'rose-crimson pink',
+  'Тремер':                'deep violet-magenta',
+  'Тзимище':               'dark oxblood-red',
+  'Баали':                 'near-black blood-red',
+  'Дочери Какофонии':      'slate blue-grey',
+  'Каппадокийцы':          'ashen grey',
+  'Нагараджа':             'burnt sienna-brown',
+  'Салубри':               'deep teal-blue',
+  'Самеди':                'dark plum-purple',
+  'Серпанты Света':        'dull olive-yellow',
+};
+
+app.post('/api/characters/:slug/generate-prompt', express.json(), async (req, res) => {
   try {
     // Validate cheap inputs BEFORE constructing a generation client (no API call needed to 404/400).
-    const name = decodeURIComponent(req.params.name);
+    const slug = decodeURIComponent(req.params.slug);
     const city = reqCity(req);
     const chars = await getAllCharacters(city);
-    const char  = chars.find(c => c.name === name);
+    const char  = chars.find(c => c.slug === slug);
     if (!char) return res.status(404).json({ error: 'Персонаж не найден' });
 
     const appearance = char.appearance && !char.appearance.includes('⚠️') ? char.appearance.trim() : '';
@@ -4042,6 +4072,7 @@ app.post('/api/characters/:name/generate-prompt', express.json(), async (req, re
     const lineageName = { vampires: 'vampire', fairies: 'changeling / fairy', mortals: 'mortal',
       werewolves: 'werewolf', mages: 'mage', hunters: 'hunter' }[char.lineageFolder] || 'character';
     const clan = char.clan && !char.clan.includes('⚠️') ? char.clan : '';
+    const clanAccent = clan ? CLAN_PROMPT_ACCENT[clan] : null;
 
     const systemPrompt = 'You are an expert prompt writer for AI image generation (DALL-E 3, Midjourney, Stable Diffusion). You write precise, vivid, technically correct English prompts for dark fantasy gothic RPG art.';
     const userPrompt = `Write an image generation prompt for a Vampire: The Masquerade character card.
@@ -4050,6 +4081,7 @@ Character:
 - Name: ${char.name}
 - Type: ${lineageName}${clan ? ` (${clan})` : ''}
 - Appearance (Russian): ${appearance}
+${clanAccent ? `- Clan accent color: ${clanAccent} — use ONLY as the rim-light / background tint in Block 2, never for skin, eyes or hair (those come strictly from Appearance above)` : ''}
 
 Rules excerpt:
 ${portretRules.slice(0, 1200)}
@@ -4064,7 +4096,7 @@ Requirements:
 - ALL text must be in English
 - Positive prompt: exactly 3 blocks labeled [Блок 1], [Блок 2], [Блок 3]
 - Block 1: translate character appearance from Russian, expand with specific visual details
-- Block 2: cinematic lighting, mood, background
+- Block 2: cinematic lighting, mood, background${clanAccent ? ` — make ${clanAccent} the dominant rim-light or background color, to keep this clan's visual identity consistent across all character portraits` : ''}
 - Block 3: art style, medium, quality tags (dark fantasy digital painting, painterly brushstrokes, VtM aesthetic, concept art quality, artstation masterpiece)
 - Negative prompt: photorealistic photography, 3D render, CGI, anime, cartoon, blurry, low quality, deformed, blood, gore, wounds, injuries, violence
 - NO blood, wounds, gore, violence in positive prompt under any circumstances`;
@@ -4092,7 +4124,7 @@ Requirements:
         } catch (e) {
           lastErr = e;
           const is429 = e.status === 429;
-          const retryable = e.status === 404 || is429 || (e.status === 400 && /not a valid model|No endpoints/i.test(e.message))
+          const retryable = e.status === 404 || e.status === 502 || is429 || (e.status === 400 && /not a valid model|No endpoints/i.test(e.message))
             || (e.status === 403 && /moderation|flagged/i.test(e.message));
           if (!retryable) { allRateLimited = false; throw e; }
           if (!is429) allRateLimited = false;
@@ -4126,12 +4158,12 @@ Requirements:
 
 // ── List all art images for a character ───────────────────────────────────────
 
-app.get('/api/characters/:name/images', async (req, res) => {
+app.get('/api/characters/:slug/images', async (req, res) => {
   try {
-    const name = decodeURIComponent(req.params.name);
+    const slug = decodeURIComponent(req.params.slug);
     const city = reqCity(req);
     const chars = await getAllCharacters(city);
-    const char  = chars.find(c => c.name === name);
+    const char  = chars.find(c => c.slug === slug);
     if (!char) return res.status(404).json({ error: 'not found' });
 
     const artDir = path.join(charsDir(city), char.lineageFolder, char.slug, 'art');
@@ -4149,14 +4181,14 @@ app.get('/api/characters/:name/images', async (req, res) => {
 
 // ── Upload portrait image ─────────────────────────────────────────────────────
 
-app.post('/api/characters/:name/upload-image', express.json({ limit: '20mb' }), async (req, res) => {
+app.post('/api/characters/:slug/upload-image', express.json({ limit: '20mb' }), async (req, res) => {
   try {
     const { base64, ext = 'jpg' } = req.body;
-    const name = decodeURIComponent(req.params.name);
+    const slug = decodeURIComponent(req.params.slug);
 
     const city  = reqCity(req);
     const chars = await getAllCharacters(city);
-    const char  = chars.find(c => c.name === name);
+    const char  = chars.find(c => c.slug === slug);
     if (!char) return res.status(404).json({ error: 'Персонаж не найден' });
 
     const artDir  = path.join(charsDir(city), char.lineageFolder, char.slug, 'art');
@@ -4202,9 +4234,9 @@ app.post('/api/characters/:name/upload-image', express.json({ limit: '20mb' }), 
 
 // ── Delete character image ────────────────────────────────────────────────────
 
-app.delete('/api/characters/:name/images/:filename', async (req, res) => {
+app.delete('/api/characters/:slug/images/:filename', async (req, res) => {
   try {
-    const name     = decodeURIComponent(req.params.name);
+    const slug     = decodeURIComponent(req.params.slug);
     const filename = decodeURIComponent(req.params.filename);
     const city     = reqCity(req);
 
@@ -4213,7 +4245,7 @@ app.delete('/api/characters/:name/images/:filename', async (req, res) => {
     }
 
     const chars = await getAllCharacters(city);
-    const char  = chars.find(c => c.name === name);
+    const char  = chars.find(c => c.slug === slug);
     if (!char) return res.status(404).json({ error: 'Персонаж не найден' });
 
     const artDir  = path.join(charsDir(city), char.lineageFolder, char.slug, 'art');

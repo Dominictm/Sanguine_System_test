@@ -243,6 +243,8 @@ Cinematic dark fantasy portrait, [тип существа / роль], [раку
 **Блок 2 — Свет и фон:**
 [тип освещения], [рим-лайт: цвет и откуда], [тени], [цвет и текстура фона], [атмосферные детали]
 
+> Для вампиров доминирующий цвет рим-лайта/фона задаётся кланом персонажа (см. `CLAN_PROMPT_ACCENT` в `web/server.js`, веб-генератор подставляет автоматически) — единая цветовая идентичность клана во всех портретах. Не каноничный лор, чисто оформительское решение; не влияет на цвет кожи/глаз/волос — те строятся только из «Внешность» карточки.
+
 **Блок 3 — Стиль / Качество:**
 Dark fantasy digital painting, visible painterly brushstrokes, textured oil-paint effect, cinematic composition, moody gothic atmosphere, Vampire the Masquerade aesthetic, concept art quality, painterly realism, artstation quality, masterpiece
 

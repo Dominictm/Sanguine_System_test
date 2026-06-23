@@ -74,10 +74,13 @@
   --z-modal:    1000;
   --z-confirm:  1100;
   --z-sheet:    2000;
+  --z-tour:     2500;
   --z-lightbox: 9000;
   /* ── Misc ── */
   --sidebar-w: 210px;
   --ease: cubic-bezier(.4, 0, .2, 1);
+  --dur-fast: .18s;
+  --dur-base: .28s;
 }
 
 *, *::before, *::after {
@@ -873,6 +876,11 @@ body {
   gap: 14px;
 }
 
+@keyframes card-reveal {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
 .char-card {
   background: var(--bg3);
   border: 2px solid var(--border);
@@ -886,6 +894,7 @@ body {
   flex-direction: column;
   justify-content: flex-end;
   min-height: 340px;
+  animation: card-reveal var(--dur-base) var(--ease) backwards;
 }
 
 .char-card:hover {
@@ -1753,7 +1762,8 @@ a:focus-visible {
 
 /* ── Create Character Modal ─────────────────────────────────── */
 .modal-overlay {
-  display: none;
+  display: flex;
+  visibility: hidden;
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, .78);
@@ -1761,10 +1771,15 @@ a:focus-visible {
   align-items: center;
   justify-content: center;
   backdrop-filter: blur(4px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--dur-base) var(--ease), visibility var(--dur-base) var(--ease);
 }
 
 .modal-overlay.open {
-  display: flex;
+  visibility: visible;
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .modal-box {
@@ -1777,6 +1792,12 @@ a:focus-visible {
   padding: 40px 44px;
   position: relative;
   box-shadow: 0 0 80px rgba(139, 0, 0, .45), 0 0 0 1px rgba(139, 0, 0, .1);
+  transform: translateY(8px) scale(.98);
+  transition: transform var(--dur-base) var(--ease);
+}
+
+.modal-overlay.open .modal-box {
+  transform: translateY(0) scale(1);
 }
 
 .modal-close {
@@ -1985,7 +2006,14 @@ a:focus-visible {
   height: min(82vh, 754px);
   padding: 0;
   overflow: hidden;
-  background: color-mix(in srgb, var(--clan-tint, var(--accent)) 10%, var(--bg2));
+  background:
+    radial-gradient(120% 140% at 0% 0%,
+      color-mix(in srgb, var(--clan-tint, var(--accent)) 24%, transparent) 0%,
+      transparent 55%),
+    radial-gradient(130% 110% at 100% 100%,
+      color-mix(in srgb, var(--clan-tint, var(--accent)) 12%, transparent) 0%,
+      transparent 60%),
+    var(--bg2);
 }
 
 #char-detail-content {
@@ -2686,21 +2714,42 @@ a:focus-visible {
 
 .chp-card,
 .city-card {
+  position: relative;
+  overflow: hidden;
   background: var(--bg3);
-  border: 1px solid var(--border);
-  border-top: 3px solid #8B0000;
+  border: 2px solid var(--border);
   border-radius: 2px;
   padding: 20px 22px;
   display: flex;
   flex-direction: column;
   gap: 10px;
   cursor: pointer;
-  transition: border-color .15s;
+  transition: border-color .15s var(--ease), background .15s var(--ease), transform .15s var(--ease);
 }
 
 .chp-card:hover,
 .city-card:hover {
-  border-color: rgba(139, 0, 0, .5);
+  border-color: var(--border2);
+  background: var(--bg4);
+  transform: translateY(-1px);
+}
+
+.chp-card::before,
+.city-card::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--accent);
+  opacity: 0;
+  transition: opacity .2s;
+}
+
+.chp-card:hover::before,
+.city-card:hover::before {
+  opacity: 1;
 }
 
 .chp-card-header {
@@ -3405,6 +3454,16 @@ a:focus-visible {
   display: flex;
   align-items: center;
   justify-content: center;
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--dur-base) var(--ease), visibility var(--dur-base) var(--ease);
+}
+
+.chr-modal-backdrop.open {
+  visibility: visible;
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .chr-modal {
@@ -3417,6 +3476,12 @@ a:focus-visible {
      before, which overflowed any screen < 1000px and overrode child max-widths */
   width: min(1000px, 92vw);
   max-width: 1300px;
+  transform: translateY(8px) scale(.98);
+  transition: transform var(--dur-base) var(--ease);
+}
+
+.chr-modal-backdrop.open .chr-modal {
+  transform: translateY(0) scale(1);
 }
 
 .chr-modal-title {
@@ -3738,6 +3803,7 @@ a:focus-visible {
   flex-direction: column;
   justify-content: flex-end;
   height: 210px;
+  animation: card-reveal var(--dur-base) var(--ease) backwards;
 }
 
 .loc-card:hover {
@@ -7036,6 +7102,92 @@ a.md-link-loc:hover {
 .v20-status.ok    { color: var(--c-success); }
 .v20-status.err   { color: var(--c-error); }
 
+/* Derived-stat badges & rule-engine actions */
+.v20-auto-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 7px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: transparent;
+  font-family: var(--f-mono);
+  font-size: var(--fs-3xs);
+  letter-spacing: .04em;
+  color: var(--text3);
+  cursor: pointer;
+  transition: border-color .15s var(--ease), color .15s var(--ease);
+}
+.v20-auto-badge:hover { border-color: var(--border2); color: var(--text2); }
+.v20-auto-badge:not(.is-match) { border-color: var(--gold2); color: var(--gold); }
+.v20-auto-badge:not(.is-match):hover { color: var(--gold); border-color: var(--gold); }
+
+.v20-mini-action {
+  margin-left: 6px;
+  padding: 1px 7px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: transparent;
+  font-family: var(--f-mono);
+  font-size: var(--fs-3xs);
+  letter-spacing: .04em;
+  color: var(--text3);
+  cursor: pointer;
+  transition: border-color .15s var(--ease), color .15s var(--ease);
+}
+.v20-mini-action:hover { border-color: var(--accent2); color: var(--accent2); }
+
+.v20-gen-info {
+  margin-left: 6px;
+  font-size: var(--fs-2xs);
+  color: var(--text3);
+  cursor: help;
+}
+
+.v20-val-report {
+  display: none;
+  margin-bottom: 8px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  background: var(--bg2);
+}
+.v20-val-report.open { display: block; }
+
+.v20-val-budgets {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 4px 16px;
+  margin-bottom: 8px;
+}
+
+.v20-val-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: var(--fs-sm);
+  color: var(--text2);
+}
+.v20-val-row.over { color: var(--c-error); }
+
+.v20-val-warnings {
+  margin: 0;
+  padding-left: 18px;
+  font-size: var(--fs-sm);
+}
+.v20-val-warn  { color: var(--gold); }
+.v20-val-error { color: var(--c-error); }
+.v20-val-info  { color: var(--c-info); }
+
+.v20-val-ok {
+  font-size: var(--fs-sm);
+  color: var(--c-success);
+}
+
+.v20-val-note {
+  margin-top: 8px;
+  font-size: var(--fs-3xs);
+  color: var(--text3);
+}
+
 @media (max-width: 720px) {
   .v20-header,
   .v20-grid3 {
@@ -7936,4 +8088,157 @@ tr.rumor-told:hover .rumor-cb-cell {
 .srch-open-btn:hover {
   background: var(--bg3);
   border-color: var(--gold);
+}
+
+/* ── Onboarding tour — ceremonial spotlight walkthrough ───────── */
+/* Replay trigger in the sidebar logo. Whisper-Until-Touched: gold only on hover. */
+.tour-replay-btn {
+  margin-left: auto;
+  flex: 0 0 auto;
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid var(--border2);
+  border-radius: 50%;
+  color: var(--text3);
+  font-family: var(--f-heading);
+  font-size: var(--fs-md);
+  line-height: 1;
+  cursor: pointer;
+  transition: color var(--dur-fast) var(--ease),
+              border-color var(--dur-fast) var(--ease),
+              background var(--dur-fast) var(--ease);
+}
+
+.tour-replay-btn:hover,
+.tour-replay-btn:focus-visible {
+  color: var(--gold);
+  border-color: var(--gold);
+  background: rgba(184, 134, 11, .1);
+}
+
+/* Spotlight: a transparent rect whose huge solid-black shadow dims everything
+   else — the sanctioned modal-isolation shadow, not a decorative gray box-shadow. */
+#tour-spotlight {
+  position: fixed;
+  z-index: var(--z-tour);
+  border-radius: 3px;
+  pointer-events: none;
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, .82);
+  transition: top var(--dur-base) var(--ease), left var(--dur-base) var(--ease),
+              width var(--dur-base) var(--ease), height var(--dur-base) var(--ease);
+}
+
+/* Click-catcher so stray clicks don't fall through to the app behind the dim. */
+#tour-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-tour);
+  background: transparent;
+  cursor: pointer;
+}
+
+#tour-card {
+  position: fixed;
+  z-index: var(--z-tour);
+  width: min(340px, calc(100vw - 32px));
+  background: var(--bg2);
+  border: 1px solid var(--gold);
+  border-radius: 3px;
+  padding: 22px 24px 20px;
+  box-shadow: 0 0 60px rgba(0, 0, 0, .7), 0 0 0 1px rgba(184, 134, 11, .15);
+  animation: tour-card-in var(--dur-base) var(--ease);
+}
+
+@keyframes tour-card-in {
+  from { opacity: 0; transform: translateY(6px) scale(.98); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.tour-step-label {
+  font-family: var(--f-mono);
+  font-size: var(--fs-xs);
+  letter-spacing: .18em;
+  text-transform: uppercase;
+  color: var(--gold);
+  margin-bottom: 8px;
+}
+
+.tour-card-title {
+  font-family: var(--f-heading);
+  font-size: var(--fs-xl);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--text);
+  margin-bottom: 8px;
+  text-wrap: balance;
+}
+
+.tour-card-body {
+  font-family: var(--f-body);
+  font-size: var(--fs-sm);
+  line-height: 1.5;
+  color: var(--text2);
+  margin-bottom: 18px;
+  text-wrap: pretty;
+}
+
+.tour-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.tour-actions .tour-spacer {
+  margin-left: auto;
+}
+
+.tour-btn {
+  font-family: var(--f-heading);
+  font-size: var(--fs-xs);
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  padding: 8px 16px;
+  border-radius: 2px;
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease),
+              border-color var(--dur-fast) var(--ease),
+              color var(--dur-fast) var(--ease);
+}
+
+.tour-btn-ghost {
+  background: transparent;
+  border: 1px solid var(--border2);
+  color: var(--text3);
+}
+
+.tour-btn-ghost:hover,
+.tour-btn-ghost:focus-visible {
+  color: var(--text);
+  border-color: var(--text3);
+}
+
+.tour-btn-primary {
+  background: rgba(184, 134, 11, .12);
+  border: 1px solid var(--gold);
+  color: var(--gold2);
+}
+
+.tour-btn-primary:hover,
+.tour-btn-primary:focus-visible {
+  background: rgba(184, 134, 11, .22);
+  border-color: var(--gold2);
+}
+
+.tour-btn:disabled {
+  opacity: .4;
+  cursor: default;
+}
+
+@media (pointer: coarse) {
+  .tour-replay-btn { width: 44px; height: 44px; }
+  .tour-btn { min-height: 44px; }
 }

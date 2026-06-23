@@ -116,7 +116,7 @@
   }
   .stat-box.s-total .val { color: var(--gold); }
   .stat-box.s-pass  .val { color: var(--green2); }
-  .stat-box.s-fail  .val { color: var(--text-dim); }
+  .stat-box.s-fail  .val { color: var(--red2); }
   .stat-box.s-dur   .val { color: var(--text-dim); }
   .stat-box.s-pct   .val { color: var(--gold); }
 
@@ -127,7 +127,7 @@
   }
   .progress-fill {
     height: 100%;
-    width: 100%;
+    width: 97%;
     background: linear-gradient(90deg, var(--crimson), var(--blood));
     transition: width .6s ease;
   }
@@ -240,23 +240,23 @@
 
 <div class="report-header">
   <h1>Vampire: The Masquerade</h1>
-  <p class="subtitle">CHRONICLE MANAGER · TEST REPORT · 17.06.2026, 12:53:00</p>
-  <span class="status-badge good">ALL PASSED</span>
+  <p class="subtitle">CHRONICLE MANAGER · TEST REPORT · 23.06.2026, 12:21:07</p>
+  <span class="status-badge bad">5 FAILED</span>
 </div>
 
 <div class="summary-bar">
-  <div class="stat-box s-total"><span class="val">181</span><span class="lbl">TOTAL</span></div>
-  <div class="stat-box s-pass"> <span class="val">181</span> <span class="lbl">PASSED</span></div>
-  <div class="stat-box s-fail"> <span class="val">0</span> <span class="lbl">FAILED</span></div>
+  <div class="stat-box s-total"><span class="val">197</span><span class="lbl">TOTAL</span></div>
+  <div class="stat-box s-pass"> <span class="val">192</span> <span class="lbl">PASSED</span></div>
+  <div class="stat-box s-fail"> <span class="val">5</span> <span class="lbl">FAILED</span></div>
   <div class="stat-box s-dur">  <span class="val">2.19s</span><span class="lbl">DURATION</span></div>
-  <div class="stat-box s-pct">  <span class="val">100%</span><span class="lbl">PASS RATE</span></div>
+  <div class="stat-box s-pct">  <span class="val">97%</span><span class="lbl">PASS RATE</span></div>
 </div>
 <div class="progress-track"><div class="progress-fill"></div></div>
 
 <div class="results">
   
 <details class="suite suite-pass" open>
-  <summary><span class="suite-name">Parsers — unit</span><span class="suite-stat"><span class="s-pass">78✓</span></span></summary>
+  <summary><span class="suite-name">Parsers — unit</span><span class="suite-stat"><span class="s-pass">80✓</span></span></summary>
   <div class="suite-body">
 <details class="suite suite-pass" open>
   <summary><span class="suite-name">readPrompt — Format A (indented)</span><span class="suite-stat"><span class="s-pass">2✓</span></span></summary>
@@ -296,14 +296,16 @@
 </details>
 
 <details class="suite suite-pass" open>
-  <summary><span class="suite-name">slugify</span><span class="suite-stat"><span class="s-pass">7✓</span></span></summary>
+  <summary><span class="suite-name">slugify</span><span class="suite-stat"><span class="s-pass">9✓</span></span></summary>
   <div class="suite-body"><div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">transliterates Cyrillic → ASCII</span></div>
 <div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">collapses separators and trims underscores</span></div>
 <div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">drops soft/hard signs</span></div>
 <div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">handles digits</span></div>
 <div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">null / undefined → empty string</span></div>
 <div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">already-ASCII slug is stable</span></div>
-<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">browser parity — public/scripts.js _NTR mirrors CYRILLIC_TR</span></div></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">browser parity — public/scripts.js _NTR mirrors CYRILLIC_TR</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">browser parity — public/scripts.js _LATIN_TR mirrors LATIN_TR</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">non-Cyrillic diacritics fold (Düsseldorf→dusseldorf, Şanlıurfa→sanliurfa)</span></div></div>
 </details>
 
 <details class="suite suite-pass" open>
@@ -406,7 +408,7 @@
 </details>
 
 <details class="suite suite-pass" open>
-  <summary><span class="suite-name">API — integration</span><span class="suite-stat"><span class="s-pass">82✓</span></span></summary>
+  <summary><span class="suite-name">API — integration</span><span class="suite-stat"><span class="s-pass">84✓</span></span></summary>
   <div class="suite-body">
 <details class="suite suite-pass" open>
   <summary><span class="suite-name">Health / system</span><span class="suite-stat"><span class="s-pass">5✓</span></span></summary>
@@ -553,6 +555,12 @@
 </details>
 
 <details class="suite suite-pass" open>
+  <summary><span class="suite-name">Character delete — guards</span><span class="suite-stat"><span class="s-pass">2✓</span></span></summary>
+  <div class="suite-body"><div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">GET delete-preview — unknown char → 404</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">DELETE — unknown char → 404</span></div></div>
+</details>
+
+<details class="suite suite-pass" open>
   <summary><span class="suite-name">Image deletion — guards</span><span class="suite-stat"><span class="s-pass">3✓</span></span></summary>
   <div class="suite-body"><div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">DELETE dotfile name → 400 (filename guard before lookup)</span></div>
 <div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">DELETE for unknown char → 404</span></div>
@@ -583,14 +591,26 @@
 </details></div>
 </details>
 
-<details class="suite suite-pass" open>
-  <summary><span class="suite-name">E2E — сквозной цикл хроники</span><span class="suite-stat"><span class="s-pass">21✓</span></span></summary>
+<details class="suite suite-fail" open>
+  <summary><span class="suite-name">E2E — сквозной цикл хроники</span><span class="suite-stat"><span class="s-fail">5✗</span>&nbsp;<span class="s-pass">28✓</span></span></summary>
   <div class="suite-body">
 <details class="suite suite-pass" open>
   <summary><span class="suite-name">1. Город</span><span class="suite-stat"><span class="s-pass">3✓</span></span></summary>
   <div class="suite-body"><div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">POST /api/tool/new_city создаёт город</span></div>
 <div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">город виден в /api/cities</span></div>
 <div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">/api/status отдаёт домен города</span></div></div>
+</details>
+
+<details class="suite suite-pass" open>
+  <summary><span class="suite-name">1b. CRUD городов (API)</span><span class="suite-stat"><span class="s-pass">8✓</span></span></summary>
+  <div class="suite-body"><div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">POST /api/cities создаёт город из полей</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">POST с уже существующим слагом → 409</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">POST без названия → 400</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">GET detail отдаёт parsed.display/year/секции</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">PUT (fields) переписывает display</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">PUT (raw cityMd) сохраняет произвольный markdown</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">PUT без cityMd/fields → 400</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">DELETE мягко удаляет (город пропадает из /api/cities)</span></div></div>
 </details>
 
 <details class="suite suite-pass" open>
@@ -601,12 +621,29 @@
 <div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">/api/characters отдаёт созданного персонажа</span></div></div>
 </details>
 
-<details class="suite suite-pass" open>
-  <summary><span class="suite-name">2b. AI-генерация (mock)</span><span class="suite-stat"><span class="s-pass">4✓</span></span></summary>
-  <div class="suite-body"><div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">POST sheet/generate создаёт и сохраняет лист V20</span></div>
-<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">GET sheet возвращает сохранённый лист</span></div>
+<details class="suite suite-fail" open>
+  <summary><span class="suite-name">2b. AI-генерация (mock)</span><span class="suite-stat"><span class="s-fail">2✗</span>&nbsp;<span class="s-pass">2✓</span></span></summary>
+  <div class="suite-body"><div class="test test-fail"><span class="t-icon">✗</span><span class="t-name">POST sheet/generate создаёт и сохраняет лист V20</span><pre class="test-error">HTTP 404: {"ok":false,"error":"Персонаж не найден"}
+
+404 !== 200
+</pre></div>
+<div class="test test-fail"><span class="t-icon">✗</span><span class="t-name">GET sheet возвращает сохранённый лист</span><pre class="test-error">Expected values to be strictly equal:
+
+404 !== 200
+</pre></div>
 <div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">POST dialogue возвращает реплики в характере</span></div>
 <div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">POST canon-check возвращает массив issues</span></div></div>
+</details>
+
+<details class="suite suite-fail" open>
+  <summary><span class="suite-name">2c. Удаление персонажа</span><span class="suite-stat"><span class="s-fail">3✗</span>&nbsp;<span class="s-pass">1✓</span></span></summary>
+  <div class="suite-body"><div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">new_npc создаёт одноразового персонажа</span></div>
+<div class="test test-fail"><span class="t-icon">✗</span><span class="t-name">DELETE архивирует папку в _deleted</span><pre class="test-error">HTTP 404: {"error":"Персонаж не найден"}
+
+404 !== 200
+</pre></div>
+<div class="test test-fail"><span class="t-icon">✗</span><span class="t-name">персонаж исчез из /api/characters</span><pre class="test-error">удалённый всё ещё в списке</pre></div>
+<div class="test test-fail"><span class="t-icon">✗</span><span class="t-name">строка реестра удалена</span><pre class="test-error">ссылка осталась в индексе</pre></div></div>
 </details>
 
 <details class="suite suite-pass" open>
@@ -638,7 +675,7 @@
 </div>
 
 <div class="report-footer">
-  Generated by <span>Sanguine System</span> test suite &mdash; 17.06.2026, 12:53:00
+  Generated by <span>Sanguine System</span> test suite &mdash; 23.06.2026, 12:21:07
 </div>
 
 </body>

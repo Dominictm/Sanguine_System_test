@@ -8,6 +8,9 @@
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Cinzel+Decorative:wght@700&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=Share+Tech+Mono&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css">
 <script src="https://d3js.org/d3.v7.min.js" defer></script>
+<!-- impeccable-live-start -->
+<script src="http://localhost:8400/live.js"></script>
+<!-- impeccable-live-end -->
 </head>
 <body>
 <div id="app">
@@ -20,6 +23,7 @@
         <span class="t1">Sanguine</span>
         <span class="t2">System</span>
       </div>
+      <button type="button" class="tour-replay-btn" id="btn-tour" title="Тур по интерфейсу" aria-label="Запустить тур по интерфейсу">?</button>
     </div>
 
     <div class="city-switch">
@@ -129,6 +133,11 @@
           <option value="torpor">Торпор</option>
           <option value="dead">Мёртв / Мертва</option>
         </select>
+        <!-- impeccable-variants-start c906fd2d -->
+        <div data-impeccable-variants="c906fd2d" data-impeccable-mode="insert" data-impeccable-variant-count="3" style="display: contents">
+          <!-- Variants: insert below this line -->
+        </div>
+        <!-- impeccable-variants-end c906fd2d -->
         <button class="btn-create-char" id="btn-open-create-char">+ Создать</button>
       </div>
 
@@ -169,7 +178,7 @@
     </section>
 
     <!-- Chronicle create modal -->
-    <div id="chr-create-modal" class="chr-modal-backdrop" style="display:none">
+    <div id="chr-create-modal" class="chr-modal-backdrop">
       <div class="chr-modal">
         <div class="chr-modal-title">📕 Новая хроника</div>
         <div class="chr-modal-body">
@@ -243,7 +252,7 @@
     </section>
 
     <!-- Chronicle detail modal -->
-    <div id="chr-detail-modal" class="chr-modal-backdrop" style="display:none">
+    <div id="chr-detail-modal" class="chr-modal-backdrop">
       <div class="chr-modal chr-detail-modal">
         <div class="chr-detail-header">
           <div>
@@ -273,7 +282,7 @@
     </div>
 
     <!-- Module create modal -->
-    <div id="mod-create-modal" class="chr-modal-backdrop" style="display:none">
+    <div id="mod-create-modal" class="chr-modal-backdrop">
       <div class="chr-modal mod-fill-modal">
         <div class="chr-modal-title">📖 Новый модуль</div>
         <div class="chr-modal-body mod-fill-body">
@@ -330,7 +339,7 @@
     </div>
 
     <!-- Module fill modal (для генерации из существующего модуля) -->
-    <div id="mod-fill-modal" class="chr-modal-backdrop" style="display:none">
+    <div id="mod-fill-modal" class="chr-modal-backdrop">
       <div class="chr-modal mod-fill-modal">
         <div class="chr-modal-title" id="mod-fill-title">🪄 Сгенерировать сценарий</div>
         <div class="chr-modal-body mod-fill-body">
@@ -371,7 +380,7 @@
     </div>
 
     <!-- Module delete confirm modal -->
-    <div id="mod-delete-modal" class="chr-modal-backdrop" style="display:none">
+    <div id="mod-delete-modal" class="chr-modal-backdrop">
       <div class="chr-modal">
         <div class="chr-modal-title">🗑 Удалить модуль</div>
         <div id="mod-delete-body" class="chr-modal-body"></div>
@@ -383,7 +392,7 @@
     </div>
 
     <!-- Chronicle delete confirm modal -->
-    <div id="chr-delete-modal" class="chr-modal-backdrop" style="display:none">
+    <div id="chr-delete-modal" class="chr-modal-backdrop">
       <div class="chr-modal">
         <div class="chr-modal-title">🗑 Удалить хронику</div>
         <div id="chr-delete-body" class="chr-modal-body"></div>
@@ -931,6 +940,7 @@
   <div class="lightbox-counter" id="lightbox-counter"></div>
 </div>
 
+<script src="rules-v20.js"></script>
 <script src="scripts.js"></script>
 </body>
 </html>

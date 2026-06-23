@@ -434,7 +434,7 @@ function renderChars() {
     return;
   }
 
-  grid.innerHTML = list.map(c => {
+  grid.innerHTML = list.map((c, i) => {
     const icon   = LINEAGE_ICONS[c.lineage] || '👤';
     const stType = c.statusType || 'unknown';
     const stLbl  = statusLabel(c);
@@ -445,15 +445,16 @@ function renderChars() {
       <div class="char-name">${escHtml(c.name)}</div>
       <div class="char-clan">${c.lineage === 'mortal' ? '' : escHtml(c.clan || c.lineageLabel || '—')}</div>
       <div class="char-badges">${linBadge}</div>`;
+    const delay = `style="animation-delay:${Math.min(i, 12) * 30}ms"`;
 
     if (c.imageUrl) {
-      return `<div class="char-card has-art" data-name="${escHtml(c.name)}">
+      return `<div class="char-card has-art" data-name="${escHtml(c.name)}" ${delay}>
         <img class="char-card-art" src="${c.imageUrl}" alt="${escHtml(c.name)}" loading="lazy" decoding="async">
         <div class="char-card-overlay">${textBlock}</div>
         ${stRow}
       </div>`;
     }
-    return `<div class="char-card" data-name="${escHtml(c.name)}">
+    return `<div class="char-card" data-name="${escHtml(c.name)}" ${delay}>
       <span class="char-lineage-icon">${icon}</span>
       ${stRow}
       ${textBlock}
@@ -775,7 +776,7 @@ function showInfoPanel(d, links, nodes) {
     items.map(({ other, desc }) => `
       <div class="rel-item">
         <div class="rel-target">
-          <div class="rel-type-dot" style="background:${REL_COLORS[type] || '#555'}"></div>
+          <div class="rel-type-dot" style="background:${REL_COLORS[type] || 'var(--text3)'}"></div>
           ${escHtml(other)}
         </div>
         <div class="rel-desc">${escHtml(desc)}</div>
@@ -897,6 +898,14 @@ const OR_FEAT_MODELS_FALLBACK = {
     { id: 'mistralai/mistral-7b-instruct:free',     label: 'Mistral 7B Instruct' },
     { id: 'openrouter/free',                        label: 'Free Models Router' },
   ],
+  // Strong instruction-following models — для англоязычного промта по описанию внешности
+  prompt: [
+    { id: 'meta-llama/llama-3.3-70b-instruct:free', label: 'Llama 3.3 70B Instruct' },
+    { id: 'deepseek/deepseek-chat:free',            label: 'DeepSeek Chat' },
+    { id: 'qwen/qwen3-235b-a22b:free',              label: 'Qwen3 235B A22B' },
+    { id: 'google/gemma-3-27b-it:free',             label: 'Google Gemma 3 27B' },
+    { id: 'openrouter/free',                        label: 'Free Models Router' },
+  ],
 };
 
 // Build per-feature model lists. Every feature gets ALL free models reported live by
@@ -1005,6 +1014,7 @@ async function loadAiSettings() {
   const locPref      = _getPref(featPrefs, 'locations',  'openrouter');
   const prosePref    = _getPref(featPrefs, 'prose',      'claude');
   const dialoguePref = _getPref(featPrefs, 'dialogue',   'openrouter');
+  const promptPref   = _getPref(featPrefs, 'prompt',     'openrouter');
 
   el.innerHTML = `
     <div class="ais-layout">
@@ -1106,6 +1116,7 @@ async function loadAiSettings() {
           ${_renderFeatCard('locations',  '📍', 'Генерация локаций',    'Карточки мест при наполнении модуля', locPref,      featOrModels.locations)}
           ${_renderFeatCard('prose',      '🪄', 'Генерация прозы',      'Дневники и финалы сессии',            prosePref,    featOrModels.prose)}
           ${_renderFeatCard('dialogue',   '💬', 'Генерация фраз',       'Реплики НПС в характере',             dialoguePref, featOrModels.dialogue)}
+          ${_renderFeatCard('prompt',     '🎨', 'Генерация промта',     'Промт для изображения по внешности',  promptPref,   featOrModels.prompt)}
         </div>
 
         <button class="ais-confirm-btn" id="ais-feat-save" style="margin-top:16px">✓ Применить</button>
@@ -1256,7 +1267,7 @@ async function loadAiSettings() {
   document.getElementById('ais-feat-save').addEventListener('click', () => {
     const status = document.getElementById('ais-feat-status');
     const prefs  = {};
-    for (const feat of ['appearance', 'locations', 'prose', 'dialogue']) {
+    for (const feat of ['appearance', 'locations', 'prose', 'dialogue', 'prompt']) {
       const provSel = document.querySelector(`input[name="feat-${feat}"]:checked`);
       const modSel  = document.getElementById(`feat-${feat}-model`);
       if (provSel) prefs[feat] = { provider: provSel.value, model: modSel?.value || null };
@@ -1327,6 +1338,13 @@ function escHtml(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 function escAttr(s) { return escHtml(s).replace(/"/g, '&quot;'); }
+
+// Character API routes are keyed by ASCII slug, not the Cyrillic display name
+// (avoids percent-encoded Cyrillic in the URL bar). Modular module-only NPCs have
+// no slug — those fall back to the raw name, which the dialogue route also accepts.
+function _charSlug(name) {
+  return STATE.characters.find(c => c.name === name)?.slug || name;
+}
 
 // One editable relationship row (name + type/description + delete) for the «Отношения» tab
 function _relRowHtml(target = '', description = '') {
@@ -1523,7 +1541,7 @@ document.getElementById('btn-new-npc').addEventListener('click', async () => {
         fr.readAsDataURL(file);
       });
       const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
-      const u = await fetch(`/api/characters/${encodeURIComponent(name)}/upload-image${qs}`,
+      const u = await fetch(`/api/characters/${encodeURIComponent(d.slug)}/upload-image${qs}`,
         { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ base64, ext }) }
       ).then(r => r.json());
       msg += u.ok ? '\n📷 Арт загружен' : `\n⚠ Арт не загружен: ${u.error || ''}`;
@@ -1937,7 +1955,7 @@ async function openChrDetail(slug, display, tab) {
   title.textContent   = display;
   metaEl.textContent  = '';
   body.innerHTML      = SPINNER;
-  modal.style.display = 'flex';
+  modal.classList.add('open');
 
   // Sync tab buttons
   document.querySelectorAll('.chr-detail-tab').forEach(b =>
@@ -2105,11 +2123,11 @@ document.getElementById('chr-detail-body').addEventListener('click', e => {
 
 // Close detail modal
 document.getElementById('chr-detail-close').addEventListener('click', () => {
-  document.getElementById('chr-detail-modal').style.display = 'none';
+  document.getElementById('chr-detail-modal').classList.remove('open');
 });
 document.getElementById('chr-detail-modal').addEventListener('click', e => {
   if (e.target === document.getElementById('chr-detail-modal'))
-    document.getElementById('chr-detail-modal').style.display = 'none';
+    document.getElementById('chr-detail-modal').classList.remove('open');
 });
 
 // ── "Ранее в хронике…" — AI recap of recent events ────────────────────────────
@@ -2216,7 +2234,7 @@ document.getElementById('btn-create-module-in-chr').addEventListener('click', as
   document.getElementById('mod-create-npcs').innerHTML = '';
   document.getElementById('mod-create-error').style.display = 'none';
   _modSlugEdited = false;
-  document.getElementById('mod-create-modal').style.display = 'flex';
+  document.getElementById('mod-create-modal').classList.add('open');
   setTimeout(() => document.getElementById('mod-create-name').focus(), 50);
   _populateCharDatalist('mod-create-pc-list', 'mod-create-npc-list');
 });
@@ -2244,11 +2262,11 @@ document.getElementById('mod-create-npc-input').addEventListener('keydown', e =>
 });
 
 document.getElementById('mod-create-cancel').addEventListener('click', () => {
-  document.getElementById('mod-create-modal').style.display = 'none';
+  document.getElementById('mod-create-modal').classList.remove('open');
 });
 document.getElementById('mod-create-modal').addEventListener('click', e => {
   if (e.target === document.getElementById('mod-create-modal'))
-    document.getElementById('mod-create-modal').style.display = 'none';
+    document.getElementById('mod-create-modal').classList.remove('open');
 });
 
 document.getElementById('mod-create-submit').addEventListener('click', async () => {
@@ -2276,7 +2294,7 @@ document.getElementById('mod-create-submit').addEventListener('click', async () 
 
     if (!d.ok) { errEl.textContent = d.error || 'Ошибка'; errEl.style.display = ''; return; }
 
-    document.getElementById('mod-create-modal').style.display = 'none';
+    document.getElementById('mod-create-modal').classList.remove('open');
     openChrDetail(_chrDetailSlug, _chrDetailDisplay, 'modules');
   } catch (e) {
     errEl.textContent = 'Ошибка: ' + e.message; errEl.style.display = '';
@@ -2286,7 +2304,7 @@ document.getElementById('mod-create-submit').addEventListener('click', async () 
 });
 
 document.getElementById('mod-create-modal').addEventListener('keydown', e => {
-  if (e.key === 'Escape') document.getElementById('mod-create-modal').style.display = 'none';
+  if (e.key === 'Escape') document.getElementById('mod-create-modal').classList.remove('open');
 });
 
 // ── Generate scenario modal (for existing modules) ────────────────────────────
@@ -2307,7 +2325,7 @@ async function openFillModal(chr, mod, title, fromModPage = false) {
   document.getElementById('mod-fill-content').value   = '';
   document.getElementById('mod-fill-error').style.display = 'none';
   document.getElementById('mod-fill-title').textContent = `🪄 Сгенерировать сценарий: ${title}`;
-  document.getElementById('mod-fill-modal').style.display = 'flex';
+  document.getElementById('mod-fill-modal').classList.add('open');
   _populateCharDatalist('mod-fill-pc-list', 'mod-fill-npc-list');
 }
 
@@ -2329,12 +2347,12 @@ document.getElementById('mod-fill-npc-input').addEventListener('keydown', e => {
 });
 
 document.getElementById('mod-fill-cancel').addEventListener('click', () => {
-  document.getElementById('mod-fill-modal').style.display = 'none';
+  document.getElementById('mod-fill-modal').classList.remove('open');
   _fillModTarget = null;
 });
 document.getElementById('mod-fill-modal').addEventListener('click', e => {
   if (e.target === document.getElementById('mod-fill-modal')) {
-    document.getElementById('mod-fill-modal').style.display = 'none';
+    document.getElementById('mod-fill-modal').classList.remove('open');
     _fillModTarget = null;
   }
 });
@@ -2360,7 +2378,7 @@ document.getElementById('mod-fill-generate').addEventListener('click', async () 
 
     if (!d.ok) { errEl.textContent = d.error || 'Ошибка генерации'; errEl.style.display = ''; return; }
 
-    document.getElementById('mod-fill-modal').style.display = 'none';
+    document.getElementById('mod-fill-modal').classList.remove('open');
     const fromMod = _fillFromModPage;
     _fillModTarget   = null;
     _fillFromModPage = false;
@@ -2399,16 +2417,16 @@ document.addEventListener('click', e => {
       </ul>
       Канонические персонажи <b>не затрагиваются</b>.
     </div>`;
-  document.getElementById('mod-delete-modal').style.display = 'flex';
+  document.getElementById('mod-delete-modal').classList.add('open');
 });
 
 document.getElementById('mod-delete-cancel').addEventListener('click', () => {
-  document.getElementById('mod-delete-modal').style.display = 'none';
+  document.getElementById('mod-delete-modal').classList.remove('open');
   _modDeleteTarget = null;
 });
 document.getElementById('mod-delete-modal').addEventListener('click', e => {
   if (e.target === document.getElementById('mod-delete-modal')) {
-    document.getElementById('mod-delete-modal').style.display = 'none';
+    document.getElementById('mod-delete-modal').classList.remove('open');
     _modDeleteTarget = null;
   }
 });
@@ -2429,7 +2447,7 @@ document.getElementById('mod-delete-confirm').addEventListener('click', async ()
     const cleaned = d.cleanedChars?.length ? `<br>Очищено дневников: ${d.cleanedChars.length}` : '';
     body.innerHTML = `<div style="color:var(--accent1)">✓ Модуль <b>${escHtml(mod)}</b> удалён.${cleaned}</div>`;
     setTimeout(() => {
-      document.getElementById('mod-delete-modal').style.display = 'none';
+      document.getElementById('mod-delete-modal').classList.remove('open');
       _modDeleteTarget = null;
       confirm.textContent = 'Удалить';
       if (_modDeleteSource === 'modules-page') {
@@ -2456,7 +2474,7 @@ document.getElementById('btn-create-chronicle').addEventListener('click', () => 
   document.getElementById('chr-create-mood').value  = '';
   document.getElementById('chr-create-error').style.display = 'none';
   _slugEdited = false;
-  document.getElementById('chr-create-modal').style.display = 'flex';
+  document.getElementById('chr-create-modal').classList.add('open');
   setTimeout(() => document.getElementById('chr-create-name').focus(), 50);
 });
 
@@ -2466,11 +2484,11 @@ document.getElementById('chr-create-name').addEventListener('input', e => {
 document.getElementById('chr-create-slug').addEventListener('input', () => { _slugEdited = true; });
 
 document.getElementById('chr-create-cancel').addEventListener('click', () => {
-  document.getElementById('chr-create-modal').style.display = 'none';
+  document.getElementById('chr-create-modal').classList.remove('open');
 });
 document.getElementById('chr-create-modal').addEventListener('click', e => {
   if (e.target === document.getElementById('chr-create-modal'))
-    document.getElementById('chr-create-modal').style.display = 'none';
+    document.getElementById('chr-create-modal').classList.remove('open');
 });
 
 document.getElementById('chr-create-submit').addEventListener('click', async () => {
@@ -2492,7 +2510,7 @@ document.getElementById('chr-create-submit').addEventListener('click', async () 
 
     if (!d.ok) { errEl.textContent = d.error || 'Ошибка'; errEl.style.display = ''; return; }
 
-    document.getElementById('chr-create-modal').style.display = 'none';
+    document.getElementById('chr-create-modal').classList.remove('open');
     loadChroniclesPage();
   } catch (e) {
     errEl.textContent = 'Ошибка соединения: ' + e.message; errEl.style.display = '';
@@ -2504,7 +2522,7 @@ document.getElementById('chr-create-submit').addEventListener('click', async () 
 // Enter submits form
 document.getElementById('chr-create-modal').addEventListener('keydown', e => {
   if (e.key === 'Enter') document.getElementById('chr-create-submit').click();
-  if (e.key === 'Escape') document.getElementById('chr-create-modal').style.display = 'none';
+  if (e.key === 'Escape') document.getElementById('chr-create-modal').classList.remove('open');
 });
 
 // ── Delete modal logic ────────────────────────────────────────────────────────
@@ -2521,7 +2539,7 @@ document.addEventListener('click', async e => {
   const confirm = document.getElementById('chr-delete-confirm');
   _chrDeleteSlug = slug;
   confirm.disabled = true;
-  modal.style.display = 'flex';
+  modal.classList.add('open');
   body.innerHTML = '<div class="loading-state" style="height:80px"><div class="spinner"></div>Анализ...</div>';
 
   try {
@@ -2548,12 +2566,12 @@ document.addEventListener('click', async e => {
 });
 
 document.getElementById('chr-delete-cancel').addEventListener('click', () => {
-  document.getElementById('chr-delete-modal').style.display = 'none';
+  document.getElementById('chr-delete-modal').classList.remove('open');
   _chrDeleteSlug = null;
 });
 document.getElementById('chr-delete-modal').addEventListener('click', e => {
   if (e.target === document.getElementById('chr-delete-modal')) {
-    document.getElementById('chr-delete-modal').style.display = 'none';
+    document.getElementById('chr-delete-modal').classList.remove('open');
     _chrDeleteSlug = null;
   }
 });
@@ -2576,7 +2594,7 @@ document.getElementById('chr-delete-confirm').addEventListener('click', async ()
       : '';
     body.innerHTML = `<div style="color:var(--accent1)">✓ Хроника <b>${escHtml(slug)}</b> удалена.${movedMsg}</div>`;
     setTimeout(() => {
-      document.getElementById('chr-delete-modal').style.display = 'none';
+      document.getElementById('chr-delete-modal').classList.remove('open');
       _chrDeleteSlug = null;
       confirm.textContent = 'Удалить';
       loadChroniclesPage();
@@ -2642,7 +2660,7 @@ STATE.currentModule = null;
 
 function openModulePage(chronicle, name) {
   STATE.currentModule = { chronicle, name };
-  document.getElementById('chr-detail-modal').style.display = 'none';
+  document.getElementById('chr-detail-modal').classList.remove('open');
   navigate('module');
 }
 
@@ -2751,7 +2769,7 @@ async function _genModuleNpcDialogue(btn) {
     const body  = { situation, source: pref.provider, model: pref.model };
     // Модульные НПС не в общем реестре — подскажем серверу, где искать карточку
     if (modular && STATE.currentModule) { body.chr = STATE.currentModule.chronicle; body.mod = STATE.currentModule.name; }
-    const d = await fetch(`/api/characters/${encodeURIComponent(name)}/dialogue${qs}`,
+    const d = await fetch(`/api/characters/${encodeURIComponent(modular ? name : _charSlug(name))}/dialogue${qs}`,
       { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }
     ).then(r => r.json());
     if (!d.ok) { box.innerHTML = `<div class="canon-warn">Ошибка: ${escHtml(d.error || 'не удалось')}</div>`; return; }
@@ -4914,9 +4932,115 @@ function _v20Field(label, tpath, val, extra = '') {
   return `<label class="v20-field"><span class="v20-field-lbl">${escHtml(label)}</span><input class="v20-field-input" data-tpath="${tpath}" value="${escAttr(val || '')}"${extra}></label>`;
 }
 
+// ── Rules engine: derived stats, auto badges, clan/generation actions, validation ──
+function _v20Derive(m) {
+  const isVamp = (m.lineage || '') === 'vampires';
+  const out = { willpower: m.virtues.courage, humanity: null, gen: null };
+  if (!m.path || /^человечност/i.test(m.path)) out.humanity = _clamp(m.virtues.conscience + m.virtues.selfcontrol, 0, 10);
+  if (isVamp) out.gen = v20GenerationInfo(m.header.generation);
+  return out;
+}
+
+function _v20AutoBadge(actual, computed, path, kind) {
+  if (computed == null || !Number.isFinite(Number(computed))) return '';
+  const match = Number(actual) === Number(computed);
+  const title = match ? 'Совпадает с расчётным значением' : `Расчётное по правилам: ${computed}. Нажмите, чтобы применить.`;
+  return `<button type="button" class="v20-auto-badge${match ? ' is-match' : ''}" data-auto-path="${path}" data-auto-kind="${kind}" data-auto-val="${computed}" title="${escAttr(title)}">${match ? '✓ авто' : `↺ ${computed}`}</button>`;
+}
+
+function _v20ApplyAutoBadge(badge) {
+  const path = badge.dataset.autoPath, kind = badge.dataset.autoKind, val = badge.dataset.autoVal;
+  _v20Set(_v20Model, path, kind === 'dot' ? _clamp(val, 0, 10) : val);
+  _v20MarkDirty();
+  _v20RenderSheet(document.getElementById('cdet-sheet-panel'), _v20Ctx.name);
+}
+
+function _v20RunAction(action) {
+  const m = _v20Model;
+  if (action === 'fill-clan-disc') {
+    const info = v20ClanInfo(m.header.clan);
+    if (!info) return;
+    info.disciplines.slice(0, 3).forEach((name, i) => { m.disciplines[i].name = name; });
+  } else if (action === 'insert-clan-weakness') {
+    const info = v20ClanInfo(m.header.clan);
+    if (!info || !info.weakness) return;
+    if (m.flaw.trim() && !confirm('Поле «Изъян» не пустое. Заменить текущий текст слабостью клана?')) return;
+    m.flaw = info.weakness;
+  } else return;
+  _v20MarkDirty();
+  _v20RenderSheet(document.getElementById('cdet-sheet-panel'), _v20Ctx.name);
+}
+
+// Advisory budget/limit check (not blocking — Рассказчик может переопределить вручную).
+function _v20Validate(m) {
+  const lineage = m.lineage || 'vampires';
+  const budget = lineage === 'vampires' ? RULES_V20.creation.vampires.kamarilla
+    : lineage === 'mortals' ? RULES_V20.creation.mortals
+    : lineage === 'fairies' ? RULES_V20.creation.fairies
+    : null;
+  if (!budget) return { items: [], warnings: [{ text: 'Для этой линейки бюджеты создания не определены.', level: 'info' }] };
+
+  const attrTotal = ['physical', 'social', 'mental'].reduce((a, g) => a + Object.values(m.attributes[g]).reduce((x, y) => x + y, 0), 0);
+  const abilTotal = ['talents', 'skills', 'knowledges'].reduce((a, g) => a + m.abilities[g].reduce((x, s) => x + _num(s.val, 0), 0), 0);
+  const virtTotal = m.virtues.conscience + m.virtues.selfcontrol + m.virtues.courage;
+  const bgTotal = m.backgrounds.reduce((a, b) => a + _num(b.val, 0), 0);
+  const discTotal = m.disciplines.reduce((a, d) => a + _num(d.val, 0), 0);
+
+  const items = [
+    { label: 'Характеристики', used: attrTotal - 9, max: budget.attrs.reduce((a, b) => a + b, 0) },
+    { label: 'Способности', used: abilTotal, max: budget.abilities.reduce((a, b) => a + b, 0) },
+    { label: 'Добродетели', used: virtTotal - 3, max: budget.virtues },
+    { label: 'Факты биографии', used: bgTotal, max: budget.backgrounds },
+  ];
+  if (lineage === 'vampires') items.push({ label: 'Дисциплины (старт.)', used: discTotal, max: budget.disciplines });
+
+  const warnings = [];
+  const stillChargen = _num(m.experience.spent, 0) === 0;
+  if (stillChargen) {
+    for (const g of ['talents', 'skills', 'knowledges']) for (const s of m.abilities[g]) {
+      if (_num(s.val, 0) > 3 && s.name) warnings.push({ text: `«${s.name}» выше 3 при создании (только свободные очки/одобрение Рассказчика)`, level: 'warn' });
+    }
+  }
+  if (lineage === 'vampires') {
+    const gen = parseInt(String(m.header.generation || '').replace(/\D/g, ''), 10);
+    const genAllowsAbove5 = Number.isFinite(gen) && gen <= 7;
+    for (const g of ['physical', 'social', 'mental']) for (const [k, ru] of V20_ATTRS[g]) {
+      if (m.attributes[g][k] > 5 && !genAllowsAbove5) warnings.push({ text: `«${ru}» выше 5 — требуется поколение 7 и ниже (сейчас: ${m.header.generation || '—'})`, level: 'error' });
+    }
+    const genInfo = v20GenerationInfo(m.header.generation);
+    if (genInfo) for (const d of m.disciplines) {
+      if (d.name && d.val > genInfo.discMax) warnings.push({ text: `«${d.name}» (${d.val}) выше максимума дисциплин для поколения (${genInfo.discMax})`, level: 'error' });
+    }
+  } else {
+    for (const g of ['physical', 'social', 'mental']) for (const [k, ru] of V20_ATTRS[g]) {
+      if (m.attributes[g][k] > 5) warnings.push({ text: `«${ru}» выше 5`, level: 'error' });
+    }
+  }
+  return { items, warnings };
+}
+
+function _v20RenderValidationReport(m) {
+  const r = _v20Validate(m);
+  const rows = r.items.map(it => `<div class="v20-val-row${it.used > it.max ? ' over' : ''}"><span>${escHtml(it.label)}</span><span>${it.used} / ${it.max}</span></div>`).join('');
+  const warn = r.warnings.length
+    ? `<ul class="v20-val-warnings">${r.warnings.map(w => `<li class="v20-val-${w.level}">${escHtml(w.text)}</li>`).join('')}</ul>`
+    : `<div class="v20-val-ok">Нарушений не найдено.</div>`;
+  return `<div class="v20-val-budgets">${rows}</div>${warn}<div class="v20-val-note">Свободные очки и опыт не учитываются — лимиты ориентировочные.</div>`;
+}
+
+function _v20ToggleValidation() {
+  const box = document.getElementById('v20-validate-report');
+  if (!box) return;
+  if (box.classList.contains('open')) { box.classList.remove('open'); box.innerHTML = ''; return; }
+  box.innerHTML = _v20RenderValidationReport(_v20Model);
+  box.classList.add('open');
+}
+
 function _v20RenderSheet(panel, charName) {
   const m = _v20Model;
   const isVamp = (m.lineage || '') === 'vampires';
+  const derived = _v20Derive(m);
+  const clanInfo = isVamp ? v20ClanInfo(m.header.clan) : null;
 
   const attrCol = g => `<div class="v20-col"><div class="v20-col-title">${V20_ATTR_GROUP_LABELS[g]}</div>${V20_ATTRS[g].map(([k, ru]) => _v20DotRow(ru, `attributes.${g}.${k}`, m.attributes[g][k])).join('')}</div>`;
   const abilCol = g => {
@@ -4947,7 +5071,9 @@ function _v20RenderSheet(panel, charName) {
     <div class="v20-band">Способности</div>
     <div class="v20-grid3">${abilCol('talents')}${abilCol('skills')}${abilCol('knowledges')}</div>`;
 
-  const discCol = `<div class="v20-col"><div class="v20-col-title">Дисциплины</div>${m.disciplines.map((d, i) => _v20NamedDotRow(`disciplines.${i}.name`, d.name, `disciplines.${i}.val`, d.val)).join('')}</div>`;
+  const discFillBtn = clanInfo && m.disciplines.slice(0, 3).every(d => !d.name)
+    ? `<button type="button" class="v20-mini-action" data-v20-action="fill-clan-disc">+ клановые</button>` : '';
+  const discCol = `<div class="v20-col"><div class="v20-col-title">Дисциплины${discFillBtn}</div>${m.disciplines.map((d, i) => _v20NamedDotRow(`disciplines.${i}.name`, d.name, `disciplines.${i}.val`, d.val)).join('')}</div>`;
   const bgCol = `<div class="v20-col"><div class="v20-col-title">Факты биографии</div>${m.backgrounds.map((b, i) => _v20NamedDotRow(`backgrounds.${i}.name`, b.name, `backgrounds.${i}.val`, b.val)).join('')}</div>`;
   const virtCol = `<div class="v20-col"><div class="v20-col-title">Добродетели</div>
       ${_v20DotRow('Совесть/Решимость', 'virtues.conscience', m.virtues.conscience)}
@@ -4966,24 +5092,24 @@ function _v20RenderSheet(panel, charName) {
       <div class="v20-col">
         <div class="v20-col-title">Достоинства и недостатки</div>
         <textarea class="v20-textarea" data-tpath="meritsFlaws" rows="6" placeholder="По строке на пункт…">${escHtml(m.meritsFlaws)}</textarea>
-        <div class="v20-col-title" style="margin-top:12px">Изъян</div>
+        <div class="v20-col-title" style="margin-top:12px">Изъян${clanInfo && clanInfo.weakness ? `<button type="button" class="v20-mini-action" data-v20-action="insert-clan-weakness">+ слабость клана</button>` : ''}</div>
         <input class="v20-field-input" data-tpath="flaw" value="${escAttr(m.flaw)}">
       </div>
       <div class="v20-col">
         <div class="v20-stat-block">
-          <div class="v20-stat-title">Человечность / Путь</div>
+          <div class="v20-stat-title">Человечность / Путь ${_v20AutoBadge(m.humanity, derived.humanity, 'humanity', 'dot')}</div>
           ${_v20DotsHtml('humanity', m.humanity, 10)}
           <input class="v20-line-input v20-path" data-tpath="path" value="${escAttr(m.path)}" placeholder="Столп (Путь)">
         </div>
         <div class="v20-stat-block">
-          <div class="v20-stat-title">Воля</div>
+          <div class="v20-stat-title">Воля ${_v20AutoBadge(m.willpower.permanent, derived.willpower, 'willpower.permanent', 'dot')}</div>
           ${_v20DotsHtml('willpower.permanent', m.willpower.permanent, 10)}
           ${_v20BoxesHtml('willpower.temp', m.willpower.temp)}
         </div>
         ${isVamp ? `<div class="v20-stat-block">
-          <div class="v20-stat-title">Запас крови</div>
+          <div class="v20-stat-title">Запас крови${derived.gen ? `<span class="v20-gen-info" title="Поколение ${escAttr(m.header.generation)}: max ${derived.gen.bloodMax}, предел/ход ${derived.gen.bloodPerTurn}, max дисциплины ${derived.gen.discMax}">ⓘ</span>` : ''}</div>
           ${_v20BoxesHtml('bloodPool', m.bloodPool)}
-          <label class="v20-inline-field">Предел траты в ход <input class="v20-mini-input" data-tpath="bloodPerTurn" value="${escAttr(m.bloodPerTurn)}"></label>
+          <label class="v20-inline-field">Предел траты в ход ${derived.gen ? _v20AutoBadge(m.bloodPerTurn, derived.gen.bloodPerTurn, 'bloodPerTurn', 'text') : ''}<input class="v20-mini-input" data-tpath="bloodPerTurn" value="${escAttr(m.bloodPerTurn)}"></label>
         </div>` : ''}
       </div>
       <div class="v20-col">
@@ -5043,13 +5169,16 @@ function _v20RenderSheet(panel, charName) {
     <div class="cdet-sheet-toolbar">
       <button class="cdet-sheet-btn primary" id="v20-save" disabled>💾 Сохранено</button>
       <button class="cdet-sheet-btn" id="v20-regen">♻ Перегенерировать ИИ</button>
+      <button class="cdet-sheet-btn" id="v20-validate">📋 Проверить лист</button>
       <span class="v20-status" id="v20-status"></span>
     </div>
+    <div class="v20-val-report" id="v20-validate-report"></div>
     <div class="v20-sheet">${header}${attributes}${abilities}${advantages}${bottom}${page2}</div>
     <div class="v20-foot">Создание: Характеристики 7/5/3 · Способности 13/9/5 · Дисциплины 3 · Факты биографии 5 · Добродетели 7 · Свободные пункты 15</div>`;
 
   document.getElementById('v20-save').addEventListener('click', _v20Save);
   document.getElementById('v20-regen').addEventListener('click', e => _v20Regen(e.currentTarget));
+  document.getElementById('v20-validate').addEventListener('click', _v20ToggleValidation);
   _v20BindPanel(panel);
 }
 
@@ -5076,17 +5205,26 @@ function _v20BindPanel(panel) {
     _v20RebuildDots(span, nv);
     _v20MarkDirty();
   };
-  panel.addEventListener('click', e => { const dot = e.target.closest('.v20-dot'); if (dot) onDot(dot); });
+  panel.addEventListener('click', e => {
+    const dot = e.target.closest('.v20-dot'); if (dot) { onDot(dot); return; }
+    const badge = e.target.closest('.v20-auto-badge'); if (badge) { _v20ApplyAutoBadge(badge); return; }
+    const action = e.target.closest('[data-v20-action]'); if (action) { _v20RunAction(action.dataset.v20Action); return; }
+  });
   panel.addEventListener('keydown', e => {
     const dot = e.target.closest('.v20-dot');
     if (dot && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); onDot(dot); }
   });
   panel.addEventListener('change', e => {
-    const box = e.target.closest('.v20-box'); if (!box) return;
-    const bp = box.dataset.bpath;
-    if (box.dataset.i !== undefined) { const arr = _v20Get(_v20Model, bp) || []; arr[+box.dataset.i] = box.checked; _v20Set(_v20Model, bp, arr); }
-    else _v20Set(_v20Model, bp, box.checked);
-    _v20MarkDirty();
+    const box = e.target.closest('.v20-box');
+    if (box) {
+      const bp = box.dataset.bpath;
+      if (box.dataset.i !== undefined) { const arr = _v20Get(_v20Model, bp) || []; arr[+box.dataset.i] = box.checked; _v20Set(_v20Model, bp, arr); }
+      else _v20Set(_v20Model, bp, box.checked);
+      _v20MarkDirty();
+      return;
+    }
+    const t = e.target.closest('[data-tpath="header.clan"], [data-tpath="header.generation"]');
+    if (t) _v20RenderSheet(panel, _v20Ctx.name);  // refresh clan/gen-derived badges & actions
   });
   panel.addEventListener('input', e => {
     const t = e.target.closest('[data-tpath]'); if (!t) return;
@@ -5115,7 +5253,7 @@ async function _v20Save() {
   _v20Model.experience.spent = _num(_v20Model.experience.spent, 0);
   _v20Model.bloodPerTurn = _num(_v20Model.bloodPerTurn, 0);
   try {
-    const r = await fetch(`/api/characters/${encodeURIComponent(_v20Ctx.name)}/sheet-data${location.search}`,
+    const r = await fetch(`/api/characters/${encodeURIComponent(_charSlug(_v20Ctx.name))}/sheet-data${location.search}`,
       { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ data: _v20Model }) }
     ).then(r => r.json());
     if (!r.ok) throw new Error(r.error || 'не удалось');
@@ -5136,7 +5274,7 @@ async function _v20Regen(btn) {
     const ok = await _generateSheet({ scope: 'character', name: _v20Ctx.name }, null);
     if (!ok) throw new Error('генерация не удалась');
     const q = location.search ? location.search + '&fromMd=1' : '?fromMd=1';
-    const d = await fetch(`/api/characters/${encodeURIComponent(_v20Ctx.name)}/sheet-data${q}`).then(r => r.json());
+    const d = await fetch(`/api/characters/${encodeURIComponent(_charSlug(_v20Ctx.name))}/sheet-data${q}`).then(r => r.json());
     _v20Model = _v20ModelFrom(d);
     _v20DirtyFlag = false;
     _v20RenderSheet(document.getElementById('cdet-sheet-panel'), _v20Ctx.name);
@@ -5154,7 +5292,7 @@ async function _loadCharSheet(charName) {
   panel.innerHTML = '<div class="loading-state"><div class="spinner"></div>Загрузка листа…</div>';
   _v20Ctx = { name: charName }; _v20DirtyFlag = false;
   let d;
-  try { d = await fetch(`/api/characters/${encodeURIComponent(charName)}/sheet-data${location.search}`).then(r => r.json()); }
+  try { d = await fetch(`/api/characters/${encodeURIComponent(_charSlug(charName))}/sheet-data${location.search}`).then(r => r.json()); }
   catch (e) { panel.innerHTML = `<div class="cdet-empty">Ошибка загрузки: ${escHtml(e.message)}</div>`; return; }
   _v20Model = _v20ModelFrom(d);
   _v20RenderSheet(panel, charName);
@@ -5168,7 +5306,7 @@ function _sheetApi(ctx) {
     const base = `/api/chronicles/${encodeURIComponent(ctx.chr)}/modules/${encodeURIComponent(ctx.mod)}/npc/${encodeURIComponent(ctx.slug)}/sheet`;
     return { get: base + qs, gen: base + '/generate' + qs, put: base + qs };
   }
-  const base = `/api/characters/${encodeURIComponent(ctx.name)}/sheet`;
+  const base = `/api/characters/${encodeURIComponent(_charSlug(ctx.name))}/sheet`;
   return { get: base + qs, gen: base + '/generate' + qs, put: base + qs };
 }
 
@@ -5353,7 +5491,7 @@ async function _diaryGenerate(charName) {
     const pref         = _getPref(featPrefs, 'prose', 'openrouter');
     const preferSource = pref.provider;
     const orModel      = preferSource === 'openrouter' ? (pref.model || null) : null;
-    const r = await fetch(`/api/characters/${encodeURIComponent(charName)}/diary/generate`,
+    const r = await fetch(`/api/characters/${encodeURIComponent(_charSlug(charName))}/diary/generate`,
       { method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ period, session: document.getElementById('diary-session').value.trim(), hint: document.getElementById('diary-hint').value.trim(), preferSource, orModel }) }).then(r => r.json());
     if (r.error) { _diaryMsg(r.error, false); return; }
@@ -5371,7 +5509,7 @@ async function _diarySave(charName) {
   const btn = document.getElementById('diary-save'); const old = btn.textContent;
   btn.disabled = true; btn.textContent = '⏳…';
   try {
-    const r = await fetch(`/api/characters/${encodeURIComponent(charName)}/diary`,
+    const r = await fetch(`/api/characters/${encodeURIComponent(_charSlug(charName))}/diary`,
       { method: 'PUT', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ period, session: document.getElementById('diary-session').value.trim(), text }) }).then(r => r.json());
     if (r.error) { _diaryMsg(r.error, false); return; }
@@ -5398,7 +5536,7 @@ async function loadDiaryEntry(charName, file) {
   panel.innerHTML = '<div class="diary-loading"><div class="spinner"></div>Загрузка...</div>';
   try {
     const data = await fetch(
-      `/api/characters/${encodeURIComponent(charName)}/diary?file=${encodeURIComponent(file)}`
+      `/api/characters/${encodeURIComponent(_charSlug(charName))}/diary?file=${encodeURIComponent(file)}`
     ).then(r => r.json());
     if (data.error) throw new Error(data.error);
     const panels = panel.closest('.cdet-panels');
@@ -5441,7 +5579,7 @@ async function loadDiaryEntry(charName, file) {
 // Soft-delete a character: preview affected refs, confirm, then DELETE.
 async function _confirmDeleteChar(name) {
   let pv;
-  try { pv = await fetch(`/api/characters/${encodeURIComponent(name)}/delete-preview${location.search}`).then(r => r.json()); }
+  try { pv = await fetch(`/api/characters/${encodeURIComponent(_charSlug(name))}/delete-preview${location.search}`).then(r => r.json()); }
   catch (e) { alert('Не удалось получить предпросмотр: ' + e.message); return; }
   if (pv.error) { alert(pv.error); return; }
 
@@ -5477,7 +5615,7 @@ async function _confirmDeleteChar(name) {
     const btn = ov.querySelector('[data-act="ok"]');
     btn.disabled = true; btn.textContent = '⏳ Удаление…';
     try {
-      const d = await fetch(`/api/characters/${encodeURIComponent(name)}${location.search}`, { method: 'DELETE' })
+      const d = await fetch(`/api/characters/${encodeURIComponent(_charSlug(name))}${location.search}`, { method: 'DELETE' })
         .then(r => r.json());
       if (!d.ok) throw new Error(d.error || 'Ошибка');
       close();
@@ -5779,7 +5917,7 @@ async function initCarousel(charName) {
   _carouselImages = [];
   _carouselIdx = 0;
 
-  const resp = await fetch(`/api/characters/${encodeURIComponent(charName)}/images${window.location.search}`)
+  const resp = await fetch(`/api/characters/${encodeURIComponent(_charSlug(charName))}/images${window.location.search}`)
     .catch(() => null);
   if (!resp?.ok) return;
   const { images } = await resp.json().catch(() => ({}));
@@ -5890,7 +6028,7 @@ async function _savePanelEdit(panel, charName) {
   try {
     if (panel === 'bio') {
       const bio = document.getElementById('cdet-bio-ta')?.value.trim() || '';
-      const r = await fetch(`/api/characters/${encodeURIComponent(charName)}/fields${qs}`,
+      const r = await fetch(`/api/characters/${encodeURIComponent(_charSlug(charName))}/fields${qs}`,
         { method: 'PUT', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ fields: { biography: bio } }) });
       const d = await r.json();
@@ -5908,7 +6046,7 @@ async function _savePanelEdit(panel, charName) {
         if (!target) return null;
         return desc ? `${target} — ${desc}` : target;
       }).filter(Boolean);
-      const r = await fetch(`/api/characters/${encodeURIComponent(charName)}/relations${qs}`,
+      const r = await fetch(`/api/characters/${encodeURIComponent(_charSlug(charName))}/relations${qs}`,
         { method: 'PUT', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ lines }) });
       const d = await r.json();
@@ -5941,7 +6079,7 @@ async function _savePanelEdit(panel, charName) {
       if (voice)        fields.voice         = voice;
       if (imagePrompt)  fields.imagePrompt   = imagePrompt;
       if (negativePrompt) fields.negativePrompt = negativePrompt;
-      const r = await fetch(`/api/characters/${encodeURIComponent(charName)}/fields${qs}`,
+      const r = await fetch(`/api/characters/${encodeURIComponent(_charSlug(charName))}/fields${qs}`,
         { method: 'PUT', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ fields }) });
       const d = await r.json();
@@ -5984,7 +6122,7 @@ async function _generateAppearance(charName) {
 
     // 1. Генерируем внешность через Vision API
     const resp = await fetch(
-      `/api/characters/${encodeURIComponent(charName)}/generate-appearance${qs}`,
+      `/api/characters/${encodeURIComponent(_charSlug(charName))}/generate-appearance${qs}`,
       { method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ model: claudeModel, preferSource, orModel }) }
     );
@@ -5998,7 +6136,7 @@ async function _generateAppearance(charName) {
     // 2. Автосохраняем в карточку персонажа
     if (btn) btn.textContent = '💾 Сохранение...';
     const saveResp = await fetch(
-      `/api/characters/${encodeURIComponent(charName)}/fields${qs}`,
+      `/api/characters/${encodeURIComponent(_charSlug(charName))}/fields${qs}`,
       { method: 'PUT', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ fields: { appearance: d.appearance } }) }
     );
@@ -6045,7 +6183,7 @@ async function _loadDescImages(charName) {
   if (!gallery) return;
   gallery.innerHTML = '<div class="cdet-img-gallery-loading">Загрузка…</div>';
 
-  const resp = await fetch(`/api/characters/${encodeURIComponent(charName)}/images${window.location.search}`).catch(() => null);
+  const resp = await fetch(`/api/characters/${encodeURIComponent(_charSlug(charName))}/images${window.location.search}`).catch(() => null);
   if (!resp?.ok) { gallery.innerHTML = ''; return; }
   const { images } = await resp.json().catch(() => ({}));
 
@@ -6075,7 +6213,7 @@ async function _deleteCharImage(charName, filename) {
   const qs = window.location.search;
   try {
     const resp = await fetch(
-      `/api/characters/${encodeURIComponent(charName)}/images/${encodeURIComponent(filename)}${qs}`,
+      `/api/characters/${encodeURIComponent(_charSlug(charName))}/images/${encodeURIComponent(filename)}${qs}`,
       { method: 'DELETE' }
     );
     const d = await resp.json();
@@ -6137,7 +6275,7 @@ async function _genDialogue(charName) {
     const qs    = window.location.search;
     const prefs = JSON.parse(localStorage.getItem('ai-feature-prefs') || '{}');
     const pref  = _getPref(prefs, 'dialogue', 'openrouter');
-    const d = await fetch(`/api/characters/${encodeURIComponent(charName)}/dialogue${qs}`,
+    const d = await fetch(`/api/characters/${encodeURIComponent(_charSlug(charName))}/dialogue${qs}`,
       { method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ situation, source: pref.provider, model: pref.model }) }
     ).then(r => r.json());
@@ -6173,11 +6311,11 @@ async function _generatePrompt(charName) {
   try {
     const qs = window.location.search;
     const featPrefs  = JSON.parse(localStorage.getItem('ai-feature-prefs') || '{}');
-    const _appPref   = _getPref(featPrefs, 'appearance', 'openrouter');
-    const preferSource = _appPref.provider;
-    const orModel    = preferSource === 'openrouter' ? (_appPref.model || null) : null;
+    const _promptPref = _getPref(featPrefs, 'prompt', 'openrouter');
+    const preferSource = _promptPref.provider;
+    const orModel    = preferSource === 'openrouter' ? (_promptPref.model || null) : null;
 
-    const resp = await fetch(`/api/characters/${encodeURIComponent(charName)}/generate-prompt${qs}`, {
+    const resp = await fetch(`/api/characters/${encodeURIComponent(_charSlug(charName))}/generate-prompt${qs}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ preferSource, orModel }),
@@ -6193,7 +6331,7 @@ async function _generatePrompt(charName) {
       return;
     }
 
-    const saveResp = await fetch(`/api/characters/${encodeURIComponent(charName)}/fields${qs}`, {
+    const saveResp = await fetch(`/api/characters/${encodeURIComponent(_charSlug(charName))}/fields${qs}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ fields: { imagePrompt: d.positive, negativePrompt: d.negative } }),
@@ -6365,7 +6503,7 @@ async function _saveInfoFields() {
 
   try {
     const resp = await fetch(
-      `/api/characters/${encodeURIComponent(prevName)}/fields${window.location.search}`,
+      `/api/characters/${encodeURIComponent(_charSlug(prevName))}/fields${window.location.search}`,
       { method: 'PUT', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ fields }) }
     );
@@ -6428,7 +6566,7 @@ async function triggerImageUpload(charName) {
         r.onerror = rej;
         r.readAsDataURL(file);
       });
-      const resp   = await fetch(`/api/characters/${encodeURIComponent(charName)}/upload-image`, {
+      const resp   = await fetch(`/api/characters/${encodeURIComponent(_charSlug(charName))}/upload-image`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ base64, ext })
@@ -6556,7 +6694,7 @@ function renderLocations() {
     grid.innerHTML = '<div class="loading-state" style="height:100px">Локации не найдены</div>';
     return;
   }
-  grid.innerHTML = list.map(loc => {
+  grid.innerHTML = list.map((loc, i) => {
     const zc    = zoneClass(loc.zone);
     const mLvl  = loc.masqueradeLevel || 'unknown';
     const masqBadge = MASQ_BADGE_LABELS[mLvl]
@@ -6571,14 +6709,15 @@ function renderLocations() {
       ${distLine    ? `<div class="loc-district">${distLine}</div>` : ''}
       ${loc.address ? `<div class="loc-address">${escHtml(loc.address)}</div>` : ''}
       <div class="loc-badges">${zoneBadge}${masqBadge}</div>`;
+    const delay = `style="animation-delay:${Math.min(i, 12) * 30}ms"`;
 
     if (loc.imageUrl) {
-      return `<div class="loc-card has-art" data-slug="${escHtml(loc.slug)}">
+      return `<div class="loc-card has-art" data-slug="${escHtml(loc.slug)}" ${delay}>
         <img class="loc-card-img" src="${loc.imageUrl}" alt="${escHtml(loc.title || loc.slug)}" loading="lazy" decoding="async">
         <div class="loc-card-overlay">${textBlock}</div>
       </div>`;
     }
-    return `<div class="loc-card" data-slug="${escHtml(loc.slug)}">
+    return `<div class="loc-card" data-slug="${escHtml(loc.slug)}" ${delay}>
       <span class="loc-zone-icon">${ZONE_CLASS_LABELS[zc][0]}</span>
       ${textBlock}
     </div>`;
@@ -7303,13 +7442,13 @@ modalSubmit.addEventListener('click', async () => {
   const fail  = msg => { modalOut.className = 'output-area show'; modalOut.textContent = '⚠ ' + msg; reset(); };
 
   // Shared success: optional art upload → refresh list → close.
-  const onCreated = async (okMsg) => {
+  const onCreated = async (okMsg, slug) => {
     modalOut.className = 'output-area show ok';
     modalOut.textContent = okMsg;
     STATE.graph.inited = false;
     if (modalImgB64 && charName) {
       try {
-        const u = await fetch(`/api/characters/${encodeURIComponent(charName)}/upload-image${qs}`, {
+        const u = await fetch(`/api/characters/${encodeURIComponent(slug || _charSlug(charName))}/upload-image${qs}`, {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ base64: modalImgB64, ext: modalImgExt })
         }).then(r => r.json());
@@ -7341,7 +7480,7 @@ modalSubmit.addEventListener('click', async () => {
         body: JSON.stringify(payload)
       }).then(r => r.json());
       if (!d.ok) return fail(d.error || 'Ошибка');
-      await onCreated(`✓ Создан: cities/${CITY}/characters/${d.lineage}/${d.slug}/${d.slug}.md`);
+      await onCreated(`✓ Создан: cities/${CITY}/characters/${d.lineage}/${d.slug}/${d.slug}.md`, d.slug);
     } else {
       // Other lineages → new_npc CLI tool (Name / Clan / Sect / Role positional args).
       const TYPE_TO_LINEAGE = {
@@ -7355,9 +7494,154 @@ modalSubmit.addEventListener('click', async () => {
         body: JSON.stringify({ args: npcArgs })
       }).then(r => r.json());
       if (!d.ok) { modalOut.textContent = d.output || '(нет вывода)'; reset(); return; }
-      await onCreated(d.output || '✓ Создан');
+      // CLI tool doesn't return JSON — pull the slug out of its stdout path (cities/.../<slug>/<slug>.md).
+      const slugMatch = (d.output || '').match(/\/([a-z0-9_]+)\/\1\.md/);
+      await onCreated(d.output || '✓ Создан', slugMatch?.[1]);
     }
   } catch (e) {
     fail(e.message);
   }
+});
+
+// ═══════════════════════════════════════════════════════════════
+// Onboarding tour — ceremonial spotlight walkthrough (zero-dep)
+// ═══════════════════════════════════════════════════════════════
+// Steps target the sidebar (always visible, data-independent) so the tour works
+// on a brand-new install with no city/characters yet. Workflow, not features.
+const TOUR_SEEN_KEY = 'sanguine-tour-seen';
+const TOUR_STEPS = [
+  {
+    sel: '.city-switch',
+    label: 'Шаг 1 · 5',
+    title: 'Начни с домена',
+    body: 'Каждый город — отдельный сеттинг: своя политика, фракции, локации и персонажи. Активный домен переключается здесь, а кнопка «+» создаёт новый.',
+  },
+  {
+    sel: '.nav-item[data-page="characters"]',
+    label: 'Шаг 2 · 5',
+    title: 'Реестр персонажей',
+    body: 'Вампиры, смертные и феи домена. Клик по карточке открывает досье: внешность, дисциплины, связи, дневники. Фильтры сверху сужают список по линейке и статусу.',
+  },
+  {
+    sel: '.nav-item[data-page="chronicles-page"]',
+    label: 'Шаг 3 · 5',
+    title: 'Хроники и модули',
+    body: 'Хроника — это кампания. Внутри неё живут модули — отдельные игровые сессии со сценарием, событиями и НПС.',
+  },
+  {
+    sel: '.nav-item[data-page="threads"]',
+    label: 'Шаг 4 · 5',
+    title: 'Открытые нити',
+    body: 'Незавершённые сюжетные нити, ждущие развязки. Здесь видно, что осталось разрешить, и можно менять их статус и приоритет.',
+  },
+  {
+    sel: '.nav-item[data-page="tools"]',
+    label: 'Шаг 5 · 5',
+    title: 'Инструменты Рассказчика',
+    body: 'Создание доменов, НПС и локаций, генерация контента и проверка целостности данных. Этот тур всегда можно перезапустить кнопкой «?» у логотипа.',
+  },
+];
+
+let _tourIdx = 0;
+let _tourEls = null;
+
+function _tourTeardown() {
+  if (_tourEls) {
+    _tourEls.backdrop.remove();
+    _tourEls.spotlight.remove();
+    _tourEls.card.remove();
+    _tourEls = null;
+  }
+  window.removeEventListener('resize', _tourReposition);
+  window.removeEventListener('keydown', _tourKey);
+}
+
+function _tourFinish() {
+  _tourTeardown();
+  try { localStorage.setItem(TOUR_SEEN_KEY, '1'); } catch {}
+}
+
+function _tourNext() {
+  if (_tourIdx < TOUR_STEPS.length - 1) { _tourIdx++; _tourRender(); }
+  else _tourFinish();
+}
+
+function _tourPrev() {
+  if (_tourIdx > 0) { _tourIdx--; _tourRender(); }
+}
+
+function _tourKey(e) {
+  if (e.key === 'Escape')                            _tourFinish();
+  else if (e.key === 'ArrowRight' || e.key === 'Enter') _tourNext();
+  else if (e.key === 'ArrowLeft')                    _tourPrev();
+}
+
+function _tourReposition() {
+  if (!_tourEls) return;
+  const target = document.querySelector(TOUR_STEPS[_tourIdx].sel);
+  if (!target) { _tourFinish(); return; }
+  const r = target.getBoundingClientRect();
+  const pad = 6;
+  const sp = _tourEls.spotlight;
+  sp.style.top    = `${r.top - pad}px`;
+  sp.style.left   = `${r.left - pad}px`;
+  sp.style.width  = `${r.width + pad * 2}px`;
+  sp.style.height = `${r.height + pad * 2}px`;
+  // Card sits to the right of the sidebar target, vertically aligned, clamped to viewport.
+  const card  = _tourEls.card;
+  const gap   = 16;
+  const cardW = card.offsetWidth  || 340;
+  const cardH = card.offsetHeight || 180;
+  let left = r.right + gap;
+  if (left + cardW > window.innerWidth - 12) left = Math.max(12, r.left - cardW - gap);
+  let top = r.top;
+  if (top + cardH > window.innerHeight - 12) top = Math.max(12, window.innerHeight - cardH - 12);
+  card.style.left = `${left}px`;
+  card.style.top  = `${top}px`;
+}
+
+function _tourRender() {
+  const step = TOUR_STEPS[_tourIdx];
+  if (!document.querySelector(step.sel)) { _tourNext(); return; }
+  const last = _tourIdx === TOUR_STEPS.length - 1;
+  _tourEls.card.innerHTML = `
+    <div class="tour-step-label">${escHtml(step.label)}</div>
+    <div class="tour-card-title">${escHtml(step.title)}</div>
+    <div class="tour-card-body">${escHtml(step.body)}</div>
+    <div class="tour-actions">
+      <button type="button" class="tour-btn tour-btn-ghost" data-act="skip">Пропустить</button>
+      <span class="tour-spacer"></span>
+      <button type="button" class="tour-btn tour-btn-ghost" data-act="prev"${_tourIdx === 0 ? ' disabled' : ''}>Назад</button>
+      <button type="button" class="tour-btn tour-btn-primary" data-act="next">${last ? 'Готово' : 'Далее'}</button>
+    </div>`;
+  _tourReposition();
+}
+
+function startTour() {
+  if (_tourEls) return;
+  _tourIdx = 0;
+  const backdrop  = document.createElement('div'); backdrop.id  = 'tour-backdrop';
+  const spotlight = document.createElement('div'); spotlight.id = 'tour-spotlight';
+  const card      = document.createElement('div'); card.id      = 'tour-card';
+  document.body.append(backdrop, spotlight, card);
+  _tourEls = { backdrop, spotlight, card };
+  backdrop.addEventListener('click', _tourNext);
+  card.addEventListener('click', e => {
+    const act = e.target.closest('[data-act]')?.dataset.act;
+    if (act === 'next')      _tourNext();
+    else if (act === 'prev') _tourPrev();
+    else if (act === 'skip') _tourFinish();
+  });
+  window.addEventListener('resize', _tourReposition);
+  window.addEventListener('keydown', _tourKey);
+  _tourRender();
+}
+
+document.getElementById('btn-tour')?.addEventListener('click', startTour);
+
+// First-run auto-launch (once). Wait for the sidebar and initial load to settle.
+window.addEventListener('load', () => {
+  let seen = false;
+  try { seen = localStorage.getItem(TOUR_SEEN_KEY) === '1'; } catch {}
+  if (!seen && document.querySelector('.city-switch')) setTimeout(startTour, 900);
 });

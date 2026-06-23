@@ -47,7 +47,7 @@ const THREAD_TABLE = [
 const CITY          = '?city=paris';
 const CHR           = 'leto_v_parizhe';
 const MOD           = 'progulki_po_nocham';
-const CHAR_GERSON   = encodeURIComponent('Герсон');
+const CHAR_GERSON   = 'gerson';
 const CHAR_UNKNOWN  = '__NOBODY__';
 const CITY_ROOT     = path.join(__dirname, '../../cities/paris');
 
@@ -828,7 +828,7 @@ describe('API — integration', () => {
     const CHAR_SLUG    = 'gerson';
     const CHAR_LINEAGE = 'vampires';
     const TEST_PERIOD  = '1900-01';
-    const CHAR_ENC     = encodeURIComponent(CHAR_NAME);
+    const CHAR_ENC     = encodeURIComponent(CHAR_SLUG);
     const FILE_REL     = `journal/${TEST_PERIOD}.md`;
     const charDir      = path.join(CITY_ROOT, 'characters', CHAR_LINEAGE, CHAR_SLUG);
     const diaryFile    = path.join(charDir, FILE_REL);
