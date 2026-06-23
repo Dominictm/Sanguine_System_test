@@ -84,9 +84,29 @@ function v20GenerationInfo(gen) {
   return RULES_V20.generations[clamped] || null;
 }
 
+// Стоимость одного шага повышения (тек. рейтинг ДО шага → +1) по таблице «Стоимость обучения».
+function v20XpStepCost(kind, curStep, isClanDisc) {
+  switch (kind) {
+    case 'attribute':  return curStep * 4;
+    case 'ability':     return curStep === 0 ? 3 : curStep * 2;
+    case 'virtue':      return curStep * 2;
+    case 'humanity':    return curStep * 2;
+    case 'willpower':   return curStep || 1;
+    case 'discipline':  return curStep === 0 ? 10 : curStep * (isClanDisc ? 5 : 7);
+    default: return 0;
+  }
+}
+// Суммарная стоимость поднятия от cur до next (несколько шагов, если ставят сразу несколько точек).
+function v20XpCost(kind, cur, next, isClanDisc) {
+  let total = 0;
+  for (let s = cur; s < next; s++) total += v20XpStepCost(kind, s, isClanDisc);
+  return total;
+}
+
 if (typeof window !== 'undefined') {
   window.RULES_V20 = RULES_V20;
   window.v20ClanKey = v20ClanKey;
   window.v20ClanInfo = v20ClanInfo;
   window.v20GenerationInfo = v20GenerationInfo;
+  window.v20XpCost = v20XpCost;
 }

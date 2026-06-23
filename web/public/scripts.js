@@ -4722,7 +4722,7 @@ function _v20Empty(lineage = 'vampires') {
     willpower: { permanent: 1, temp: Array(10).fill(false) },
     bloodPool: Array(20).fill(false), bloodPerTurn: 1,
     health: { bruised: false, hurt: false, injured: false, wounded: false, mauled: false, crippled: false, incapacitated: false },
-    flaw: '', experience: { total: 0, spent: 0 },
+    flaw: '', experience: { total: 0, spent: 0, log: [] },
     // ── Page 2 ──
     specializations: Array.from({ length: 6 }, () => ({ ability: '', spec: '' })),
     otherTraits: Array.from({ length: 6 }, () => ({ name: '', val: 0 })),
@@ -4777,7 +4777,12 @@ function _v20Normalize(m) {
   if (m.bloodPerTurn != null) e.bloodPerTurn = _num(m.bloodPerTurn, 1);
   Object.assign(e.health, m.health || {});
   if (typeof m.flaw === 'string') e.flaw = m.flaw;
-  if (m.experience) { e.experience.total = _num(m.experience.total, 0); e.experience.spent = _num(m.experience.spent, 0); }
+  if (m.experience) {
+    e.experience.total = _num(m.experience.total, 0); e.experience.spent = _num(m.experience.spent, 0);
+    e.experience.log = Array.isArray(m.experience.log)
+      ? m.experience.log.slice(0, 50).map(x => ({ date: String(x?.date || ''), text: String(x?.text || ''), cost: _num(x?.cost, 0) }))
+      : [];
+  }
   // ── Page 2 ──
   e.specializations = _v20PadPairs(m.specializations, 6, ['ability', 'spec']);
   e.otherTraits = _v20PadSlots(m.otherTraits, 6);
@@ -4955,6 +4960,221 @@ function _v20ApplyAutoBadge(badge) {
   _v20RenderSheet(document.getElementById('cdet-sheet-panel'), _v20Ctx.name);
 }
 
+// ── Dice roller V20 (Фаза 4, GM-ориентированный) ────────────────────────────
+let _v20RollLog = [];
+
+function _v20RollPool(poolSize, difficulty, specialized) {
+  const n = Math.max(0, poolSize);
+  const dice = [];
+  let successes = 0, ones = 0;
+  for (let i = 0; i < n; i++) {
+    const d = 1 + Math.floor(Math.random() * 10);
+    dice.push(d);
+    if (d === 1) ones++;
+    else if (d >= difficulty) successes += (d === 10 && specialized) ? 2 : 1;
+  }
+  return { dice, successes, botch: n > 0 && successes === 0 && ones > 0 };
+}
+
+// Most severe checked wound level → numeric dice penalty (V20_HEALTH penalty text, e.g. '−2').
+function _v20HealthPenalty(m) {
+  let pen = 0;
+  for (const [k, , penText] of V20_HEALTH) {
+    if (!m.health[k]) continue;
+    const n = parseInt(String(penText).replace(/[^\d]/g, ''), 10);
+    if (Number.isFinite(n) && n > pen) pen = n;
+  }
+  return pen;
+}
+
+function _v20RollOptionsHtml() {
+  const m = _v20Model;
+  const attrOpts = ['<option value="">—</option>'];
+  for (const g of ['physical', 'social', 'mental']) for (const [k, ru] of V20_ATTRS[g]) attrOpts.push(`<option value="attributes.${g}.${k}">${escHtml(ru)} (${m.attributes[g][k]})</option>`);
+  const abilOpts = ['<option value="">—</option>'];
+  for (const g of ['talents', 'skills', 'knowledges']) m.abilities[g].forEach((s, i) => { if (s.name) abilOpts.push(`<option value="abilities.${g}.${i}">${escHtml(s.name)} (${s.val})</option>`); });
+  return { attrOpts: attrOpts.join(''), abilOpts: abilOpts.join('') };
+}
+
+function _v20UpdateRollPoolInfo() {
+  const attrSel = document.getElementById('v20-roll-attr'), abilSel = document.getElementById('v20-roll-abil');
+  const bonus = _num(document.getElementById('v20-roll-bonus')?.value, 0);
+  const attrVal = attrSel.value ? _num(_v20Get(_v20Model, attrSel.value), 0) : 0;
+  const abilVal = abilSel.value ? _num(_v20Get(_v20Model, abilSel.value + '.val'), 0) : 0;
+  const penalty = _v20HealthPenalty(_v20Model);
+  const pool = Math.max(0, attrVal + abilVal + bonus - penalty);
+  const info = document.getElementById('v20-roll-pool-info');
+  if (info) info.textContent = `Пул: ${attrVal} + ${abilVal} + ${bonus}${penalty ? ` − ${penalty} (раны)` : ''} = ${pool}`;
+  return pool;
+}
+
+function _v20RenderRollLog() {
+  const box = document.getElementById('v20-roll-log');
+  if (!box) return;
+  box.innerHTML = _v20RollLog.map(r =>
+    `<div class="v20-roll-log-row"><span>${escHtml(r.label)}</span><span class="v20-roll-log-result ${r.botch ? 'is-botch' : r.successes > 0 ? 'is-success' : 'is-fail'}">${escHtml(r.text)}</span></div>`).join('');
+}
+
+function _v20DoRoll() {
+  const attrSel = document.getElementById('v20-roll-attr'), abilSel = document.getElementById('v20-roll-abil');
+  const diff = _num(document.getElementById('v20-roll-diff')?.value, 6);
+  const spec = !!document.getElementById('v20-roll-spec')?.checked;
+  const pool = _v20UpdateRollPoolInfo();
+  const r = _v20RollPool(pool, diff, spec);
+  const optLabel = sel => sel.value ? sel.options[sel.selectedIndex].textContent.replace(/\s*\(\d+\)$/, '') : '';
+  const label = [optLabel(attrSel), optLabel(abilSel)].filter(Boolean).join(' + ') || `Пул ${pool}`;
+  const resultText = r.botch ? 'Ботч!' : r.successes > 0 ? `${r.successes} усп.` : 'Провал';
+  const verdictClass = r.botch ? 'is-botch' : r.successes > 0 ? 'is-success' : 'is-fail';
+  const diceHtml = r.dice.length
+    ? r.dice.map(d => `<span class="v20-roll-die${d === 1 ? ' is-one' : d >= diff ? ' is-success' : ''}${d === 10 ? ' is-ten' : ''}">${d}</span>`).join('')
+    : '<span class="v20-roll-die-empty">пул 0</span>';
+  document.getElementById('v20-roll-result').innerHTML = `<div class="v20-roll-dice">${diceHtml}</div><div class="v20-roll-verdict ${verdictClass}">${escHtml(resultText)}</div>`;
+  _v20RollLog.unshift({ label, text: `${resultText} (сл. ${diff}, пул ${pool})`, successes: r.successes, botch: r.botch });
+  _v20RollLog = _v20RollLog.slice(0, 6);
+  _v20RenderRollLog();
+}
+
+function _v20CloseRollModal() { document.getElementById('v20-roll-modal-backdrop')?.classList.remove('open'); }
+
+function _v20OpenRollModal(seed) {
+  let modal = document.getElementById('v20-roll-modal-backdrop');
+  const { attrOpts, abilOpts } = _v20RollOptionsHtml();
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'v20-roll-modal-backdrop';
+    modal.className = 'v20-disc-modal-backdrop';
+    modal.innerHTML = `<div class="v20-disc-modal v20-roll-modal">
+      <button type="button" class="v20-disc-modal-close" id="v20-roll-modal-close" aria-label="Закрыть бросок">✕</button>
+      <h3>🎲 Бросок</h3>
+      <div class="v20-roll-row">
+        <label class="v20-roll-field">Характеристика<select id="v20-roll-attr">${attrOpts}</select></label>
+        <label class="v20-roll-field">Способность<select id="v20-roll-abil">${abilOpts}</select></label>
+      </div>
+      <div class="v20-roll-row">
+        <label class="v20-roll-field v20-roll-field-sm">Доп. кубики<input type="number" id="v20-roll-bonus" value="0" class="v20-mini-input"></label>
+        <label class="v20-roll-field v20-roll-field-sm">Сложность<input type="number" id="v20-roll-diff" value="6" class="v20-mini-input"></label>
+        <label class="v20-roll-spec"><input type="checkbox" id="v20-roll-spec"> Специализация (10 = 2 усп.)</label>
+      </div>
+      <div class="v20-roll-pool-info" id="v20-roll-pool-info"></div>
+      <button type="button" class="cdet-sheet-btn primary v20-roll-go" id="v20-roll-go">🎲 Бросить</button>
+      <div class="v20-roll-result" id="v20-roll-result"></div>
+      <div class="v20-roll-log" id="v20-roll-log"></div>
+    </div>`;
+    document.body.appendChild(modal);
+    modal.addEventListener('click', e => { if (e.target === modal) _v20CloseRollModal(); });
+    modal.querySelector('#v20-roll-modal-close').addEventListener('click', _v20CloseRollModal);
+    modal.querySelector('#v20-roll-go').addEventListener('click', _v20DoRoll);
+    modal.querySelectorAll('#v20-roll-attr, #v20-roll-abil, #v20-roll-bonus').forEach(el => el.addEventListener('input', _v20UpdateRollPoolInfo));
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') _v20CloseRollModal(); });
+  } else {
+    modal.querySelector('#v20-roll-attr').innerHTML = attrOpts;
+    modal.querySelector('#v20-roll-abil').innerHTML = abilOpts;
+  }
+  modal.querySelector('#v20-roll-attr').value = seed?.attr || '';
+  modal.querySelector('#v20-roll-abil').value = seed?.abil || '';
+  document.getElementById('v20-roll-result').innerHTML = '';
+  modal.classList.add('open');
+  _v20UpdateRollPoolInfo();
+  _v20RenderRollLog();
+}
+
+// ── Discipline reference library (Фаза 3) ──────────────────────────────────
+function _v20DisciplineLevelRow(lv) {
+  return `<div class="v20-disc-level-row"><span class="v20-disc-level-num">${escHtml(String(lv.level))}</span><span class="v20-disc-level-name">${escHtml(lv.name)}</span><span class="v20-disc-level-fx">${escHtml(lv.effect)}</span></div>`;
+}
+function _v20DisciplineDetailHtml(info) {
+  if (!info) return '<div class="v20-disc-empty">Дисциплина не найдена в справочнике.</div>';
+  let body;
+  if (info.noLevels && info.paths) {
+    body = Object.values(info.paths).map(p => `
+      <div class="v20-disc-path">
+        <div class="v20-disc-path-title">${escHtml(p.name)}</div>
+        ${p.note ? `<div class="v20-disc-note">${escHtml(p.note)}</div>` : ''}
+        ${p.levels.map(_v20DisciplineLevelRow).join('')}
+      </div>`).join('');
+  } else {
+    body = `
+      ${info.note ? `<div class="v20-disc-note">${escHtml(info.note)}</div>` : ''}
+      ${(info.core || []).map(_v20DisciplineLevelRow).join('')}
+      ${info.ext?.length ? `<div class="v20-disc-ext-title">Уровень 6+ (доп. канон)</div>${info.ext.map(_v20DisciplineLevelRow).join('')}` : ''}
+    `;
+  }
+  return `<div class="v20-disc-detail-head"><h3>${escHtml(info.name)}</h3><span class="v20-disc-clans">${escHtml(info.clans)}</span></div>${body}`;
+}
+function _v20RenderDisciplineLibrary() {
+  const body = document.getElementById('v20-disc-modal-body');
+  if (!body) return;
+  const items = Object.entries(RULES_DISCIPLINES).map(([key, d]) =>
+    `<button type="button" class="v20-disc-list-item" data-disc-key="${key}"><span>${escHtml(d.name)}</span><span class="v20-disc-list-clans">${escHtml(d.clans)}</span></button>`).join('');
+  body.innerHTML = `<h3>📚 Справочник дисциплин</h3><div class="v20-disc-list">${items}</div>`;
+}
+function _v20RenderDisciplineDetail(key) {
+  const body = document.getElementById('v20-disc-modal-body');
+  if (!body) return;
+  body.innerHTML = `<button type="button" class="v20-disc-back" data-disc-back>← к списку</button>${_v20DisciplineDetailHtml(RULES_DISCIPLINES[key])}`;
+}
+function _v20CloseDisciplineModal() { document.getElementById('v20-disc-modal-backdrop')?.classList.remove('open'); }
+function _v20OpenDisciplineModal(name) {
+  let modal = document.getElementById('v20-disc-modal-backdrop');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'v20-disc-modal-backdrop';
+    modal.className = 'v20-disc-modal-backdrop';
+    modal.innerHTML = `<div class="v20-disc-modal">
+      <button type="button" class="v20-disc-modal-close" id="v20-disc-modal-close" aria-label="Закрыть справочник">✕</button>
+      <div id="v20-disc-modal-body"></div>
+    </div>`;
+    document.body.appendChild(modal);
+    modal.addEventListener('click', e => { if (e.target === modal) _v20CloseDisciplineModal(); });
+    modal.querySelector('#v20-disc-modal-close').addEventListener('click', _v20CloseDisciplineModal);
+    modal.addEventListener('click', e => {
+      const back = e.target.closest('[data-disc-back]'); if (back) { _v20RenderDisciplineLibrary(); return; }
+      const item = e.target.closest('[data-disc-key]'); if (item) { _v20RenderDisciplineDetail(item.dataset.discKey); return; }
+    });
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') _v20CloseDisciplineModal(); });
+  }
+  modal.classList.add('open');
+  const info = name ? v20DisciplineInfo(name) : null;
+  if (info) _v20RenderDisciplineDetail(info.key);
+  else _v20RenderDisciplineLibrary();
+}
+
+// ── XP mode: clicking a dot up spends experience instead of a free edit ──
+let _v20XpMode = false;
+
+function _v20LabelFromPath(path, m) {
+  const parts = path.split('.');
+  if (parts[0] === 'attributes') { const found = V20_ATTRS[parts[1]]?.find(([k]) => k === parts[2]); return found ? found[1] : parts[2]; }
+  if (parts[0] === 'abilities') return m.abilities[parts[1]][+parts[2]]?.name || 'Способность';
+  return path;
+}
+
+function _v20XpKindFromPath(path, m) {
+  if (path.startsWith('attributes.')) return { kind: 'attribute', label: _v20LabelFromPath(path, m) };
+  if (path.startsWith('abilities.')) return { kind: 'ability', label: _v20LabelFromPath(path, m) };
+  if (path.startsWith('disciplines.')) {
+    const name = m.disciplines[+path.split('.')[1]]?.name || 'Дисциплина';
+    const info = v20ClanInfo(m.header.clan);
+    const isClanDisc = !!(info && info.disciplines.some(d => _v20Norm(d) === _v20Norm(name)));
+    return { kind: 'discipline', label: name, isClanDisc };
+  }
+  if (path === 'virtues.conscience')  return { kind: 'virtue', label: 'Совесть/Решимость' };
+  if (path === 'virtues.selfcontrol') return { kind: 'virtue', label: 'Самоконтроль/Инстинкты' };
+  if (path === 'virtues.courage')     return { kind: 'virtue', label: 'Смелость' };
+  if (path === 'humanity')            return { kind: 'humanity', label: m.path || 'Человечность' };
+  if (path === 'willpower.permanent') return { kind: 'willpower', label: 'Воля' };
+  return null; // факты биографии и пр. — без таблицы стоимости, повышаются свободно даже в режиме опыта
+}
+
+// Unchecks the highest filled box in a boolean-array pool (spend 1 point of blood/willpower).
+function _v20SpendPool(path) {
+  const arr = _v20Get(_v20Model, path) || [];
+  for (let i = arr.length - 1; i >= 0; i--) {
+    if (arr[i]) { arr[i] = false; _v20Set(_v20Model, path, arr); return true; }
+  }
+  return false;
+}
+
 function _v20RunAction(action) {
   const m = _v20Model;
   if (action === 'fill-clan-disc') {
@@ -4966,6 +5186,13 @@ function _v20RunAction(action) {
     if (!info || !info.weakness) return;
     if (m.flaw.trim() && !confirm('Поле «Изъян» не пустое. Заменить текущий текст слабостью клана?')) return;
     m.flaw = info.weakness;
+  } else if (action === 'open-disc-library') {
+    _v20OpenDisciplineModal();
+    return;
+  } else if (action === 'spend-blood') {
+    if (!_v20SpendPool('bloodPool')) return;
+  } else if (action === 'spend-willpower') {
+    if (!_v20SpendPool('willpower.temp')) return;
   } else return;
   _v20MarkDirty();
   _v20RenderSheet(document.getElementById('cdet-sheet-panel'), _v20Ctx.name);
@@ -5042,11 +5269,16 @@ function _v20RenderSheet(panel, charName) {
   const derived = _v20Derive(m);
   const clanInfo = isVamp ? v20ClanInfo(m.header.clan) : null;
 
-  const attrCol = g => `<div class="v20-col"><div class="v20-col-title">${V20_ATTR_GROUP_LABELS[g]}</div>${V20_ATTRS[g].map(([k, ru]) => _v20DotRow(ru, `attributes.${g}.${k}`, m.attributes[g][k])).join('')}</div>`;
+  const rollIcon = (kind, path) => `<button type="button" class="v20-roll-icon-btn" data-roll-seed="${kind}:${path}" title="Бросок">🎲</button>`;
+  const attrCol = g => `<div class="v20-col"><div class="v20-col-title">${V20_ATTR_GROUP_LABELS[g]}</div>${V20_ATTRS[g].map(([k, ru]) =>
+    `<div class="v20-row-roll-wrap">${_v20DotRow(ru, `attributes.${g}.${k}`, m.attributes[g][k])}${rollIcon('attr', `attributes.${g}.${k}`)}</div>`).join('')}</div>`;
   const abilCol = g => {
-    const rows = m.abilities[g].map((slot, i) => slot.fixed
-      ? _v20DotRow(slot.name, `abilities.${g}.${i}.val`, slot.val)
-      : _v20NamedDotRow(`abilities.${g}.${i}.name`, slot.name, `abilities.${g}.${i}.val`, slot.val)).join('');
+    const rows = m.abilities[g].map((slot, i) => {
+      const rowHtml = slot.fixed
+        ? _v20DotRow(slot.name, `abilities.${g}.${i}.val`, slot.val)
+        : _v20NamedDotRow(`abilities.${g}.${i}.name`, slot.name, `abilities.${g}.${i}.val`, slot.val);
+      return `<div class="v20-row-roll-wrap">${rowHtml}${slot.name ? rollIcon('abil', `abilities.${g}.${i}`) : ''}</div>`;
+    }).join('');
     return `<div class="v20-col"><div class="v20-col-title">${V20_ABILITY_GROUP_LABELS[g]}</div>${rows}</div>`;
   };
 
@@ -5073,7 +5305,13 @@ function _v20RenderSheet(panel, charName) {
 
   const discFillBtn = clanInfo && m.disciplines.slice(0, 3).every(d => !d.name)
     ? `<button type="button" class="v20-mini-action" data-v20-action="fill-clan-disc">+ клановые</button>` : '';
-  const discCol = `<div class="v20-col"><div class="v20-col-title">Дисциплины${discFillBtn}</div>${m.disciplines.map((d, i) => _v20NamedDotRow(`disciplines.${i}.name`, d.name, `disciplines.${i}.val`, d.val)).join('')}</div>`;
+  const discLibBtn = `<button type="button" class="v20-mini-action" data-v20-action="open-disc-library" title="Открыть справочник дисциплин">📚</button>`;
+  const discRow = (d, i) => {
+    const known = !!v20DisciplineKey(d.name);
+    const infoBtn = known ? `<button type="button" class="v20-disc-info-btn" data-disc-view="${escAttr(d.name)}" title="Силы по уровням: ${escAttr(d.name)}">ℹ</button>` : '';
+    return `<div class="v20-row v20-named v20-disc-row">${infoBtn}<input class="v20-line-input" data-tpath="disciplines.${i}.name" value="${escAttr(d.name)}" placeholder="…">${_v20DotsHtml(`disciplines.${i}.val`, d.val)}</div>`;
+  };
+  const discCol = `<div class="v20-col"><div class="v20-col-title">Дисциплины${discFillBtn}${discLibBtn}</div>${m.disciplines.map(discRow).join('')}</div>`;
   const bgCol = `<div class="v20-col"><div class="v20-col-title">Факты биографии</div>${m.backgrounds.map((b, i) => _v20NamedDotRow(`backgrounds.${i}.name`, b.name, `backgrounds.${i}.val`, b.val)).join('')}</div>`;
   const virtCol = `<div class="v20-col"><div class="v20-col-title">Добродетели</div>
       ${_v20DotRow('Совесть/Решимость', 'virtues.conscience', m.virtues.conscience)}
@@ -5102,12 +5340,12 @@ function _v20RenderSheet(panel, charName) {
           <input class="v20-line-input v20-path" data-tpath="path" value="${escAttr(m.path)}" placeholder="Столп (Путь)">
         </div>
         <div class="v20-stat-block">
-          <div class="v20-stat-title">Воля ${_v20AutoBadge(m.willpower.permanent, derived.willpower, 'willpower.permanent', 'dot')}</div>
+          <div class="v20-stat-title">Воля ${_v20AutoBadge(m.willpower.permanent, derived.willpower, 'willpower.permanent', 'dot')}<button type="button" class="v20-mini-action" data-v20-action="spend-willpower" title="Потратить 1 пункт временной Воли">−1</button></div>
           ${_v20DotsHtml('willpower.permanent', m.willpower.permanent, 10)}
           ${_v20BoxesHtml('willpower.temp', m.willpower.temp)}
         </div>
         ${isVamp ? `<div class="v20-stat-block">
-          <div class="v20-stat-title">Запас крови${derived.gen ? `<span class="v20-gen-info" title="Поколение ${escAttr(m.header.generation)}: max ${derived.gen.bloodMax}, предел/ход ${derived.gen.bloodPerTurn}, max дисциплины ${derived.gen.discMax}">ⓘ</span>` : ''}</div>
+          <div class="v20-stat-title">Запас крови${derived.gen ? `<span class="v20-gen-info" title="Поколение ${escAttr(m.header.generation)}: max ${derived.gen.bloodMax}, предел/ход ${derived.gen.bloodPerTurn}, max дисциплины ${derived.gen.discMax}">ⓘ</span>` : ''}<button type="button" class="v20-mini-action" data-v20-action="spend-blood" title="Потратить 1 пункт крови">−1</button></div>
           ${_v20BoxesHtml('bloodPool', m.bloodPool)}
           <label class="v20-inline-field">Предел траты в ход ${derived.gen ? _v20AutoBadge(m.bloodPerTurn, derived.gen.bloodPerTurn, 'bloodPerTurn', 'text') : ''}<input class="v20-mini-input" data-tpath="bloodPerTurn" value="${escAttr(m.bloodPerTurn)}"></label>
         </div>` : ''}
@@ -5121,6 +5359,10 @@ function _v20RenderSheet(panel, charName) {
           <label class="v20-inline-field">Потрачено <input class="v20-mini-input" data-tpath="experience.spent" data-exp value="${escAttr(m.experience.spent)}"></label>
           <label class="v20-inline-field">Остаток <span class="v20-exp-remain" id="v20-exp-remain">${_num(m.experience.total, 0) - _num(m.experience.spent, 0)}</span></label>
         </div>
+        ${m.experience.log?.length ? `<div class="v20-xp-log">
+          <div class="v20-xp-log-title">История трат</div>
+          ${m.experience.log.slice(0, 8).map(le => `<div class="v20-xp-log-row"><span>${escHtml(le.date)} · ${escHtml(le.text)}</span><span>−${le.cost}</span></div>`).join('')}
+        </div>` : ''}
       </div>
     </div>`;
 
@@ -5170,6 +5412,8 @@ function _v20RenderSheet(panel, charName) {
       <button class="cdet-sheet-btn primary" id="v20-save" disabled>💾 Сохранено</button>
       <button class="cdet-sheet-btn" id="v20-regen">♻ Перегенерировать ИИ</button>
       <button class="cdet-sheet-btn" id="v20-validate">📋 Проверить лист</button>
+      <button class="cdet-sheet-btn${_v20XpMode ? ' active' : ''}" id="v20-xpmode" title="В этом режиме поднятие точки списывает опыт по таблице обучения">🎓 Режим опыта${_v20XpMode ? ': вкл' : ''}</button>
+      <button class="cdet-sheet-btn" id="v20-roll-btn" title="Открыть конструктор броска d10">🎲 Бросок</button>
       <span class="v20-status" id="v20-status"></span>
     </div>
     <div class="v20-val-report" id="v20-validate-report"></div>
@@ -5177,8 +5421,10 @@ function _v20RenderSheet(panel, charName) {
     <div class="v20-foot">Создание: Характеристики 7/5/3 · Способности 13/9/5 · Дисциплины 3 · Факты биографии 5 · Добродетели 7 · Свободные пункты 15</div>`;
 
   document.getElementById('v20-save').addEventListener('click', _v20Save);
+  document.getElementById('v20-roll-btn').addEventListener('click', () => _v20OpenRollModal());
   document.getElementById('v20-regen').addEventListener('click', e => _v20Regen(e.currentTarget));
   document.getElementById('v20-validate').addEventListener('click', _v20ToggleValidation);
+  document.getElementById('v20-xpmode').addEventListener('click', () => { _v20XpMode = !_v20XpMode; _v20RenderSheet(panel, charName); });
   _v20BindPanel(panel);
 }
 
@@ -5201,6 +5447,20 @@ function _v20BindPanel(panel) {
     const dpath = span.dataset.dpath, d = +dot.dataset.d;
     const cur = _v20Get(_v20Model, dpath) || 0;
     const nv = (cur === d) ? d - 1 : d;     // click filled max → step down; else set to d
+    if (_v20XpMode && nv > cur) {
+      const info = _v20XpKindFromPath(dpath, _v20Model);
+      if (info) {
+        const cost = v20XpCost(info.kind, cur, nv, info.isClanDisc);
+        const avail = _num(_v20Model.experience.total, 0) - _num(_v20Model.experience.spent, 0);
+        if (cost > avail && !confirm(`«${info.label}»: ${cur}→${nv} стоит ${cost} XP, доступно ${avail}. Всё равно повысить?`)) return;
+        _v20Model.experience.spent = _num(_v20Model.experience.spent, 0) + cost;
+        _v20Model.experience.log.unshift({ date: new Date().toISOString().slice(0, 10), text: `${info.label}: ${cur}→${nv}`, cost });
+        _v20Set(_v20Model, dpath, nv);
+        _v20MarkDirty();
+        _v20RenderSheet(panel, _v20Ctx.name);
+        return;
+      }
+    }
     _v20Set(_v20Model, dpath, nv);
     _v20RebuildDots(span, nv);
     _v20MarkDirty();
@@ -5209,6 +5469,12 @@ function _v20BindPanel(panel) {
     const dot = e.target.closest('.v20-dot'); if (dot) { onDot(dot); return; }
     const badge = e.target.closest('.v20-auto-badge'); if (badge) { _v20ApplyAutoBadge(badge); return; }
     const action = e.target.closest('[data-v20-action]'); if (action) { _v20RunAction(action.dataset.v20Action); return; }
+    const discView = e.target.closest('[data-disc-view]'); if (discView) { _v20OpenDisciplineModal(discView.dataset.discView); return; }
+    const rollBtn = e.target.closest('.v20-roll-icon-btn'); if (rollBtn) {
+      const [kind, path] = rollBtn.dataset.rollSeed.split(':');
+      _v20OpenRollModal(kind === 'attr' ? { attr: path } : { abil: path });
+      return;
+    }
   });
   panel.addEventListener('keydown', e => {
     const dot = e.target.closest('.v20-dot');
@@ -5290,7 +5556,7 @@ async function _loadCharSheet(charName) {
   if (!panel) return;
   panel.dataset.loaded = '1';
   panel.innerHTML = '<div class="loading-state"><div class="spinner"></div>Загрузка листа…</div>';
-  _v20Ctx = { name: charName }; _v20DirtyFlag = false;
+  _v20Ctx = { name: charName }; _v20DirtyFlag = false; _v20XpMode = false;
   let d;
   try { d = await fetch(`/api/characters/${encodeURIComponent(_charSlug(charName))}/sheet-data${location.search}`).then(r => r.json()); }
   catch (e) { panel.innerHTML = `<div class="cdet-empty">Ошибка загрузки: ${escHtml(e.message)}</div>`; return; }
