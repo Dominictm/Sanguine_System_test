@@ -11,6 +11,7 @@
 | **Никаких обобщений** | Нельзя писать «vampire aristocrat» без конкретики: пол, облик, одежда, детали — обязаны совпадать с описанием в источнике |
 | **Блочная структура** | Три блока (Персонаж/Место → Свет/Атмосфера → Стиль) — обязательны для всех промтов |
 | **Негативный промт** | Всегда включать стандартный негативный промт (см. секцию ниже) |
+| 🔒 **Фон персонажа — НЕ локация** | Для портретов персонажей (НПС/PC) фон в Блоке 2 — **абстрактный текстурный цветовой фон** (painterly color wash / smoke-like swirling brushstrokes, единый доминирующий оттенок), привязанный к цветовой идентичности персонажа (клановый акцент — см. «Ключ к этому стилю» и `CLAN_PROMPT_ACCENT`). **Запрещено**: конкретная архитектура, интерьеры, пейзажи, узнаваемые локации, фэнтезийные миры/города на фоне портрета — это разрушает единый стиль карточек. Для промтов **локаций** это правило не действует — там фон и есть сама локация (см. отдельный раздел) |
 
 > ⚠️ Промт без опоры на карточку (внешность / описание локации) — **невалидный промт**. Перед написанием промта — прочитать карточку.
 
@@ -139,6 +140,8 @@ daytime, sunlight, crowds of people, faces in foreground, modern post-2010 eleme
 ### Universal Dark Fantasy Portrait Prompt
 
 > ⚠️ **Это референс СТИЛЯ, а не шаблон содержания.** Пример ниже намеренно обобщён («elegant ancient vampire aristocrat») и потому **нарушает 🔒-правило «никаких обобщений»** — копировать его как промт персонажа нельзя. Используй его только для тона/света/среды (Блок 2–3); описание персонажа (Блок 1) всегда строится из секции «Внешность» конкретной карточки.
+>
+> ⚠️ **Устаревшая по медиуму ссылка.** Лексика ниже («digital painting», «oil-paint brushstrokes», «concept art», «artstation») — старая формулировка, до перехода на фотореалистичный эталон (см. «Эталон стиля» и Блок 3 в разделе НПС выше). Бери отсюда только композицию/свет/настроение — медиум (живопись vs фотография) всегда берётся из актуального правила НПС, а не из этого блока.
 
 (референс тона для MidJourney, Stable Diffusion, Flux, DALL·E)
 
@@ -189,6 +192,8 @@ daytime, sunlight, crowds of people, faces in foreground, modern post-2010 eleme
 * **живописности**
 
 > heavy painterly texture, oil canvas strokes, textured pigments, old master brushwork
+>
+> ⚠️ Использовать умеренно (или не использовать для карточек НПС) — в избытке этот модификатор уводит результат в иллюстрацию и противоречит фотореалистичному эталону карточек персонажей (см. «Эталон стиля» выше).
 
 ### Если нужно больше:
 
@@ -204,12 +209,12 @@ daytime, sunlight, crowds of people, faces in foreground, modern post-2010 eleme
 
 * pale grey skin + warm amber lighting
 * crimson-black background
-* painterly brush texture
+* photographically detailed skin and fabric, not flat illustration (см. «Эталон стиля» выше — заменяет прежний пункт «painterly brush texture»)
 * gothic luxury clothing
 * unsettling charisma
 * confident relaxed posture
 * cinematic chiaroscuro
-* visible texture and brushwork
+* subtle film grain instead of visible brushwork
 * supernatural elegance instead of horror
 
 ---
@@ -235,25 +240,48 @@ daytime, sunlight, crowds of people, faces in foreground, modern post-2010 eleme
 
 # Правила написания промтов для НПС (characters/)
 
+## Эталон стиля
+
+> ✅ **Хороший пример** — [`cities/paris/characters/vampires/verene_de_kyustin/art/verene_de_kyustin_01.png`](../../cities/paris/characters/vampires/verene_de_kyustin/art/verene_de_kyustin_01.png): выглядит как кадр из реальной фотосъёмки с тёмной кинематографичной цветокоррекцией — резкая, детализированная кожа и ткань, никаких видимых мазков кисти, фон — чистый абстрактный цветовой замес (красный/чёрный), без намёка на конкретное место.
+>
+> ❌ **Плохой пример** (тип ошибки, с которым нужно бороться) — портрет, где фон читается как **космос/туманность/энергетический портал** (а не плоский цветовой замес), а кожа имеет эффект **трещин камня/мрамора** вместо живой текстуры; общее ощущение — иллюстрация фэнтези-арта, а не фотография. Если результат тянет в эту сторону — промт нарушает правила ниже.
+
+## Размер изображения
+
+🔒 Все промты персонажей **обязаны** заканчиваться размером `1023x1537` (вертикальный портрет ~2:3) — копировать дословно в конец Блока 3.
+
 ## Структура — три блока
 
 **Блок 1 — Персонаж:**
-Cinematic dark fantasy portrait, [тип существа / роль], [ракурс], [внешность: волосы, кожа, глаза], [общий стиль одежды без конкретики предметов], [поза / язык тела], [выражение + психологический подтекст]
+Cinematic hyperrealistic portrait, [тип существа / роль], [ракурс], [внешность: волосы, кожа, глаза], [общий стиль одежды без конкретики предметов], [поза / язык тела], [выражение + психологический подтекст]
 
 **Блок 2 — Свет и фон:**
-[тип освещения], [рим-лайт: цвет и откуда], [тени], [цвет и текстура фона], [атмосферные детали]
+[тип освещения], [рим-лайт: цвет и откуда], [тени], **abstract flat color-wash background, soft smoke-like gradient, single dominant hue, no shapes or forms within the background** (никогда — конкретное место, никогда — космос/туманность/энергия/портал), [атмосферные детали]
 
 > Для вампиров доминирующий цвет рим-лайта/фона задаётся кланом персонажа (см. `CLAN_PROMPT_ACCENT` в `web/server.js`, веб-генератор подставляет автоматически) — единая цветовая идентичность клана во всех портретах. Не каноничный лор, чисто оформительское решение; не влияет на цвет кожи/глаз/волос — те строятся только из «Внешность» карточки.
+>
+> Для НЕ-вампиров (mortals, fairies, werewolves, mages, hunters — у них нет клана и записи в `CLAN_PROMPT_ACCENT`): фон по умолчанию — **deep crimson-red and black** (тот же дух, что и у вампирских карточек), если у города/линейки нет отдельного указания цвета. Цель — одна и та же абстрактная текстурная эстетика для ВСЕХ карточек персонажей города, вне зависимости от линейки.
+>
+> ❌ Что недопустимо в Блоке 2 (явный список — не ограничивается им, но эти слова/образы триггерят откат к фэнтези-фону и должны быть прямо запрещены в промте):
+> - конкретная архитектура (улицы, здания, интерьеры комнат), пейзажи (лес, кладбище, побережье), узнаваемые места из карточки локации
+> - фэнтезийные миры/руины/замки/порталы на фоне
+> - **космос, галактика, туманность, звёзды, энергетические вихри/свечения, магические порталы** — любой фон, который читается как *место* или *явление*, а не плоский цвет
+>
+> Фон портрета — это **цвет и мягкий градиент**, не место и не явление. Если нужна сцена «персонаж в локации» — это отдельный тип промта (см. правила локаций выше), а не карточка персонажа.
 
 **Блок 3 — Стиль / Качество:**
-Dark fantasy digital painting, visible painterly brushstrokes, textured oil-paint effect, cinematic composition, moody gothic atmosphere, Vampire the Masquerade aesthetic, concept art quality, painterly realism, artstation quality, masterpiece
+Hyperrealistic cinematic portrait photography, fashion-editorial color grading, sharp fine detail on skin texture and fabric, natural human skin (никогда — cracked/marble/stone skin texture), subtle gothic noir atmosphere, Vampire the Masquerade aesthetic, high-end editorial photography quality, masterpiece, 1023x1537
+
+> Ключевой сдвиг от прежней версии правил: раньше Блок 3 требовал «digital painting / oil-paint effect / concept art / artstation» — это и уводило результат в сторону иллюстрации/фэнтези-арта. Эталонный стиль карточек — **фотография с кинематографичной цветокоррекцией**, не картина. Видимые мазки кисти, эффект масляной живописи, «concept art» / «artstation» лексика — больше не используются в Блоке 3 персонажей.
 
 ## Что НЕ включать в промт карточки
 
 - ❌ «take pose from reference» — поза задаётся индивидуально при генерации
 - ❌ Название персонажа или имена собственные
 - ❌ Кровь, раны, увечья, явные признаки насилия — угроза и опасность передаются через взгляд, тень, позу, освещение, не через прямые образы жестокости
+- ❌ «digital painting», «oil-paint effect», «visible brushstrokes», «concept art», «artstation» — уводит результат в иллюстрацию вместо фотореализма (см. «Эталон стиля» выше)
+- ❌ «nebula», «galaxy», «cosmic energy», «swirling portal», «cracked stone/marble skin» — фон/кожа не должны читаться как место/явление/камень
 
 ## Негативный промт (стандартный для всех)
 
-> photorealistic photography, digital art, anime, cartoon, illustration, watermark, text overlay, blurry, low quality, artifacts, deformed anatomy, extra limbs, oversaturated colors, bright white background, 3D render, CGI.
+> digital painting, illustration, anime, cartoon, oil painting, visible brushstrokes, concept art, watermark, text overlay, blurry, low quality, artifacts, deformed anatomy, extra limbs, oversaturated colors, bright white background, 3D render, CGI, cracked skin, marble skin, stone texture skin, nebula background, galaxy background, cosmic energy background, swirling portal background.

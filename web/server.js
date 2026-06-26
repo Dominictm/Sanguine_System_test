@@ -14,6 +14,7 @@ const {
   parseParticipant, parseTable, parseWorldState, parseEvent, parseChronicle,
   parseChronicleParticipants,
 } = require('./lib/parsers');
+const { parseDisciplineMd } = require('./lib/disciplines');
 
 // Load .env file (secrets not committed to git)
 try {
@@ -2323,6 +2324,7 @@ app.post('/api/characters/:slug/diary/generate', express.json(), async (req, res
     const gen = await makeGenerationClient(preferSource, orModel);
 
     const diaryRules = await fs.readFile(path.join(ROOT, 'system', 'rules', 'diary_rules.md'), 'utf-8').catch(() => '');
+    const litStyle   = await fs.readFile(path.join(ROOT, 'system', 'rules', 'literary_style.md'), 'utf-8').catch(() => '');
     const card = await fs.readFile(path.join(charsDir(city), char.lineageFolder, char.slug, `${char.slug}.md`), 'utf-8').catch(() => '');
     let eventsText = '';
     try {
@@ -2343,7 +2345,7 @@ app.post('/api/characters/:slug/diary/generate', express.json(), async (req, res
 
     const periodTxt = periodLabel(period) || period;
     const systemPrompt = `Ты — Рассказчик Vampire: The Masquerade V20. Пишешь литературную дневниковую запись от первого лица строго по правилам.
-
+${litStyle ? `\n# ЛИТЕРАТУРНЫЙ СТИЛЬ (system/rules/literary_style.md)\n${litStyle.slice(0, 3000)}\n` : ''}
 # ПРАВИЛА ДНЕВНИКОВ
 ${diaryRules.slice(0, 4000)}
 
@@ -2418,12 +2420,13 @@ app.post('/api/characters/:id/dialogue', express.json(), async (req, res) => {
     const diaryRules = await fs.readFile(path.join(ROOT, 'system', 'rules', 'diary_rules.md'), 'utf-8').catch(() => '');
     const stylesM    = diaryRules.match(/##\s*🎭\s*Правила литературной стилизации[\s\S]*?(?=\n##\s|\s*$)/);
     const styles     = stylesM ? stylesM[0] : diaryRules.slice(0, 2500);
+    const litStyle   = await fs.readFile(path.join(ROOT, 'system', 'rules', 'literary_style.md'), 'utf-8').catch(() => '');
 
     const gen = await makeGenerationClient(req.body?.source || null, req.body?.model || null);
     const systemPrompt = `Ты пишешь РЕПЛИКИ НПС в характере для Vampire: The Masquerade V20.
 Говори ГОЛОСОМ персонажа (поле «Голос» в карточке) и в КЛАНОВОМ СТИЛЕ — строка его клана «${clan || '—'}» в таблице ниже.
 Маскарад: вампирскую природу/дисциплины — только намёками и метафорами. Не выдумывай факты вне карточки. Русский язык.
-
+${litStyle ? `\n# ЛИТЕРАТУРНЫЙ СТИЛЬ (system/rules/literary_style.md)\n${litStyle.slice(0, 2500)}\n` : ''}
 # КАРТОЧКА ПЕРСОНАЖА (голос, клан, характер, факты)
 ${card.slice(0, 3000)}
 
@@ -2444,6 +2447,33 @@ ${styles.slice(0, 2000)}`;
       : (e.message ?? String(e));
     res.status(status >= 400 && status < 600 ? status : 500).json({ ok: false, error: msg });
   }
+});
+
+// ── Библиотека: справочник дисциплин (system/library/disciplines/*.md) ──────────
+// Город-нейтральные данные → кэшируются по mtime каталога.
+let _discCache = null; // { mtime, list }
+const DISC_DIR = path.join(ROOT, 'system', 'library', 'disciplines');
+
+async function loadDisciplines() {
+  let dirMtime = 0;
+  try { dirMtime = (await fs.stat(DISC_DIR)).mtimeMs; } catch { return []; }
+  if (_discCache && _discCache.mtime === dirMtime) return _discCache.list;
+
+  const files = (await fs.readdir(DISC_DIR).catch(() => []))
+    .filter(f => f.endsWith('.md') && f.toLowerCase() !== 'readme.md');
+  const list = [];
+  for (const f of files.sort()) {
+    const slug = f.replace(/\.md$/, '');
+    const md = await fs.readFile(path.join(DISC_DIR, f), 'utf-8').catch(() => '');
+    if (md) list.push(parseDisciplineMd(md, slug));
+  }
+  _discCache = { mtime: dirMtime, list };
+  return list;
+}
+
+app.get('/api/library/disciplines', async (_req, res) => {
+  try { res.json(await loadDisciplines()); }
+  catch (e) { serverError(res, e); }
 });
 
 app.get('/api/locations', async (req, res) => {
@@ -3199,7 +3229,24 @@ const EDITABLE_FIELD_MAP = {
   biography:    'Биография',
   appearance:   'Внешность',
   voice:        'Голос',
+  // ── Линейко-специфичные поля (феи/смертные/иное) ──
+  race:         'Раса',
+  kith:         'Род',
+  court:        'Двор',
+  title:        'Титул',
+  features:     'Особенности / Способности',
+  relatives:    'Родственники',
+  attitude:     'Отношение к сверхъестественному',
 };
+// Переопределение ярлыка карточки по линейке (там, где он отличается от базового).
+// Феи хранят локацию как «Фригольд / Локация» — пишем обратно тем же ярлыком, чтобы
+// не плодить дублирующую строку «Домен / Локация».
+const FIELD_LABEL_BY_LINEAGE = {
+  fairies: { location: 'Фригольд / Локация' },
+};
+function fieldMdLabel(key, lineageFolder) {
+  return (FIELD_LABEL_BY_LINEAGE[lineageFolder] || {})[key] || EDITABLE_FIELD_MAP[key];
+}
 
 app.put('/api/characters/:slug/fields', express.json(), async (req, res) => {
   try {
@@ -3240,7 +3287,7 @@ app.put('/api/characters/:slug/fields', express.json(), async (req, res) => {
         continue;
       }
 
-      const mdKey = EDITABLE_FIELD_MAP[key];
+      const mdKey = fieldMdLabel(key, char.lineageFolder);
       if (!mdKey) continue;
       const value   = String(rawValue).replace(/\n+/g, ' ').trim(); // single-line fields
       const escaped = mdKey.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -3966,8 +4013,15 @@ app.post('/api/characters/:slug/generate-appearance', express.json(), async (req
     const lineageName = { vampires: 'вампира', fairies: 'феи / ченджлинга', mortals: 'смертного',
       werewolves: 'оборотня', mages: 'мага', hunters: 'охотника' }[char.lineageFolder] || 'персонажа';
 
-    const systemPrompt = 'Ты — редактор персонажных карточек для настольной RPG Vampire: The Masquerade.';
-    const userPrompt   = `Перед тобой ${imageBuffers.length > 1 ? `${imageBuffers.length} изображения` : 'изображение'} ${lineageName} по имени ${char.name}.\n\nОпиши внешность для карточки. Требования:\n- 3–5 конкретных визуальных маркеров (лицо, волосы, кожа, глаза, одежда, характерные детали)\n- Стиль: лаконичный, образный, готический. Без «воды».\n- Язык: русский.\n- Формат: один абзац, без списков и заголовков.\n- Упомяни всё необычное, характерное, запоминающееся.\n- Запрет: не упоминать кровь, раны, увечья, явные признаки насилия — даже если они видны на изображении.`;
+    const gender = char.gender && !char.gender.includes('⚠️') ? char.gender : '';
+    const genderNote = gender.startsWith('Неизвестно')
+      ? '\n- Пол персонажа намеренно неопределим (часть лора) — пиши нейтрально, не используй гендерные местоимения/окончания там, где это можно обойти.'
+      : gender
+        ? `\n- Пол персонажа: ${gender}. Используй грамматически верный род (окончания глаголов/прилагательных) — не угадывай по картинке, если она неочевидна.`
+        : '';
+    const litStyle = await fs.readFile(path.join(ROOT, 'system', 'rules', 'literary_style.md'), 'utf-8').catch(() => '');
+    const systemPrompt = `Ты — редактор персонажных карточек для настольной RPG Vampire: The Masquerade. Пиши прозу строго по литературному стилю проекта.${litStyle ? `\n\n# ЛИТЕРАТУРНЫЙ СТИЛЬ (system/rules/literary_style.md)\n${litStyle.slice(0, 3500)}` : ''}`;
+    const userPrompt   = `Перед тобой ${imageBuffers.length > 1 ? `${imageBuffers.length} изображения` : 'изображение'} ${lineageName} по имени ${char.name}.\n\nОпиши внешность для карточки. Требования:\n- 3–5 конкретных визуальных маркеров (лицо, волосы, кожа, глаза, одежда, характерные детали)\n- Стиль: лаконичный, образный, готический. Без «воды».\n- Язык: русский.\n- Формат: один абзац, без списков и заголовков.\n- Упомяни всё необычное, характерное, запоминающееся.\n- Запрет: не упоминать кровь, раны, увечья, явные признаки насилия — даже если они видны на изображении.${genderNote}`;
 
     let appearance = '';
 
@@ -4073,6 +4127,8 @@ app.post('/api/characters/:slug/generate-prompt', express.json(), async (req, re
       werewolves: 'werewolf', mages: 'mage', hunters: 'hunter' }[char.lineageFolder] || 'character';
     const clan = char.clan && !char.clan.includes('⚠️') ? char.clan : '';
     const clanAccent = clan ? CLAN_PROMPT_ACCENT[clan] : null;
+    const gender = char.gender && !char.gender.includes('⚠️') ? char.gender : '';
+    const genderEn = gender.startsWith('Мужской') ? 'male' : gender.startsWith('Женский') ? 'female' : '';
 
     const systemPrompt = 'You are an expert prompt writer for AI image generation (DALL-E 3, Midjourney, Stable Diffusion). You write precise, vivid, technically correct English prompts for dark fantasy gothic RPG art.';
     const userPrompt = `Write an image generation prompt for a Vampire: The Masquerade character card.
@@ -4080,11 +4136,12 @@ app.post('/api/characters/:slug/generate-prompt', express.json(), async (req, re
 Character:
 - Name: ${char.name}
 - Type: ${lineageName}${clan ? ` (${clan})` : ''}
+- Gender: ${genderEn || (gender.startsWith('Неизвестно') ? 'intentionally indeterminate/ambiguous — keep it that way, do not assign male or female markers' : 'not specified — infer only from Appearance below, do not guess beyond it')}
 - Appearance (Russian): ${appearance}
 ${clanAccent ? `- Clan accent color: ${clanAccent} — use ONLY as the rim-light / background tint in Block 2, never for skin, eyes or hair (those come strictly from Appearance above)` : ''}
 
 Rules excerpt:
-${portretRules.slice(0, 1200)}
+${portretRules}
 
 Output ONLY valid JSON, no extra text:
 {
@@ -4095,10 +4152,10 @@ Output ONLY valid JSON, no extra text:
 Requirements:
 - ALL text must be in English
 - Positive prompt: exactly 3 blocks labeled [Блок 1], [Блок 2], [Блок 3]
-- Block 1: translate character appearance from Russian, expand with specific visual details
-- Block 2: cinematic lighting, mood, background${clanAccent ? ` — make ${clanAccent} the dominant rim-light or background color, to keep this clan's visual identity consistent across all character portraits` : ''}
-- Block 3: art style, medium, quality tags (dark fantasy digital painting, painterly brushstrokes, VtM aesthetic, concept art quality, artstation masterpiece)
-- Negative prompt: photorealistic photography, 3D render, CGI, anime, cartoon, blurry, low quality, deformed, blood, gore, wounds, injuries, violence
+- Block 1: translate character appearance from Russian, expand with specific visual details; reflect the Gender given above (a clear "man"/"woman" marker, or deliberate ambiguity if Gender is indeterminate) — never contradict it
+- Block 2: cinematic lighting, mood, background — the background MUST be a flat abstract color-wash (soft smoke-like gradient, single dominant hue, no shapes or forms within it), NEVER a literal location/architecture/landscape/fantasy environment, and NEVER cosmic/nebula/galaxy/energy-swirl/portal imagery (those read as a place or phenomenon, not a flat color); make ${clanAccent || 'deep crimson-red and black'} the dominant rim-light/background color${clanAccent ? ', to keep this clan\'s visual identity consistent across all character portraits' : ', the default mood color for non-vampire characters, to keep visual identity consistent across all character portraits'}
+- Block 3: end with exactly this style/quality phrasing, then the resolution — hyperrealistic cinematic portrait photography, fashion-editorial color grading, sharp fine detail on skin texture and fabric, natural human skin, subtle gothic noir atmosphere, Vampire the Masquerade aesthetic, high-end editorial photography quality, masterpiece, 1023x1537. Do NOT use "digital painting", "oil-paint effect", "visible brushstrokes", "concept art" or "artstation" — the target look is a graded photograph, not an illustration or painting.
+- Negative prompt: digital painting, illustration, oil painting, visible brushstrokes, concept art, 3D render, CGI, anime, cartoon, blurry, low quality, deformed, cracked skin, marble skin, stone texture skin, nebula background, galaxy background, cosmic energy background, swirling portal background, blood, gore, wounds, injuries, violence
 - NO blood, wounds, gore, violence in positive prompt under any circumstances`;
 
     let positive = '', negative = '';
@@ -5160,9 +5217,11 @@ app.get('/api/claude/health', (req, res) => {
 // ── OpenRouter prose generation ───────────────────────────────────────────────
 
 async function buildProseContext(city, valid) {
-  // 1. diary_rules.md
+  // 1. diary_rules.md + literary_style.md
   const diaryRules = await fs.readFile(
     path.join(ROOT, 'system', 'rules', 'diary_rules.md'), 'utf-8').catch(() => '');
+  const litStyle = await fs.readFile(
+    path.join(ROOT, 'system', 'rules', 'literary_style.md'), 'utf-8').catch(() => '');
 
   // 2. Read each stub file + extract referenced characters and chronicle facts
   const stubContents = [];
@@ -5210,7 +5269,7 @@ async function buildProseContext(city, valid) {
     if (evTxt) eventsChunks.push(`### ${evRel}\n${evTxt.slice(0, 6000)}`);
   }
 
-  return { diaryRules, stubContents, charCards, eventsChunks };
+  return { diaryRules, litStyle, stubContents, charCards, eventsChunks };
 }
 
 app.post('/api/openrouter/generate-prose', express.json(), async (req, res) => {
@@ -5229,10 +5288,10 @@ app.post('/api/openrouter/generate-prose', express.json(), async (req, res) => {
     }
     if (!valid.length) return res.status(400).json({ ok: false, error: 'Нет stub-файлов с меткой «ОЖИДАЕТ ГЕНЕРАЦИИ».' });
 
-    const { diaryRules, stubContents, charCards, eventsChunks } = await buildProseContext(city, valid);
+    const { diaryRules, litStyle, stubContents, charCards, eventsChunks } = await buildProseContext(city, valid);
 
     const systemPrompt = `Ты — Рассказчик Vampire: The Masquerade V20. Пишешь литературные дневниковые записи персонажей строго по правилам ниже.
-
+${litStyle ? `\n# ЛИТЕРАТУРНЫЙ СТИЛЬ (system/rules/literary_style.md)\n${litStyle.slice(0, 3000)}\n` : ''}
 # ПРАВИЛА ДНЕВНИКОВ
 ${diaryRules.slice(0, 4000)}
 
@@ -5337,6 +5396,7 @@ app.post('/api/claude/generate-prose', async (req, res) => {
       ...valid.map(s => '- ' + s),
       '',
       'Правила:',
+      '0. Литературный стиль — строго по system/rules/literary_style.md (тон, ритм, диалоги, антишаблоны, голоса персонажей). Применяется ко всей прозе.',
       '1. Дневники — строго по system/rules/diary_rules.md: глубокий POV, клановый стиль автора (сверяйся с карточкой в cities/<город>/characters/), Маскарад через метафоры, 150–400 слов. Заполни поля «📖 Текст записи» и «🔗 Зеркальная ссылка».',
       '2. Файл finale.md — литературный текст финальной сцены сессии.',
       '3. Факты бери ТОЛЬКО из записи хроники, указанной в комментарии «ФАКТЫ» внутри файла (chronicles/<хроника>/events.md). Не выдумывай события и участников.',

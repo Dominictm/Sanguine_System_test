@@ -309,6 +309,7 @@ function parseCharacter(rawContent, folderName, lineage) {
     if (k === 'Статус')                         c.status        = v;
     if (k === 'Детали статуса')                 c.statusDetails = v;
     if (k === 'Линейка WoD')                    c.lineageLabel  = v;
+    if (k === 'Пол')                            c.gender        = v;
     if (k === 'Роль')                           c.role          = v;
     if (k === 'Год обращения')                  c.embraceYear   = v;
     if (k === 'Сир')                            c.sire          = v;
@@ -326,9 +327,18 @@ function parseCharacter(rawContent, folderName, lineage) {
     if (k === 'Род' && !c.clan)                 c.clan          = v;
     if (k === 'Секта / Двор' && !c.sect)        c.sect          = v;
     if (k === 'Фригольд / Локация' && !c.location) c.location  = v;
+    if (k === 'Фригольд' && !c.location)        c.location      = v;
     if (k === 'Принадлежность')                 c.belonging     = v;
     if (k === 'Присутствие')                    c.presence      = v;   // появления в других городах
     if (k === 'Алиасы')                         c.aliases       = v;
+    // ── Линейко-специфичные поля (феи/смертные/иное) ──
+    if (k === 'Раса')                           c.race          = v;   // фейри: кит/раса
+    if (k === 'Род')                            c.kith          = v;   // фейри: род (отд. от clan-fallback выше)
+    if (k === 'Двор')                           c.court         = v;   // фейри: Сияющий/Сумрачный/Теневой двор
+    if (k === 'Титул')                          c.title         = v;
+    if (k === 'Особенности / Способности')      c.features      = v;
+    if (k === 'Родственники')                   c.relatives     = v;   // смертные
+    if (k === 'Отношение к сверхъестественному') c.attitude     = v;   // смертные
   }
 
   // Diary links: - **📖 Дневники:** [Title](path.md)

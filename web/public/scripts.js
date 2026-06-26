@@ -169,6 +169,7 @@ function navigate(page) {
   if (page === 'module')          loadModulePage();
   if (page === 'threads')    loadThreads();
   if (page === 'locations')  loadLocations();
+  if (page === 'library')    loadLibrary();
   if (page === 'factions')   loadFactions();
   if (page === 'rumors')     loadRumors();
   if (page === 'search')     loadSearch();
@@ -845,8 +846,9 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     const tab = btn.dataset.tab;
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
     document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.id === `tab-${tab}`));
-    if (tab === 'ai-settings') loadAiSettings();
-    if (tab === 'new-city')    loadCitiesGrid();
+    if (tab === 'ai-settings')     loadAiSettings();
+    if (tab === 'new-city')        loadCitiesGrid();
+    if (tab === 'lib-disciplines') loadLibrary();
   });
 });
 
@@ -902,6 +904,14 @@ const OR_FEAT_MODELS_FALLBACK = {
   prompt: [
     { id: 'meta-llama/llama-3.3-70b-instruct:free', label: 'Llama 3.3 70B Instruct' },
     { id: 'deepseek/deepseek-chat:free',            label: 'DeepSeek Chat' },
+    { id: 'qwen/qwen3-235b-a22b:free',              label: 'Qwen3 235B A22B' },
+    { id: 'google/gemma-3-27b-it:free',             label: 'Google Gemma 3 27B' },
+    { id: 'openrouter/free',                        label: 'Free Models Router' },
+  ],
+  // Strong instruction-following models — для числового V20-листа по карточке персонажа
+  sheet: [
+    { id: 'meta-llama/llama-3.3-70b-instruct:free', label: 'Llama 3.3 70B Instruct' },
+    { id: 'deepseek/deepseek-r1:free',              label: 'DeepSeek R1 (Reasoning)' },
     { id: 'qwen/qwen3-235b-a22b:free',              label: 'Qwen3 235B A22B' },
     { id: 'google/gemma-3-27b-it:free',             label: 'Google Gemma 3 27B' },
     { id: 'openrouter/free',                        label: 'Free Models Router' },
@@ -1015,6 +1025,7 @@ async function loadAiSettings() {
   const prosePref    = _getPref(featPrefs, 'prose',      'claude');
   const dialoguePref = _getPref(featPrefs, 'dialogue',   'openrouter');
   const promptPref   = _getPref(featPrefs, 'prompt',     'openrouter');
+  const sheetPref    = _getPref(featPrefs, 'sheet',      'claude');
 
   el.innerHTML = `
     <div class="ais-layout">
@@ -1117,6 +1128,7 @@ async function loadAiSettings() {
           ${_renderFeatCard('prose',      '🪄', 'Генерация прозы',      'Дневники и финалы сессии',            prosePref,    featOrModels.prose)}
           ${_renderFeatCard('dialogue',   '💬', 'Генерация фраз',       'Реплики НПС в характере',             dialoguePref, featOrModels.dialogue)}
           ${_renderFeatCard('prompt',     '🎨', 'Генерация промта',     'Промт для изображения по внешности',  promptPref,   featOrModels.prompt)}
+          ${_renderFeatCard('sheet',      '📋', 'Генерация листа персонажа', 'Числовые данные V20-листа по карточке', sheetPref, featOrModels.sheet)}
         </div>
 
         <button class="ais-confirm-btn" id="ais-feat-save" style="margin-top:16px">✓ Применить</button>
@@ -1267,7 +1279,7 @@ async function loadAiSettings() {
   document.getElementById('ais-feat-save').addEventListener('click', () => {
     const status = document.getElementById('ais-feat-status');
     const prefs  = {};
-    for (const feat of ['appearance', 'locations', 'prose', 'dialogue', 'prompt']) {
+    for (const feat of ['appearance', 'locations', 'prose', 'dialogue', 'prompt', 'sheet']) {
       const provSel = document.querySelector(`input[name="feat-${feat}"]:checked`);
       const modSel  = document.getElementById(`feat-${feat}-model`);
       if (provSel) prefs[feat] = { provider: provSel.value, model: modSel?.value || null };
@@ -4598,26 +4610,73 @@ loadDashboard();
 // Char Detail Modal
 // ═══════════════════════════════════════════════════════════════
 
-const INFO_FIELDS = [
-  ['clan',         'Клан'],
-  ['sect',         'Секта'],
-  ['generation',   'Поколение'],
-  ['birthYear',    'Год рождения'],
-  ['embraceYear',  'Год обращения'],
-  ['sire',         'Сир'],
-  ['childe',       'Дитя'],
-  ['location',     'Домен / Локация'],
-  ['hierarchy',    'Иерархия'],
-  ['disciplines',  'Дисциплины'],
-  ['derangements', 'Деранжементы'],
-  ['profession',   'Профессия'],
-  ['role',         'Роль'],
-  ['belonging',    'Принадлежность'],
+// Наборы полей вкладки «Информация» — свои для каждой линейки WoD.
+// Карточка хранит линейко-специфичные поля (Раса/Двор/Титул у фей, Профессия у смертных);
+// здесь выбирается, какие из них показывать и в каком порядке.
+const INFO_FIELDS_BY_LINEAGE = {
+  vampire: [
+    ['clan',         'Клан'],
+    ['sect',         'Секта'],
+    ['generation',   'Поколение'],
+    ['birthYear',    'Год рождения'],
+    ['embraceYear',  'Год обращения'],
+    ['sire',         'Сир'],
+    ['childe',       'Дитя'],
+    ['location',     'Домен / Локация'],
+    ['hierarchy',    'Иерархия'],
+    ['disciplines',  'Дисциплины'],
+    ['derangements', 'Деранжементы'],
+    ['profession',   'Профессия'],
+    ['role',         'Роль'],
+    ['belonging',    'Принадлежность'],
+  ],
+  fairy: [
+    ['race',       'Раса'],
+    ['kith',       'Род'],
+    ['court',      'Двор'],
+    ['title',      'Титул'],
+    ['birthYear',  'Год рождения'],
+    ['location',   'Фригольд / Локация'],
+    ['features',   'Особенности / Способности'],
+    ['hierarchy',  'Иерархия'],
+    ['role',       'Роль'],
+    ['belonging',  'Принадлежность'],
+  ],
+  mortal: [
+    ['profession', 'Профессия'],
+    ['birthYear',  'Год рождения'],
+    ['location',   'Домен / Локация'],
+    ['relatives',  'Родственники'],
+    ['attitude',   'Отношение к сверхъестественному'],
+    ['hierarchy',  'Иерархия'],
+    ['role',       'Роль'],
+    ['belonging',  'Принадлежность'],
+  ],
+};
+// Оборотни / маги / охотники: пока нет выделенного набора — общий минимум.
+const INFO_FIELDS_GENERIC = [
+  ['race',      'Раса / Тип'],
+  ['sect',      'Фракция'],
+  ['birthYear', 'Год рождения'],
+  ['location',  'Домен / Локация'],
+  ['hierarchy', 'Иерархия'],
+  ['role',      'Роль'],
+  ['belonging', 'Принадлежность'],
 ];
+function infoFieldsFor(lineage) {
+  return INFO_FIELDS_BY_LINEAGE[lineage] || INFO_FIELDS_GENERIC;
+}
 
-// Info fields that stay visible even when empty (shown with a «!» flag in view mode).
-// Остальные пустые поля скрываются в просмотре и видны только при редактировании.
-const REQUIRED_INFO_FIELDS = new Set(['clan']);
+// Обязательное (всегда видимое) поле — своё для линейки. Показывается даже пустым с флагом «!».
+const REQUIRED_INFO_KEY = { vampire: 'clan', fairy: 'race', mortal: 'profession' };
+function requiredInfoFor(lineage) {
+  const k = REQUIRED_INFO_KEY[lineage];
+  return new Set(k ? [k] : []);
+}
+// Линейка персонажа по имени (для режима редактирования, где под рукой только имя).
+function _lineageOf(name) {
+  return (STATE.characters.find(c => c.name === name) || {}).lineage || 'vampire';
+}
 
 function renderDiaryList(c) {
   const ch = escHtml(c.name);
@@ -5079,42 +5138,76 @@ function _v20OpenRollModal(seed) {
 }
 
 // ── Discipline reference library (Фаза 3) ──────────────────────────────────
-function _v20DisciplineLevelRow(lv) {
-  return `<div class="v20-disc-level-row"><span class="v20-disc-level-num">${escHtml(String(lv.level))}</span><span class="v20-disc-level-name">${escHtml(lv.name)}</span><span class="v20-disc-level-fx">${escHtml(lv.effect)}</span></div>`;
+// Источник истины — system/library/disciplines/*.md (сервер парсит → /api/library/disciplines).
+let _disciplinesCache = null;
+async function ensureDisciplines() {
+  if (_disciplinesCache) return _disciplinesCache;
+  try {
+    const data = await fetch('/api/library/disciplines').then(r => r.json());
+    _disciplinesCache = Array.isArray(data) ? data : [];
+  } catch { _disciplinesCache = []; }
+  return _disciplinesCache;
 }
-function _v20DisciplineDetailHtml(info) {
-  if (!info) return '<div class="v20-disc-empty">Дисциплина не найдена в справочнике.</div>';
+function _discBySlug(slug) { return (_disciplinesCache || []).find(d => d.slug === slug) || null; }
+
+// Уровень способности → N красно-золотых точек (1…10).
+function _libLevelDots(n) {
+  const v = Math.max(1, Math.min(10, parseInt(n, 10) || 1));
+  return `<span class="lib-dots" title="Уровень ${v}" aria-label="Уровень ${v}">${'<span class="lib-dot"></span>'.repeat(v)}</span>`;
+}
+
+function _libPowerHtml(p) {
+  return `<div class="lib-power">
+    <div class="lib-power-head">${_libLevelDots(p.level)}<span class="lib-power-name">${escHtml(p.name)}</span></div>
+    ${p.literary ? `<div class="lib-power-sec"><div class="lib-power-label">Литературное описание</div><p class="lib-power-text">${escHtml(p.literary)}</p></div>` : ''}
+    ${p.system ? `<div class="lib-power-sec"><div class="lib-power-label">Система</div><p class="lib-power-text lib-power-sys">${escHtml(p.system)}</p></div>` : ''}
+  </div>`;
+}
+
+function _libDisciplineDetailHtml(d) {
+  if (!d) return '<div class="v20-disc-empty">Дисциплина не найдена в справочнике.</div>';
   let body;
-  if (info.noLevels && info.paths) {
-    body = Object.values(info.paths).map(p => `
-      <div class="v20-disc-path">
-        <div class="v20-disc-path-title">${escHtml(p.name)}</div>
+  if (d.noLevels && d.paths?.length) {
+    body = d.paths.map(p => `
+      <div class="lib-path">
+        <div class="lib-path-title">${escHtml(p.name)}</div>
         ${p.note ? `<div class="v20-disc-note">${escHtml(p.note)}</div>` : ''}
-        ${p.levels.map(_v20DisciplineLevelRow).join('')}
+        ${(p.levels || []).map(_libPowerHtml).join('')}
       </div>`).join('');
   } else {
-    body = `
-      ${info.note ? `<div class="v20-disc-note">${escHtml(info.note)}</div>` : ''}
-      ${(info.core || []).map(_v20DisciplineLevelRow).join('')}
-      ${info.ext?.length ? `<div class="v20-disc-ext-title">Уровень 6+ (доп. канон)</div>${info.ext.map(_v20DisciplineLevelRow).join('')}` : ''}
-    `;
+    body = `${d.note ? `<div class="v20-disc-note">${escHtml(d.note)}</div>` : ''}${(d.levels || []).map(_libPowerHtml).join('')}`;
   }
-  return `<div class="v20-disc-detail-head"><h3>${escHtml(info.name)}</h3><span class="v20-disc-clans">${escHtml(info.clans)}</span></div>${body}`;
+  return `<div class="v20-disc-detail-head"><h3>${escHtml(d.name)}</h3><span class="v20-disc-clans">${escHtml(d.clans || '')}</span></div>${body}`;
 }
+function _libDisciplineListHtml() {
+  return `<div class="v20-disc-list">${(_disciplinesCache || []).map(d =>
+    `<button type="button" class="v20-disc-list-item" data-disc-slug="${escAttr(d.slug)}"><span>${escHtml(d.name)}</span><span class="v20-disc-list-clans">${escHtml(d.clans || '')}</span></button>`).join('')}</div>`;
+}
+
+// Имя дисциплины из листа («Прорицание», «Auspex», «Прорицание (Auspex)») → slug.
+function v20DisciplineKey(name) {
+  const norm = String(name || '').toLowerCase().replace(/\(.*?\)/g, '').trim();
+  if (!norm) return null;
+  for (const d of (_disciplinesCache || [])) {
+    const ru = d.name.toLowerCase().replace(/\(.*?\)/g, '').trim();
+    if (ru === norm || norm.startsWith(ru) || ru.startsWith(norm)) return d.slug;
+  }
+  return null;
+}
+function v20DisciplineInfo(name) { const slug = v20DisciplineKey(name); return slug ? _discBySlug(slug) : null; }
+
 function _v20RenderDisciplineLibrary() {
   const body = document.getElementById('v20-disc-modal-body');
   if (!body) return;
-  const items = Object.entries(RULES_DISCIPLINES).map(([key, d]) =>
-    `<button type="button" class="v20-disc-list-item" data-disc-key="${key}"><span>${escHtml(d.name)}</span><span class="v20-disc-list-clans">${escHtml(d.clans)}</span></button>`).join('');
-  body.innerHTML = `<h3>📚 Справочник дисциплин</h3><div class="v20-disc-list">${items}</div>`;
+  body.innerHTML = `<h3>📚 Справочник дисциплин</h3>${_libDisciplineListHtml()}`;
 }
-function _v20RenderDisciplineDetail(key) {
+function _v20RenderDisciplineDetail(slug) {
   const body = document.getElementById('v20-disc-modal-body');
   if (!body) return;
-  body.innerHTML = `<button type="button" class="v20-disc-back" data-disc-back>← к списку</button>${_v20DisciplineDetailHtml(RULES_DISCIPLINES[key])}`;
+  body.innerHTML = `<button type="button" class="v20-disc-back" data-disc-back>← к списку</button>${_libDisciplineDetailHtml(_discBySlug(slug))}`;
 }
 function _v20CloseDisciplineModal() { document.getElementById('v20-disc-modal-backdrop')?.classList.remove('open'); }
-function _v20OpenDisciplineModal(name) {
+async function _v20OpenDisciplineModal(name) {
   let modal = document.getElementById('v20-disc-modal-backdrop');
   if (!modal) {
     modal = document.createElement('div');
@@ -5129,15 +5222,38 @@ function _v20OpenDisciplineModal(name) {
     modal.querySelector('#v20-disc-modal-close').addEventListener('click', _v20CloseDisciplineModal);
     modal.addEventListener('click', e => {
       const back = e.target.closest('[data-disc-back]'); if (back) { _v20RenderDisciplineLibrary(); return; }
-      const item = e.target.closest('[data-disc-key]'); if (item) { _v20RenderDisciplineDetail(item.dataset.discKey); return; }
+      const item = e.target.closest('[data-disc-slug]'); if (item) { _v20RenderDisciplineDetail(item.dataset.discSlug); return; }
     });
     document.addEventListener('keydown', e => { if (e.key === 'Escape') _v20CloseDisciplineModal(); });
   }
   modal.classList.add('open');
-  const info = name ? v20DisciplineInfo(name) : null;
-  if (info) _v20RenderDisciplineDetail(info.key);
+  const body = document.getElementById('v20-disc-modal-body');
+  if (body) body.innerHTML = '<div class="loading-state"><div class="spinner"></div>Загрузка справочника…</div>';
+  await ensureDisciplines();
+  const slug = name ? v20DisciplineKey(name) : null;
+  if (slug) _v20RenderDisciplineDetail(slug);
   else _v20RenderDisciplineLibrary();
 }
+
+// ── Library page → «Дисциплины» tab (same reference, full-page instead of modal) ──
+function _libRenderDisciplineList() {
+  const body = document.getElementById('lib-disciplines-body');
+  if (body) body.innerHTML = _libDisciplineListHtml();
+}
+function _libRenderDisciplineDetail(slug) {
+  const body = document.getElementById('lib-disciplines-body');
+  if (body) body.innerHTML = `<button type="button" class="v20-disc-back" data-disc-back>← к списку</button>${_libDisciplineDetailHtml(_discBySlug(slug))}`;
+}
+async function loadLibrary() {
+  const body = document.getElementById('lib-disciplines-body');
+  if (body) body.innerHTML = '<div class="loading-state"><div class="spinner"></div>Загрузка...</div>';
+  await ensureDisciplines();
+  _libRenderDisciplineList();
+}
+document.getElementById('lib-disciplines-body').addEventListener('click', e => {
+  const back = e.target.closest('[data-disc-back]'); if (back) { _libRenderDisciplineList(); return; }
+  const item = e.target.closest('[data-disc-slug]'); if (item) { _libRenderDisciplineDetail(item.dataset.discSlug); return; }
+});
 
 // ── XP mode: clicking a dot up spends experience instead of a free edit ──
 let _v20XpMode = false;
@@ -5736,7 +5852,7 @@ async function _generateSheet(ctx, btn) {
   if (btn) { btn.disabled = true; btn.textContent = '⏳ Генерация…'; }
   try {
     const prefs = JSON.parse(localStorage.getItem('ai-feature-prefs') || '{}');
-    const pref  = _getPref(prefs, 'prose', 'openrouter');
+    const pref  = _getPref(prefs, 'sheet', 'claude');
     const d = await fetch(_sheetApi(ctx).gen,
       { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ source: pref.provider, model: pref.model }) }
     ).then(r => r.json());
@@ -5912,11 +6028,12 @@ function openCharDetail(name) {
   if (clanTint) detailModalEl.style.setProperty('--clan-tint', clanTint);
   else detailModalEl.style.removeProperty('--clan-tint');
 
-  const infoFields = INFO_FIELDS
+  const _reqFields = requiredInfoFor(c.lineage);
+  const infoFields = infoFieldsFor(c.lineage)
     .map(([k, lbl]) => {
       const raw = c[k];
       const empty = !raw || raw === '—' || String(raw).includes('⚠️');
-      const required = REQUIRED_INFO_FIELDS.has(k);
+      const required = _reqFields.has(k);
       const opt = (empty && !required) ? ' cdet-opt-empty' : '';   // hidden in view mode
       const keyHtml = (empty && required)
         ? `${lbl} <span class="cdet-req-flag" title="Обязательное поле">!</span>` : lbl;
@@ -5951,18 +6068,20 @@ function openCharDetail(name) {
       <div class="cdet-section-title">Голос</div>
       <div class="cdet-voice">${escHtml(c.voice)}</div>
       <div class="cdet-divider"></div>` : '',
-    c.imagePrompt ? `
-      <div class="cdet-section-title">Промт для генерации</div>
-      <textarea class="cdet-prompt-box" readonly>${escHtml(c.imagePrompt)}</textarea>
-      ${c.negativePrompt ? `
-        <div class="cdet-section-title" style="margin-top:14px">Негативный промт</div>
-        <textarea class="cdet-prompt-box cdet-prompt-neg" readonly>${escHtml(c.negativePrompt)}</textarea>` : ''}` : '',
+    _promptSectionHtml(c.imagePrompt, c.negativePrompt),
   ].filter(Boolean).join('');
+
+  const stampParts = c.lineage === 'vampire'
+    ? [c.clan, c.generation ? `${c.generation} поколение` : ''].filter(Boolean)
+    : [LINEAGE_LABELS[c.lineage] || c.lineage];
+  const stampText = stampParts.filter(p => p && p !== '—' && !String(p).includes('⚠️')).join(' · ');
 
   document.getElementById('char-detail-content').innerHTML = `
     <div class="cdet-portrait-col" id="cdet-portrait-col">${portraitCol}</div>
     <div class="cdet-info-col">
       <div class="cdet-sticky-header">
+        <div class="cdet-header-grain" aria-hidden="true"></div>
+        ${stampText ? `<div class="cdet-stamp">${escHtml(stampText)}</div>` : ''}
         <div class="cdet-name">${escHtml(c.name)}</div>
         <div class="cdet-badges">
           <span class="badge badge-${c.lineage}">${LINEAGE_LABELS[c.lineage] || c.lineage}</span>
@@ -6131,6 +6250,8 @@ document.getElementById('char-detail-content').addEventListener('click', e => {
   }
   const relDelBtn = e.target.closest('.cdet-rel-del-btn');
   if (relDelBtn) { relDelBtn.closest('.cdet-rel-row')?.remove(); return; }
+  const promptCopyBtn = e.target.closest('#cdet-prompt-copy');
+  if (promptCopyBtn) { _copyImagePrompt(promptCopyBtn); return; }
   if (e.target.closest('#cdet-gen-appearance')) { _generateAppearance(e.target.closest('#cdet-gen-appearance').dataset.char); return; }
   if (e.target.closest('#cdet-gen-prompt')) { _generatePrompt(e.target.closest('#cdet-gen-prompt').dataset.char); return; }
   if (e.target.closest('#cdet-gen-dialogue')) { _genDialogue(e.target.closest('#cdet-gen-dialogue').dataset.char); return; }
@@ -6357,7 +6478,7 @@ async function _savePanelEdit(panel, charName) {
         const descHtml = [
           appearance ? `<div class="cdet-section-title">Внешность</div><div class="cdet-bio">${escHtml(appearance)}</div><div class="cdet-divider"></div>` : '',
           voice ? `<div class="cdet-section-title">Голос</div><div class="cdet-voice">${escHtml(voice)}</div><div class="cdet-divider"></div>` : '',
-          imagePrompt ? `<div class="cdet-section-title">Промт для генерации</div><textarea class="cdet-prompt-box" readonly>${escHtml(imagePrompt)}</textarea>${negativePrompt ? `<div class="cdet-section-title" style="margin-top:14px">Негативный промт</div><textarea class="cdet-prompt-box cdet-prompt-neg" readonly>${escHtml(negativePrompt)}</textarea>` : ''}` : '',
+          _promptSectionHtml(imagePrompt, negativePrompt),
         ].filter(Boolean).join('');
         document.getElementById('cdet-desc-view').innerHTML = descHtml || '<div class="cdet-empty">Описание не заполнено</div>';
       }
@@ -6423,7 +6544,7 @@ async function _generateAppearance(charName) {
       view.innerHTML = [
         d.appearance  ? `<div class="cdet-section-title">Внешность</div><div class="cdet-bio">${escHtml(d.appearance)}</div><div class="cdet-divider"></div>` : '',
         voice         ? `<div class="cdet-section-title">Голос</div><div class="cdet-voice">${escHtml(voice)}</div><div class="cdet-divider"></div>` : '',
-        imagePrompt   ? `<div class="cdet-section-title">Промт для генерации</div><textarea class="cdet-prompt-box" readonly>${escHtml(imagePrompt)}</textarea>${negPrompt ? `<div class="cdet-section-title" style="margin-top:14px">Негативный промт</div><textarea class="cdet-prompt-box cdet-prompt-neg" readonly>${escHtml(negPrompt)}</textarea>` : ''}` : '',
+        _promptSectionHtml(imagePrompt, negPrompt),
       ].filter(Boolean).join('') || '<div class="cdet-empty">Описание не заполнено</div>';
     }
 
@@ -6557,6 +6678,39 @@ async function _genDialogue(charName) {
   }
 }
 
+// Single source of truth for the "Промт для генерации" block in #cdet-desc-view,
+// so the copy button (#cdet-prompt-copy) can't silently drop out of one of the
+// several re-render call sites (initial render, manual save, AI generation) again.
+function _promptSectionHtml(imagePrompt, negativePrompt) {
+  if (!imagePrompt) return '';
+  return `
+    <div class="cdet-section-title cdet-prompt-head">
+      <span>Промт для генерации</span>
+      <button type="button" class="cdet-prompt-copy" id="cdet-prompt-copy"
+        title="Скопировать промт${negativePrompt ? ' и негатив' : ''} в буфер обмена" aria-label="Скопировать промт в буфер обмена">⧉</button>
+    </div>
+    <textarea class="cdet-prompt-box" readonly>${escHtml(imagePrompt)}</textarea>
+    ${negativePrompt ? `
+      <div class="cdet-section-title" style="margin-top:14px">Негативный промт</div>
+      <textarea class="cdet-prompt-box cdet-prompt-neg" readonly>${escHtml(negativePrompt)}</textarea>` : ''}`;
+}
+
+// Copy positive + negative image prompt as one clipboard payload (A1111-style,
+// so it can be pasted whole and most generators parse the "Negative prompt:" tail).
+function _copyImagePrompt(btn) {
+  const view = btn.closest('#cdet-desc-view') || document;
+  const pos = view.querySelector('.cdet-prompt-box:not(.cdet-prompt-neg)')?.value.trim() || '';
+  const neg = view.querySelector('.cdet-prompt-neg')?.value.trim() || '';
+  if (!pos && !neg) return;
+  const payload = neg ? `${pos}\n\nNegative prompt: ${neg}` : pos;
+  const flash = ok => {
+    btn.textContent = ok ? '✓' : '✕';
+    btn.classList.toggle('copied', ok);
+    setTimeout(() => { btn.textContent = '⧉'; btn.classList.remove('copied'); }, 1400);
+  };
+  navigator.clipboard.writeText(payload).then(() => flash(true)).catch(() => flash(false));
+}
+
 async function _generatePrompt(charName) {
   if (_genPromptRunning) return;
 
@@ -6607,9 +6761,6 @@ async function _generatePrompt(charName) {
 
     Object.assign(c, { imagePrompt: d.positive, negativePrompt: d.negative });
 
-    const negHtml = d.negative
-      ? `<div class="cdet-section-title" style="margin-top:14px">Негативный промт</div><textarea class="cdet-prompt-box cdet-prompt-neg" readonly>${escHtml(d.negative)}</textarea>`
-      : '';
     const descView = document.getElementById('cdet-desc-view');
     if (descView) {
       const appearance = c.appearance && !c.appearance.includes('⚠️') ? c.appearance : '';
@@ -6617,7 +6768,7 @@ async function _generatePrompt(charName) {
       const html = [
         appearance ? `<div class="cdet-section-title">Внешность</div><div class="cdet-bio">${escHtml(appearance)}</div><div class="cdet-divider"></div>` : '',
         voice ? `<div class="cdet-section-title">Голос</div><div class="cdet-voice">${escHtml(voice)}</div><div class="cdet-divider"></div>` : '',
-        `<div class="cdet-section-title">Промт для генерации</div><textarea class="cdet-prompt-box" readonly>${escHtml(d.positive)}</textarea>${negHtml}`,
+        _promptSectionHtml(d.positive, d.negative),
       ].filter(Boolean).join('');
       descView.innerHTML = html;
     }
@@ -6716,11 +6867,14 @@ function _exitInfoEdit(saved) {
   }
 
   // Restore value cells (+ re-apply view-mode hiding of empty optional fields)
+  const _lineage   = _lineageOf(_editCharName || _editOrigName);
+  const _reqFields = requiredInfoFor(_lineage);
+  const _fieldSet  = infoFieldsFor(_lineage);
   grid.querySelectorAll('.cdet-field-input').forEach(input => {
     const key      = input.dataset.field;
     const value    = saved ? input.value.trim() : (_editOrigValues[key] || '');
     const empty    = !value;
-    const required = REQUIRED_INFO_FIELDS.has(key);
+    const required = _reqFields.has(key);
     const hide     = empty && !required;
     const div = document.createElement('div');
     div.className = 'cdet-val' + (empty ? ' unknown' : '') + (hide ? ' cdet-opt-empty' : '');
@@ -6729,7 +6883,7 @@ function _exitInfoEdit(saved) {
     // sync the preceding label cell (hide class + required «!» flag)
     const keyCell = input.previousElementSibling;
     if (keyCell && keyCell.classList.contains('cdet-key')) {
-      const lbl = (INFO_FIELDS.find(([fk]) => fk === key) || [null, key])[1];
+      const lbl = (_fieldSet.find(([fk]) => fk === key) || [null, key])[1];
       keyCell.innerHTML = (empty && required)
         ? `${lbl} <span class="cdet-req-flag" title="Обязательное поле">!</span>` : lbl;
       keyCell.classList.toggle('cdet-opt-empty', hide);
@@ -7876,9 +8030,10 @@ function _tourRender() {
     <div class="tour-card-body">${escHtml(step.body)}</div>
     <div class="tour-actions">
       <button type="button" class="tour-btn tour-btn-ghost" data-act="skip">Пропустить</button>
-      <span class="tour-spacer"></span>
-      <button type="button" class="tour-btn tour-btn-ghost" data-act="prev"${_tourIdx === 0 ? ' disabled' : ''}>Назад</button>
-      <button type="button" class="tour-btn tour-btn-primary" data-act="next">${last ? 'Готово' : 'Далее'}</button>
+      <div class="tour-actions-right">
+        <button type="button" class="tour-btn tour-btn-ghost" data-act="prev"${_tourIdx === 0 ? ' disabled' : ''}>Назад</button>
+        <button type="button" class="tour-btn tour-btn-primary" data-act="next">${last ? 'Готово' : 'Далее'}</button>
+      </div>
     </div>`;
   _tourReposition();
 }

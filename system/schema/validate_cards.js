@@ -19,7 +19,7 @@ const LINEAGES = {
   hunters:   /Охотник/i,
 };
 const STATUS = ['Жив', 'Жива', 'Торпор', 'Мёртв', 'Мертва', 'Уничтожен', 'Пропал', 'Неизвестно', 'Активен'];
-const GENDER = ['Мужской', 'Женский'];
+const GENDER = ['Мужской', 'Женский', 'Неизвестно'];
 
 const isDir  = p => { try { return fs.statSync(p).isDirectory(); } catch { return false; } };
 const exists = p => { try { return fs.existsSync(p); } catch { return false; } };
@@ -79,7 +79,7 @@ for (const grp of discover()) {
     // Всегда WARNING (даже в --strict), пока не принято решение о массовом бэкфилле.
     const gender = field(c, 'Пол');
     if (!gender) W('нет поля «Пол»');
-    else if (!GENDER.includes(gender)) W(`пол «${gender}» вне enum (Мужской/Женский)`);
+    else if (!GENDER.some(g => gender.startsWith(g))) W(`пол «${gender}» вне enum (Мужской/Женский/Неизвестно)`);
 
     const r = reg(grp.city);
     const h1 = (c.match(/^#\s+(.*)$/m) || [])[1] || slugDir;
