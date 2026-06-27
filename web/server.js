@@ -2451,23 +2451,27 @@ ${styles.slice(0, 2000)}`;
 
 // ── Библиотека: справочник дисциплин (system/library/disciplines/*.md) ──────────
 // Город-нейтральные данные → кэшируются по mtime каталога.
-let _discCache = null; // { mtime, list }
+let _discCache = null; // { sig, list }
 const DISC_DIR = path.join(ROOT, 'system', 'library', 'disciplines');
 
 async function loadDisciplines() {
-  let dirMtime = 0;
-  try { dirMtime = (await fs.stat(DISC_DIR)).mtimeMs; } catch { return []; }
-  if (_discCache && _discCache.mtime === dirMtime) return _discCache.list;
+  const files = (await fs.readdir(DISC_DIR).catch(() => null));
+  if (!files) return [];
+  const mds = files.filter(f => f.endsWith('.md') && f.toLowerCase() !== 'readme.md').sort();
 
-  const files = (await fs.readdir(DISC_DIR).catch(() => []))
-    .filter(f => f.endsWith('.md') && f.toLowerCase() !== 'readme.md');
+  // Сигнатура по mtime каждого файла: правка содержимого существующего .md
+  // не меняет mtime каталога, поэтому ключевать по нему нельзя (иначе кэш не сбросится).
+  const stats = await Promise.all(mds.map(f => fs.stat(path.join(DISC_DIR, f)).catch(() => null)));
+  const sig = mds.map((f, i) => `${f}:${stats[i] ? stats[i].mtimeMs : 0}`).join('|');
+  if (_discCache && _discCache.sig === sig) return _discCache.list;
+
   const list = [];
-  for (const f of files.sort()) {
+  for (const f of mds) {
     const slug = f.replace(/\.md$/, '');
     const md = await fs.readFile(path.join(DISC_DIR, f), 'utf-8').catch(() => '');
     if (md) list.push(parseDisciplineMd(md, slug));
   }
-  _discCache = { mtime: dirMtime, list };
+  _discCache = { sig, list };
   return list;
 }
 

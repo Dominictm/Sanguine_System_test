@@ -5250,7 +5250,7 @@ async function loadLibrary() {
   await ensureDisciplines();
   _libRenderDisciplineList();
 }
-document.getElementById('lib-disciplines-body').addEventListener('click', e => {
+document.getElementById('lib-disciplines-body')?.addEventListener('click', e => {
   const back = e.target.closest('[data-disc-back]'); if (back) { _libRenderDisciplineList(); return; }
   const item = e.target.closest('[data-disc-slug]'); if (item) { _libRenderDisciplineDetail(item.dataset.discSlug); return; }
 });

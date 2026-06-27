@@ -54,35 +54,35 @@ function parseDisciplineMd(rawContent, slug) {
 
   // Разбить на H2-секции.
   const h2parts = content.split(/\n##\s+/).slice(1); // [0] — шапка
-  let curPath = null;
   for (const part of h2parts) {
     const nl = part.indexOf('\n');
     const heading = (nl === -1 ? part : part.slice(0, nl)).trim();
     const bodyAll = nl === -1 ? '' : part.slice(nl + 1);
 
-    if (/^(Путь|Path)\b/i.test(heading) || /\bПуть\b/i.test(heading)) {
-      // Группа-Путь: внутри — H3-силы.
-      curPath = { name: heading, levels: [] };
-      d.paths.push(curPath);
-      const h3parts = bodyAll.split(/\n###\s+/).slice(1);
-      // Возможна вводная заметка пути до первого H3.
-      const pathHead = bodyAll.split(/\n###\s+/)[0];
-      const pnote = (pathHead.match(/^>\s?(.*)$/gm) || []).map(l => l.replace(/^>\s?/, '').trim()).filter(Boolean);
-      if (pnote.length) curPath.note = pnote.join(' ');
-      for (const h3 of h3parts) {
-        const n3 = h3.indexOf('\n');
-        const h3head = (n3 === -1 ? h3 : h3.slice(0, n3)).trim();
-        const h3body = n3 === -1 ? '' : h3.slice(n3 + 1);
-        const ph = parsePowerHeading(h3head);
-        if (!ph) continue;
-        curPath.levels.push({ ...ph, ...splitPowerBody(h3body) });
-      }
-      continue;
-    }
-
+    // «Уровень N — …» → плоская сила дисциплины.
     const ph = parsePowerHeading(heading);
-    if (!ph) continue;
-    d.levels.push({ ...ph, ...splitPowerBody(bodyAll) });
+    if (ph) { d.levels.push({ ...ph, ...splitPowerBody(bodyAll) }); continue; }
+
+    // Иначе это группа-Путь (Некромантия/Тауматургия) — её имя может и не содержать
+    // слова «Путь» («Привлечение Огней», «Руки Разрушения»). Признак — наличие
+    // вложенных H3-сил «Уровень N — …». Путь без сил не добавляем.
+    const h3parts = bodyAll.split(/\n###\s+/).slice(1);
+    const levels = [];
+    for (const h3 of h3parts) {
+      const n3 = h3.indexOf('\n');
+      const h3head = (n3 === -1 ? h3 : h3.slice(0, n3)).trim();
+      const h3body = n3 === -1 ? '' : h3.slice(n3 + 1);
+      const p3 = parsePowerHeading(h3head);
+      if (!p3) continue;
+      levels.push({ ...p3, ...splitPowerBody(h3body) });
+    }
+    if (!levels.length) continue;
+    const curPath = { name: heading, levels };
+    // Возможна вводная заметка пути до первого H3.
+    const pathHead = bodyAll.split(/\n###\s+/)[0];
+    const pnote = (pathHead.match(/^>\s?(.*)$/gm) || []).map(l => l.replace(/^>\s?/, '').trim()).filter(Boolean);
+    if (pnote.length) curPath.note = pnote.join(' ');
+    d.paths.push(curPath);
   }
 
   d.noLevels = d.levels.length === 0 && d.paths.length > 0;
