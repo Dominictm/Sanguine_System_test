@@ -64,6 +64,50 @@ echo.
 
 :node_ok
 
+rem --- Проверка наличия Git ----------------------------------
+where git > nul 2>&1
+if %errorlevel% neq 0 goto git_missing
+goto git_ok
+
+:git_missing
+echo   Git не найден.
+echo.
+choice /C YN /M "Установить Git автоматически через winget?"
+if errorlevel 2 goto git_manual
+if errorlevel 1 goto git_autoinstall
+
+:git_manual
+echo.
+echo   Установите Git вручную: https://git-scm.com/download/win
+echo   Затем запустите start.bat ещё раз.
+echo.
+pause
+exit /b 1
+
+:git_autoinstall
+where winget > nul 2>&1
+if %errorlevel% neq 0 (
+    echo   winget недоступен на этой системе.
+    echo   Установите Git вручную: https://git-scm.com/download/win
+    pause
+    exit /b 1
+)
+echo   Устанавливаю Git (может появиться запрос UAC)...
+winget install --id Git.Git -e --source winget --accept-package-agreements --accept-source-agreements
+rem Сделать свежеустановленный git видимым в текущей сессии без перезапуска.
+set PATH=%PATH%;%ProgramFiles%\Git\cmd
+where git > nul 2>&1
+if %errorlevel% neq 0 (
+    echo   Git установлен, но не виден в этой сессии.
+    echo   Перезапустите start.bat или терминал.
+    pause
+    exit /b 1
+)
+echo   Git установлен успешно.
+echo.
+
+:git_ok
+
 netstat -ano 2>nul | find "LISTENING" | find ":3000" > nul
 if %errorlevel% == 0 (
     echo   Server already running at http://localhost:3000
