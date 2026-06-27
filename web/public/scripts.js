@@ -1736,17 +1736,147 @@ function _cityHasCustomSections(cityMd) {
   return headings.some(h => !known.has(h));
 }
 
+// ── Структурные редакторы секций «Политический ландшафт» / «Ключевые локации» ──
+// Строки-записи (роль/имя/имя2 и тип/имя) поверх готовой row-инфраструктуры .cdet-rel-*.
+const CITY_POLITICAL_ROLES = ['Князь', 'Шериф', 'Сенешаль', 'Примаген'];
+const CITY_LOCATION_TYPES  = ['Элизиум'];
+let _cityEditChars = [];  // имена персонажей города — для datalist
+let _cityEditLocs  = [];  // названия локаций города — для datalist
+let _polRowSeq = 0;
+
+// city.md-строки секции ↔ структурные записи (round-trip с buildCityMd/parseCityMd).
+function _parsePoliticalLines(text) {
+  return String(text || '').split('\n').map(l => l.replace(/^\s*-\s?/, '').trim()).filter(Boolean).map(line => {
+    const ci = line.indexOf(':');
+    let role = '', rest = line;
+    if (ci !== -1) { role = line.slice(0, ci).trim(); rest = line.slice(ci + 1).trim(); }
+    const [name = '', name2 = ''] = rest.split('/').map(s => s.trim());
+    return { role, name, name2 };
+  });
+}
+function _politicalRowToLine(r) {
+  const np = r.name2 ? (r.name ? `${r.name} / ${r.name2}` : r.name2) : r.name;
+  return r.role ? `${r.role}: ${np}` : np;
+}
+function _parseLocationLines(text) {
+  return String(text || '').split('\n').map(l => l.replace(/^\s*-\s?/, '').trim()).filter(Boolean).map(line => {
+    const ci = line.indexOf(':');
+    if (ci === -1) return { type: '', name: line };
+    return { type: line.slice(0, ci).trim(), name: line.slice(ci + 1).trim() };
+  });
+}
+function _locationRowToLine(r) { return r.type ? `${r.type}: ${r.name}` : r.name; }
+
+// Персонажи, уже занятые в других строках, не предлагаются повторно (кроме self).
+function _polAvailableNames(allNames, records, self) {
+  const occ = new Set();
+  records.forEach(r => { if (r === self) return; if (r.name) occ.add(r.name); if (r.name2) occ.add(r.name2); });
+  return allNames.filter(n => !occ.has(n));
+}
+
+function _polRowHtml(role = '', name = '', name2 = '', availableNames = _cityEditChars) {
+  const known   = CITY_POLITICAL_ROLES.includes(role);
+  const selVal  = !role ? '' : (known ? role : 'other');
+  const custVal = (!known && role) ? role : '';
+  const opts = [
+    `<option value=""${selVal === '' ? ' selected' : ''}>Должность…</option>`,
+    ...CITY_POLITICAL_ROLES.map(o => `<option value="${escAttr(o)}"${o === selVal ? ' selected' : ''}>${escHtml(o)}</option>`),
+    `<option value="other"${selVal === 'other' ? ' selected' : ''}>Другое…</option>`,
+  ].join('');
+  const dlId   = `cdet-pol-dl-${++_polRowSeq}`;
+  const dlOpts = availableNames.map(n => `<option value="${escAttr(n)}">`).join('');
+  return `<div class="cdet-rel-row cdet-pol-row">
+    <select class="form-control cdet-pol-role-sel">${opts}</select>
+    <input class="cdet-rel-type-inp cdet-pol-role-custom" placeholder="Своя должность" value="${escAttr(custVal)}" style="${selVal === 'other' ? '' : 'display:none'}">
+    <input class="cdet-rel-name-inp cdet-pol-name-inp" list="${dlId}" placeholder="Имя персонажа" value="${escAttr(name)}">
+    <input class="cdet-rel-name-inp cdet-pol-name-inp cdet-pol-name2-inp" list="${dlId}" placeholder="Второе имя (необязательно)" value="${escAttr(name2)}">
+    <button class="cdet-rel-del-btn" type="button" title="Удалить запись">✕</button>
+    <datalist id="${dlId}">${dlOpts}</datalist>
+  </div>`;
+}
+function _locRowHtml(type = '', name = '', locationNames = _cityEditLocs) {
+  const known   = CITY_LOCATION_TYPES.includes(type);
+  const selVal  = !type ? '' : (known ? type : 'other');
+  const custVal = (!known && type) ? type : '';
+  const opts = [
+    `<option value=""${selVal === '' ? ' selected' : ''}>Тип…</option>`,
+    ...CITY_LOCATION_TYPES.map(o => `<option value="${escAttr(o)}"${o === selVal ? ' selected' : ''}>${escHtml(o)}</option>`),
+    `<option value="other"${selVal === 'other' ? ' selected' : ''}>Другое…</option>`,
+  ].join('');
+  return `<div class="cdet-rel-row cdet-loc-row">
+    <select class="form-control cdet-pol-role-sel cdet-loc-type-sel">${opts}</select>
+    <input class="cdet-rel-type-inp cdet-loc-type-custom" placeholder="Свой тип" value="${escAttr(custVal)}" style="${selVal === 'other' ? '' : 'display:none'}">
+    <input class="cdet-rel-name-inp cdet-loc-name-inp" list="cdet-city-loc-names" placeholder="Название локации" value="${escAttr(name)}">
+    <button class="cdet-rel-del-btn" type="button" title="Удалить запись">✕</button>
+  </div>`;
+}
+
+// HTML-блоки структурных секций для формы _renderCityEdit.
+function _cityPolEditorHtml(sec) {
+  const records = _parsePoliticalLines(sec.political || '');
+  const rows = records.length
+    ? records.map(r => _polRowHtml(r.role, r.name, r.name2, _polAvailableNames(_cityEditChars, records, r))).join('')
+    : _polRowHtml('', '', '', _cityEditChars);
+  return `
+    <div class="form-group">
+      <label class="form-label">Политический ландшафт</label>
+      <div class="cdet-rels-hint">Должность — из списка или своя. Имя (и второе, если нужно) — выбери из персонажей или впиши своё. Занятые в других строках персонажи не предлагаются.</div>
+      <div id="cdet-political-rows">${rows}</div>
+      <button class="cdet-rel-add-btn" id="cdet-political-add-btn" type="button">+ Добавить запись</button>
+    </div>`;
+}
+function _cityLocEditorHtml(sec) {
+  const records = _parseLocationLines(sec.locations || '');
+  const rows = records.length ? records.map(r => _locRowHtml(r.type, r.name)).join('') : _locRowHtml();
+  return `
+    <div class="form-group">
+      <label class="form-label">Ключевые локации</label>
+      <div class="cdet-rels-hint">Тип — из списка или свой. Название — из созданных локаций или своё.</div>
+      <div id="cdet-location-rows">${rows}</div>
+      <button class="cdet-rel-add-btn" id="cdet-location-add-btn" type="button">+ Добавить запись</button>
+      <datalist id="cdet-city-loc-names">${_cityEditLocs.map(n => `<option value="${escAttr(n)}">`).join('')}</datalist>
+    </div>`;
+}
+
+// Сбор структурных строк обратно в текст секции city.md (буллет на запись).
+function _collectPoliticalRows() {
+  return Array.from(document.querySelectorAll('#cdet-political-rows .cdet-pol-row')).map(row => {
+    const sel    = row.querySelector('.cdet-pol-role-sel');
+    const custom = row.querySelector('.cdet-pol-role-custom');
+    const role   = sel?.value === 'other' ? (custom?.value.trim() || '') : (sel?.value || '');
+    const name   = row.querySelector('.cdet-pol-name-inp')?.value.trim() || '';
+    const name2  = row.querySelector('.cdet-pol-name2-inp')?.value.trim() || '';
+    return { role, name, name2 };
+  }).filter(r => r.role || r.name || r.name2).map(_politicalRowToLine).join('\n');
+}
+function _collectLocationRows() {
+  return Array.from(document.querySelectorAll('#cdet-location-rows .cdet-loc-row')).map(row => {
+    const sel    = row.querySelector('.cdet-loc-type-sel');
+    const custom = row.querySelector('.cdet-loc-type-custom');
+    const type   = sel?.value === 'other' ? (custom?.value.trim() || '') : (sel?.value || '');
+    const name   = row.querySelector('.cdet-loc-name-inp')?.value.trim() || '';
+    return { type, name };
+  }).filter(r => r.type || r.name).map(_locationRowToLine).join('\n');
+}
+
 async function openCityDetail(slug) {
   const modal   = document.getElementById('city-detail-modal');
   const content = document.getElementById('city-detail-content');
   content.innerHTML = `<div class="mod-loading">${SPINNER}</div>`;
   modal.classList.add('open');
 
-  let d;
-  try { d = await fetch(`/api/cities/${encodeURIComponent(slug)}/detail`).then(r => r.json()); }
-  catch { content.innerHTML = '<div class="cdet-empty" style="padding:40px">⚠ Не удалось загрузить город</div>'; return; }
+  let d, chars = [], locs = [];
+  try {
+    [d, chars, locs] = await Promise.all([
+      fetch(`/api/cities/${encodeURIComponent(slug)}/detail`).then(r => r.json()),
+      fetch(`/api/characters?city=${encodeURIComponent(slug)}`).then(r => r.json()).catch(() => []),
+      fetch(`/api/locations?city=${encodeURIComponent(slug)}`).then(r => r.json()).catch(() => []),
+    ]);
+  } catch { content.innerHTML = '<div class="cdet-empty" style="padding:40px">⚠ Не удалось загрузить город</div>'; return; }
   if (d.error) { content.innerHTML = `<div class="cdet-empty" style="padding:40px">${escHtml(d.error)}</div>`; return; }
 
+  _cityEditChars = Array.isArray(chars) ? chars.map(c => c.name).filter(Boolean) : [];
+  _cityEditLocs  = Array.isArray(locs) ? locs.map(l => l.title).filter(Boolean) : [];
   _cityDetail = { ...d, slug, active: slug === CITY };
   _renderCityView();
 }
@@ -1791,12 +1921,16 @@ function _renderCityEdit() {
   const sec = (d.parsed && d.parsed.sections) || {};
   const custom = _cityHasCustomSections(d.cityMd);
 
-  const fieldRows = CITY_SECTION_DEFS.map(([key, heading]) => `
+  const fieldRows = CITY_SECTION_DEFS.map(([key, heading]) => {
+    if (key === 'political') return _cityPolEditorHtml(sec);
+    if (key === 'locations') return _cityLocEditorHtml(sec);
+    return `
     <div class="form-group">
       <label class="form-label">${escHtml(heading)}</label>
       <textarea class="form-control" data-city-field="${key}" rows="3"
         placeholder="По строке на пункт…">${escHtml(sec[key] || '')}</textarea>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 
   content.innerHTML = `
     <div class="cdet-info-col mod-info-col">
@@ -1838,6 +1972,29 @@ document.getElementById('city-detail-content').addEventListener('click', async e
   const sw = e.target.closest('[data-switch-city]');
   if (sw) { location.search = 'city=' + encodeURIComponent(sw.dataset.switchCity); return; }
 
+  // Структурные строки политики/локаций: добавить/удалить
+  if (e.target.closest('#cdet-political-add-btn')) {
+    const rows = document.getElementById('cdet-political-rows');
+    if (rows) {
+      const occ = new Set();
+      rows.querySelectorAll('.cdet-pol-row').forEach(row => {
+        const n1 = row.querySelector('.cdet-pol-name-inp')?.value.trim();
+        const n2 = row.querySelector('.cdet-pol-name2-inp')?.value.trim();
+        if (n1) occ.add(n1); if (n2) occ.add(n2);
+      });
+      rows.insertAdjacentHTML('beforeend', _polRowHtml('', '', '', _cityEditChars.filter(n => !occ.has(n))));
+      rows.lastElementChild?.querySelector('.cdet-pol-name-inp')?.focus();
+    }
+    return;
+  }
+  if (e.target.closest('#cdet-political-rows .cdet-rel-del-btn')) { e.target.closest('.cdet-pol-row')?.remove(); return; }
+  if (e.target.closest('#cdet-location-add-btn')) {
+    const rows = document.getElementById('cdet-location-rows');
+    if (rows) { rows.insertAdjacentHTML('beforeend', _locRowHtml()); rows.lastElementChild?.querySelector('.cdet-loc-name-inp')?.focus(); }
+    return;
+  }
+  if (e.target.closest('#cdet-location-rows .cdet-rel-del-btn')) { e.target.closest('.cdet-loc-row')?.remove(); return; }
+
   if (e.target.closest('[data-city-edit]'))   { _renderCityEdit(); return; }
   if (e.target.closest('[data-city-cancel]')) { _renderCityView(); return; }
 
@@ -1851,6 +2008,14 @@ document.getElementById('city-detail-content').addEventListener('click', async e
 
   if (e.target.closest('[data-city-save]'))   { await _saveCityEdit(); return; }
   if (e.target.closest('[data-city-delete]')) { await _deleteCity(); return; }
+});
+
+// Показ/скрытие поля «своя должность/тип» при выборе «Другое…».
+document.getElementById('city-detail-content').addEventListener('change', e => {
+  const locSel = e.target.closest('.cdet-loc-type-sel');
+  if (locSel) { const c = locSel.closest('.cdet-loc-row')?.querySelector('.cdet-loc-type-custom'); if (c) c.style.display = locSel.value === 'other' ? '' : 'none'; return; }
+  const polSel = e.target.closest('.cdet-pol-role-sel');
+  if (polSel) { const c = polSel.closest('.cdet-pol-row')?.querySelector('.cdet-pol-role-custom'); if (c) c.style.display = polSel.value === 'other' ? '' : 'none'; }
 });
 
 async function _saveCityEdit() {
@@ -1868,7 +2033,11 @@ async function _saveCityEdit() {
     const display = q('display').value.trim();
     if (!display) { if (statusEl) statusEl.textContent = '⚠ Укажите название'; return; }
     const fields = { display, year: q('year').value.trim() };
-    for (const [key] of CITY_SECTION_DEFS) fields[key] = q(key).value.trim();
+    for (const [key] of CITY_SECTION_DEFS) {
+      if (key === 'political')      fields[key] = _collectPoliticalRows();
+      else if (key === 'locations') fields[key] = _collectLocationRows();
+      else                          fields[key] = q(key).value.trim();
+    }
     payload = { fields };
   }
 

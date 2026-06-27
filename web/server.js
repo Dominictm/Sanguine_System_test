@@ -701,6 +701,53 @@ app.post('/api/cities', express.json(), async (req, res) => {
   }
 });
 
+// Разбор строк секции «Политический ландшафт» ("Роль: Имя / Имя2") в структурные записи.
+function parsePoliticalRecords(lines) {
+  return (Array.isArray(lines) ? lines : String(lines || '').split('\n'))
+    .map(l => String(l).replace(/^\s*-\s?/, '').trim()).filter(Boolean)
+    .map(line => {
+      const ci = line.indexOf(':');
+      let role = '', rest = line;
+      if (ci !== -1) { role = line.slice(0, ci).trim(); rest = line.slice(ci + 1).trim(); }
+      const [name = '', name2 = ''] = rest.split('/').map(s => s.trim());
+      return { role, name, name2 };
+    }).filter(r => r.role || r.name || r.name2);
+}
+function _parseMdTableRow(r) { return r.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map(c => c.trim()); }
+
+// Зеркалирование политического ландшафта в archive/political_state.md «Карта фракций»,
+// чтобы страница «Фракции» отражала тот же состав. Строки управляемых здесь должностей
+// перестраиваются; рукописные строки прочих должностей сохраняются. previousRoles —
+// должности, что были в city.md до сохранения (чтобы убрать удалённые в редакторе).
+async function syncPoliticalStateTable(slug, records, previousRoles = []) {
+  const file = path.join(cityDir(slug), 'archive', 'political_state.md');
+  const md = await fs.readFile(file, 'utf-8').catch(() => null);
+  if (md === null) return;
+  let chars = [];
+  try { chars = await getAllCharacters(slug); } catch {}
+  const clanByName = new Map(chars.map(c => [c.name, c.clan || '']));
+  const lines = md.split('\n');
+  const headerIdx = lines.findIndex(l => /^\s*\|.*Должность.*\|.*Персонаж.*\|/i.test(l));
+  if (headerIdx === -1) return;
+  const sepIdx = headerIdx + 1;
+  let end = sepIdx + 1;
+  while (end < lines.length && /^\s*\|/.test(lines[end])) end++;
+  const existingRows = lines.slice(sepIdx + 1, end).map(_parseMdTableRow);
+  const noteByRole = new Map(existingRows.map(r => [r[0], r[3] || '']));
+  const savedRoles = new Set(records.map(r => r.role).filter(Boolean));
+  const removedRoles = new Set(previousRoles.filter(role => role && !savedRoles.has(role)));
+  const kept = existingRows.filter(r => !savedRoles.has(r[0]) && !removedRoles.has(r[0]));
+  const newRows = records.filter(r => r.role || r.name || r.name2).map(r => {
+    const persons = [r.name, r.name2].filter(Boolean).join(' / ') || '—';
+    const clan = clanByName.get(r.name) || clanByName.get(r.name2) || '';
+    return [r.role || '—', persons, clan, noteByRole.get(r.role) || ''];
+  });
+  const allRows = [...newRows, ...kept];
+  const rowsText = allRows.length ? allRows.map(r => `| ${r.join(' | ')} |`).join('\n') : '|  |  |  |  |';
+  lines.splice(sepIdx + 1, end - (sepIdx + 1), rowsText);
+  await writeFileAtomic(file, lines.join('\n'), 'utf-8');
+}
+
 // PUT /api/cities/:slug — edit city.md. Body: { cityMd } (raw, full replace — preserves
 // custom/hand-written sections) OR { fields:{display,year,...} } (rebuild from template).
 app.put('/api/cities/:slug', express.json(), async (req, res) => {
@@ -710,6 +757,14 @@ app.put('/api/cities/:slug', express.json(), async (req, res) => {
     if (!(await listCities()).includes(slug)) return res.status(404).json({ error: 'Город не найден' });
 
     const b = req.body || {};
+    // Должности, что город перечислял ДО сохранения — для синка с «Картой фракций».
+    let prevRoles = [];
+    if (b.fields && typeof b.fields.political === 'string') {
+      try {
+        const oldMd = await fs.readFile(path.join(cityDir(slug), 'city.md'), 'utf-8');
+        prevRoles = parsePoliticalRecords((parseCityMd(oldMd).sections.political || '').split('\n')).map(r => r.role).filter(Boolean);
+      } catch {}
+    }
     let cityMd;
     if (typeof b.cityMd === 'string' && b.cityMd.trim()) {
       cityMd = b.cityMd.replace(/^﻿/, '');
@@ -721,6 +776,10 @@ app.put('/api/cities/:slug', express.json(), async (req, res) => {
     if (!/^#\s+\S/m.test(cityMd)) return res.status(400).json({ error: 'city.md должен начинаться с заголовка # …' });
 
     await writeFileAtomic(path.join(cityDir(slug), 'city.md'), cityMd, 'utf-8');
+    // Отразить политический состав в archive/political_state.md «Фракции».
+    if (b.fields && typeof b.fields.political === 'string') {
+      await syncPoliticalStateTable(slug, parsePoliticalRecords(b.fields.political.split('\n')), prevRoles).catch(() => {});
+    }
     delete _cache[slug];
     console.log(`[edit-city] ${slug}`);
     res.json({ ok: true, slug, parsed: parseCityMd(cityMd) });

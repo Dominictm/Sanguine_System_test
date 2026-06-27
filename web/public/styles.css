@@ -2538,6 +2538,24 @@ a:focus-visible {
   flex: 1;
 }
 
+/* Структурные редакторы города: ряды политики/локаций поверх .cdet-rel-row,
+   с ведущим <select> должности/типа. */
+#cdet-political-rows, #cdet-location-rows { display: flex; flex-direction: column; gap: 8px; }
+.cdet-pol-row, .cdet-loc-row { flex-wrap: wrap; }
+.cdet-pol-role-sel {
+  flex: 0 0 150px;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 8px 10px;
+  font-family: var(--f-body);
+  font-size: var(--fs-md);
+}
+.cdet-pol-role-sel:focus { outline: none; border-color: var(--accent); box-shadow: var(--glow); }
+.cdet-pol-role-custom, .cdet-loc-type-custom { flex: 0 0 150px; }
+.cdet-pol-name-inp, .cdet-loc-name-inp { flex: 1 1 200px; }
+
 .cdet-rel-name-inp:focus, .cdet-rel-type-inp:focus {
   outline: none;
   border-color: var(--accent);
