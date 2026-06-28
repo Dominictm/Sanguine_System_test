@@ -34,6 +34,7 @@ function slugify(s) {
 // POST/PUT /api/cities and the edit form. Order = order rendered in the file.
 const CITY_SECTIONS = [
   ['political',  'Политический ландшафт'],
+  ['factions',   'Фракции'],
   ['locations',  'Ключевые локации'],
   ['leitmotif',  'Лейтмотивы и атмосфера'],
   ['specifics',  'Специфика ответа'],

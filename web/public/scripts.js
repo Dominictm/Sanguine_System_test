@@ -1721,12 +1721,18 @@ document.getElementById('cities-grid')?.addEventListener('click', e => {
 // Канонические секции city.md — зеркало CITY_SECTIONS в web/lib/parsers.js.
 const CITY_SECTION_DEFS = [
   ['political',  'Политический ландшафт'],
+  ['factions',   'Фракции'],
   ['locations',  'Ключевые локации'],
   ['leitmotif',  'Лейтмотивы и атмосфера'],
   ['specifics',  'Специфика ответа'],
   ['avoid',      'Чего избегать'],
   ['sources',    'Источники'],
 ];
+// Секты и независимые кланы V20 (system/rules/reference_wod.md) — варианты для
+// мультиселекта секции «Фракции». Независимые — канонические 4 клана V20
+// (Каппадокийцы — вымерший/Dark Ages клан, в набор не входят).
+const CITY_SECTS = ['Камарилья', 'Анархи', 'Шабаш'];
+const CITY_INDEPENDENT_CLANS = ['Ассамиты', 'Следующие Луны', 'Джованни', 'Равнос'];
 let _cityDetail = null;  // { slug, cityMd, parsed, characters, modules, locations, active }
 
 // У города есть секции вне стандартного набора (рукописный city.md, как у Парижа)?
@@ -1748,18 +1754,28 @@ let _polRowSeq = 0;
 // (как сейчас у всех городов — цельный абзац-описание) и структурные записи вида
 // "Должность: Имя" / "Тип: Название". Раньше всё это разбиралось в одни и те же строки
 // формы, и нарратив без двоеточия попадал в поле «Имя» структурного редактора — отсюда
-// и путаница. Делим по строке: похожа на короткую метку с двоеточием → запись,
-// иначе → нарратив (он не теряется, просто не лезет в структурные поля).
-function _isStructuredCityLine(line) {
+// и путаница. Делим по строке: запись — короткая метка + двоеточие, где метка либо из
+// известного словаря (Князь/Шериф/…, Элизиум), либо значение похоже на имя (короткое,
+// без «прозаической» пунктуации). Иначе строка — нарратив. Так проза с двоеточием
+// («Камарилья: оплот старейшин, но раздроблена») остаётся в нарративе, а не уезжает
+// фальшивой записью в структурный редактор и «Карту фракций».
+function _isStructuredCityLine(line, knownLabels) {
   const ci = line.indexOf(':');
-  return ci > 0 && ci <= 40 && !/[.!?]/.test(line.slice(0, ci));
+  if (ci <= 0 || ci > 40) return false;
+  const label = line.slice(0, ci).trim();
+  if (!label || label.length > 24 || label.split(/\s+/).length > 2 || label.includes(',')) return false;
+  if (knownLabels && knownLabels.has(label.toLowerCase())) return true;
+  const value = line.slice(ci + 1).trim();
+  return value.length > 0 && value.length <= 48 && !/[.!?,;]/.test(value);
 }
-function _splitCitySectionRecords(text) {
+function _splitCitySectionRecords(text, knownLabels) {
   const lines = String(text || '').split('\n').map(l => l.replace(/^\s*-\s?/, '').trim()).filter(Boolean);
   const narrative = [], recordLines = [];
-  for (const line of lines) (_isStructuredCityLine(line) ? recordLines : narrative).push(line);
+  for (const line of lines) (_isStructuredCityLine(line, knownLabels) ? recordLines : narrative).push(line);
   return { narrative: narrative.join('\n'), recordLines };
 }
+const _POL_LABELS = new Set(CITY_POLITICAL_ROLES.map(r => r.toLowerCase()));
+const _LOC_LABELS = new Set(CITY_LOCATION_TYPES.map(t => t.toLowerCase()));
 
 // city.md-строки записей ↔ структурные записи (round-trip с buildCityMd/parseCityMd).
 function _parsePoliticalLines(lines) {
@@ -1831,7 +1847,7 @@ function _locRowHtml(type = '', name = '', locationNames = _cityEditLocs) {
 // HTML-блоки структурных секций для формы _renderCityEdit. Нарратив и структурные
 // записи — два отдельных поля, чтобы не путались при заполнении.
 function _cityPolEditorHtml(sec) {
-  const { narrative, recordLines } = _splitCitySectionRecords(sec.political || '');
+  const { narrative, recordLines } = _splitCitySectionRecords(sec.political || '', _POL_LABELS);
   const records = _parsePoliticalLines(recordLines);
   const rows = records.length
     ? records.map(r => _polRowHtml(r.role, r.name, r.name2, _polAvailableNames(_cityEditChars, records, r))).join('')
@@ -1851,7 +1867,7 @@ function _cityPolEditorHtml(sec) {
     </div>`;
 }
 function _cityLocEditorHtml(sec) {
-  const { narrative, recordLines } = _splitCitySectionRecords(sec.locations || '');
+  const { narrative, recordLines } = _splitCitySectionRecords(sec.locations || '', _LOC_LABELS);
   const records = _parseLocationLines(recordLines);
   const rows = records.length ? records.map(r => _locRowHtml(r.type, r.name)).join('') : _locRowHtml();
   return `
@@ -1868,6 +1884,38 @@ function _cityLocEditorHtml(sec) {
       <button class="cdet-rel-add-btn" id="cdet-location-add-btn" type="button">+ Добавить запись</button>
       <datalist id="cdet-city-loc-names">${_cityEditLocs.map(n => `<option value="${escAttr(n)}">`).join('')}</datalist>
     </div>`;
+}
+// Мультиселект-чипы: секты Камарилья/Анархи/Шабаш + независимые кланы. Храним как
+// буллет-список (по строке на выбор) — та же конвенция, что у простых секций.
+// Строки, не совпавшие ни с одним чипом (рукописные/нестандартные фракции — Инконню
+// и т.п.), не теряются: их показываем в поле «Другие фракции» и сохраняем как есть.
+function _cityFactionsEditorHtml(sec) {
+  const all = String(sec.factions || '').split('\n').map(l => l.replace(/^\s*-\s?/, '').trim()).filter(Boolean);
+  const known = new Set([...CITY_SECTS, ...CITY_INDEPENDENT_CLANS]);
+  const selected = new Set(all.filter(l => known.has(l)));
+  const other = all.filter(l => !known.has(l));
+  const chip = name => {
+    const on = selected.has(name);
+    return `<button type="button" class="cdet-faction-chip" aria-pressed="${on}" data-faction="${escAttr(name)}">${escHtml(name)}</button>`;
+  };
+  return `
+    <div class="form-group">
+      <label class="form-label">Фракции</label>
+      <div class="cdet-rels-hint">Секты и независимые кланы, присутствующие в городе. Можно выбрать несколько.</div>
+      <div class="cdet-faction-group-label">Секты</div>
+      <div class="cdet-faction-chips" data-faction-group="sects">${CITY_SECTS.map(chip).join('')}</div>
+      <div class="cdet-faction-group-label">Независимые кланы</div>
+      <div class="cdet-faction-chips" data-faction-group="clans">${CITY_INDEPENDENT_CLANS.map(chip).join('')}</div>
+      <div class="cdet-faction-group-label">Другие фракции</div>
+      <textarea class="form-control" data-city-field="factions-other" rows="2"
+        placeholder="По строке на фракцию вне списка (напр. Инконню)…">${escHtml(other.join('\n'))}</textarea>
+    </div>`;
+}
+function _collectFactions() {
+  const chips = Array.from(document.querySelectorAll('.cdet-faction-chip[aria-pressed="true"]')).map(b => b.dataset.faction);
+  const other = (document.querySelector('[data-city-field="factions-other"]')?.value || '')
+    .split('\n').map(l => l.trim()).filter(Boolean);
+  return [...chips, ...other].join('\n');
 }
 
 // Сбор нарратива + структурных строк обратно в текст секции city.md (буллет на пункт/запись).
@@ -1961,6 +2009,7 @@ function _renderCityEdit() {
 
   const fieldRows = CITY_SECTION_DEFS.map(([key, heading]) => {
     if (key === 'political') return _cityPolEditorHtml(sec);
+    if (key === 'factions')  return _cityFactionsEditorHtml(sec);
     if (key === 'locations') return _cityLocEditorHtml(sec);
     return `
     <div class="form-group">
@@ -2014,6 +2063,13 @@ function _renderCityEdit() {
 document.getElementById('city-detail-content').addEventListener('click', async e => {
   const sw = e.target.closest('[data-switch-city]');
   if (sw) { location.search = 'city=' + encodeURIComponent(sw.dataset.switchCity); return; }
+
+  // Мультиселект-чип фракции: переключить выбранность (aria-pressed = состояние).
+  const factionChip = e.target.closest('.cdet-faction-chip');
+  if (factionChip) {
+    factionChip.setAttribute('aria-pressed', factionChip.getAttribute('aria-pressed') === 'true' ? 'false' : 'true');
+    return;
+  }
 
   // Структурные строки политики/локаций: добавить/удалить
   if (e.target.closest('#cdet-political-add-btn')) {
@@ -2078,6 +2134,7 @@ async function _saveCityEdit() {
     const fields = { display, year: q('year').value.trim(), description: q('description').value.trim() };
     for (const [key] of CITY_SECTION_DEFS) {
       if (key === 'political')      fields[key] = _collectPoliticalRows();
+      else if (key === 'factions')  fields[key] = _collectFactions();
       else if (key === 'locations') fields[key] = _collectLocationRows();
       else                          fields[key] = q(key).value.trim();
     }

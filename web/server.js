@@ -702,15 +702,22 @@ app.post('/api/cities', express.json(), async (req, res) => {
 });
 
 // Разбор строк секции «Политический ландшафт» ("Роль: Имя / Имя2") в структурные записи.
-// Секция вперемешку с вольным нарративом (см. _isStructuredCityLine в scripts.js) — строка
-// без короткой "Роль:"-метки в начале не запись, а описание, в «Карту фракций» не идёт.
+// Зеркалит эвристику _isStructuredCityLine из scripts.js: запись — короткая метка (≤24,
+// ≤2 слов, без запятой) + значение, похожее на имя (≤48, без прозаической пунктуации).
+// Иначе строка — нарратив и в «Карту фракций» не идёт (проза с двоеточием тоже).
 function parsePoliticalRecords(lines) {
   return (Array.isArray(lines) ? lines : String(lines || '').split('\n'))
     .map(l => String(l).replace(/^\s*-\s?/, '').trim()).filter(Boolean)
     .map(line => {
       const ci = line.indexOf(':');
       let role = '', rest = line;
-      if (ci > 0 && ci <= 40 && !/[.!?]/.test(line.slice(0, ci))) { role = line.slice(0, ci).trim(); rest = line.slice(ci + 1).trim(); }
+      if (ci > 0 && ci <= 40) {
+        const label = line.slice(0, ci).trim();
+        const value = line.slice(ci + 1).trim();
+        const labelOk = label && label.length <= 24 && label.split(/\s+/).length <= 2 && !label.includes(',');
+        const valueOk = value.length > 0 && value.length <= 48 && !/[.!?,;]/.test(value);
+        if (labelOk && valueOk) { role = label; rest = value; }
+      }
       const [name = '', name2 = ''] = rest.split('/').map(s => s.trim());
       return { role, name, name2 };
     }).filter(r => r.role);

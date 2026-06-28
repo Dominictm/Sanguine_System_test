@@ -1728,7 +1728,8 @@ select.form-control {
   .modp-gen-btn, .modp-close-btn, .modp-del-btn, .chr-delete-btn,
   .chp-create-btn, .btn-create-char, .filter-select, .filter-input,
   .form-control, .ais-input, .ais-select, .chr-form-input,
-  .city-edit-btn, .city-del-btn, .mod-gen-scenario-btn, .nav-item {
+  .city-edit-btn, .city-del-btn, .mod-gen-scenario-btn, .nav-item,
+  .cdet-faction-chip {
     min-height: 44px;
   }
 
@@ -2601,6 +2602,41 @@ a:focus-visible {
 
 .cdet-rel-add-btn:hover {
   background: rgba(184, 134, 11, 0.2);
+}
+
+/* Мультиселект-чипы секции «Фракции»: секты + независимые кланы. */
+.cdet-faction-group-label {
+  font-family: var(--f-heading);
+  font-size: var(--fs-2xs);
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--gold);
+  margin: 12px 0 6px;
+}
+.cdet-faction-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.cdet-faction-chip {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  color: var(--text2);
+  cursor: pointer;
+  font-family: var(--f-body);
+  font-size: var(--fs-sm);
+  padding: 6px 16px;
+  transition: background .15s, border-color .15s, color .15s;
+}
+.cdet-faction-chip:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
+.cdet-faction-chip[aria-pressed="true"] {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  border-color: var(--accent);
+  color: var(--text);
 }
 
 .cdet-upload-row {

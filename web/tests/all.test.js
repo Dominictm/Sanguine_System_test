@@ -14,6 +14,7 @@ const {
   mdExtractLinks, mdStripLinks, mdStripInline, classifyChronicleLink,
   categorizeRel, parseCharacter, parseLocation, parseEvent, parseChronicle,
   parseChronicleParticipants,
+  CITY_SECTIONS, buildCityMd, parseCityMd,
 } = require('../lib/parsers');
 
 // ── Shared fixtures ───────────────────────────────────────────────────────────
@@ -188,6 +189,57 @@ describe('Parsers — unit', () => {
       assert.equal(slugify('Düsseldorf'), 'dusseldorf');
       assert.equal(slugify('Şanlıurfa'), 'sanliurfa');
       assert.equal(slugify('Майкоп'), 'maykop');  // Cyrillic й survives (NFKD must run after the map)
+    });
+  });
+
+  describe('city.md — buildCityMd / parseCityMd', () => {
+    it('round-trip сохраняет display, year, description и все секции', () => {
+      const fields = {
+        display: 'Балмонт', year: '2024',
+        description: 'Тёмный индустриальный город под вечным дождём.',
+        political: 'Камарилья держит центр\nКнязь: Маркус',
+        factions: 'Камарилья\nДжованни',
+        locations: 'Небоскрёб в центре\nЭлизиум: Опера',
+        leitmotif: 'Дождь и преступность',
+        specifics: 'Уточнять сезон',
+        avoid: 'Канонических старейшин',
+        sources: 'Нью-Йорк в Ночи',
+      };
+      const parsed = parseCityMd(buildCityMd(fields));
+      assert.equal(parsed.display, 'Балмонт');
+      assert.equal(parsed.year, '2024');
+      assert.equal(parsed.description, fields.description);
+      for (const [key] of CITY_SECTIONS) assert.equal(parsed.sections[key], fields[key], `секция ${key}`);
+    });
+
+    it('description читается из абзаца между H1 и первой секцией, чистит blockquote', () => {
+      const md = '# Балмонт, 2024 — сеттинг города\n\n> Описание города\n> вторая строка\n\n## Политический ландшафт\n- что-то\n';
+      assert.equal(parseCityMd(md).description, 'Описание города\nвторая строка');
+    });
+
+    it('пустые поля → плейсхолдеры, description дефолтный', () => {
+      const md = buildCityMd({ display: 'X', year: '2020' });
+      const parsed = parseCityMd(md);
+      assert.ok(parsed.description.length > 0, 'дефолтное описание не пустое');
+      assert.equal(parsed.sections.factions, '');  // «- …» отфильтровывается в пустую строку
+    });
+
+    it('факции-секция канонична (между political и locations)', () => {
+      const keys = CITY_SECTIONS.map(([k]) => k);
+      assert.ok(keys.includes('factions'), 'есть ключ factions');
+      assert.equal(keys.indexOf('factions'), keys.indexOf('political') + 1);
+      assert.equal(keys.indexOf('factions'), keys.indexOf('locations') - 1);
+    });
+
+    it('browser parity — public/scripts.js CITY_SECTION_DEFS зеркалит CITY_SECTIONS', () => {
+      const src = require('fs').readFileSync(
+        path.join(__dirname, '../public/scripts.js'), 'utf-8');
+      const m = src.match(/const CITY_SECTION_DEFS\s*=\s*(\[[\s\S]*?\n\]);/);
+      assert.ok(m, 'CITY_SECTION_DEFS literal not found in scripts.js');
+      // eslint-disable-next-line no-new-func
+      const browserDefs = (new Function(`return (${m[1]})`))();
+      assert.deepEqual(browserDefs, CITY_SECTIONS,
+        'browser CITY_SECTION_DEFS диверговал от CITY_SECTIONS — держите в синхроне');
     });
   });
 
