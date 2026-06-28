@@ -98,6 +98,93 @@ function parseCityMd(raw) {
   return { display, year, description, sections };
 }
 
+// Полный каркас нового города — ЕДИНЫЙ источник для POST /api/cities и tools/new_city.js.
+// Чистая функция: только строит данные (содержимое файлов + список пустых папок под
+// .gitkeep). Сам ввод-вывод делают вызывающие (атомарная запись в сервере, синхронная
+// в CLI). До выноса оба пути хардкодили эти шаблоны по отдельности и успели разойтись
+// (в visitors.md) — теперь источник один. Принимает те же поля, что buildCityMd, плюс
+// districts (CSV-строка или массив).
+function cityScaffold(fields = {}) {
+  const display   = String(fields.display || '').trim() || 'Город';
+  const year      = String(fields.year || '').trim() || '20XX';
+  const districts = (Array.isArray(fields.districts)
+    ? fields.districts
+    : String(fields.districts || '').split(','))
+    .map(d => String(d).trim()).filter(Boolean);
+
+  const files = {
+    'city.md': buildCityMd(fields),
+    'archive/events.md':
+`# 📖 Хроника «${display}» — События
+
+> 🔗 Все персонажи — [characters_index.md](characters_index.md)
+> 🔗 Протокол записей — [chronicle.md](../../../system/rules/chronicle.md)
+
+---
+
+## 🌍 Состояние мира
+
+> Обновляется после каждой сессии.
+> Последнее обновление: **—**.
+
+---
+
+## 📋 Сводная хроника событий
+
+> Агрегат из \`chronicles/<хроника>/events.md\`. Индекс генерируется \`tools/build_city_events.js\` — вручную не править.
+
+<!-- AUTO:events-index -->
+<!-- /AUTO:events-index -->
+`,
+    'archive/political_state.md':
+`# Карта фракций — ${display}, ${year}
+
+> Шаблон. Кто контролирует домен, иерархия, ключевые NPC, конфликты.
+
+| Должность | Персонаж | Клан | Примечание |
+|---|---|---|---|
+|  |  |  |  |
+`,
+    'archive/characters_index.md':
+`# Персонажи — ${display}
+
+> Сводник. Добавляется при создании карточек (по \`system/rules/npcs_city.md\`).
+`,
+    'archive/visitors.md':
+`# Гости из других городов — ${display}
+
+> Персонажи с \`Родной город\` ≠ ${display}, присутствующие здесь. Только ссылки —
+> карточка-источник живёт в родном городе (один источник истины).
+
+| Персонаж | Родной город | Появление |
+|---|---|---|
+|  |  |  |
+`,
+  };
+
+  const keepDirs = [
+    ...['vampires', 'fairies', 'mortals', 'werewolves', 'mages', 'hunters'].map(l => `characters/${l}`),
+    'chronicles',
+    'rules',
+  ];
+  if (districts.length) {
+    // Дедуп по итоговому слагу: два района с одинаковым именем (или дающие один слаг)
+    // не создают дублирующих папок. Оставшиеся нумеруются подряд district_01, 02…
+    const seen = new Set();
+    districts.forEach((d, i) => {
+      const dslug = slugify(d) || `rayon_${String(i + 1).padStart(2, '0')}`;
+      if (seen.has(dslug)) return;
+      seen.add(dslug);
+      keepDirs.push(`locations/district_${String(seen.size).padStart(2, '0')}/${dslug}`);
+    });
+    if (!seen.size) keepDirs.push('locations');
+  } else {
+    keepDirs.push('locations');
+  }
+
+  return { files, keepDirs };
+}
+
 // Thread status display strings keyed by slug
 const THREAD_STATUS = {
   active:     '🔴 Активна',
@@ -645,6 +732,7 @@ module.exports = {
   CITY_SECTIONS,
   buildCityMd,
   parseCityMd,
+  cityScaffold,
   parseDiary,
   readPrompt,
   writePrompt,

@@ -7,7 +7,7 @@ const { spawn } = require('child_process');
 const Anthropic = require('@anthropic-ai/sdk');
 const {
   RU_MONTHS_NOM, THREAD_STATUS, slugify, parseDiary, readPrompt, writePrompt,
-  buildCityMd, parseCityMd,
+  buildCityMd, parseCityMd, cityScaffold,
   periodLabel, threadStatusKey, parseThreadsContent,
   mdExtractLinks, mdStripLinks, mdStripInline, classifyChronicleLink,
   categorizeRel, parseCharacter, parseLocation, parseChronicleLocation,
@@ -654,43 +654,42 @@ app.post('/api/cities', express.json(), async (req, res) => {
     if (!display) return res.status(400).json({ error: 'Укажи название города' });
     const slug = slugify(display);
     if (!slug) return res.status(400).json({ error: 'Не удалось сформировать слаг из названия' });
+    // Год обязателен (как и на фронте) и должен быть 3–4 цифрами.
+    const year = String(b.year || '').trim();
+    if (!year) return res.status(400).json({ error: 'Укажи год' });
+    if (!/^\d{3,4}$/.test(year)) return res.status(400).json({ error: 'Год — это 3–4 цифры (например 2010)' });
     if ((await listCities()).includes(slug))
       return res.status(409).json({ error: `Город «${slug}» уже существует` });
 
     const base = cityDir(slug);
-    const year = String(b.year || '').trim() || '20XX';
-    const cityMd = buildCityMd({
-      display, year,
-      political: b.political, locations: b.locations, leitmotif: b.leitmotif,
-      specifics: b.specifics, avoid: b.avoid, sources: b.sources,
-    });
 
     const W    = (rel, txt) => fs.mkdir(path.dirname(path.join(base, rel)), { recursive: true })
       .then(() => writeFileAtomic(path.join(base, rel), txt, 'utf-8'));
     const KEEP = rel => fs.mkdir(path.join(base, rel), { recursive: true })
       .then(() => writeFileAtomic(path.join(base, rel, '.gitkeep'), ''));
 
-    await W('city.md', cityMd);
-    await W('archive/events.md',
-      `# 📖 Хроника «${display}» — События\n\n> 🔗 Все персонажи — [characters_index.md](characters_index.md)\n> 🔗 Протокол записей — [chronicle.md](../../../system/rules/chronicle.md)\n\n---\n\n## 🌍 Состояние мира\n\n> Обновляется после каждой сессии.\n> Последнее обновление: **—**.\n\n---\n\n## 📋 Сводная хроника событий\n\n> Агрегат из \`chronicles/<хроника>/events.md\`. Индекс генерируется \`tools/build_city_events.js\` — вручную не править.\n\n<!-- AUTO:events-index -->\n<!-- /AUTO:events-index -->\n`);
-    await W('archive/political_state.md',
-      `# Карта фракций — ${display}, ${year}\n\n> Шаблон. Кто контролирует домен, иерархия, ключевые NPC, конфликты.\n\n| Должность | Персонаж | Клан | Примечание |\n|---|---|---|---|\n|  |  |  |  |\n`);
-    await W('archive/characters_index.md',
-      `# Персонажи — ${display}\n\n> Сводник. Добавляется при создании карточек (по \`system/rules/npcs_city.md\`).\n`);
-    await W('archive/visitors.md',
-      `# Гости из других городов — ${display}\n\n> Персонажи с \`Родной город\` ≠ ${display}, присутствующие здесь.\n\n| Персонаж | Родной город | Появление |\n|---|---|---|\n|  |  |  |\n`);
-
-    for (const lin of ['vampires', 'fairies', 'mortals', 'werewolves', 'mages', 'hunters']) await KEEP(`characters/${lin}`);
-    await KEEP('chronicles');
-    await KEEP('rules');
-
-    const districts = String(b.districts || '').split(',').map(d => d.trim()).filter(Boolean);
-    if (districts.length) {
-      for (let i = 0; i < districts.length; i++) {
-        const num = String(i + 1).padStart(2, '0');
-        await KEEP(`locations/district_${num}/${slugify(districts[i]) || `rayon_${num}`}`);
+    // Единый каркас (тот же, что у tools/new_city.js) — см. cityScaffold в web/lib/parsers.js.
+    const { files, keepDirs } = cityScaffold({
+      display, year,
+      description: b.description, factions: b.factions,
+      political: b.political, locations: b.locations, leitmotif: b.leitmotif,
+      specifics: b.specifics, avoid: b.avoid, sources: b.sources,
+      districts: b.districts,
+    });
+    try {
+      for (const [rel, txt] of Object.entries(files)) await W(rel, txt);
+      for (const rel of keepDirs) await KEEP(rel);
+      // Отразить указанный политический состав в archive/political_state.md «Карте фракций»
+      // сразу при создании — как это делает PUT при редактировании.
+      if (typeof b.political === 'string' && b.political.trim()) {
+        await syncPoliticalStateTable(slug, parsePoliticalRecords(b.political.split('\n')), []).catch(() => {});
       }
-    } else await KEEP('locations');
+    } catch (writeErr) {
+      // Откат: слага не было до запроса (проверка выше), папка свежая — сносим целиком,
+      // чтобы не оставить полу-созданный «битый» город в списке.
+      await fs.rm(base, { recursive: true, force: true }).catch(() => {});
+      throw writeErr;
+    }
 
     delete _cache[slug];
     console.log(`[create-city] ${slug} («${display}», ${year})`);

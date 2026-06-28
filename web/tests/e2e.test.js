@@ -151,11 +151,27 @@ describe('E2E — сквозной цикл хроники', () => {
 
     it('POST /api/cities создаёт город из полей', async () => {
       const r = await post('/api/cities', { name: 'Крудтест', year: '2012',
-        political: 'Камарилья правит\nАнархи на окраинах', locations: 'Элизиум — Ратуша' });
+        description: 'Сырой портовый город под вечной моросью.',
+        political: 'Камарилья правит\nКнязь: Тестус', factions: 'Камарилья\nДжованни',
+        locations: 'Элизиум — Ратуша' });
       assert.strictEqual(r.status, 200, `HTTP ${r.status}`);
       assert.ok(r.json?.ok, `ok=false: ${JSON.stringify(r.json)}`);
       assert.strictEqual(r.json.slug, slugify('Крудтест'));
       assert.ok(fileExists(`cities/${r.json.slug}/city.md`));
+    });
+
+    it('POST пробрасывает description и factions в city.md', async () => {
+      const slug = slugify('Крудтест');
+      const d = await get(`/api/cities/${slug}/detail`);
+      assert.match(d.json.parsed.description, /Сырой портовый город/);
+      assert.match(d.json.parsed.sections.factions, /Камарилья/);
+      assert.match(d.json.parsed.sections.factions, /Джованни/);
+    });
+
+    it('POST синхронизирует «Карту фракций» (political_state.md) при создании', () => {
+      const ps = readFile(`cities/${slugify('Крудтест')}/archive/political_state.md`);
+      assert.match(ps, /Князь/, 'роль Князь не попала в Карту фракций');
+      assert.match(ps, /Тестус/, 'персонаж не попал в Карту фракций');
     });
 
     it('POST с уже существующим слагом → 409', async () => {
@@ -165,6 +181,16 @@ describe('E2E — сквозной цикл хроники', () => {
 
     it('POST без названия → 400', async () => {
       const r = await post('/api/cities', { year: '2012' });
+      assert.strictEqual(r.status, 400);
+    });
+
+    it('POST без года → 400', async () => {
+      const r = await post('/api/cities', { name: 'Безгода' });
+      assert.strictEqual(r.status, 400);
+    });
+
+    it('POST с нечисловым годом → 400', async () => {
+      const r = await post('/api/cities', { name: 'Кривогод', year: 'abcd' });
       assert.strictEqual(r.status, 400);
     });
 

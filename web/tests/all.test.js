@@ -14,7 +14,7 @@ const {
   mdExtractLinks, mdStripLinks, mdStripInline, classifyChronicleLink,
   categorizeRel, parseCharacter, parseLocation, parseEvent, parseChronicle,
   parseChronicleParticipants,
-  CITY_SECTIONS, buildCityMd, parseCityMd,
+  CITY_SECTIONS, buildCityMd, parseCityMd, cityScaffold,
 } = require('../lib/parsers');
 
 // ── Shared fixtures ───────────────────────────────────────────────────────────
@@ -240,6 +240,63 @@ describe('Parsers — unit', () => {
       const browserDefs = (new Function(`return (${m[1]})`))();
       assert.deepEqual(browserDefs, CITY_SECTIONS,
         'browser CITY_SECTION_DEFS диверговал от CITY_SECTIONS — держите в синхроне');
+    });
+  });
+
+  describe('cityScaffold — единый каркас города', () => {
+    it('содержит все обязательные файлы каркаса', () => {
+      const { files } = cityScaffold({ display: 'Берлин', year: '2010' });
+      const keys = Object.keys(files);
+      for (const f of ['city.md', 'archive/events.md', 'archive/political_state.md',
+        'archive/characters_index.md', 'archive/visitors.md']) {
+        assert.ok(keys.includes(f), `нет файла ${f}`);
+        assert.ok(files[f].length > 0, `файл ${f} пуст`);
+      }
+    });
+
+    it('интерполирует display/year в шапки файлов', () => {
+      const { files } = cityScaffold({ display: 'Берлин', year: '2010' });
+      assert.match(files['city.md'], /^# Берлин, 2010 —/);
+      assert.match(files['archive/political_state.md'], /Карта фракций — Берлин, 2010/);
+      assert.match(files['archive/events.md'], /Хроника «Берлин»/);
+      assert.match(files['archive/visitors.md'], /Гости из других городов — Берлин/);
+    });
+
+    it('keepDirs: 6 линеек персонажей + chronicles + rules + locations (без районов)', () => {
+      const { keepDirs } = cityScaffold({ display: 'X', year: '2020' });
+      for (const l of ['vampires', 'fairies', 'mortals', 'werewolves', 'mages', 'hunters'])
+        assert.ok(keepDirs.includes(`characters/${l}`), `нет characters/${l}`);
+      assert.ok(keepDirs.includes('chronicles'));
+      assert.ok(keepDirs.includes('rules'));
+      assert.ok(keepDirs.includes('locations'));
+      assert.ok(!keepDirs.some(d => d.startsWith('locations/district_')), 'без районов не должно быть district_*');
+    });
+
+    it('районы (CSV или массив) → locations/district_NN/<slug>', () => {
+      const fromCsv = cityScaffold({ display: 'X', year: '2020', districts: 'Митте, Кройцберг' }).keepDirs;
+      assert.ok(fromCsv.includes('locations/district_01/mitte'));
+      assert.ok(fromCsv.includes('locations/district_02/kroytsberg'));
+      assert.ok(!fromCsv.includes('locations'), 'при наличии районов общей папки locations нет');
+      const fromArr = cityScaffold({ display: 'X', year: '2020', districts: ['Митте'] }).keepDirs;
+      assert.ok(fromArr.includes('locations/district_01/mitte'));
+    });
+
+    it('дедуп районов: одинаковый слаг схлопывается, нумерация подряд', () => {
+      const { keepDirs } = cityScaffold({ display: 'X', year: '2020', districts: 'Митте, Митте, Кройцберг' });
+      const dist = keepDirs.filter(d => d.startsWith('locations/district_'));
+      assert.deepEqual(dist, ['locations/district_01/mitte', 'locations/district_02/kroytsberg'],
+        'дубль «Митте» должен быть схлопнут, районы пронумерованы подряд');
+    });
+
+    it('source-guard: POST /api/cities и new_city.js вызывают cityScaffold (без хардкода)', () => {
+      const fs = require('fs');
+      const server = fs.readFileSync(path.join(__dirname, '../server.js'), 'utf-8');
+      const cli    = fs.readFileSync(path.join(__dirname, '../../tools/new_city.js'), 'utf-8');
+      assert.match(server, /cityScaffold\(/, 'server.js должен звать cityScaffold');
+      assert.match(cli,    /cityScaffold\(/, 'new_city.js должен звать cityScaffold');
+      // Старые хардкод-литералы каркаса не должны вернуться в вызывающие файлы.
+      assert.doesNotMatch(server, /Сводная хроника событий/, 'каркас events.md не должен дублироваться в server.js');
+      assert.doesNotMatch(cli,    /Сводная хроника событий/, 'каркас events.md не должен дублироваться в new_city.js');
     });
   });
 

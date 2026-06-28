@@ -1464,16 +1464,30 @@ cityNameInput.addEventListener('input', () => {
   citySlugPreview.textContent = slugifyJS(cityNameInput.value.trim()) || '—';
 });
 
+// Редактор «Фракции» в форме создания — тот же компонент, что в модалке редактирования
+// (единый источник чипов/полей). Инжектится лениво в loadCitiesGrid() — там все
+// const-наборы (CITY_SECTS и т.п.) уже инициализированы.
+const _cityFactionsCreateHost = document.getElementById('city-factions-editor');
+
 document.getElementById('btn-new-city').addEventListener('click', async () => {
   const city = cityNameInput.value.trim();
   const year = document.getElementById('city-year').value.trim();
   if (!city) { alert('Укажите название города'); return; }
   if (!year) { alert('Укажите год'); return; }
+  if (!/^\d{3,4}$/.test(year)) { alert('Год — это 3–4 цифры (например 2010)'); return; }
+  // Районы, дающие одинаковую папку (один слаг), будут схлопнуты в один — предупреждаем.
+  const districtNames = document.getElementById('city-districts').value.split(',').map(s => s.trim()).filter(Boolean);
+  const dSlugs = districtNames.map(d => slugifyJS(d) || d.toLowerCase());
+  const dupSlugs = [...new Set(dSlugs.filter((s, i) => dSlugs.indexOf(s) !== i))];
+  if (dupSlugs.length &&
+      !confirm(`Районы дают одинаковую папку (${dupSlugs.join(', ')}) — дубликаты будут пропущены. Продолжить?`)) return;
   const btn = document.getElementById('btn-new-city');
   const out = document.getElementById('out-new-city');
   const payload = {
     name: city, year,
+    description: document.getElementById('city-description').value.trim(),
     political:  document.getElementById('city-political').value.trim(),
+    factions:   _cityFactionsCreateHost ? _collectFactions(_cityFactionsCreateHost) : '',
     locations:  document.getElementById('city-locations').value.trim(),
     leitmotif:  document.getElementById('city-leitmotif').value.trim(),
     specifics:  document.getElementById('city-specifics').value.trim(),
@@ -1693,6 +1707,11 @@ function renderCityCard(c) {
 }
 
 async function loadCitiesGrid() {
+  // Ленивый инжект редактора «Фракции» в форму создания (один раз).
+  if (_cityFactionsCreateHost && !_cityFactionsCreateHost.dataset.ready) {
+    _cityFactionsCreateHost.innerHTML = _cityFactionsEditorHtml({ factions: '' });
+    _cityFactionsCreateHost.dataset.ready = '1';
+  }
   const el = document.getElementById('cities-grid');
   if (!el) return;
   el.innerHTML = SPINNER;
@@ -1911,9 +1930,11 @@ function _cityFactionsEditorHtml(sec) {
         placeholder="По строке на фракцию вне списка (напр. Инконню)…">${escHtml(other.join('\n'))}</textarea>
     </div>`;
 }
-function _collectFactions() {
-  const chips = Array.from(document.querySelectorAll('.cdet-faction-chip[aria-pressed="true"]')).map(b => b.dataset.faction);
-  const other = (document.querySelector('[data-city-field="factions-other"]')?.value || '')
+// root ограничивает сбор одной формой — модалка редактирования и форма создания
+// держат свои наборы чипов одновременно, без пересечения селекторов.
+function _collectFactions(root = document) {
+  const chips = Array.from(root.querySelectorAll('.cdet-faction-chip[aria-pressed="true"]')).map(b => b.dataset.faction);
+  const other = (root.querySelector('[data-city-field="factions-other"]')?.value || '')
     .split('\n').map(l => l.trim()).filter(Boolean);
   return [...chips, ...other].join('\n');
 }
@@ -2060,16 +2081,18 @@ function _renderCityEdit() {
     </div>`;
 }
 
-document.getElementById('city-detail-content').addEventListener('click', async e => {
-  const sw = e.target.closest('[data-switch-city]');
-  if (sw) { location.search = 'city=' + encodeURIComponent(sw.dataset.switchCity); return; }
-
-  // Мультиселект-чип фракции: переключить выбранность (aria-pressed = состояние).
+// Мультиселект-чип фракции (aria-pressed = состояние) — делегировано на document,
+// чтобы работало и в модалке редактирования, и в форме создания города.
+document.addEventListener('click', e => {
   const factionChip = e.target.closest('.cdet-faction-chip');
   if (factionChip) {
     factionChip.setAttribute('aria-pressed', factionChip.getAttribute('aria-pressed') === 'true' ? 'false' : 'true');
-    return;
   }
+});
+
+document.getElementById('city-detail-content').addEventListener('click', async e => {
+  const sw = e.target.closest('[data-switch-city]');
+  if (sw) { location.search = 'city=' + encodeURIComponent(sw.dataset.switchCity); return; }
 
   // Структурные строки политики/локаций: добавить/удалить
   if (e.target.closest('#cdet-political-add-btn')) {
@@ -2134,7 +2157,7 @@ async function _saveCityEdit() {
     const fields = { display, year: q('year').value.trim(), description: q('description').value.trim() };
     for (const [key] of CITY_SECTION_DEFS) {
       if (key === 'political')      fields[key] = _collectPoliticalRows();
-      else if (key === 'factions')  fields[key] = _collectFactions();
+      else if (key === 'factions')  fields[key] = _collectFactions(document.getElementById('city-detail-content'));
       else if (key === 'locations') fields[key] = _collectLocationRows();
       else                          fields[key] = q(key).value.trim();
     }
