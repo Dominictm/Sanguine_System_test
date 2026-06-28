@@ -47,22 +47,24 @@ function _citySection(txt) {
   return lines.length ? lines.map(l => l.startsWith('-') ? l : `- ${l}`).join('\n') : '- …';
 }
 
-// Build city.md from form fields: { display, year, political, locations, leitmotif, specifics, avoid, sources }
+const CITY_DEFAULT_DESCRIPTION = 'Опиши здесь свой домен — то, с чем сверяется Рассказчик перед сценой (см. CLAUDE.md → «Активный город»).';
+
+// Build city.md from form fields: { display, year, description, political, locations, leitmotif, specifics, avoid, sources }
 function buildCityMd(fields = {}) {
-  const display = String(fields.display || '').trim() || 'Город';
-  const year    = String(fields.year || '').trim() || '20XX';
+  const display     = String(fields.display || '').trim() || 'Город';
+  const year        = String(fields.year || '').trim() || '20XX';
+  const description = String(fields.description || '').trim() || CITY_DEFAULT_DESCRIPTION;
   const body = CITY_SECTIONS.map(([key, heading]) => `## ${heading}\n${_citySection(fields[key])}`).join('\n\n');
   return `# ${display}, ${year} — сеттинг города
 
-> Опиши здесь свой домен — то, с чем сверяется Рассказчик перед сценой
-> (см. CLAUDE.md → «Активный город»).
+${description}
 
 ${body}
 `;
 }
 
-// Parse city.md back into { display, year, sections:{...} } for the edit form and for
-// robust display/year labels (no longer dependent on the exact H1 suffix matching).
+// Parse city.md back into { display, year, description, sections:{...} } for the edit form
+// and for robust display/year labels (no longer dependent on the exact H1 suffix matching).
 function parseCityMd(raw) {
   const text = String(raw == null ? '' : raw).replace(/^﻿/, '').replace(/\r\n/g, '\n');
   let display = '', year = '';
@@ -72,6 +74,14 @@ function parseCityMd(raw) {
     const m2 = h1.match(/^(.*?),\s*([^,]+?)\s*$/);
     if (m2) { display = m2[1].trim(); year = m2[2].trim(); }
     else display = h1;
+  }
+  // Текст между заголовком H1 и первой секцией "##" — общее описание/сеттинг города.
+  let description = '';
+  if (hm) {
+    const afterH1 = text.slice(hm.index + hm[0].length);
+    const firstHeadingIdx = afterH1.search(/^##\s+/m);
+    const introRaw = firstHeadingIdx === -1 ? afterH1 : afterH1.slice(0, firstHeadingIdx);
+    description = introRaw.split('\n').map(l => l.replace(/^>\s?/, '')).join('\n').trim();
   }
   const headingToKey = new Map(CITY_SECTIONS.map(([k, h]) => [h.toLowerCase(), k]));
   const sections = {};
@@ -84,7 +94,7 @@ function parseCityMd(raw) {
     sections[key] = bodyTxt.split('\n').map(l => l.replace(/^\s*-\s?/, '').trim())
       .filter(l => l && l !== '…').join('\n');
   }
-  return { display, year, sections };
+  return { display, year, description, sections };
 }
 
 // Thread status display strings keyed by slug

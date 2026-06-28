@@ -1744,9 +1744,26 @@ let _cityEditChars = [];  // имена персонажей города — д
 let _cityEditLocs  = [];  // названия локаций города — для datalist
 let _polRowSeq = 0;
 
-// city.md-строки секции ↔ структурные записи (round-trip с buildCityMd/parseCityMd).
-function _parsePoliticalLines(text) {
-  return String(text || '').split('\n').map(l => l.replace(/^\s*-\s?/, '').trim()).filter(Boolean).map(line => {
+// Секция «Политический ландшафт»/«Ключевые локации» может содержать вольный нарратив
+// (как сейчас у всех городов — цельный абзац-описание) и структурные записи вида
+// "Должность: Имя" / "Тип: Название". Раньше всё это разбиралось в одни и те же строки
+// формы, и нарратив без двоеточия попадал в поле «Имя» структурного редактора — отсюда
+// и путаница. Делим по строке: похожа на короткую метку с двоеточием → запись,
+// иначе → нарратив (он не теряется, просто не лезет в структурные поля).
+function _isStructuredCityLine(line) {
+  const ci = line.indexOf(':');
+  return ci > 0 && ci <= 40 && !/[.!?]/.test(line.slice(0, ci));
+}
+function _splitCitySectionRecords(text) {
+  const lines = String(text || '').split('\n').map(l => l.replace(/^\s*-\s?/, '').trim()).filter(Boolean);
+  const narrative = [], recordLines = [];
+  for (const line of lines) (_isStructuredCityLine(line) ? recordLines : narrative).push(line);
+  return { narrative: narrative.join('\n'), recordLines };
+}
+
+// city.md-строки записей ↔ структурные записи (round-trip с buildCityMd/parseCityMd).
+function _parsePoliticalLines(lines) {
+  return lines.map(line => {
     const ci = line.indexOf(':');
     let role = '', rest = line;
     if (ci !== -1) { role = line.slice(0, ci).trim(); rest = line.slice(ci + 1).trim(); }
@@ -1758,8 +1775,8 @@ function _politicalRowToLine(r) {
   const np = r.name2 ? (r.name ? `${r.name} / ${r.name2}` : r.name2) : r.name;
   return r.role ? `${r.role}: ${np}` : np;
 }
-function _parseLocationLines(text) {
-  return String(text || '').split('\n').map(l => l.replace(/^\s*-\s?/, '').trim()).filter(Boolean).map(line => {
+function _parseLocationLines(lines) {
+  return lines.map(line => {
     const ci = line.indexOf(':');
     if (ci === -1) return { type: '', name: line };
     return { type: line.slice(0, ci).trim(), name: line.slice(ci + 1).trim() };
@@ -1811,26 +1828,41 @@ function _locRowHtml(type = '', name = '', locationNames = _cityEditLocs) {
   </div>`;
 }
 
-// HTML-блоки структурных секций для формы _renderCityEdit.
+// HTML-блоки структурных секций для формы _renderCityEdit. Нарратив и структурные
+// записи — два отдельных поля, чтобы не путались при заполнении.
 function _cityPolEditorHtml(sec) {
-  const records = _parsePoliticalLines(sec.political || '');
+  const { narrative, recordLines } = _splitCitySectionRecords(sec.political || '');
+  const records = _parsePoliticalLines(recordLines);
   const rows = records.length
     ? records.map(r => _polRowHtml(r.role, r.name, r.name2, _polAvailableNames(_cityEditChars, records, r))).join('')
     : _polRowHtml('', '', '', _cityEditChars);
   return `
     <div class="form-group">
       <label class="form-label">Политический ландшафт</label>
+      <div class="cdet-rels-hint">Общее описание расклада сил — атмосфера, фракции, конфликты.</div>
+      <textarea class="form-control" data-city-field="political-narrative" rows="3"
+        placeholder="По строке на пункт…">${escHtml(narrative)}</textarea>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Держатели ключевых должностей</label>
       <div class="cdet-rels-hint">Должность — из списка или своя. Имя (и второе, если нужно) — выбери из персонажей или впиши своё. Занятые в других строках персонажи не предлагаются.</div>
       <div id="cdet-political-rows">${rows}</div>
       <button class="cdet-rel-add-btn" id="cdet-political-add-btn" type="button">+ Добавить запись</button>
     </div>`;
 }
 function _cityLocEditorHtml(sec) {
-  const records = _parseLocationLines(sec.locations || '');
+  const { narrative, recordLines } = _splitCitySectionRecords(sec.locations || '');
+  const records = _parseLocationLines(recordLines);
   const rows = records.length ? records.map(r => _locRowHtml(r.type, r.name)).join('') : _locRowHtml();
   return `
     <div class="form-group">
       <label class="form-label">Ключевые локации</label>
+      <div class="cdet-rels-hint">Общее описание ключевых локаций города.</div>
+      <textarea class="form-control" data-city-field="locations-narrative" rows="3"
+        placeholder="По строке на пункт…">${escHtml(narrative)}</textarea>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Отмеченные локации</label>
       <div class="cdet-rels-hint">Тип — из списка или свой. Название — из созданных локаций или своё.</div>
       <div id="cdet-location-rows">${rows}</div>
       <button class="cdet-rel-add-btn" id="cdet-location-add-btn" type="button">+ Добавить запись</button>
@@ -1838,25 +1870,31 @@ function _cityLocEditorHtml(sec) {
     </div>`;
 }
 
-// Сбор структурных строк обратно в текст секции city.md (буллет на запись).
+// Сбор нарратива + структурных строк обратно в текст секции city.md (буллет на пункт/запись).
 function _collectPoliticalRows() {
-  return Array.from(document.querySelectorAll('#cdet-political-rows .cdet-pol-row')).map(row => {
+  const narrative = document.querySelector('[data-city-field="political-narrative"]')?.value.trim() || '';
+  const narrativeLines = narrative ? narrative.split('\n').map(l => l.trim()).filter(Boolean) : [];
+  const recordLines = Array.from(document.querySelectorAll('#cdet-political-rows .cdet-pol-row')).map(row => {
     const sel    = row.querySelector('.cdet-pol-role-sel');
     const custom = row.querySelector('.cdet-pol-role-custom');
     const role   = sel?.value === 'other' ? (custom?.value.trim() || '') : (sel?.value || '');
     const name   = row.querySelector('.cdet-pol-name-inp')?.value.trim() || '';
     const name2  = row.querySelector('.cdet-pol-name2-inp')?.value.trim() || '';
     return { role, name, name2 };
-  }).filter(r => r.role || r.name || r.name2).map(_politicalRowToLine).join('\n');
+  }).filter(r => r.role || r.name || r.name2).map(_politicalRowToLine);
+  return [...narrativeLines, ...recordLines].join('\n');
 }
 function _collectLocationRows() {
-  return Array.from(document.querySelectorAll('#cdet-location-rows .cdet-loc-row')).map(row => {
+  const narrative = document.querySelector('[data-city-field="locations-narrative"]')?.value.trim() || '';
+  const narrativeLines = narrative ? narrative.split('\n').map(l => l.trim()).filter(Boolean) : [];
+  const recordLines = Array.from(document.querySelectorAll('#cdet-location-rows .cdet-loc-row')).map(row => {
     const sel    = row.querySelector('.cdet-loc-type-sel');
     const custom = row.querySelector('.cdet-loc-type-custom');
     const type   = sel?.value === 'other' ? (custom?.value.trim() || '') : (sel?.value || '');
     const name   = row.querySelector('.cdet-loc-name-inp')?.value.trim() || '';
     return { type, name };
-  }).filter(r => r.type || r.name).map(_locationRowToLine).join('\n');
+  }).filter(r => r.type || r.name).map(_locationRowToLine);
+  return [...narrativeLines, ...recordLines].join('\n');
 }
 
 async function openCityDetail(slug) {
@@ -1953,6 +1991,11 @@ function _renderCityEdit() {
               <input class="form-control" data-city-field="year" type="text" maxlength="9" value="${escAttr((d.parsed && d.parsed.year) || '')}">
             </div>
           </div>
+          <div class="form-group">
+            <label class="form-label">Сеттинг</label>
+            <textarea class="form-control" data-city-field="description" rows="3"
+              placeholder="Общее описание города — эпоха, тон, в рамках какого канона разворачиваются сцены…">${escHtml((d.parsed && d.parsed.description) || '')}</textarea>
+          </div>
           ${fieldRows}
         </div>
         <div class="cdet-panel city-edit-panel ${custom ? 'active' : ''}" data-city-pane="markdown">
@@ -2032,7 +2075,7 @@ async function _saveCityEdit() {
   } else {
     const display = q('display').value.trim();
     if (!display) { if (statusEl) statusEl.textContent = '⚠ Укажите название'; return; }
-    const fields = { display, year: q('year').value.trim() };
+    const fields = { display, year: q('year').value.trim(), description: q('description').value.trim() };
     for (const [key] of CITY_SECTION_DEFS) {
       if (key === 'political')      fields[key] = _collectPoliticalRows();
       else if (key === 'locations') fields[key] = _collectLocationRows();

@@ -702,16 +702,18 @@ app.post('/api/cities', express.json(), async (req, res) => {
 });
 
 // Разбор строк секции «Политический ландшафт» ("Роль: Имя / Имя2") в структурные записи.
+// Секция вперемешку с вольным нарративом (см. _isStructuredCityLine в scripts.js) — строка
+// без короткой "Роль:"-метки в начале не запись, а описание, в «Карту фракций» не идёт.
 function parsePoliticalRecords(lines) {
   return (Array.isArray(lines) ? lines : String(lines || '').split('\n'))
     .map(l => String(l).replace(/^\s*-\s?/, '').trim()).filter(Boolean)
     .map(line => {
       const ci = line.indexOf(':');
       let role = '', rest = line;
-      if (ci !== -1) { role = line.slice(0, ci).trim(); rest = line.slice(ci + 1).trim(); }
+      if (ci > 0 && ci <= 40 && !/[.!?]/.test(line.slice(0, ci))) { role = line.slice(0, ci).trim(); rest = line.slice(ci + 1).trim(); }
       const [name = '', name2 = ''] = rest.split('/').map(s => s.trim());
       return { role, name, name2 };
-    }).filter(r => r.role || r.name || r.name2);
+    }).filter(r => r.role);
 }
 function _parseMdTableRow(r) { return r.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map(c => c.trim()); }
 
