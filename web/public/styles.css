@@ -984,7 +984,7 @@ body {
 }
 
 .char-card.has-art .char-clan {
-  margin-bottom: 8px;
+  margin-bottom: 36px;
 }
 
 
@@ -1001,13 +1001,23 @@ body {
   font-size: var(--fs-xl);
   color: var(--text2);
   font-style: italic;
-  margin-bottom: 10px;
+  margin-bottom: 40px;
 }
 
+/* Pinned to the bottom-left, mirroring .char-status-row on the right, so the two
+   badge rows always share one baseline — independent of how many lines the name/
+   clan above happen to wrap to (in-flow, it used to drift per-card and pick up an
+   unwanted flex-stretch height from being the last column-flex item). */
 .char-badges {
+  position: absolute;
+  bottom: 10px;
+  left: 18px;
+  z-index: 3;
   display: flex;
+  align-items: center;
   gap: 6px;
   flex-wrap: wrap;
+  margin: 0;
 }
 
 .char-status-row {
@@ -1669,30 +1679,6 @@ select.form-control {
 
   .filter-bar {
     gap: 10px;
-  }
-}
-
-/* Tablets in portrait (iPad classic/mini 768px, iPad Air 820px) and large
-   phones: stack the detail modals (image over content) so the fixed image
-   column never crushes the text column down to an unreadable sliver. */
-@media (max-width: 820px) {
-
-  #char-detail-content,
-  #loc-detail-content {
-    flex-direction: column;
-  }
-
-  .cdet-portrait-col,
-  .locdet-img-col {
-    width: 100%;
-    min-width: 0;
-    height: 200px;
-    flex-shrink: 0;
-  }
-
-  .cdet-info-col {
-    border-left: none;
-    border-top: 1px solid var(--border);
   }
 }
 
@@ -4816,6 +4802,30 @@ a:focus-visible {
   transform: translateX(4px);
 }
 
+.diary-item-del-btn {
+  flex-shrink: 0;
+  background: rgba(0, 0, 0, .35);
+  border: 1px solid rgba(139, 0, 0, .55);
+  color: rgba(220, 100, 100, .9);
+  width: 26px;
+  height: 26px;
+  border-radius: 2px;
+  cursor: pointer;
+  font-size: var(--fs-xs);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  padding: 0;
+  transition: background .15s, color .15s, border-color .15s;
+}
+
+.diary-item-del-btn:hover {
+  background: rgba(139, 0, 0, .75);
+  border-color: rgba(180, 60, 60, .8);
+  color: #fff;
+}
+
 .diary-back {
   display: inline-flex;
   align-items: center;
@@ -4831,12 +4841,48 @@ a:focus-visible {
   border-radius: 2px;
   cursor: pointer;
   transition: background .15s, border-color .15s, color .15s;
-  margin-bottom: 20px;
 }
 
 .diary-back:hover {
   border-color: var(--gold);
   color: var(--gold);
+}
+
+.diary-entry-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.diary-entry-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.diary-entry-del-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: 1px solid rgba(139, 0, 0, .55);
+  color: rgba(220, 100, 100, .9);
+  font-family: var(--f-heading);
+  font-size: var(--fs-2xs);
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  padding: 6px 12px;
+  border-radius: 2px;
+  cursor: pointer;
+  transition: background .15s, border-color .15s, color .15s;
+}
+
+.diary-entry-del-btn:hover {
+  background: rgba(139, 0, 0, .75);
+  border-color: rgba(180, 60, 60, .8);
+  color: #fff;
 }
 
 .diary-session {
@@ -8848,4 +8894,36 @@ tr.rumor-told:hover .rumor-cb-cell {
 @media (pointer: coarse) {
   .tour-replay-btn { width: 44px; height: 44px; }
   .tour-btn { min-height: 44px; }
+}
+
+/* Tablets in portrait (iPad classic/mini 768px, iPad Air 820px) and large
+   phones: stack the detail modals (image over content) so the fixed image
+   column never crushes the text column down to an unreadable sliver.
+   Kept at the end of the file on purpose — .cdet-portrait-col/.locdet-img-col/
+   .cdet-info-col's own (equal-specificity) base rules are defined further down
+   than where this block used to sit, and CSS breaks ties by source order, not
+   by which @media condition is "more specific" to the viewport. With this
+   block earlier in the file, the unconditional height:100% rule silently won
+   at every width, collapsing .cdet-info-col (and the delete button inside its
+   sticky header) to ~0px tall on narrow screens — present in the DOM, visually
+   clipped to nothing, unclickable. */
+@media (max-width: 820px) {
+
+  #char-detail-content,
+  #loc-detail-content {
+    flex-direction: column;
+  }
+
+  .cdet-portrait-col,
+  .locdet-img-col {
+    width: 100%;
+    min-width: 0;
+    height: 200px;
+    flex-shrink: 0;
+  }
+
+  .cdet-info-col {
+    border-left: none;
+    border-top: 1px solid var(--border);
+  }
 }

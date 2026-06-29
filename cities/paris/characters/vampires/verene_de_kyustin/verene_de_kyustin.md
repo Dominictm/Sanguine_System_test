@@ -32,7 +32,7 @@
   - Филиппа — мать
   - Госпожа Бубенчик — Сир; также появляется как Кален Урес, хозяйка цирка; Верене знает обе личины
   - Ви — подопечная Госпожи Бубенчик; Верене устроила ей тест в декабре 2010, намеренно проиграла и отдала последний бубенчик с маски арлекина
-- **📖 Дневники:** [Ноябрь 2010](journal/2010-11.md)
+- **📖 Дневники:** [Ноябрь 2010, суббота, ~01:30 — Платформа Saint-Michel.](journal/2010-11.md)
 - **🎨 Промт для генерации изображения:**
   [Блок 1] Cinematic dark fantasy portrait, girl-vampire who appears fourteen, Malkavian of the XIV century, three-quarter view, platinum choppy disheveled short hair, septum piercing, brow piercing, heavy kohl-lined eyes, white oversized graphic t-shirt with dried bloodstains, dark tactical pants with straps, black-and-white harlequin porcelain mask held in one hand, small black leather shoulder bag, expression oscillating between child-like blankness and the cold clarity of a killing machine
   [Блок 2] Harsh red-white rim-light from behind, deep crimson shadows, red-black painterly background with abstract swirling brushstroke textures, blood mist and fractured light

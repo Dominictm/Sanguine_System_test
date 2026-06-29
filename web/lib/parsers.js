@@ -414,7 +414,11 @@ function parseCharacter(rawContent, folderName, lineage) {
     if (k === 'Год рождения')                   c.birthYear     = v;
     if (k === 'Биография')                      c.biography     = v;
     if (k === 'Голос')                          c.voice         = v;
+    if (k === 'Характер')                       c.personality   = v;
     if (k === 'Внешность')                      c.appearance    = v;
+    if (k === 'Натура')                         c.nature        = v;
+    if (k === 'Маска')                          c.demeanor      = v;
+    if (k === 'Амплуа')                         c.concept       = v;
     if (k === 'Дитя')                           c.childe        = v;
     if (k === 'Домен / Локация')                c.location      = v;
     if (/иерархи/i.test(k))                     c.hierarchy     = v;   // «Иерархия в городе» / устар. варианты

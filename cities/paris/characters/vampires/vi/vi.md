@@ -34,7 +34,7 @@
   - Диана Колсби — знакомая Кален, провела Ви на Элизиум (декабрь 2010)
   - Верене де Кюстин — нападавшая, соперница, первый поединок; бубенчик с маски (декабрь 2010)
 
-- **📖 Дневники:** [Декабрь 2010](journal/2010-12.md)
+- **📖 Дневники:** [Декабрь 2010 — Начало декабря 2010 — Конверт](journal/2010-12.md)
 
 - **🎨 Промт для генерации изображения:**
   [Блок 1] Cinematic dark fantasy portrait, girl-vampire who appears fourteen, Malkavian of the late 20th century, three-quarter view, dark hair pulled back in a practical bun or braid, athletic and compact gymnast's build, dark form-fitting athletic wear with straps, fingerless leather gloves, eyes slightly unfocused — listening to something that isn't there, controlled expression with an edge of displacement

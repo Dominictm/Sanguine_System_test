@@ -114,11 +114,14 @@ const ACTION_MAP = {
   'GET /api/characters/all-images':           req => `Карусель — загрузка всех артов (${reqCity(req)})`,
   'GET /api/characters/:slug/images':         req => `Арты персонажа: ${decodeURIComponent(req.params.slug)}`,
   'GET /api/characters/:slug/diary':          req => `Дневник: ${decodeURIComponent(req.params.slug)} → ${req.query.file || '?'}`,
+  'DELETE /api/characters/:slug/diary':       req => `🗑 Удаление записи дневника: ${decodeURIComponent(req.params.slug)} → ${req.query.file || '?'}`,
   'PUT /api/characters/:slug/fields':         req => `✏  Редактирование полей: ${decodeURIComponent(req.params.slug)}`,
   'PUT /api/characters/:slug/relations':      req => `✏  Редактирование отношений: ${decodeURIComponent(req.params.slug)}`,
   'POST /api/characters/:slug/upload-image':  req => `📷 Загрузка изображения → ${decodeURIComponent(req.params.slug)}`,
   'POST /api/characters/:slug/generate-appearance': req => `🤖 Генерация внешности: ${decodeURIComponent(req.params.slug)}`,
   'POST /api/characters/:slug/generate-prompt':    req => `🎨 Генерация промта: ${decodeURIComponent(req.params.slug)}`,
+  'POST /api/characters/:slug/generate-personality': req => `🎭 Генерация характера и голоса: ${decodeURIComponent(req.params.slug)}`,
+  'POST /api/characters/:slug/generate-biography':   req => `📖 Генерация биографии: ${decodeURIComponent(req.params.slug)}`,
   'DELETE /api/characters/:slug/images/:filename':  req => `🗑 Удаление изображения: ${decodeURIComponent(req.params.filename)} ← ${decodeURIComponent(req.params.slug)}`,
   'GET /api/locations':                       req => `Локации — загрузка (${reqCity(req)})`,
   'GET /api/locations/:slug/images':          req => `Арты локации: ${decodeURIComponent(req.params.slug)}`,
@@ -2322,6 +2325,31 @@ app.get('/api/characters/:slug/diary', async (req, res) => {
   } catch (e) { serverError(res, e); }
 });
 
+// Delete a diary entry file (journal/<period>.md) and drop its link from the card.
+app.delete('/api/characters/:slug/diary', async (req, res) => {
+  try {
+    const slug = decodeURIComponent(req.params.slug);
+    const file = req.query.file;
+    if (!file) return res.status(400).json({ error: 'file param required' });
+
+    const city  = reqCity(req);
+    const chars = await getAllCharacters(city);
+    const char  = chars.find(c => c.slug === slug);
+    if (!char) return res.status(404).json({ error: 'Персонаж не найден' });
+
+    const charDir  = path.resolve(charsDir(city), char.lineageFolder, char.slug);
+    const filePath = path.resolve(charDir, file);
+    if (!filePath.startsWith(charDir + path.sep) && filePath !== charDir)
+      return res.status(403).json({ error: 'Forbidden' });
+
+    await fs.unlink(filePath).catch(() => {});
+    await removeDiaryLink(city, char, file.replace(/^\/+/, ''));
+
+    delete _cache[city];
+    res.json({ ok: true });
+  } catch (e) { serverError(res, e); }
+});
+
 // Add a [label](journal/<period>.md) link to the card's "📖 Дневники" field if absent.
 async function ensureDiaryLink(city, char, period, label) {
   const cardPath = path.join(charsDir(city), char.lineageFolder, char.slug, `${char.slug}.md`);
@@ -2340,6 +2368,49 @@ async function ensureDiaryLink(city, char, period, label) {
     if (lastM) { const pos = lastM.index + lastM[0].length; card = card.slice(0, pos) + '\n' + line + card.slice(pos); }
     else return;
   }
+  await writeFileAtomic(cardPath, card, 'utf-8');
+}
+
+// Like ensureDiaryLink, but replaces an existing link's label instead of leaving it
+// untouched — used when an entry is edited/regenerated and its title may have changed.
+async function upsertDiaryLink(city, char, period, label) {
+  const cardPath = path.join(charsDir(city), char.lineageFolder, char.slug, `${char.slug}.md`);
+  let card = await fs.readFile(cardPath, 'utf-8').catch(() => null);
+  if (card === null) return;
+  const href = `journal/${period}.md`;
+  const link = `[${label}](${href})`;
+  const fieldRe = /^- \*\*📖 Дневники:\*\*\s*(.*)$/m;
+  const fm = card.match(fieldRe);
+  if (fm) {
+    const hrefEsc = href.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const linkRe = new RegExp(`\\[[^\\]]*\\]\\(${hrefEsc}\\)`);
+    card = linkRe.test(fm[1])
+      ? card.replace(fieldRe, `- **📖 Дневники:** ${fm[1].replace(linkRe, link)}`)
+      : card.replace(fieldRe, `- **📖 Дневники:** ${fm[1].trim() ? fm[1].trim() + ' · ' + link : link}`);
+  } else {
+    const lastM = [...card.matchAll(/^- \*\*[^*:\n]+[^*]*:\*\*\s*.+$/gm)].at(-1);
+    const line = `- **📖 Дневники:** ${link}`;
+    if (lastM) { const pos = lastM.index + lastM[0].length; card = card.slice(0, pos) + '\n' + line + card.slice(pos); }
+    else return;
+  }
+  await writeFileAtomic(cardPath, card, 'utf-8');
+}
+
+// Remove a [label](journal/<period>.md) link from the card's "📖 Дневники" field —
+// drops the whole field line if it was the last link.
+async function removeDiaryLink(city, char, href) {
+  const cardPath = path.join(charsDir(city), char.lineageFolder, char.slug, `${char.slug}.md`);
+  let card = await fs.readFile(cardPath, 'utf-8').catch(() => null);
+  if (card === null) return;
+  const fieldRe = /^- \*\*📖 Дневники:\*\*\s*(.*)$/m;
+  const fm = card.match(fieldRe);
+  if (!fm) return;
+  const hrefEsc = href.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const linkRe = new RegExp(`\\s*·?\\s*\\[[^\\]]*\\]\\(${hrefEsc}\\)`);
+  const rest = fm[1].replace(linkRe, '').replace(/^\s*·\s*/, '').trim();
+  card = rest
+    ? card.replace(fieldRe, `- **📖 Дневники:** ${rest}`)
+    : card.replace(/^- \*\*📖 Дневники:\*\*\s*.*\n?/m, '');
   await writeFileAtomic(cardPath, card, 'utf-8');
 }
 
@@ -2366,12 +2437,16 @@ app.put('/api/characters/:slug/diary', express.json(), async (req, res) => {
     const section  = `### 📅 ${title}\n\n- **👤 Автор:** ${char.name}\n\n- **📖 Текст записи:**\n\n${indented}\n`;
 
     const existing = await fs.readFile(file, 'utf-8').catch(() => null);
-    const out = (existing === null || mode === 'create')
+    // 'replace' always overwrites — used when editing/regenerating an existing single-entry
+    // record; 'create'/'append' (default) preserve the original add-entry-form behaviour.
+    const out = (existing === null || mode === 'create' || mode === 'replace')
       ? `# 📖 Дневник ${char.name} — ${periodLabel(per)}\n\n---\n\n${section}`
       : existing.replace(/\s*$/, '') + `\n\n---\n\n${section}`;
     await writeFileAtomic(file, out, 'utf-8');
 
-    await ensureDiaryLink(city, char, per, periodLabel(per));
+    const linkLabel = title !== periodLabel(per) ? `${periodLabel(per)} — ${title}` : periodLabel(per);
+    if (mode === 'replace') await upsertDiaryLink(city, char, per, linkLabel);
+    else await ensureDiaryLink(city, char, per, linkLabel);
     delete _cache[city];
     res.json({ ok: true, file: `journal/${per}.md` });
   } catch (e) { serverError(res, e); }
@@ -2382,7 +2457,7 @@ app.post('/api/characters/:slug/diary/generate', express.json(), async (req, res
   try {
     const city = reqCity(req);
     const slug = decodeURIComponent(req.params.slug);
-    const { period = '', session = '', hint = '', orModel = null, preferSource = null } = req.body || {};
+    const { period = '', session = '', hint = '', draft = '', orModel = null, preferSource = null } = req.body || {};
 
     const chars = await getAllCharacters(city);
     const char  = chars.find(c => c.slug === slug);
@@ -2422,11 +2497,12 @@ ${card.slice(0, 3000)}
 # СОБЫТИЯ ХРОНИКИ (ИСТОЧНИК ФАКТОВ — не выдумывай вне этого)
 ${eventsText.slice(0, 8000) || '(не найдены)'}`;
 
+    const draftTxt = String(draft || '').trim();
     const userPrompt = `Напиши дневниковую запись персонажа «${char.name}» за период ${periodTxt}${session ? ` (${session})` : ''}.
-${hint ? `Акцент/пожелание: ${hint}\n` : ''}Требования:
+${hint ? `Акцент/пожелание: ${hint}\n` : ''}${draftTxt ? `\nЧерновик записи (уже существует, написан ранее — используй как базу, дополни и доработай стиль, сохраняя заданную канву и факты, не противоречь им):\n${draftTxt}\n` : ''}Требования:
 - От первого лица, голосом персонажа (см. карточку).
 - Только факты из событий хроники; канон не выдумывай.
-- Лаконично и литературно, по правилам diary_rules.md.
+${draftTxt ? '- Сохрани канву и факты черновика выше, углуби и доработай стиль/детали — не противоречь содержанию.\n' : ''}- Лаконично и литературно, по правилам diary_rules.md.
 - Верни ТОЛЬКО текст записи (без заголовков и markdown-полей).`;
 
     let text = '';
@@ -2809,8 +2885,15 @@ app.post('/api/characters/:slug/sheet/generate', express.json(), async (req, res
     const card = await fs.readFile(path.join(dir, `${char.slug}.md`), 'utf-8').catch(() => '');
     if (!card) return res.status(404).json({ ok: false, error: 'Карточка персонажа не найдена' });
     const gen  = await makeGenerationClient(req.body?.source || null, req.body?.model || null);
-    const text = await _generateV20Sheet({ card, displayName: char.name, gen, lineage: char.lineageFolder });
+    let text = await _generateV20Sheet({ card, displayName: char.name, gen, lineage: char.lineageFolder });
     if (!text) return res.status(500).json({ ok: false, error: 'ИИ вернул пустой лист' });
+    // Re-stamp header fields already known from the card — the AI is given the card
+    // text but can still paraphrase/invent name·clan·generation·sire; force them back
+    // to the card's own values so the sheet never disagrees with «Информация».
+    for (const [key, label] of Object.entries(SHEET_HEADER_FROM_CARD)) {
+      const v = String(char[key] || '').trim();
+      if (v && !v.includes('⚠️')) text = _setSheetHeaderCell(text, label, v);
+    }
     await writeFileAtomic(path.join(dir, `${char.slug}-sheet.md`), text + '\n', 'utf-8');
     await _ensureSheetLink(path.join(dir, `${char.slug}.md`), `${char.slug}-sheet.md`);
     res.json({ ok: true, content: text });
@@ -3300,6 +3383,10 @@ const EDITABLE_FIELD_MAP = {
   biography:    'Биография',
   appearance:   'Внешность',
   voice:        'Голос',
+  personality:  'Характер',
+  nature:       'Натура',
+  demeanor:     'Маска',
+  concept:      'Амплуа',
   // ── Линейко-специфичные поля (феи/смертные/иное) ──
   race:         'Раса',
   kith:         'Род',
@@ -3317,6 +3404,86 @@ const FIELD_LABEL_BY_LINEAGE = {
 };
 function fieldMdLabel(key, lineageFolder) {
   return (FIELD_LABEL_BY_LINEAGE[lineageFolder] || {})[key] || EDITABLE_FIELD_MAP[key];
+}
+
+// «Информация» — карточные факты (без биографии/внешности/голоса/характера, которые
+// генераторы передают отдельно) для подмешивания в AI-промты, чтобы сгенерированный
+// текст не противоречил клану/секте/роли и т.д. персонажа.
+const INFO_KEYS_FOR_PROMPT = [
+  'clan', 'sect', 'generation', 'birthYear', 'embraceYear', 'sire', 'childe',
+  'location', 'hierarchy', 'disciplines', 'derangements', 'profession', 'role', 'belonging',
+  'race', 'kith', 'court', 'title', 'features', 'relatives', 'attitude',
+];
+function charInfoLines(char) {
+  const lines = [];
+  if (char.gender && !char.gender.includes('⚠️')) lines.push(`Пол: ${char.gender}`);
+  if (char.status && char.status !== '—') lines.push(`Статус: ${char.status}`);
+  for (const key of INFO_KEYS_FOR_PROMPT) {
+    const v = char[key];
+    if (v && !String(v).includes('⚠️') && v !== '—') lines.push(`${EDITABLE_FIELD_MAP[key]}: ${v}`);
+  }
+  return lines.join('\n');
+}
+function charRelationshipLines(char) {
+  return (char.relationships || [])
+    .filter(r => r.target)
+    .map(r => r.description ? `${r.target} — ${r.description}` : r.target)
+    .join('\n');
+}
+
+// Card fields that are mirrored in the V20 sheet's «🧩 Шапка» header table — kept in
+// sync both ways: edits to the card push into an existing sheet (see _syncSheetHeader),
+// and a freshly (re)generated sheet has these re-stamped from the card so the AI can't
+// drift them from what's already known (see _generateV20Sheet's post-process below).
+const SHEET_HEADER_FROM_CARD = {
+  name: 'Имя', clan: 'Клан', generation: 'Поколение', sire: 'Сир',
+  nature: 'Натура', demeanor: 'Маска', concept: 'Амплуа',
+};
+
+// Replace the value cell of a «| **Label...** | value |» row in the sheet's header
+// table. Matches the label by prefix (handles suffixes like «Клан (Clan)»). No-op if
+// the row isn't found — never fabricates table structure that isn't already there.
+function _setSheetHeaderCell(md, labelPrefix, value) {
+  const escaped = String(labelPrefix).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const re = new RegExp(`^(\\|\\s*\\*\\*${escaped}[^*]*\\*\\*\\s*\\|\\s*)[^|]*(\\|)`, 'm');
+  return re.test(md) ? md.replace(re, (_, pre, post) => `${pre}${value} ${post}`) : md;
+}
+
+// Push known-good card values (name/clan/generation/sire) into an existing sheet —
+// both the AI markdown (-sheet.md) and the interactive JSON sidecar (-sheet.json),
+// so editing the card's info tab doesn't leave a stale, drifted sheet behind.
+async function _syncSheetHeaderFromCard(city, char, updates) {
+  const linked = Object.keys(updates).filter(k => SHEET_HEADER_FROM_CARD[k]);
+  if (!linked.length) return;
+  const dir = path.join(charsDir(city), char.lineageFolder, char.slug);
+
+  const mdPath = path.join(dir, `${char.slug}-sheet.md`);
+  const md = await fs.readFile(mdPath, 'utf-8').catch(() => null);
+  if (md !== null) {
+    let out = md;
+    for (const k of linked) {
+      const v = String(updates[k] || '').trim();
+      if (!v || v.includes('⚠️')) continue;
+      out = _setSheetHeaderCell(out, SHEET_HEADER_FROM_CARD[k], v);
+    }
+    if (out !== md) await writeFileAtomic(mdPath, out, 'utf-8');
+  }
+
+  const jsonPath = path.join(dir, `${char.slug}-sheet.json`);
+  const rawJson = await fs.readFile(jsonPath, 'utf-8').catch(() => null);
+  if (rawJson !== null) {
+    try {
+      const data = JSON.parse(rawJson);
+      data.header = data.header || {};
+      let changed = false;
+      for (const k of linked) {
+        const v = String(updates[k] || '').trim();
+        if (!v || v.includes('⚠️') || data.header[k] === v) continue;
+        data.header[k] = v; changed = true;
+      }
+      if (changed) await writeFileAtomic(jsonPath, JSON.stringify(data, null, 2), 'utf-8');
+    } catch { /* corrupt sidecar — leave untouched, not this endpoint's job to repair */ }
+  }
 }
 
 app.put('/api/characters/:slug/fields', express.json(), async (req, res) => {
@@ -3377,6 +3544,7 @@ app.put('/api/characters/:slug/fields', express.json(), async (req, res) => {
 
     await writeFileAtomic(cardPath, card, 'utf-8');
     delete _cache[city];
+    await _syncSheetHeaderFromCard(city, char, fields);
     res.json({ ok: true });
   } catch (e) {
     serverError(res, e);
@@ -3493,7 +3661,7 @@ app.post('/api/characters', express.json(), async (req, res) => {
     }
     if (isVamp) fields.push(`- **Амплуа:** ${concept || '⚠️ Не указано'}`);
     if (!isVamp && role) fields.push(`- **Роль:** ${role}`);
-    fields.push(`- **Статус:** Жив`);
+    fields.push(`- **Статус:** ${gender === 'Женский' ? 'Жива' : 'Жив'}`);
     fields.push(`- **Принадлежность:** ${belonging}`);
     fields.push(`- **Биография:** ${bio || '⚠️ Требуется уточнение'}`);
     fields.push(`- **Внешность:** ${app_ || '⚠️ Требуется уточнение (3–5 визуальных маркеров)'}`);
@@ -3509,6 +3677,23 @@ app.post('/api/characters', express.json(), async (req, res) => {
     await fs.mkdir(path.join(dir, 'journal'), { recursive: true });
     await writeFileAtomic(path.join(dir, 'journal', '.gitkeep'), '');
     await writeFileAtomic(path.join(dir, `${slug}.md`), card, 'utf-8');   // no BOM — clean cards
+
+    // Standard sheet-data sidecar, seeded from the card fields just written — so
+    // the «Лист V20» tab has something real to render immediately (not just the
+    // in-memory empty default), and _syncSheetHeaderFromCard has a file to patch
+    // the moment Поколение/Клан/Натура/etc. are next edited on «Информация».
+    // Everything not seeded here (attributes, abilities, …) is filled client-side
+    // by _v20Normalize() the same way it already handles any partial/legacy sheet.
+    const sheetHeader = {
+      name, player: '', chronicle: '',
+      nature: hasNatureDemeanor ? nature : '',
+      demeanor: hasNatureDemeanor ? demeanor : '',
+      concept: isVamp ? concept : '',
+      clan: isVamp ? clan : '',
+      generation: isVamp ? gen : '',
+      sire: isVamp ? sire : '',
+    };
+    await writeFileAtomic(path.join(dir, `${slug}-sheet.json`), JSON.stringify({ lineage: folder, header: sheetHeader }, null, 2), 'utf-8');
 
     // Append to characters_index.md (preserve its BOM if present)
     const idxPath = path.join(archiveDir(city), 'characters_index.md');
@@ -4280,6 +4465,179 @@ Requirements:
     const status = e?.status ?? 500;
     const msg    = e?.error?.error?.message ?? e?.message ?? String(e);
     console.error(`[generate-prompt] ${status}`, msg);
+    res.status(status >= 400 && status < 600 ? status : 500).json({ error: msg });
+  }
+});
+
+// ── Generate personality + voice from appearance & biography ──────────────────
+
+app.post('/api/characters/:slug/generate-personality', express.json(), async (req, res) => {
+  try {
+    const slug = decodeURIComponent(req.params.slug);
+    const city = reqCity(req);
+    const chars = await getAllCharacters(city);
+    const char  = chars.find(c => c.slug === slug);
+    if (!char) return res.status(404).json({ error: 'Персонаж не найден' });
+
+    const appearance = char.appearance && !char.appearance.includes('⚠️') ? char.appearance.trim() : '';
+    const biography   = char.biography  && !char.biography.includes('⚠️')  ? char.biography.trim()  : '';
+    if (!appearance && !biography)
+      return res.status(400).json({ error: 'Заполните «Внешность» или «Биография» перед генерацией' });
+
+    const infoLines          = charInfoLines(char);
+    const existingPersonality = char.personality && !char.personality.includes('⚠️') ? char.personality.trim() : '';
+    const existingVoice       = char.voice       && !char.voice.includes('⚠️')       ? char.voice.trim()       : '';
+
+    const preferSource = req.body?.preferSource || null;
+    const orModel      = req.body?.orModel      || null;
+    const gen = await makeGenerationClient(preferSource, orModel);
+
+    const litStyle = await fs.readFile(path.join(ROOT, 'system', 'rules', 'literary_style.md'), 'utf-8').catch(() => '');
+    const systemPrompt = `Ты — редактор персонажных карточек для настольной RPG Vampire: The Masquerade. Пиши строго по литературному стилю проекта.${litStyle ? `\n\n# ЛИТЕРАТУРНЫЙ СТИЛЬ (system/rules/literary_style.md)\n${litStyle.slice(0, 3500)}` : ''}`;
+    const userPrompt = `Персонаж: ${char.name}${infoLines ? `\n\nИнформация:\n${infoLines}` : ''}${appearance ? `\n\nВнешность:\n${appearance}` : ''}${biography ? `\n\nБиография:\n${biography}` : ''}${existingPersonality ? `\n\nЧерновик «Характер» (написан пользователем — возможно общими фразами; используй как базу, но уточни и конкретизируй на основе данных выше, не противоречь им):\n${existingPersonality}` : ''}${existingVoice ? `\n\nЧерновик «Голос» (аналогично — база для уточнения, не финальный текст):\n${existingVoice}` : ''}
+
+На основе этих данных опиши характер и голос персонажа.
+
+Требования:
+- «Характер»: 2–4 предложения — ключевые черты, мотивации, манера держаться с другими, внутренние противоречия. Без «воды», без пересказа биографии.
+- «Голос»: 1–2 предложения — манера речи, тембр, характерные обороты/интонации, темп.
+- Если выше есть черновики «Характер»/«Голос» — не отбрасывай их и не противоречь им, но обязательно конкретизируй и привяжи к фактам персонажа (информация/биография/внешность), чтобы итоговый текст не расходился с карточкой и персонаж читался однозначно.
+- Если черновика нет — выводи строго из информации/биографии/внешности, не придумывай факты, которых там нет.
+- Язык: русский. Стиль: лаконичный, образный, готический.
+
+Выведи СТРОГО JSON, без лишнего текста:
+{"personality": "...", "voice": "..."}`;
+
+    let personality = '', voice = '';
+    const parseResult = (text) => {
+      const match = text.match(/\{[\s\S]*\}/);
+      if (!match) throw new Error('Модель не вернула JSON с характером.');
+      const parsed = JSON.parse(match[0]);
+      personality = (parsed.personality || '').trim();
+      voice       = (parsed.voice || '').trim();
+    };
+
+    if (_isOA(gen)) {
+      const modelsToTry = _oaModels(gen);
+      let lastErr, allRateLimited = true;
+      for (const m of modelsToTry) {
+        try {
+          parseResult(await _oaCall(gen)(m, systemPrompt, userPrompt, [], 75000, 1200));
+          allRateLimited = false;
+          break;
+        } catch (e) {
+          lastErr = e;
+          const is429 = e.status === 429;
+          const retryable = e.status === 404 || e.status === 502 || is429 || (e.status === 400 && /not a valid model|No endpoints/i.test(e.message))
+            || (e.status === 403 && /moderation|flagged/i.test(e.message));
+          if (!retryable) { allRateLimited = false; throw e; }
+          if (!is429) allRateLimited = false;
+          console.warn(`[generate-personality] model ${m} unavailable (${e.status}), trying next...`);
+          if (is429) await new Promise(r => setTimeout(r, 800));
+        }
+      }
+      if (!personality) {
+        if (allRateLimited) return res.status(429).json({ rateLimited: true, error: 'Превышен лимит запросов ко всем моделям. Подождите минуту и попробуйте снова.' });
+        throw lastErr;
+      }
+    } else {
+      const model = VALID_MODELS.includes(req.body?.model) ? req.body.model : 'claude-haiku-4-5-20251001';
+      const message = await gen.client.messages.create({
+        model, max_tokens: 500, system: systemPrompt,
+        messages: [{ role: 'user', content: userPrompt }],
+      });
+      parseResult(message.content[0]?.text?.trim() || '');
+    }
+
+    if (!personality) return res.status(500).json({ error: 'Модель не вернула характер. Попробуйте ещё раз.' });
+
+    res.json({ ok: true, personality, voice, source: gen.source });
+  } catch (e) {
+    const status = e?.status ?? 500;
+    const msg    = e?.error?.error?.message ?? e?.message ?? String(e);
+    console.error(`[generate-personality] ${status}`, msg);
+    res.status(status >= 400 && status < 600 ? status : 500).json({ error: msg });
+  }
+});
+
+// ── Generate biography from info fields, appearance & relationships ────────────
+
+app.post('/api/characters/:slug/generate-biography', express.json(), async (req, res) => {
+  try {
+    const slug = decodeURIComponent(req.params.slug);
+    const city = reqCity(req);
+    const chars = await getAllCharacters(city);
+    const char  = chars.find(c => c.slug === slug);
+    if (!char) return res.status(404).json({ error: 'Персонаж не найден' });
+
+    const infoLines    = charInfoLines(char);
+    const relLines      = charRelationshipLines(char);
+    const appearance    = char.appearance && !char.appearance.includes('⚠️') ? char.appearance.trim() : '';
+    const existingBio   = char.biography  && !char.biography.includes('⚠️')  ? char.biography.trim()  : '';
+    if (!infoLines && !appearance && !existingBio)
+      return res.status(400).json({ error: 'Заполните вкладку «Информация» (или «Внешность»/«Биография») перед генерацией' });
+
+    const preferSource = req.body?.preferSource || null;
+    const orModel      = req.body?.orModel      || null;
+    const gen = await makeGenerationClient(preferSource, orModel);
+
+    const litStyle = await fs.readFile(path.join(ROOT, 'system', 'rules', 'literary_style.md'), 'utf-8').catch(() => '');
+    const systemPrompt = `Ты — редактор персонажных карточек для настольной RPG Vampire: The Masquerade. Пиши строго по литературному стилю проекта.${litStyle ? `\n\n# ЛИТЕРАТУРНЫЙ СТИЛЬ (system/rules/literary_style.md)\n${litStyle.slice(0, 3500)}` : ''}`;
+    const userPrompt = `Персонаж: ${char.name}${infoLines ? `\n\nИнформация:\n${infoLines}` : ''}${appearance ? `\n\nВнешность:\n${appearance}` : ''}${relLines ? `\n\nОтношения (обязательно явно отразить смысл КАЖДОЙ связи в тексте биографии — например, родственные/опекунские связи, союзы, конфликты):\n${relLines}` : ''}${existingBio ? `\n\nЧерновик биографии (написан пользователем — используй как базу, дополни и углуби, не противоречь заданной канве):\n${existingBio}` : ''}
+
+Напиши биографию персонажа для карточки.
+
+Требования:
+- 4–8 предложений, лаконично, без «воды»
+- Обязательно согласуй с данными выше (клан/секта/поколение/роль/локация и т.п.) — никаких противоречий с карточкой
+- Если указаны отношения — явно отрази смысл каждого из них в тексте (не просто упомяни имя, а скажи, кем этот персонаж приходится — родственником, союзником, противником и т.д.)
+- Если есть черновик биографии — сохрани заданную пользователем канву, дополни и углуби её, не противоречь
+- Если черновика нет — выводи строго из информации/внешности/отношений, не придумывай факты, которых там нет
+- Язык: русский. Стиль: лаконичный, образный, готический.
+- Запрет: не упоминать кровь, раны, увечья, явные сцены насилия
+
+Выведи ТОЛЬКО текст биографии — без заголовков, без кавычек, без JSON.`;
+
+    let biography = '';
+    if (_isOA(gen)) {
+      const modelsToTry = _oaModels(gen);
+      let lastErr, allRateLimited = true;
+      for (const m of modelsToTry) {
+        try {
+          biography = (await _oaCall(gen)(m, systemPrompt, userPrompt, [], 75000, 700)).trim();
+          allRateLimited = false;
+          break;
+        } catch (e) {
+          lastErr = e;
+          const is429 = e.status === 429;
+          const retryable = e.status === 404 || e.status === 502 || is429 || (e.status === 400 && /not a valid model|No endpoints/i.test(e.message))
+            || (e.status === 403 && /moderation|flagged/i.test(e.message));
+          if (!retryable) { allRateLimited = false; throw e; }
+          if (!is429) allRateLimited = false;
+          console.warn(`[generate-biography] model ${m} unavailable (${e.status}), trying next...`);
+          if (is429) await new Promise(r => setTimeout(r, 800));
+        }
+      }
+      if (!biography) {
+        if (allRateLimited) return res.status(429).json({ rateLimited: true, error: 'Превышен лимит запросов ко всем моделям. Подождите минуту и попробуйте снова.' });
+        throw lastErr;
+      }
+    } else {
+      const model = VALID_MODELS.includes(req.body?.model) ? req.body.model : 'claude-haiku-4-5-20251001';
+      const message = await gen.client.messages.create({
+        model, max_tokens: 600, system: systemPrompt,
+        messages: [{ role: 'user', content: userPrompt }],
+      });
+      biography = message.content[0]?.text?.trim() || '';
+    }
+
+    if (!biography) return res.status(500).json({ error: 'Модель не вернула биографию. Попробуйте ещё раз.' });
+
+    res.json({ ok: true, biography, source: gen.source });
+  } catch (e) {
+    const status = e?.status ?? 500;
+    const msg    = e?.error?.error?.message ?? e?.message ?? String(e);
+    console.error(`[generate-biography] ${status}`, msg);
     res.status(status >= 400 && status < 600 ? status : 500).json({ error: msg });
   }
 });

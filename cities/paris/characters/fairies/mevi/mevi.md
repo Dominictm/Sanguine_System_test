@@ -30,7 +30,7 @@
   - Клер — терпит только в нужное время
   - Верене — рада; чувствует дар, учит рунам и ритуалам, помогает рисовать руны
   - Ши (возлюбленный, 1592–1624) — предатель; объект клятвы мести
-- **📖 Дневники:** [Ретроспектива](journal/retrospective.md)
+- **📖 Дневники:** [Ретроспектива — Самхайн 1304 — Первое.](journal/retrospective.md)
 - **🎨 Промт для генерации изображения:**
   [Блок 1] A girl appearing six years old with an unnaturally grave, watchful expression beyond her years. She has delicate, pale features with an ethereal quality suggesting otherworldly nature. Wearing a crimson hooded cloak over simple dark clothing. Around her neck hangs a cord strung with wooden runes carved with arcane symbols—the only artifact remaining unchanged across all veils. Her posture is perfectly still and composed, eyes ancient and knowing despite her youthful frame. Fair skin, dark hair visible beneath the hood, poised with preternatural calm.
   [Блок 2] Dimly lit interior space with candlelight casting long, dancing shadows across her small figure. Moody atmospheric lighting emphasizing the contrast between soft golden illumination and deep surrounding darkness. Gothic architectural elements visible in background—stone walls, ornate shadows. Air thick with mystery and unseen presence. Theatrical, intimate framing creating sense of dread and enchantment.

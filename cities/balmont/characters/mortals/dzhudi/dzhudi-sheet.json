@@ -1,0 +1,458 @@
+{
+  "lineage": "mortals",
+  "header": {
+    "name": "джуди",
+    "player": "Рассказчик",
+    "chronicle": "",
+    "nature": "Судья (Judge)",
+    "demeanor": "Судья (Judge)",
+    "concept": "Журналист",
+    "clan": "",
+    "generation": "",
+    "sire": ""
+  },
+  "attributes": {
+    "physical": {
+      "strength": 2,
+      "dexterity": 2,
+      "stamina": 2
+    },
+    "social": {
+      "charisma": 3,
+      "manipulation": 3,
+      "appearance": 3
+    },
+    "mental": {
+      "perception": 4,
+      "intelligence": 3,
+      "wits": 3
+    }
+  },
+  "abilities": {
+    "talents": [
+      {
+        "name": "Атлетика",
+        "val": 1,
+        "fixed": true
+      },
+      {
+        "name": "Бдительность",
+        "val": 3,
+        "fixed": true
+      },
+      {
+        "name": "Драка",
+        "val": 0,
+        "fixed": true
+      },
+      {
+        "name": "Запугивание",
+        "val": 2,
+        "fixed": true
+      },
+      {
+        "name": "Красноречие",
+        "val": 2,
+        "fixed": true
+      },
+      {
+        "name": "Лидерство",
+        "val": 0,
+        "fixed": true
+      },
+      {
+        "name": "Уличное чутьё",
+        "val": 3,
+        "fixed": true
+      },
+      {
+        "name": "Хитрость",
+        "val": 3,
+        "fixed": true
+      },
+      {
+        "name": "Шестое чувство",
+        "val": 4,
+        "fixed": true
+      },
+      {
+        "name": "Эмпатия",
+        "val": 2,
+        "fixed": true
+      },
+      {
+        "name": "",
+        "val": 0
+      },
+      {
+        "name": "",
+        "val": 0
+      }
+    ],
+    "skills": [
+      {
+        "name": "Вождение",
+        "val": 1,
+        "fixed": true
+      },
+      {
+        "name": "Воровство",
+        "val": 1,
+        "fixed": true
+      },
+      {
+        "name": "Выживание",
+        "val": 0,
+        "fixed": true
+      },
+      {
+        "name": "Исполнение",
+        "val": 0,
+        "fixed": true
+      },
+      {
+        "name": "Обращение с животными",
+        "val": 0,
+        "fixed": true
+      },
+      {
+        "name": "Ремесло",
+        "val": 0,
+        "fixed": true
+      },
+      {
+        "name": "Скрытность",
+        "val": 2,
+        "fixed": true
+      },
+      {
+        "name": "Стрельба",
+        "val": 0,
+        "fixed": true
+      },
+      {
+        "name": "Фехтование",
+        "val": 0,
+        "fixed": true
+      },
+      {
+        "name": "Этикет",
+        "val": 2,
+        "fixed": true
+      },
+      {
+        "name": "",
+        "val": 0
+      },
+      {
+        "name": "",
+        "val": 0
+      }
+    ],
+    "knowledges": [
+      {
+        "name": "Гуманитарные науки",
+        "val": 2,
+        "fixed": true
+      },
+      {
+        "name": "Естественные науки",
+        "val": 0,
+        "fixed": true
+      },
+      {
+        "name": "Законы",
+        "val": 2,
+        "fixed": true
+      },
+      {
+        "name": "Информатика",
+        "val": 2,
+        "fixed": true
+      },
+      {
+        "name": "Медицина",
+        "val": 0,
+        "fixed": true
+      },
+      {
+        "name": "Оккультизм",
+        "val": 3,
+        "fixed": true
+      },
+      {
+        "name": "Политика",
+        "val": 2,
+        "fixed": true
+      },
+      {
+        "name": "Расследование",
+        "val": 4,
+        "fixed": true
+      },
+      {
+        "name": "Финансы",
+        "val": 0,
+        "fixed": true
+      },
+      {
+        "name": "Электроника",
+        "val": 0,
+        "fixed": true
+      },
+      {
+        "name": "",
+        "val": 0
+      },
+      {
+        "name": "",
+        "val": 0
+      }
+    ]
+  },
+  "disciplines": [
+    {
+      "name": "",
+      "val": 0
+    },
+    {
+      "name": "",
+      "val": 0
+    },
+    {
+      "name": "",
+      "val": 0
+    },
+    {
+      "name": "",
+      "val": 0
+    },
+    {
+      "name": "",
+      "val": 0
+    },
+    {
+      "name": "",
+      "val": 0
+    }
+  ],
+  "backgrounds": [
+    {
+      "name": "Контакты",
+      "val": 3
+    },
+    {
+      "name": "Ресурсы",
+      "val": 2
+    },
+    {
+      "name": "",
+      "val": 0
+    },
+    {
+      "name": "",
+      "val": 0
+    },
+    {
+      "name": "",
+      "val": 0
+    },
+    {
+      "name": "",
+      "val": 0
+    }
+  ],
+  "virtues": {
+    "conscience": 2,
+    "selfcontrol": 5,
+    "courage": 3
+  },
+  "meritsFlaws": "",
+  "humanity": 5,
+  "path": "Человечность",
+  "willpower": {
+    "permanent": 2,
+    "temp": [
+      true,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "bloodPool": [
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false
+  ],
+  "bloodPerTurn": 1,
+  "health": {
+    "bruised": false,
+    "hurt": false,
+    "injured": false,
+    "wounded": false,
+    "mauled": false,
+    "crippled": false,
+    "incapacitated": false
+  },
+  "flaw": "",
+  "experience": {
+    "total": 0,
+    "spent": 0,
+    "log": []
+  },
+  "specializations": [
+    {
+      "ability": "Расследование",
+      "spec": "Архивные данные"
+    },
+    {
+      "ability": "Шестое чувство",
+      "spec": "Ощущение сверхъестественного"
+    },
+    {
+      "ability": "",
+      "spec": ""
+    },
+    {
+      "ability": "",
+      "spec": ""
+    },
+    {
+      "ability": "",
+      "spec": ""
+    },
+    {
+      "ability": "",
+      "spec": ""
+    }
+  ],
+  "otherTraits": [
+    {
+      "name": "",
+      "val": 0
+    },
+    {
+      "name": "",
+      "val": 0
+    },
+    {
+      "name": "",
+      "val": 0
+    },
+    {
+      "name": "",
+      "val": 0
+    },
+    {
+      "name": "",
+      "val": 0
+    },
+    {
+      "name": "",
+      "val": 0
+    }
+  ],
+  "rituals": [
+    {
+      "name": "",
+      "level": ""
+    },
+    {
+      "name": "",
+      "level": ""
+    },
+    {
+      "name": "",
+      "level": ""
+    },
+    {
+      "name": "",
+      "level": ""
+    },
+    {
+      "name": "",
+      "level": ""
+    },
+    {
+      "name": "",
+      "level": ""
+    }
+  ],
+  "history": "Джуди родилась в 1995 году. С раннего возраста обнаружила в себе парапсихические способности, которые заставили её искать ответы за пределами обычного мира. Став журналистом, она использует свою профессию как легальный прикрытия для расследований природы сверхъестественного. В её облике сочетается строгость профессионала и скрытая тяга к опасным, «темным» играм.",
+  "goals": "Раскрыть тайны города Балмонт, систематизировать знания об оккультном мире.",
+  "description": {
+    "birthDate": "1995",
+    "apparentAge": "25-30 лет",
+    "deathDate": "",
+    "gender": "Женский",
+    "race": "Человек",
+    "hair": "Тёмные, растрёпанные",
+    "eyes": "Глубокий, затаённый взгляд",
+    "heightWeight": "170 см / 55 кг",
+    "build": "Стройная, порочная грация, татуировки на плечах и руках",
+    "nationality": ""
+  },
+  "allies": "[Информаторы в Балмонте — передача сведений о городских тайнах]",
+  "possessions": "[Диктофон, блокнот, смартфон, зажигалка, набор для курения]",
+  "combat": [
+    {
+      "weapon": "Без оружия",
+      "diff": "3",
+      "damage": "1",
+      "range": "—",
+      "rate": "—",
+      "clip": "—",
+      "size": "С"
+    },
+    {
+      "weapon": "",
+      "diff": "",
+      "damage": "",
+      "range": "",
+      "rate": "",
+      "clip": "",
+      "size": ""
+    },
+    {
+      "weapon": "",
+      "diff": "",
+      "damage": "",
+      "range": "",
+      "rate": "",
+      "clip": "",
+      "size": ""
+    },
+    {
+      "weapon": "",
+      "diff": "",
+      "damage": "",
+      "range": "",
+      "rate": "",
+      "clip": "",
+      "size": ""
+    }
+  ]
+}

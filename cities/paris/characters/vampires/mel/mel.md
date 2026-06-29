@@ -29,7 +29,7 @@
   - [Мишель Моро](../mishel_moro/mishel_moro.md) — воспринимает как сестру
   - [Ева](../eva/eva.md) — воспринимает как сестру
 - **Голос (Мэл):** Расслабленный, с паузами и чёрным юмором. Никогда не торопится. Переключение на Аню маркируется физически — смена шляпы, нож останавливается. **Голос (Аня):** Короче, жёстче, прямая угроза без украшений. Оба никогда не кричат.
-- **📖 Дневники:** [Ноябрь 2010](journal/2010-11.md)
+- **📖 Дневники:** [Ноябрь 2010, суббота — Будка. Финал.](journal/2010-11.md)
 - **🎨 Промт для генерации изображения (Мэл):**
   [Блок 1] Cinematic dark fantasy portrait, androgynous slender Malkavian vampire, full figure, numerous thin dark senegalese braids loosely tied back, pale skin, wide-brim white hat at an angle, white longcoat, black open-front shirt showing bare abdomen, butterfly knife held open in hand, practiced careless stance of someone who has nothing left to fear
   [Блок 2] Cool blue side-lighting from the left, deep indigo rim-light from behind, cold shadows consuming half the figure, blue-black painterly background with abstract swirling brushstroke textures, cold indigo smoke

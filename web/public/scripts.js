@@ -103,6 +103,10 @@ const REL_LABELS = {
 // Standard relation types offered in the «Отношения» editor (datalist)
 const REL_TYPE_OPTIONS = ['Семья', 'Сир/Чайлд', 'Союзник', 'Враг', 'Преданность', 'Нейтральный', 'Знакомый', 'Тайная связь'];
 
+// V20 generation range (3rd = eldest/Methuselah-tier down to 14th = thin-blooded), offered
+// as a dropdown wherever generation is entered/edited — keeps the value numeric and in-canon.
+const VAMPIRE_GENERATIONS = ['14-е', '13-е', '12-е', '11-е', '10-е', '9-е', '8-е', '7-е', '6-е', '5-е', '4-е', '3-е'];
+
 const NODE_COLORS = {
   vampire:  '#7A0000',
   fairy:    '#2A5020',
@@ -789,7 +793,7 @@ function showInfoPanel(d, links, nodes) {
     ? `<img class="info-portrait" src="${charData.imageUrl}" alt="${d.id}">`
     : `<span class="info-lineage-icon">${LINEAGE_ICONS[d.lineage] || '👤'}</span>`;
 
-  const graphStatusLbl = charData?.status || STATUS_LABELS[d.status] || d.status;
+  const graphStatusLbl = charData ? statusLabel(charData) : (STATUS_LABELS[d.status] || d.status);
   const graphStatusDetails = charData?.statusDetails || '';
 
   document.getElementById('info-content').innerHTML = `
@@ -904,6 +908,22 @@ const OR_FEAT_MODELS_FALLBACK = {
   prompt: [
     { id: 'meta-llama/llama-3.3-70b-instruct:free', label: 'Llama 3.3 70B Instruct' },
     { id: 'deepseek/deepseek-chat:free',            label: 'DeepSeek Chat' },
+    { id: 'qwen/qwen3-235b-a22b:free',              label: 'Qwen3 235B A22B' },
+    { id: 'google/gemma-3-27b-it:free',             label: 'Google Gemma 3 27B' },
+    { id: 'openrouter/free',                        label: 'Free Models Router' },
+  ],
+  // Conversational/character models — для характера и голоса по внешности и биографии
+  personality: [
+    { id: 'meta-llama/llama-3.3-70b-instruct:free', label: 'Llama 3.3 70B Instruct' },
+    { id: 'qwen/qwen3-235b-a22b:free',              label: 'Qwen3 235B A22B' },
+    { id: 'google/gemma-3-27b-it:free',             label: 'Google Gemma 3 27B' },
+    { id: 'deepseek/deepseek-chat:free',            label: 'DeepSeek Chat' },
+    { id: 'openrouter/free',                        label: 'Free Models Router' },
+  ],
+  // Creative/narrative models — для биографии по информации/отношениям персонажа
+  biography: [
+    { id: 'meta-llama/llama-3.3-70b-instruct:free', label: 'Llama 3.3 70B Instruct' },
+    { id: 'deepseek/deepseek-r1:free',              label: 'DeepSeek R1 (Reasoning)' },
     { id: 'qwen/qwen3-235b-a22b:free',              label: 'Qwen3 235B A22B' },
     { id: 'google/gemma-3-27b-it:free',             label: 'Google Gemma 3 27B' },
     { id: 'openrouter/free',                        label: 'Free Models Router' },
@@ -1025,6 +1045,8 @@ async function loadAiSettings() {
   const prosePref    = _getPref(featPrefs, 'prose',      'claude');
   const dialoguePref = _getPref(featPrefs, 'dialogue',   'openrouter');
   const promptPref   = _getPref(featPrefs, 'prompt',     'openrouter');
+  const personalityPref = _getPref(featPrefs, 'personality', 'openrouter');
+  const biographyPref   = _getPref(featPrefs, 'biography',   'openrouter');
   const sheetPref    = _getPref(featPrefs, 'sheet',      'claude');
 
   el.innerHTML = `
@@ -1128,6 +1150,8 @@ async function loadAiSettings() {
           ${_renderFeatCard('prose',      '🪄', 'Генерация прозы',      'Дневники и финалы сессии',            prosePref,    featOrModels.prose)}
           ${_renderFeatCard('dialogue',   '💬', 'Генерация фраз',       'Реплики НПС в характере',             dialoguePref, featOrModels.dialogue)}
           ${_renderFeatCard('prompt',     '🎨', 'Генерация промта',     'Промт для изображения по внешности',  promptPref,   featOrModels.prompt)}
+          ${_renderFeatCard('personality', '🎭', 'Характер и голос',    'По внешности и биографии персонажа',  personalityPref, featOrModels.personality)}
+          ${_renderFeatCard('biography',  '📖', 'Генерация биографии',  'По информации и отношениям персонажа', biographyPref, featOrModels.biography)}
           ${_renderFeatCard('sheet',      '📋', 'Генерация листа персонажа', 'Числовые данные V20-листа по карточке', sheetPref, featOrModels.sheet)}
         </div>
 
@@ -1279,7 +1303,7 @@ async function loadAiSettings() {
   document.getElementById('ais-feat-save').addEventListener('click', () => {
     const status = document.getElementById('ais-feat-status');
     const prefs  = {};
-    for (const feat of ['appearance', 'locations', 'prose', 'dialogue', 'prompt', 'sheet']) {
+    for (const feat of ['appearance', 'locations', 'prose', 'dialogue', 'prompt', 'personality', 'biography', 'sheet']) {
       const provSel = document.querySelector(`input[name="feat-${feat}"]:checked`);
       const modSel  = document.getElementById(`feat-${feat}-model`);
       if (provSel) prefs[feat] = { provider: provSel.value, model: modSel?.value || null };
@@ -1444,8 +1468,20 @@ function mdToHtml(md) {
   return html;
 }
 
+// Bare canonical status words written without checking «Пол» (common at creation,
+// where the card text is just «Жив» regardless of gender) — grammatically correct
+// for display by gender. Anything with extra narrative (e.g. «Жив, но в бегах»)
+// is left as-is below; this only intervenes on an exact bare-word match.
+const GENDERED_STATUS_WORD = {
+  'жив':    { 'Мужской': 'Жив',   'Женский': 'Жива' },
+  'жива':   { 'Мужской': 'Жив',   'Женский': 'Жива' },
+  'мёртв':  { 'Мужской': 'Мёртв', 'Женский': 'Мертва' },
+  'мертва': { 'Мужской': 'Мёртв', 'Женский': 'Мертва' },
+};
 function statusLabel(c) {
-  const raw = c.status || '';
+  const raw = (c.status || '').trim();
+  const gendered = GENDERED_STATUS_WORD[raw.toLowerCase()]?.[c.gender];
+  if (gendered) return gendered;
   if (raw && !raw.includes('⚠️')) return raw;
   return STATUS_LABELS[c.statusType || 'unknown'] || '—';
 }
@@ -4933,6 +4969,9 @@ const INFO_FIELDS_BY_LINEAGE = {
     ['derangements', 'Деранжементы'],
     ['profession',   'Профессия'],
     ['role',         'Роль'],
+    ['nature',       'Натура'],
+    ['demeanor',     'Маска'],
+    ['concept',      'Амплуа'],
     ['belonging',    'Принадлежность'],
   ],
   fairy: [
@@ -4945,6 +4984,8 @@ const INFO_FIELDS_BY_LINEAGE = {
     ['features',   'Особенности / Способности'],
     ['hierarchy',  'Иерархия'],
     ['role',       'Роль'],
+    ['nature',     'Натура'],
+    ['demeanor',   'Маска'],
     ['belonging',  'Принадлежность'],
   ],
   mortal: [
@@ -4955,6 +4996,8 @@ const INFO_FIELDS_BY_LINEAGE = {
     ['attitude',   'Отношение к сверхъестественному'],
     ['hierarchy',  'Иерархия'],
     ['role',       'Роль'],
+    ['nature',     'Натура'],
+    ['demeanor',   'Маска'],
     ['belonging',  'Принадлежность'],
   ],
 };
@@ -4990,6 +5033,7 @@ function renderDiaryList(c) {
         <div class="diary-item" data-char="${ch}" data-file="${escHtml(d.file)}" data-title="${escHtml(d.title)}">
           <span class="diary-item-icon">📜</span>
           <span class="diary-item-title">${escHtml(d.title)}</span>
+          <button class="diary-item-del-btn" data-char="${ch}" data-file="${escHtml(d.file)}" data-title="${escHtml(d.title)}" title="Удалить запись">✕</button>
           <span class="diary-item-arrow">→</span>
         </div>`).join('')}</div>`
     : '<div class="cdet-empty">Дневников нет</div>';
@@ -6217,6 +6261,25 @@ function formatDiaryText(text) {
     .join('');
 }
 
+// Holds the currently-viewed diary entry's data so the edit/regenerate/save
+// handlers (triggered by delegated clicks, with no room to carry full text via
+// dataset) have something to read from and write back into.
+let _diaryEntryState = null;
+
+function _diaryEntryToolbar(charName, file, data) {
+  const title = data.session || data.title || '';
+  const period = file.replace(/^journal\//, '').replace(/\.md$/, '');
+  const canEdit = data.format !== 'retrospective';
+  return `
+    <div class="diary-entry-toolbar">
+      <button class="diary-back" data-char="${escHtml(charName)}">← Все дневники</button>
+      <div class="diary-entry-toolbar-actions">
+        ${canEdit ? `<button class="cdet-edit-btn diary-entry-edit-btn" data-char="${escHtml(charName)}" data-file="${escHtml(file)}" data-period="${escHtml(period)}">✏ Редактировать</button>` : ''}
+        <button class="diary-entry-del-btn" data-char="${escHtml(charName)}" data-file="${escHtml(file)}" data-title="${escHtml(title)}" title="Удалить запись">🗑 Удалить</button>
+      </div>
+    </div>`;
+}
+
 async function loadDiaryEntry(charName, file) {
   const panel = document.querySelector('#char-detail-content [data-panel="diaries"]');
   if (!panel) return;
@@ -6229,9 +6292,11 @@ async function loadDiaryEntry(charName, file) {
     const panels = panel.closest('.cdet-panels');
     if (panels) panels.scrollTop = 0;
 
+    _diaryEntryState = { charName, file, data };
+
     if (data.format === 'retrospective') {
       panel.innerHTML = `
-        <button class="diary-back" data-char="${escHtml(charName)}">← Все дневники</button>
+        ${_diaryEntryToolbar(charName, file, data)}
         ${data.title ? `<div class="diary-retro-title">${escHtml(data.title)}</div>` : ''}
         ${(data.sections || []).map(s => `
           <div class="diary-retro-section">
@@ -6242,7 +6307,7 @@ async function loadDiaryEntry(charName, file) {
         `).join('')}`;
     } else {
       panel.innerHTML = `
-        <button class="diary-back" data-char="${escHtml(charName)}">← Все дневники</button>
+        ${_diaryEntryToolbar(charName, file, data)}
         ${data.session   ? `<div class="diary-session">📅 ${escHtml(data.session)}</div>`   : ''}
         ${data.location  ? `<div class="diary-meta">📍 ${escHtml(data.location)}</div>`      : ''}
         ${data.tone      ? `<div class="diary-meta">🎭 ${escHtml(data.tone)}</div>`          : ''}
@@ -6260,6 +6325,94 @@ async function loadDiaryEntry(charName, file) {
     panel.innerHTML = `
       <button class="diary-back" data-char="${escHtml(charName)}">← Все дневники</button>
       <div class="cdet-empty">Ошибка загрузки: ${escHtml(err.message)}</div>`;
+  }
+}
+
+function _enterDiaryEntryEdit() {
+  const st = _diaryEntryState;
+  if (!st) return;
+  const panel = document.querySelector('#char-detail-content [data-panel="diaries"]');
+  if (!panel) return;
+  const { charName, file, data } = st;
+  const period = file.replace(/^journal\//, '').replace(/\.md$/, '');
+
+  panel.innerHTML = `
+    <div class="diary-entry-toolbar">
+      <button class="diary-back" data-char="${escHtml(charName)}">← Все дневники</button>
+    </div>
+    <div class="cdet-section-title">Заголовок записи</div>
+    <input class="form-control" id="diary-entry-session-ta" value="${escAttr(data.session || '')}" placeholder="Ноябрь 2010, ночь на манеже">
+    <div class="cdet-section-title" style="margin-top:12px">Текст записи</div>
+    <textarea class="cdet-edit-textarea" id="diary-entry-text-ta" rows="14">${escHtml(data.text || '')}</textarea>
+    <div class="cdet-edit-bar show" id="diary-entry-edit-bar">
+      <button class="cdet-gen-prompt-btn diary-entry-regen-btn" data-char="${escHtml(charName)}" data-period="${escHtml(period)}">🔄 Перегенерировать</button>
+      <button class="cdet-save-btn diary-entry-save-btn" data-char="${escHtml(charName)}" data-period="${escHtml(period)}" data-file="${escHtml(file)}">Сохранить</button>
+      <button class="cdet-cancel-btn diary-entry-cancel-btn" data-char="${escHtml(charName)}" data-file="${escHtml(file)}">Отмена</button>
+      <span class="cdet-save-msg" id="diary-entry-save-msg">✓ Сохранено</span>
+    </div>`;
+}
+
+async function _regenerateDiaryEntry(charName, period) {
+  const btn = document.querySelector('.diary-entry-regen-btn');
+  const textTa = document.getElementById('diary-entry-text-ta');
+  const sessionTa = document.getElementById('diary-entry-session-ta');
+  if (!textTa) return;
+
+  const draft = textTa.value.trim();
+  if (draft && !confirm('Текущий текст будет передан модели как черновик и переписан. Продолжить?')) return;
+
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Генерация...'; }
+  try {
+    const featPrefs    = JSON.parse(localStorage.getItem('ai-feature-prefs') || '{}');
+    const pref         = _getPref(featPrefs, 'prose', 'openrouter');
+    const preferSource = pref.provider;
+    const orModel      = preferSource === 'openrouter' ? (pref.model || null) : null;
+    const r = await fetch(`/api/characters/${encodeURIComponent(_charSlug(charName))}/diary/generate`,
+      { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ period, session: sessionTa?.value.trim() || '', draft, preferSource, orModel }) }).then(r => r.json());
+    if (r.error) { alert('Ошибка генерации: ' + r.error); return; }
+    textTa.value = r.text || '';
+  } catch (e) {
+    alert('Ошибка: ' + e.message);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '🔄 Перегенерировать'; }
+  }
+}
+
+async function _saveDiaryEntryEdit(charName, period, file) {
+  const textTa = document.getElementById('diary-entry-text-ta');
+  const sessionTa = document.getElementById('diary-entry-session-ta');
+  const text = textTa?.value.trim() || '';
+  if (!text) { alert('Пустой текст записи'); return; }
+
+  const btn = document.querySelector('.diary-entry-save-btn');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳...'; }
+  try {
+    const r = await fetch(`/api/characters/${encodeURIComponent(_charSlug(charName))}/diary`,
+      { method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ period, session: sessionTa?.value.trim() || '', text, mode: 'replace' }) }).then(r => r.json());
+    if (r.error) { alert('Ошибка сохранения: ' + r.error); return; }
+    STATE.characters = []; await ensureCharsLoaded();
+    await loadDiaryEntry(charName, file);
+  } catch (e) {
+    alert('Ошибка: ' + e.message);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Сохранить'; }
+  }
+}
+
+async function _deleteDiaryEntry(charName, file, title) {
+  if (!confirm(`Удалить запись дневника «${title || file}»?\nДействие необратимо.`)) return;
+  try {
+    const r = await fetch(`/api/characters/${encodeURIComponent(_charSlug(charName))}/diary?file=${encodeURIComponent(file)}`,
+      { method: 'DELETE' }).then(r => r.json());
+    if (!r.ok) { alert('Ошибка удаления: ' + (r.error || '')); return; }
+    STATE.characters = []; await ensureCharsLoaded();
+    const c = STATE.characters.find(ch => ch.name === charName);
+    const panel = document.querySelector('#char-detail-content [data-panel="diaries"]');
+    if (panel && c) panel.innerHTML = renderDiaryList(c);
+  } catch (e) {
+    alert('Ошибка: ' + e.message);
   }
 }
 
@@ -6373,6 +6526,10 @@ function openCharDetail(name) {
       <div class="cdet-section-title">Голос</div>
       <div class="cdet-voice">${escHtml(c.voice)}</div>
       <div class="cdet-divider"></div>` : '',
+    c.personality && !c.personality.includes('⚠️') ? `
+      <div class="cdet-section-title">Характер</div>
+      <div class="cdet-bio">${escHtml(c.personality)}</div>
+      <div class="cdet-divider"></div>` : '',
     _promptSectionHtml(c.imagePrompt, c.negativePrompt),
   ].filter(Boolean).join('');
 
@@ -6427,6 +6584,9 @@ function openCharDetail(name) {
               : '<div class="cdet-empty">Биография не заполнена</div>'}
           </div>
           <div id="cdet-bio-edit" style="display:none">
+            <div class="cdet-info-header" style="margin-bottom:8px">
+              <button class="cdet-gen-prompt-btn" id="cdet-gen-biography" data-char="${escHtml(c.name)}" title="Сгенерировать биографию по вкладкам «Информация» и «Отношения»">📖 Сгенерировать биографию</button>
+            </div>
             <textarea class="cdet-edit-textarea" id="cdet-bio-ta" rows="10" placeholder="Биография персонажа...">${c.biography && !c.biography.includes('⚠️') ? escHtml(c.biography) : ''}</textarea>
           </div>
           <div class="cdet-edit-bar" id="cdet-bio-bar">
@@ -6464,6 +6624,7 @@ function openCharDetail(name) {
         <div class="cdet-panel" data-panel="desc">
           <div class="cdet-info-header" style="gap:8px">
             <button class="cdet-gen-appearance-btn" id="cdet-gen-appearance" data-char="${escHtml(c.name)}" title="Сгенерировать описание внешности по артам персонажа (Claude Vision)">👁 Внешность по арту</button>
+            <button class="cdet-gen-prompt-btn" id="cdet-gen-personality" data-char="${escHtml(c.name)}" title="Сгенерировать характер и голос по внешности и биографии">🎭 Характер и голос</button>
             <button class="cdet-gen-prompt-btn" id="cdet-gen-prompt" data-char="${escHtml(c.name)}" title="Сгенерировать промт на основе внешности персонажа">🎨 Промт</button>
             <button class="cdet-edit-btn" data-editpanel="desc" data-char="${escHtml(c.name)}">✏ Редактировать</button>
           </div>
@@ -6476,6 +6637,8 @@ function openCharDetail(name) {
             <textarea class="cdet-edit-textarea" id="cdet-appearance-ta" rows="5" placeholder="Внешность персонажа...">${c.appearance && !c.appearance.includes('⚠️') ? escHtml(c.appearance) : ''}</textarea>
             <div class="cdet-section-title" style="margin-top:12px">Голос</div>
             <textarea class="cdet-edit-textarea" id="cdet-voice-ta" rows="3" placeholder="Голос, манера речи...">${c.voice && !c.voice.includes('⚠️') ? escHtml(c.voice) : ''}</textarea>
+            <div class="cdet-section-title" style="margin-top:12px">Характер</div>
+            <textarea class="cdet-edit-textarea" id="cdet-personality-ta" rows="4" placeholder="Ключевые черты, мотивации, манера держаться с другими...">${c.personality && !c.personality.includes('⚠️') ? escHtml(c.personality) : ''}</textarea>
             <div class="cdet-section-title" style="margin-top:12px">Промт для генерации изображения</div>
             <textarea class="cdet-edit-textarea" id="cdet-prompt-ta" rows="6" placeholder="[Блок 1] ...\n[Блок 2] ...\n[Блок 3] ...">${c.imagePrompt ? escHtml(c.imagePrompt) : ''}</textarea>
             <div class="cdet-section-title" style="margin-top:12px">Негативный промт</div>
@@ -6558,6 +6721,8 @@ document.getElementById('char-detail-content').addEventListener('click', e => {
   const promptCopyBtn = e.target.closest('#cdet-prompt-copy');
   if (promptCopyBtn) { _copyImagePrompt(promptCopyBtn); return; }
   if (e.target.closest('#cdet-gen-appearance')) { _generateAppearance(e.target.closest('#cdet-gen-appearance').dataset.char); return; }
+  if (e.target.closest('#cdet-gen-personality')) { _generatePersonality(e.target.closest('#cdet-gen-personality').dataset.char); return; }
+  if (e.target.closest('#cdet-gen-biography')) { _generateBiography(e.target.closest('#cdet-gen-biography').dataset.char); return; }
   if (e.target.closest('#cdet-gen-prompt')) { _generatePrompt(e.target.closest('#cdet-gen-prompt').dataset.char); return; }
   if (e.target.closest('#cdet-gen-dialogue')) { _genDialogue(e.target.closest('#cdet-gen-dialogue').dataset.char); return; }
   if (e.target.closest('.cdet-img-del-btn')) {
@@ -6582,6 +6747,12 @@ document.getElementById('char-detail-content').addEventListener('click', e => {
   if (e.target.closest('#diary-gen'))  { _diaryGenerate(e.target.closest('#diary-gen').dataset.char); return; }
   if (e.target.closest('#diary-save')) { _diarySave(e.target.closest('#diary-save').dataset.char); return; }
 
+  const diaryDelBtn = e.target.closest('.diary-item-del-btn');
+  if (diaryDelBtn) {
+    _deleteDiaryEntry(diaryDelBtn.dataset.char, diaryDelBtn.dataset.file, diaryDelBtn.dataset.title);
+    return;
+  }
+
   const diaryItem = e.target.closest('.diary-item');
   if (diaryItem) { loadDiaryEntry(diaryItem.dataset.char, diaryItem.dataset.file); return; }
 
@@ -6596,6 +6767,24 @@ document.getElementById('char-detail-content').addEventListener('click', e => {
     }
     return;
   }
+
+  const diaryEntryEditBtn = e.target.closest('.diary-entry-edit-btn');
+  if (diaryEntryEditBtn) { _enterDiaryEntryEdit(); return; }
+
+  const diaryEntryDelBtn = e.target.closest('.diary-entry-del-btn');
+  if (diaryEntryDelBtn) {
+    _deleteDiaryEntry(diaryEntryDelBtn.dataset.char, diaryEntryDelBtn.dataset.file, diaryEntryDelBtn.dataset.title);
+    return;
+  }
+
+  const diaryRegenBtn = e.target.closest('.diary-entry-regen-btn');
+  if (diaryRegenBtn) { _regenerateDiaryEntry(diaryRegenBtn.dataset.char, diaryRegenBtn.dataset.period); return; }
+
+  const diaryEntrySaveBtn = e.target.closest('.diary-entry-save-btn');
+  if (diaryEntrySaveBtn) { _saveDiaryEntryEdit(diaryEntrySaveBtn.dataset.char, diaryEntrySaveBtn.dataset.period, diaryEntrySaveBtn.dataset.file); return; }
+
+  const diaryEntryCancelBtn = e.target.closest('.diary-entry-cancel-btn');
+  if (diaryEntryCancelBtn) { loadDiaryEntry(diaryEntryCancelBtn.dataset.char, diaryEntryCancelBtn.dataset.file); return; }
 });
 
 // ── Carousel logic ────────────────────────────────────────────────────────────
@@ -6764,11 +6953,13 @@ async function _savePanelEdit(panel, charName) {
     } else if (panel === 'desc') {
       const appearance   = document.getElementById('cdet-appearance-ta')?.value.trim() || '';
       const voice        = document.getElementById('cdet-voice-ta')?.value.trim() || '';
+      const personality  = document.getElementById('cdet-personality-ta')?.value.trim() || '';
       const imagePrompt  = document.getElementById('cdet-prompt-ta')?.value.trim() || '';
       const negativePrompt = document.getElementById('cdet-negprompt-ta')?.value.trim() || '';
       const fields = {};
       if (appearance)   fields.appearance    = appearance;
       if (voice)        fields.voice         = voice;
+      if (personality)  fields.personality   = personality;
       if (imagePrompt)  fields.imagePrompt   = imagePrompt;
       if (negativePrompt) fields.negativePrompt = negativePrompt;
       const r = await fetch(`/api/characters/${encodeURIComponent(_charSlug(charName))}/fields${qs}`,
@@ -6778,11 +6969,12 @@ async function _savePanelEdit(panel, charName) {
       ok = d.ok;
       if (ok) {
         const ch = STATE.characters.find(c => c.name === charName);
-        if (ch) Object.assign(ch, { appearance, voice, imagePrompt, negativePrompt });
+        if (ch) Object.assign(ch, { appearance, voice, personality, imagePrompt, negativePrompt });
         // Refresh desc view
         const descHtml = [
           appearance ? `<div class="cdet-section-title">Внешность</div><div class="cdet-bio">${escHtml(appearance)}</div><div class="cdet-divider"></div>` : '',
           voice ? `<div class="cdet-section-title">Голос</div><div class="cdet-voice">${escHtml(voice)}</div><div class="cdet-divider"></div>` : '',
+          personality ? `<div class="cdet-section-title">Характер</div><div class="cdet-bio">${escHtml(personality)}</div><div class="cdet-divider"></div>` : '',
           _promptSectionHtml(imagePrompt, negativePrompt),
         ].filter(Boolean).join('');
         document.getElementById('cdet-desc-view').innerHTML = descHtml || '<div class="cdet-empty">Описание не заполнено</div>';
@@ -6844,11 +7036,13 @@ async function _generateAppearance(charName) {
     if (view) {
       const cur = ch || {};
       const voice       = cur.voice       || '';
+      const personality = cur.personality || '';
       const imagePrompt = cur.imagePrompt || '';
       const negPrompt   = cur.negativePrompt || '';
       view.innerHTML = [
         d.appearance  ? `<div class="cdet-section-title">Внешность</div><div class="cdet-bio">${escHtml(d.appearance)}</div><div class="cdet-divider"></div>` : '',
         voice         ? `<div class="cdet-section-title">Голос</div><div class="cdet-voice">${escHtml(voice)}</div><div class="cdet-divider"></div>` : '',
+        personality   ? `<div class="cdet-section-title">Характер</div><div class="cdet-bio">${escHtml(personality)}</div><div class="cdet-divider"></div>` : '',
         _promptSectionHtml(imagePrompt, negPrompt),
       ].filter(Boolean).join('') || '<div class="cdet-empty">Описание не заполнено</div>';
     }
@@ -7068,11 +7262,13 @@ async function _generatePrompt(charName) {
 
     const descView = document.getElementById('cdet-desc-view');
     if (descView) {
-      const appearance = c.appearance && !c.appearance.includes('⚠️') ? c.appearance : '';
-      const voice      = c.voice && !c.voice.includes('⚠️') ? c.voice : '';
+      const appearance  = c.appearance && !c.appearance.includes('⚠️') ? c.appearance : '';
+      const voice       = c.voice && !c.voice.includes('⚠️') ? c.voice : '';
+      const personality = c.personality && !c.personality.includes('⚠️') ? c.personality : '';
       const html = [
         appearance ? `<div class="cdet-section-title">Внешность</div><div class="cdet-bio">${escHtml(appearance)}</div><div class="cdet-divider"></div>` : '',
         voice ? `<div class="cdet-section-title">Голос</div><div class="cdet-voice">${escHtml(voice)}</div><div class="cdet-divider"></div>` : '',
+        personality ? `<div class="cdet-section-title">Характер</div><div class="cdet-bio">${escHtml(personality)}</div><div class="cdet-divider"></div>` : '',
         _promptSectionHtml(d.positive, d.negative),
       ].filter(Boolean).join('');
       descView.innerHTML = html;
@@ -7087,6 +7283,153 @@ async function _generatePrompt(charName) {
   } finally {
     _genPromptRunning = false;
     if (btn) { btn.disabled = false; btn.textContent = '🎨 Промт'; }
+  }
+}
+
+let _genPersonalityRunning = false;
+
+async function _generatePersonality(charName) {
+  if (_genPersonalityRunning) return;
+
+  const c = STATE.characters.find(ch => ch.name === charName);
+  if (!c) return;
+
+  const hasAppearance = c.appearance && !c.appearance.includes('⚠️');
+  const hasBio        = c.biography && !c.biography.includes('⚠️');
+  if (!hasAppearance && !hasBio) {
+    alert('Заполните «Внешность» или «Биография» перед генерацией характера и голоса.');
+    return;
+  }
+
+  const existingPersonality = (c.personality || '').trim();
+  if (existingPersonality && !/⚠️/.test(existingPersonality)) {
+    if (!confirm('Характер уже заполнен. Сгенерировать уточнённую версию на основе информации/биографии/внешности (текущий текст будет использован как черновик)?')) return;
+  }
+
+  _genPersonalityRunning = true;
+  const btn = document.getElementById('cdet-gen-personality');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Генерация...'; }
+
+  try {
+    const qs = window.location.search;
+    const featPrefs     = JSON.parse(localStorage.getItem('ai-feature-prefs') || '{}');
+    const _persPref     = _getPref(featPrefs, 'personality', 'openrouter');
+    const preferSource  = _persPref.provider;
+    const orModel       = preferSource === 'openrouter' ? (_persPref.model || null) : null;
+
+    const resp = await fetch(`/api/characters/${encodeURIComponent(_charSlug(charName))}/generate-personality${qs}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ preferSource, orModel }),
+    });
+    const d = await resp.json();
+
+    if (resp.status === 429 || d.rateLimited) {
+      alert('Превышен лимит запросов к API.\n\nПодождите минуту и попробуйте снова, или смените модель в Настройках AI.');
+      return;
+    }
+    if (!d.ok) {
+      alert('Ошибка генерации характера: ' + (d.error || 'неизвестная ошибка'));
+      return;
+    }
+
+    const fields = { personality: d.personality };
+    if (d.voice) fields.voice = d.voice;
+    const saveResp = await fetch(`/api/characters/${encodeURIComponent(_charSlug(charName))}/fields${qs}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fields }),
+    });
+    const saveData = await saveResp.json();
+    if (!saveData.ok) { alert('Ошибка сохранения: ' + (saveData.error || '')); return; }
+
+    Object.assign(c, fields);
+
+    const descView = document.getElementById('cdet-desc-view');
+    if (descView) {
+      const appearance = c.appearance && !c.appearance.includes('⚠️') ? c.appearance : '';
+      const voice       = c.voice && !c.voice.includes('⚠️') ? c.voice : '';
+      descView.innerHTML = [
+        appearance ? `<div class="cdet-section-title">Внешность</div><div class="cdet-bio">${escHtml(appearance)}</div><div class="cdet-divider"></div>` : '',
+        voice ? `<div class="cdet-section-title">Голос</div><div class="cdet-voice">${escHtml(voice)}</div><div class="cdet-divider"></div>` : '',
+        d.personality ? `<div class="cdet-section-title">Характер</div><div class="cdet-bio">${escHtml(d.personality)}</div><div class="cdet-divider"></div>` : '',
+        _promptSectionHtml(c.imagePrompt, c.negativePrompt),
+      ].filter(Boolean).join('') || '<div class="cdet-empty">Описание не заполнено</div>';
+    }
+
+    const persTa = document.getElementById('cdet-personality-ta');
+    if (persTa) persTa.value = d.personality || '';
+    if (d.voice) {
+      const voiceTa = document.getElementById('cdet-voice-ta');
+      if (voiceTa) voiceTa.value = d.voice;
+    }
+  } catch (e) {
+    alert('Ошибка: ' + e.message);
+  } finally {
+    _genPersonalityRunning = false;
+    if (btn) { btn.disabled = false; btn.textContent = '🎭 Характер и голос'; }
+  }
+}
+
+let _genBiographyRunning = false;
+
+async function _generateBiography(charName) {
+  if (_genBiographyRunning) return;
+
+  const c = STATE.characters.find(ch => ch.name === charName);
+  if (!c) return;
+
+  const existingBio = (c.biography || '').trim();
+  if (existingBio && !/⚠️/.test(existingBio)) {
+    if (!confirm('Биография уже заполнена. Сгенерировать уточнённую версию на основе информации/отношений (текущий текст будет использован как черновик)?')) return;
+  }
+
+  _genBiographyRunning = true;
+  const btn = document.getElementById('cdet-gen-biography');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Генерация...'; }
+
+  try {
+    const qs = window.location.search;
+    const featPrefs    = JSON.parse(localStorage.getItem('ai-feature-prefs') || '{}');
+    const _bioPref     = _getPref(featPrefs, 'biography', 'openrouter');
+    const preferSource = _bioPref.provider;
+    const orModel       = preferSource === 'openrouter' ? (_bioPref.model || null) : null;
+
+    const resp = await fetch(`/api/characters/${encodeURIComponent(_charSlug(charName))}/generate-biography${qs}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ preferSource, orModel }),
+    });
+    const d = await resp.json();
+
+    if (resp.status === 429 || d.rateLimited) {
+      alert('Превышен лимит запросов к API.\n\nПодождите минуту и попробуйте снова, или смените модель в Настройках AI.');
+      return;
+    }
+    if (!d.ok) {
+      alert('Ошибка генерации биографии: ' + (d.error || 'неизвестная ошибка'));
+      return;
+    }
+
+    const saveResp = await fetch(`/api/characters/${encodeURIComponent(_charSlug(charName))}/fields${qs}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fields: { biography: d.biography } }),
+    });
+    const saveData = await saveResp.json();
+    if (!saveData.ok) { alert('Ошибка сохранения биографии: ' + (saveData.error || '')); return; }
+
+    c.biography = d.biography;
+
+    document.getElementById('cdet-bio-view').innerHTML =
+      d.biography ? `<div class="cdet-bio">${escHtml(d.biography)}</div>` : '<div class="cdet-empty">Биография не заполнена</div>';
+    const bioTa = document.getElementById('cdet-bio-ta');
+    if (bioTa) bioTa.value = d.biography || '';
+  } catch (e) {
+    alert('Ошибка: ' + e.message);
+  } finally {
+    _genBiographyRunning = false;
+    if (btn) { btn.disabled = false; btn.textContent = '📖 Сгенерировать биографию'; }
   }
 }
 
@@ -7135,6 +7478,23 @@ function _enterInfoEdit(charName) {
         const o = document.createElement('option');
         o.value = opt; o.textContent = opt;
         if (current === opt) o.selected = true;
+        input.appendChild(o);
+      });
+    } else if (key === 'generation') {
+      input = document.createElement('select');
+      input.className = 'cdet-field-input';
+      input.dataset.field = key;
+      // Legacy cards stored generation as a bare number ("8") or with qualifiers
+      // ("12-е (предположительно)") — match by leading digits so a clean numeric
+      // value still pre-selects correctly; anything else falls back to blank.
+      const curNum = (current.match(/\d+/) || [])[0];
+      const blank = document.createElement('option');
+      blank.value = ''; blank.textContent = '— выбрать —';
+      input.appendChild(blank);
+      VAMPIRE_GENERATIONS.forEach(opt => {
+        const o = document.createElement('option');
+        o.value = opt; o.textContent = opt;
+        if (curNum && opt.startsWith(curNum + '-')) o.selected = true;
         input.appendChild(o);
       });
     } else {

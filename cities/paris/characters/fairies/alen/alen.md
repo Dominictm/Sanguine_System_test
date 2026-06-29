@@ -24,7 +24,7 @@
   - Квентин (Арлен Дафф) — фейский привратник, вручил ключ; знает цену информации
   - Ямала — принцесса, признала гостя без слов
   - Верене де Кюстин — на платформе Saint-Michel сказала: «Место приходит к тебе — не ты к нему»; кукла на её поясе несла старый фейский след
-- **📖 Дневники:** [Ноябрь 2010](journal/2010-11.md)
+- **📖 Дневники:** [Ноябрь 2010, суббота, ~04:00 — Ночь, которую не знаю как назвать.](journal/2010-11.md)
 - **🎨 Промт для генерации изображения:**
   [Блок 1] Cinematic dark fantasy portrait, young Pooka changeling appearing sixteen, three-quarter view, American teenage features, tousled hair, bare feet, worn dark jeans, long dark coat hanging open, lilac-lavender scarf loosely wrapped around the neck, relaxed open posture, expression of someone who just understood something vast and is still quietly processing it
   [Блок 2] Warm amber street-light glow from below, cold blue moonlight rim from behind, deep shadows, dark ochre-black painterly background with abstract swirling brushstroke textures, faint traces of glamour in the air

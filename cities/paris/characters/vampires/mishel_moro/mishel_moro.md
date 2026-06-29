@@ -26,7 +26,7 @@
 - **Внешность:** Волосы почти альбиносные — платиновые, почти белые, средней длины. Бледная кожа. Пирсинг в носу. Цепочка на шее. Оверсайз чёрная футболка с агрессивным принтом (волк, шрифт old english). Клетчатые чёрно-белые широкие брюки. Взгляд пустой и прямой одновременно: смотрит *на* тебя, но видит что-то другое.
 - **Дисциплины:** Obfuscate 1, Auspex 1
 - **Голос:** Говорит с паузами там, где не нужно, и без пауз там, где они нужны. Называет вещи не теми именами. Обрывает собственные фразы. Типичное: «Ты живой? Отлично. Стой рядом и молчи.» / «У тебя уши неправильной формы для Парижа.» / «Ты ищешь что-то красное. Очень старое и красное.»
-- **📖 Дневники:** [Ноябрь 2010](journal/2010-11.md)
+- **📖 Дневники:** [Ноябрь 2010, суббота, 3:40 — Он настоящий.](journal/2010-11.md)
 - **🎨 Промт для генерации изображения:**
   [Блок 1] Cinematic dark fantasy portrait, young female Malkavian oracle, three-quarter view, platinum-white almost albino hair of medium length, pale skin, small nose ring, thin chain necklace, oversized black t-shirt with aggressive wolf graphic in old english lettering, wide black-and-white checkered baggy pants, posture disengaged, staring directly at the viewer but seeing something entirely behind them — the oracle's vacant gaze that reads what others cannot
   [Блок 2] Cold white-silver rim-light from the right, diffuse unnatural light, deep crimson shadow filling the edges, red-black painterly background with abstract swirling brushstroke textures, white and crimson smoke bleeding together
