@@ -27,8 +27,12 @@ function applyOverrides() {
   for (const { file, find, replace } of overrides) {
     const fp = path.join(ROOT, file);
     if (!fs.existsSync(fp)) throw new Error(`release-overrides: файл не найден: ${file}`);
-    const raw = fs.readFileSync(fp, 'utf8');
-    const bom = raw.charCodeAt(0) === 0xFEFF;
+    // .bat-файлы здесь — CP866 (надёжность чтения кириллицы в cmd.exe, см. tools/migrations/README.md
+    // не относится; см. коммит про CP866). 'latin1' — байт-в-байт passthrough, не трогает не-ASCII
+    // байты при поиске/замене чисто ASCII-якорей и не теряет их при обратной записи.
+    const enc = file.endsWith('.bat') ? 'latin1' : 'utf8';
+    const raw = fs.readFileSync(fp, enc);
+    const bom = enc === 'utf8' && raw.charCodeAt(0) === 0xFEFF;
     const crlf = raw.includes('\r\n');
     const text = (bom ? raw.slice(1) : raw).replace(/\r\n/g, '\n');
     const count = text.split(find).length - 1;
@@ -41,7 +45,7 @@ function applyOverrides() {
     }
     let next = text.replace(find, replace);
     if (crlf) next = next.replace(/\n/g, '\r\n');
-    if (!dryRun) fs.writeFileSync(fp, (bom ? '﻿' : '') + next, 'utf8');
+    if (!dryRun) fs.writeFileSync(fp, (bom ? '﻿' : '') + next, enc);
     changed.push(file);
   }
   return changed;
