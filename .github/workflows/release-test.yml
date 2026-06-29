@@ -1,0 +1,38 @@
+name: release-test
+
+# Пересобирает ветку "test" (релиз для Рассказчика) из master при каждом push.
+# Не мёрджит — берёт текущее дерево master, применяет точечные правки из
+# tools/release-overrides.json и вычищает cities/<город>/ (см. tools/build_release.js),
+# затем форс-пушит результат в test одним коммитом. История test поэтому всегда
+# расходится с предыдущей — это ожидаемо (см. update.bat / update-test.bat).
+#
+# Города/персонажи пользователей лежат в их собственной рабочей копии в cities/<город>/
+# и НЕ отслеживаются веткой test, поэтому force-push не затрагивает их данные.
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-test-branch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Build release tree (overrides + cities/ wipe)
+        run: node tools/build_release.js
+
+      - name: Commit and force-push to test
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -B test
+          git add -A
+          git commit -m "release(test): автосборка из master ${GITHUB_SHA::7}" --allow-empty
+          git push --force origin test

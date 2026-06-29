@@ -113,9 +113,11 @@ if %errorlevel% == 0 (
     echo   Server already running at http://localhost:3000
     start http://localhost:3000
     echo.
-    
+
     exit /b 0
 )
+
+cd /d "%~dp0web"
 
 if not exist "node_modules\" (
     echo   Installing dependencies...

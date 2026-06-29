@@ -15,6 +15,7 @@ const {
   parseChronicleParticipants,
 } = require('./lib/parsers');
 const { parseDisciplineMd } = require('./lib/disciplines');
+const { runMigrations } = require('./lib/migrations');
 
 // Load .env file (secrets not committed to git)
 try {
@@ -6004,7 +6005,7 @@ const SUPERVISED = process.env.VTM_SUPERVISED === '1';
 function scheduleRestart(tag = '[restart]', delayMs = 300) {
   if (!SUPERVISED) {
     console.warn(`${tag} Авто-рестарт пропущен: сервер запущен без wrapper.js. ` +
-      `Изменения вступят в силу после ручного перезапуска (web/start.bat или npm start).`);
+      `Изменения вступят в силу после ручного перезапуска (start.bat из корня или npm start).`);
     return false;
   }
   console.log(`${tag} Перезапуск (exit ${RESTART_CODE})...`);
@@ -6045,10 +6046,26 @@ process.on('uncaughtException', err => {
   if (SUPERVISED) scheduleRestart('[uncaughtException]', 100);
 });
 
+function runMigrationsOnStartup() {
+  try {
+    const { filesChanged, migrationsApplied } = runMigrations({
+      root: ROOT,
+      log: msg => console.log(`  ${C.dim}[migrate]${C.reset} ${msg}`),
+    });
+    if (filesChanged) {
+      console.log(`  \u{1F527} Миграции формата: обновлено файлов — ${filesChanged} (применений: ${migrationsApplied})\n`);
+    }
+  } catch (e) {
+    console.error(`${C.red}[migrations]${C.reset}`, e?.stack || e);
+  }
+}
+
 app.listen(PORT, () => {
   console.log(`\n  \u{1FA78} Sanguine System`);
   console.log(`  ─────────────────`);
   console.log(`  http://localhost:${PORT}\n`);
+  // Подхватить изменения формата карточек после обновления (см. web/lib/migrations.js)
+  runMigrationsOnStartup();
   // Run initial validation on startup
   runValidationBackground();
 });

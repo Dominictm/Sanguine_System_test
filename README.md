@@ -46,7 +46,7 @@ node tools/new_city.js london "Лондон" 2010
 ```bash
 cd web && npm install && node server.js      # → http://localhost:3000
 ```
-(на Windows можно `web/start.bat`)
+(на Windows можно запустить `start.bat` из корня проекта)
 
 В шапке слева выбери свой город в выпадающем списке.
 

@@ -3,12 +3,12 @@ chcp 65001 > nul
 cd /d "%~dp0"
 
 rem ============================================================
-rem  Sanguine System - загрузка/обновление версии
-rem  Источник: ветка "master" репозитория на GitHub.
+rem  Sanguine System - загрузка/обновление релизной версии
+rem  Источник: ветка "test" репозитория на GitHub.
 rem ============================================================
 
 set REPO_URL=https://github.com/Dominictm/Sanguine_System.git
-set BRANCH=master
+set BRANCH=test
 set CLONE_DIR=Sanguine_System
 
 echo.
@@ -86,7 +86,7 @@ if %errorlevel% neq 0 (
 )
 echo.
 echo   Готово. Проект в папке "%CLONE_DIR%".
-echo   Запуск приложения: %CLONE_DIR%\web\start.bat
+echo   Запуск приложения: %CLONE_DIR%\start.bat
 echo.
 pause
 exit /b 0
@@ -107,7 +107,7 @@ if %errorlevel% neq 0 (
     exit /b 1
 )
 
-rem Переключиться на master (создать локальную ветку, если её нет).
+rem Переключиться на test (создать локальную ветку, если её нет).
 git checkout %BRANCH% 2>nul || git checkout -b %BRANCH% origin/%BRANCH%
 if %errorlevel% neq 0 (
     echo   ERROR: не удалось переключиться на ветку "%BRANCH%".
@@ -115,41 +115,26 @@ if %errorlevel% neq 0 (
     exit /b 1
 )
 
-rem Безопасное обновление "вперёд" (без перезаписи локальной работы).
-git pull --ff-only origin %BRANCH%
-if %errorlevel% == 0 goto update_ok
+rem Ветка "test" пересобирается заново при каждом релизе (см. tools/build_release.js
+rem и .github/workflows/release-test.yml) — её история всегда расходится с локальной
+rem копией, это не сигнал потери данных, поэтому сразу сбрасываем без вопросов.
+rem Города/персонажи лежат в cities/<город>/ и в этой ветке не отслеживаются git'ом,
+rem поэтому сброс их не затронет.
+echo   Обновляю релизную версию (ветка "test" пересобирается с каждым релизом).
+echo   Города и персонажи в cities/ не отслеживаются этой веткой и не пострадают.
 
-echo.
-echo   ВНИМАНИЕ: обычное обновление невозможно — локальная версия
-echo   разошлась с GitHub (есть локальные изменения или коммиты).
-echo.
-choice /C YN /M "Сбросить локальную версию к GitHub? ЛОКАЛЬНЫЕ ИЗМЕНЕНИЯ БУДУТ ПОТЕРЯНЫ"
-if errorlevel 2 goto abort_update
-if errorlevel 1 goto hard_reset
-
-:hard_reset
 git reset --hard origin/%BRANCH%
 if %errorlevel% neq 0 (
     echo   ERROR: сброс не удался.
     pause
     exit /b 1
 )
-goto update_ok
 
-:abort_update
-echo.
-echo   Обновление отменено. Локальные изменения сохранены.
-echo   Сохраните/уберите их и запустите update.bat снова.
-echo.
-pause
-exit /b 1
-
-:update_ok
 echo.
 echo   Обновление завершено. Текущая версия:
 git --no-pager log -1 --format="   %%h  %%s"
 echo.
-echo   Запуск приложения: web\start.bat
+echo   Запуск приложения: start.bat
 echo.
 pause
 exit /b 0
