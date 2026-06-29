@@ -1,0 +1,485 @@
+{
+  "lineage": "vampires",
+  "header": {
+    "name": "Граф Жубака",
+    "player": "",
+    "chronicle": "",
+    "nature": "Галант (Gallant)",
+    "demeanor": "Монстр (Monster)",
+    "concept": "",
+    "clan": "Ласомбра",
+    "generation": "5-е",
+    "sire": "Куран"
+  },
+  "attributes": {
+    "physical": {
+      "strength": 4,
+      "dexterity": 3,
+      "stamina": 3
+    },
+    "social": {
+      "charisma": 1,
+      "manipulation": 4,
+      "appearance": 3
+    },
+    "mental": {
+      "perception": 1,
+      "intelligence": 2,
+      "wits": 3
+    }
+  },
+  "abilities": {
+    "talents": [
+      {
+        "name": "Атлетика",
+        "val": 2,
+        "fixed": true
+      },
+      {
+        "name": "Бдительность",
+        "val": 2,
+        "fixed": true
+      },
+      {
+        "name": "Драка",
+        "val": 1,
+        "fixed": true
+      },
+      {
+        "name": "Запугивание",
+        "val": 0,
+        "fixed": true
+      },
+      {
+        "name": "Красноречие",
+        "val": 2,
+        "fixed": true
+      },
+      {
+        "name": "Лидерство",
+        "val": 2,
+        "fixed": true
+      },
+      {
+        "name": "Уличное чутьё",
+        "val": 0,
+        "fixed": true
+      },
+      {
+        "name": "Хитрость",
+        "val": 3,
+        "fixed": true
+      },
+      {
+        "name": "Шестое чувство",
+        "val": 1,
+        "fixed": true
+      },
+      {
+        "name": "Эмпатия",
+        "val": 0,
+        "fixed": true
+      },
+      {
+        "name": "jfgfgf",
+        "val": 0,
+        "fixed": false
+      },
+      {
+        "name": "",
+        "val": 0,
+        "fixed": false
+      }
+    ],
+    "skills": [
+      {
+        "name": "Вождение",
+        "val": 1,
+        "fixed": true
+      },
+      {
+        "name": "Воровство",
+        "val": 0,
+        "fixed": true
+      },
+      {
+        "name": "Выживание",
+        "val": 0,
+        "fixed": true
+      },
+      {
+        "name": "Исполнение",
+        "val": 0,
+        "fixed": true
+      },
+      {
+        "name": "Обращение с животными",
+        "val": 0,
+        "fixed": true
+      },
+      {
+        "name": "Ремесло",
+        "val": 0,
+        "fixed": true
+      },
+      {
+        "name": "Скрытность",
+        "val": 1,
+        "fixed": true
+      },
+      {
+        "name": "Стрельба",
+        "val": 1,
+        "fixed": true
+      },
+      {
+        "name": "Фехтование",
+        "val": 1,
+        "fixed": true
+      },
+      {
+        "name": "Этикет",
+        "val": 3,
+        "fixed": true
+      },
+      {
+        "name": "Политика (Politics)",
+        "val": 3,
+        "fixed": false
+      },
+      {
+        "name": "Финансы (Finance)",
+        "val": 2,
+        "fixed": false
+      }
+    ],
+    "knowledges": [
+      {
+        "name": "Гуманитарные науки",
+        "val": 2,
+        "fixed": true
+      },
+      {
+        "name": "Естественные науки",
+        "val": 1,
+        "fixed": true
+      },
+      {
+        "name": "Законы",
+        "val": 1,
+        "fixed": true
+      },
+      {
+        "name": "Информатика",
+        "val": 1,
+        "fixed": true
+      },
+      {
+        "name": "Медицина",
+        "val": 1,
+        "fixed": true
+      },
+      {
+        "name": "Оккультизм",
+        "val": 3,
+        "fixed": true
+      },
+      {
+        "name": "Политика",
+        "val": 3,
+        "fixed": true
+      },
+      {
+        "name": "Расследование",
+        "val": 2,
+        "fixed": true
+      },
+      {
+        "name": "Финансы",
+        "val": 2,
+        "fixed": true
+      },
+      {
+        "name": "Электроника",
+        "val": 0,
+        "fixed": true
+      },
+      {
+        "name": "",
+        "val": 0,
+        "fixed": false
+      },
+      {
+        "name": "",
+        "val": 0,
+        "fixed": false
+      }
+    ]
+  },
+  "disciplines": [
+    {
+      "name": "Доминирование (Dominate)",
+      "val": 2
+    },
+    {
+      "name": "Присутствие (Presence)",
+      "val": 1
+    },
+    {
+      "name": "Тауматургия (Thaumaturgy)",
+      "val": 0
+    },
+    {
+      "name": "",
+      "val": 0
+    },
+    {
+      "name": "",
+      "val": 0
+    },
+    {
+      "name": "",
+      "val": 0
+    }
+  ],
+  "backgrounds": [
+    {
+      "name": "Союзники (Allies)",
+      "val": 1
+    },
+    {
+      "name": "Ресурсы (Resources)",
+      "val": 2
+    },
+    {
+      "name": "Убежище (Haven)",
+      "val": 1
+    },
+    {
+      "name": "Наставник (Mentor)",
+      "val": 1
+    },
+    {
+      "name": "",
+      "val": 0
+    },
+    {
+      "name": "",
+      "val": 0
+    }
+  ],
+  "virtues": {
+    "conscience": 3,
+    "selfcontrol": 2,
+    "courage": 2
+  },
+  "meritsFlaws": "",
+  "humanity": 5,
+  "path": "Человечность",
+  "willpower": {
+    "permanent": 2,
+    "temp": [
+      true,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "bloodPool": [
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false
+  ],
+  "bloodPoolCount": 0,
+  "bloodPerTurn": 8,
+  "health": {
+    "bruised": false,
+    "hurt": false,
+    "injured": false,
+    "wounded": false,
+    "mauled": false,
+    "crippled": false,
+    "incapacitated": false
+  },
+  "flaw": "",
+  "experience": {
+    "total": 0,
+    "spent": 0,
+    "log": []
+  },
+  "specializations": [
+    {
+      "ability": "Этикет",
+      "spec": "Дворянские обычаи"
+    },
+    {
+      "ability": "Политика",
+      "spec": "Внутренняя политика Камарильи"
+    },
+    {
+      "ability": "Финансы",
+      "spec": "Инвестиции в морскую торговлю"
+    },
+    {
+      "ability": "Оккультизм",
+      "spec": "Синестрия Тени (Lasombra)"
+    },
+    {
+      "ability": "Доминирование",
+      "spec": "Командный крик"
+    },
+    {
+      "ability": "",
+      "spec": ""
+    }
+  ],
+  "otherTraits": [
+    {
+      "name": "",
+      "val": 0
+    },
+    {
+      "name": "",
+      "val": 0
+    },
+    {
+      "name": "",
+      "val": 0
+    },
+    {
+      "name": "",
+      "val": 0
+    },
+    {
+      "name": "",
+      "val": 0
+    },
+    {
+      "name": "",
+      "val": 0
+    }
+  ],
+  "rituals": [
+    {
+      "name": "Слияние Тени (Shadow Merge)",
+      "level": "2"
+    },
+    {
+      "name": "Вечный Пакт (Eternal Pact)",
+      "level": "1"
+    },
+    {
+      "name": "",
+      "level": ""
+    },
+    {
+      "name": "",
+      "level": ""
+    },
+    {
+      "name": "",
+      "level": ""
+    },
+    {
+      "name": "",
+      "level": ""
+    }
+  ],
+  "history": "Родился в Балмонте в 1548 г., обращён в 1588 г. Кураном в тайных покоях дворца. С тех пор манипулирует политикой Камарильи, укрепляя влияние своей семьи.",
+  "goals": "Укрепить власть в Восточной Европе, собрать достаточный банковский капитал для открытия собственного убежища, избавиться от тяжёлого торгового долга.",
+  "description": {
+    "birthDate": "1548",
+    "apparentAge": "475 лет",
+    "deathDate": "",
+    "gender": "Мужской",
+    "race": "Вампир (Ласомбра)",
+    "hair": "Чёрные",
+    "eyes": "Красные, без зрачков",
+    "heightWeight": "190 см / 85 кг",
+    "build": "Стройный, аристократический",
+    "nationality": "Итальянская"
+  },
+  "allies": "Капитан Вилларо — морской торговец, предоставляет поставки и информацию.\nСестра Мария — смертная информатор, снабжает слухами в городе.",
+  "possessions": "Длинный длинный плащ из бархата, скрывающий клыки.\nПистоль «Скорый Укус» (пистолет с серебряным калибром).\nТёмный амулет, усиливающий Присутствие.",
+  "combat": [
+    {
+      "weapon": "Пистоль «Скорый Укус»",
+      "diff": "3",
+      "damage": "2",
+      "range": "15 м",
+      "rate": "2",
+      "clip": "6",
+      "size": "Р"
+    },
+    {
+      "weapon": "Когти (боевой стиль)",
+      "diff": "2",
+      "damage": "2",
+      "range": "—",
+      "rate": "3",
+      "clip": "—",
+      "size": "—"
+    },
+    {
+      "weapon": "",
+      "diff": "",
+      "damage": "",
+      "range": "",
+      "rate": "",
+      "clip": "",
+      "size": ""
+    },
+    {
+      "weapon": "",
+      "diff": "",
+      "damage": "",
+      "range": "",
+      "rate": "",
+      "clip": "",
+      "size": ""
+    }
+  ]
+}

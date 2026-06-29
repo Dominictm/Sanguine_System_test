@@ -7380,6 +7380,25 @@ a.md-link-loc:hover {
 }
 .v20-mini-action:hover { border-color: var(--accent2); color: var(--accent2); }
 
+.v20-add-row-btn {
+  float: right;
+}
+
+.v20-row-remove-btn {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text3);
+  font-size: var(--fs-2xs);
+  line-height: 1;
+  cursor: pointer;
+  transition: border-color .15s var(--ease), color .15s var(--ease);
+}
+.v20-row-remove-btn:hover { border-color: var(--c-danger); color: var(--c-danger-text); }
+
 .v20-gen-info {
   margin-left: 6px;
   font-size: var(--fs-2xs);

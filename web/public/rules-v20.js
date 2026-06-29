@@ -19,17 +19,21 @@ const RULES_V20 = {
     'истинный бруха': { disciplines: ['Могущество', 'Присутствие', 'Темпорис'], weakness: '' },
   },
 
-  // Поколение → запас крови (max), предел траты в ход, max точек дисциплины.
+  // Поколение → запас крови (max; null = «счётчик» без фиксированного предела, 3-е поколение),
+  // предел траты в ход, max точек дисциплины (legacy — см. maxDots), max точек ЛЮБОЙ черты
+  // (характеристики/способности/дисциплины/факты биографии — «Единая таблица максимума точек»).
   generations: {
-    5:  { bloodMax: 40, bloodPerTurn: 8, discMax: 10 },
-    6:  { bloodMax: 30, bloodPerTurn: 6, discMax: 9 },
-    7:  { bloodMax: 20, bloodPerTurn: 4, discMax: 8 },
-    8:  { bloodMax: 15, bloodPerTurn: 3, discMax: 6 },
-    9:  { bloodMax: 14, bloodPerTurn: 2, discMax: 6 },
-    10: { bloodMax: 13, bloodPerTurn: 1, discMax: 5 },
-    11: { bloodMax: 12, bloodPerTurn: 1, discMax: 5 },
-    12: { bloodMax: 11, bloodPerTurn: 1, discMax: 5 },
-    13: { bloodMax: 10, bloodPerTurn: 1, discMax: 5 },
+    3:  { bloodMax: null, bloodPerTurn: null, discMax: 10, maxDots: 10 },
+    4:  { bloodMax: 50, bloodPerTurn: 10, discMax: 9,  maxDots: 9 },
+    5:  { bloodMax: 40, bloodPerTurn: 8,  discMax: 10, maxDots: 8 },
+    6:  { bloodMax: 30, bloodPerTurn: 6,  discMax: 9,  maxDots: 7 },
+    7:  { bloodMax: 20, bloodPerTurn: 4,  discMax: 8,  maxDots: 6 },
+    8:  { bloodMax: 15, bloodPerTurn: 3,  discMax: 6,  maxDots: 5 },
+    9:  { bloodMax: 14, bloodPerTurn: 2,  discMax: 6,  maxDots: 5 },
+    10: { bloodMax: 13, bloodPerTurn: 1,  discMax: 5,  maxDots: 5 },
+    11: { bloodMax: 12, bloodPerTurn: 1,  discMax: 5,  maxDots: 5 },
+    12: { bloodMax: 11, bloodPerTurn: 1,  discMax: 5,  maxDots: 5 },
+    13: { bloodMax: 10, bloodPerTurn: 1,  discMax: 5,  maxDots: 5 },
   },
 
   // Бюджеты создания по линейке (характеристики/способности — приоритет 1/2/3).
@@ -76,11 +80,11 @@ function v20ClanInfo(name) {
   return found ? RULES_V20.clans[found] : null;
 }
 
-// Поколение (строка/число из шапки) → таблица «Запас крови по поколению».
+// Поколение (строка/число из шапки) → таблица «Запас крови / max точек по поколению».
 function v20GenerationInfo(gen) {
   const n = parseInt(String(gen || '').replace(/\D/g, ''), 10);
   if (!Number.isFinite(n)) return null;
-  const clamped = Math.max(5, Math.min(13, n));
+  const clamped = Math.max(3, Math.min(13, n));
   return RULES_V20.generations[clamped] || null;
 }
 

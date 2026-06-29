@@ -1,5 +1,7 @@
 # 🧛 Граф Жубака
 
+> 🎲 [Лист персонажа](graf_zhubaka-sheet.md)
+
 > 🔗 [Все персонажи](../../../archive/characters_index.md)
 
 ---

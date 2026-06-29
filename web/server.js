@@ -15,6 +15,7 @@ const {
   parseChronicleParticipants,
 } = require('./lib/parsers');
 const { parseDisciplineMd } = require('./lib/disciplines');
+const { parsePsychicMd } = require('./lib/psychics');
 const { runMigrations } = require('./lib/migrations');
 
 // Load .env file (secrets not committed to git)
@@ -2624,6 +2625,35 @@ app.get('/api/library/disciplines', async (_req, res) => {
   catch (e) { serverError(res, e); }
 });
 
+// ── Библиотека: справочник психических способностей (system/library/psychics/*.md) ──
+// Город-нейтральные данные → тот же mtime-кэш, что и у дисциплин (см. выше).
+let _psyCache = null; // { sig, list }
+const PSY_DIR = path.join(ROOT, 'system', 'library', 'psychics');
+
+async function loadPsychics() {
+  const files = (await fs.readdir(PSY_DIR).catch(() => null));
+  if (!files) return [];
+  const mds = files.filter(f => f.endsWith('.md') && f.toLowerCase() !== 'readme.md').sort();
+
+  const stats = await Promise.all(mds.map(f => fs.stat(path.join(PSY_DIR, f)).catch(() => null)));
+  const sig = mds.map((f, i) => `${f}:${stats[i] ? stats[i].mtimeMs : 0}`).join('|');
+  if (_psyCache && _psyCache.sig === sig) return _psyCache.list;
+
+  const list = [];
+  for (const f of mds) {
+    const slug = f.replace(/\.md$/, '');
+    const md = await fs.readFile(path.join(PSY_DIR, f), 'utf-8').catch(() => '');
+    if (md) list.push(parsePsychicMd(md, slug));
+  }
+  _psyCache = { sig, list };
+  return list;
+}
+
+app.get('/api/library/psychics', async (_req, res) => {
+  try { res.json(await loadPsychics()); }
+  catch (e) { serverError(res, e); }
+});
+
 app.get('/api/locations', async (req, res) => {
   try { res.json(await getAllLocations(reqCity(req))); }
   catch (e) { serverError(res, e); }
@@ -2840,30 +2870,190 @@ function _resolveSheetLineage(hint) {
   return 'vampire';
 }
 
+// Creation point pools per lineage (mirrors RULES_V20.creation in web/public/rules-v20.js
+// and the «Шаг 2–6» tables in system/rules/character_sheet_v20.md / _mortal.md). Used to
+// spell the pools out explicitly in the prompt and to sanity-check the AI's totals after
+// generation — vampires default to the Камарилья row (project default, see Шаг 6 note).
+const _SHEET_POOLS = {
+  vampire:    { attrs: [7, 5, 3], abilities: [13, 9, 5], disciplines: 3, backgrounds: 5, virtues: 7 },
+  mortal:     { attrs: [6, 4, 3], abilities: [11, 7, 4], backgrounds: 5, virtues: 7 },
+  changeling: { attrs: [7, 5, 3], abilities: [13, 9, 5], backgrounds: 5, virtues: 7 },
+};
+
+// Project's canon clan → in-clan-discipline-names table (mirrors «Дисциплины кланов
+// проекта» in system/rules/character_sheet_v20.md and RULES_V20.clans in rules-v20.js).
+// Library discipline files' own «Клан / принадлежность» field lists the *broader* cWoD
+// canon (e.g. fortitude.md says «Бруха, Вентру, Гангрел», but this project's table keeps
+// Бруха to Стремительность/Могущество/Присутствие only) — so this table, not the library
+// field, decides WHICH disciplines count as in-clan; the library is only used for their text.
+const _CLAN_DISCIPLINE_NAMES = {
+  'тореадор':      ['Прорицание', 'Стремительность', 'Присутствие'],
+  'малкавиан':     ['Прорицание', 'Помешательство', 'Затемнение'],
+  'вентру':        ['Доминирование', 'Стойкость', 'Присутствие'],
+  'бруха':         ['Стремительность', 'Могущество', 'Присутствие'],
+  'гангрел':       ['Анимализм', 'Стойкость', 'Превращение'],
+  'носферату':     ['Анимализм', 'Затемнение', 'Могущество'],
+  'тремер':        ['Прорицание', 'Доминирование', 'Тауматургия'],
+  'цимисхи':       ['Анимализм', 'Прорицание', 'Изменчивость'],
+  'каппадокийцы':  ['Прорицание', 'Стойкость', 'Смерть'],
+  'ассамиты':      ['Стремительность', 'Затемнение', 'Чародейство ассамитов'],
+  'истинный бруха': ['Могущество', 'Присутствие', 'Темпорис'],
+};
+
+// Clan name (case-insensitive, parenthetical aside ignored) → matching library discipline
+// objects. Looks up the project's canon discipline NAMES for the clan first (table above),
+// then finds each by name in the library; if the clan isn't in the table at all (unusual/
+// variant clan), falls back to a substring match against each discipline's own «Клан /
+// принадлежность» field — broader cWoD canon, better than nothing.
+function disciplinesForClan(allDisciplines, clanName) {
+  const key = String(clanName || '').toLowerCase().replace(/\(.*?\)/g, '').trim();
+  if (!key) return [];
+  const list = allDisciplines || [];
+  const canonNames = _CLAN_DISCIPLINE_NAMES[key];
+  if (canonNames) {
+    return canonNames
+      .map(n => list.find(d => d.name.toLowerCase().includes(n.toLowerCase())))
+      .filter(Boolean);
+  }
+  return list.filter(d => String(d.clans || '').toLowerCase().includes(key));
+}
+
+// Render up to 3 lowest levels of a discipline (name + literary/system text) for prompt injection.
+function _disciplineLevelsText(d, maxLevels = 3, maxCharsPerLevel = 280) {
+  const levels = [...(d.levels || [])].sort((a, b) => a.level - b.level).slice(0, maxLevels);
+  if (!levels.length) return '';
+  const lines = levels.map(l => {
+    const lit = (l.literary || '').slice(0, maxCharsPerLevel);
+    const sys = (l.system || '').slice(0, maxCharsPerLevel);
+    return `  · Уровень ${l.level} — ${l.name}: ${lit}${sys ? ` (Система: ${sys})` : ''}`;
+  });
+  return `**${d.name}**\n${lines.join('\n')}`;
+}
+
 // Generate a full sheet (markdown) from a character/NPC card, per the lineage rules.
 async function _generateV20Sheet({ card, displayName, gen, lineage }) {
   const cardLine = (card || '').match(/Линейк[аи][^:\n]*WoD[^:\n]*:\s*([^\n]+)/i)?.[1] || '';
-  const cfg = _SHEET_LINEAGES[_resolveSheetLineage(`${lineage || ''} ${cardLine}`)];
+  const sheetLineage = _resolveSheetLineage(`${lineage || ''} ${cardLine}`);
+  const cfg = _SHEET_LINEAGES[sheetLineage];
   const sheetRules = await fs.readFile(path.join(ROOT, 'system', 'rules', cfg.file), 'utf-8').catch(() => '');
   const systemPrompt = `Ты — Мастер ${cfg.master}. Составляешь игромеханический лист персонажа СТРОГО по правилам и шаблону ниже.
 
 # ПРАВИЛА ЛИСТА (${cfg.file})
 ${sheetRules.slice(0, 16000)}`;
+
+  // Clan-specific discipline grounding (vampires only) — pulls the real library text for the
+  // character's in-clan disciplines so the AI picks from real powers instead of inventing names.
+  let clanDiscBlock = '';
+  if (sheetLineage === 'vampire') {
+    const clanName = (card || '').match(/-\s*\*\*Клан(?:\s*\/[^*]*)?:\*\*\s*([^\n]+)/i)?.[1] || '';
+    if (clanName.trim() && !clanName.includes('⚠️')) {
+      try {
+        const allDisc = await loadDisciplines();
+        const matched = disciplinesForClan(allDisc, clanName);
+        if (matched.length) {
+          const names = matched.map(d => d.name).join(', ');
+          const texts = matched.map(d => _disciplineLevelsText(d)).filter(Boolean).join('\n\n');
+          clanDiscBlock = `\n\n# КЛАНОВЫЕ ДИСЦИПЛИНЫ (${clanName.trim()})\nИспользуй ТОЛЬКО эти клановые дисциплины при распределении точек дисциплин: ${names}. Вот их описание для использования при подборе конкретных сил:\n\n${texts}`;
+        } else {
+          console.warn(`[sheet] клан «${clanName.trim()}» не найден в system/library/disciplines/*.md — использую только таблицу из правил`);
+        }
+      } catch (e) {
+        console.warn('[sheet] не удалось загрузить библиотеку дисциплин:', e.message);
+      }
+    }
+  }
+
+  // Psychic-power grounding (mortals only) — mirrors clanDiscBlock above, but triggered by a
+  // free-text heuristic instead of a structured card field: the card schema has no dedicated
+  // «экстрасенс»/«психик» flag (checked system/schema/card_schema.md and real mortal cards —
+  // e.g. cities/balmont/characters/mortals/dzhudi/dzhudi.md just says «Проявила парапсихические
+  // способности» in «Биография»), so we scan the card text for that vocabulary. If nothing
+  // matches, the prompt says nothing about the section and the AI leaves «Нумина / Грани» empty/
+  // 0, same as a vampire card with no clan info gets Дисциплины:0.
+  let psyBlock = '';
+  if (sheetLineage === 'mortal') {
+    const isPsychicHint = /экстрасенс|психик|парапсих|телепат|ясновиден|медиум(?!а)|предвидени|прорицател/i.test(card || '');
+    if (isPsychicHint) {
+      try {
+        const allPsy = await loadPsychics();
+        if (allPsy.length) {
+          const names = allPsy.map(p => p.name).join(', ');
+          const texts = allPsy.map(p => _disciplineLevelsText(p)).filter(Boolean).join('\n\n');
+          psyBlock = `\n\n# ПСИХИЧЕСКИЕ СПОСОБНОСТИ (карточка указывает на экстрасенсорный дар)\nПерсонаж — экстрасенс. Заполни раздел «Нумина / Грани» 1–3 способностями ТОЛЬКО из этого списка (не выдумывай новые): ${names}. Описание для подбора конкретных сил по уровням:\n\n${texts}\n\nТочки на способности — по правилу проекта (Шаг 8, character_sheet_mortal.md): 3 точки суммарно, свободно по способностям, максимум 3 в одной при создании; эти точки списываются из обычного бюджета смертного (Достоинства/Свободные очки), а не выдаются дополнительно.`;
+        }
+      } catch (e) {
+        console.warn('[sheet] не удалось загрузить библиотеку психических способностей:', e.message);
+      }
+    }
+  }
+
+  const pools = _SHEET_POOLS[sheetLineage];
+  const poolsLine = pools
+    ? `Атрибуты: ${pools.attrs.join('/')} (по приоритету) · Способности: ${pools.abilities.join('/')} (по приоритету)`
+      + (pools.disciplines ? ` · Дисциплины: ${pools.disciplines}` : '')
+      + ` · Факты биографии: ${pools.backgrounds} · Добродетели: ${pools.virtues}`
+    : '';
+
   const userPrompt = `Составь ПОЛНЫЙ лист персонажа «${displayName}» по карточке ниже.
 
 # КАРТОЧКА ПЕРСОНАЖА
 ${(card || '').slice(0, 3500)}
+${clanDiscBlock}${psyBlock}
 
 Требования:
 - Точно следуй СТРУКТУРЕ, ПОРЯДКУ и ФОРМАТУ ШАБЛОНА из правил (заголовки «##», таблицы, точки «●○»).
 - Используй ТОЛЬКО названия характеристик и разделов из ШАБЛОНА выше. Названия атрибутов/способностей — по бланку STV2098: Обаяние, Привлекательность; Бдительность, Драка, Красноречие, Уличное чутьё, Хитрость, Шестое чувство; Исполнение, Стрельба, Фехтование; Гуманитарные/Естественные науки, Информатика, Законы, Электроника; Факты биографии; Совесть/Решимость, Самоконтроль/Инстинкты, Смелость; Маска, Амплуа. НЕ используй старые синонимы (Харизма, Внешность, Рукопашный бой, Огнестрельное оружие и т.п.).
 - ОБЯЗАТЕЛЬНО учитывай специфику и роль персонажа (Шаг 7): профильные способности — высокие, непрофильные — низкие.
 - Характеристики 1–5, способности 0–5; ${cfg.extras}.
-- Заполни ВСЕ разделы шаблона. Поля без данных в карточке заполняй разумно по концепции или ставь «—». Разделы, помеченные «опционально/если есть», включай только при наличии данных.
+${poolsLine ? `- ⚠️ ОБЯЗАТЕЛЬНО ПОЛНОСТЬЮ РАСПРЕДЕЛИ ВСЕ ОЧКИ ВО ВСЕХ ПУЛАХ СОЗДАНИЯ, без остатка: ${poolsLine}. Не оставляй неизрасходованные точки — если по концепции трудно найти применение, добавь точку в наименее заметную профильную черту, но пул должен быть исчерпан полностью.\n` : ''}- Заполни ВСЕ разделы шаблона. Поля без данных в карточке заполняй разумно по концепции или ставь «—». Разделы, помеченные «опционально/если есть», включай только при наличии данных.
 - Для КАЖДОЙ точечной черты (характеристики, способности, дисциплины/искусства/сферы, факты биографии, добродетели) указывай И точки, И число в формате «| Название | ●●●○○ | N |» — чтобы лист можно было редактировать.
 - Верни ТОЛЬКО markdown листа, начиная с «# 🎲 ${displayName} — Лист персонажа (${cfg.title})». Без пояснений и без \`\`\`.`;
   const out = await genTextWithRetry(gen, { system: systemPrompt, user: userPrompt, maxTokens: 5000 });
-  return (out.text || '').replace(/^```(?:markdown)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
+  const text = (out.text || '').replace(/^```(?:markdown)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
+  if (pools) _warnIfPoolsUnderspent(text, pools, displayName);
+  return text;
+}
+
+// Lightweight post-generation sanity check (warn-only, no auto-repair): sum the dot-ratings
+// in each pool's table rows and compare to the expected pool size. Intentionally simple — it
+// doesn't attempt to re-derive priority groups (1st/2nd/3rd) precisely, just totals per
+// section, since a perfect solver is out of scope for a first pass (see task notes).
+// Matches against the CURRENT heading text — «##» (e.g. «🎯 Способности») OR the most recent
+// «###» subheading (e.g. «### Дисциплины», «### Добродетели (Virtues)» — these three pools
+// live as «###» subsections under one shared «## ✨ Преимущества» heading in the template).
+function _sheetSectionDotTotal(md, sectionRe) {
+  const lines = (md || '').replace(/\r\n/g, '\n').split('\n');
+  let h2 = '', h3 = '', total = 0, sawAny = false;
+  for (const ln of lines) {
+    const m2 = ln.match(/^##\s+(.+)$/);
+    if (m2) { h2 = m2[1]; h3 = ''; continue; }
+    const m3 = ln.match(/^###\s+(.+)$/);
+    if (m3) { h3 = m3[1]; continue; }
+    if (!sectionRe.test(h2) && !sectionRe.test(h3)) continue;
+    if (!/^\s*\|/.test(ln) || /\|\s*:?-{3,}/.test(ln)) continue;
+    const cells = ln.split('|').slice(1, -1).map(c => c.trim());
+    if (cells.length < 2) continue;
+    const name = cells[0].replace(/\*\*/g, '').trim();
+    if (!name || /^(способност|характеристик|атрибут|дисциплин|факт биографии|backgrounds|предыстор|добродетел|название|поле)/i.test(name)) continue;
+    const dotsCell = cells.find(c => /^[●○]+$/.test(c));
+    if (dotsCell) { total += (dotsCell.match(/●/g) || []).length; sawAny = true; }
+  }
+  return sawAny ? total : null;
+}
+function _warnIfPoolsUnderspent(md, pools, displayName) {
+  const checks = [
+    ['Способности',         /способност/i,  pools.abilities ? pools.abilities.reduce((a, b) => a + b, 0) : null],
+    ['Дисциплины',          /дисциплин/i,    pools.disciplines ?? null],
+    ['Факты биографии',     /факт.*биограф|backgrounds|предыстор/i, pools.backgrounds ?? null],
+    ['Добродетели',         /добродетел/i,   pools.virtues ?? null],
+  ];
+  for (const [label, re, expected] of checks) {
+    if (expected == null) continue;
+    const got = _sheetSectionDotTotal(md, re);
+    if (got != null && got < expected) {
+      console.warn(`[sheet] «${displayName}»: пул «${label}» недораспределён — ${got}/${expected} точек`);
+    }
+  }
 }
 
 // Insert «> 🎲 [Лист персонажа](rel)» under the card H1 if not present.

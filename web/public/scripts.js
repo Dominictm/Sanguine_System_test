@@ -853,6 +853,7 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     if (tab === 'ai-settings')     loadAiSettings();
     if (tab === 'new-city')        loadCitiesGrid();
     if (tab === 'lib-disciplines') loadLibrary();
+    if (tab === 'lib-psychics')    loadPsychicsLibrary();
   });
 });
 
@@ -5123,12 +5124,20 @@ function _v20Empty(lineage = 'vampires') {
     },
     abilities: { talents: ab('talents'), skills: ab('skills'), knowledges: ab('knowledges') },
     disciplines: Array.from({ length: 6 }, () => ({ name: '', val: 0 })),
+    // psychicPowers — мортал-аналог disciplines (см. _v20RenderSheet/discCol): «Нумина / Грани»
+    // листа смертного (character_sheet_mortal.md, Шаг 8) — только для экстрасенсов/практиков,
+    // у обычного смертного остаётся пустым/нулевым. Источник справочника — system/library/psychics/
+    // (web/lib/psychics.js → GET /api/library/psychics, кэш ensurePsychics()/_psychicsCache).
+    psychicPowers: Array.from({ length: 6 }, () => ({ name: '', val: 0 })),
     backgrounds: Array.from({ length: 6 }, () => ({ name: '', val: 0 })),
     virtues: { conscience: 1, selfcontrol: 1, courage: 1 },
     meritsFlaws: '',
     humanity: 7, path: 'Человечность',
     willpower: { permanent: 1, temp: Array(10).fill(false) },
-    bloodPool: Array(20).fill(false), bloodPerTurn: 1,
+    // bloodPool — boolean grid (sized per generation's bloodMax at render time); bloodPoolCount —
+    // plain number used instead of the grid for generation 3 (no fixed cap, free-form «счётчик»).
+    // Mode is derived from m.header.generation at render/normalize time, not stored on the model.
+    bloodPool: Array(20).fill(false), bloodPoolCount: 0, bloodPerTurn: 1,
     health: { bruised: false, hurt: false, injured: false, wounded: false, mauled: false, crippled: false, incapacitated: false },
     flaw: '', experience: { total: 0, spent: 0, log: [] },
     // ── Page 2 ──
@@ -5142,22 +5151,108 @@ function _v20Empty(lineage = 'vampires') {
   };
 }
 
+// Pad to a baseline of n rows, but never truncate a saved array that's longer than n —
+// rows added via the «+ Добавить» UI (see _v20AddRow) must survive normalize/reload, not
+// just the in-memory session. Length only ever grows here; trimming is the user's «×».
 const _v20PadPairs = (arr, n, keys) => {
   const blank = () => Object.fromEntries(keys.map(k => [k, '']));
-  const out = Array.from({ length: n }, blank);
-  if (Array.isArray(arr)) arr.slice(0, n).forEach((x, i) => { const o = blank(); for (const k of keys) o[k] = String(x?.[k] || ''); out[i] = o; });
+  const len = Math.max(n, Array.isArray(arr) ? arr.length : 0);
+  const out = Array.from({ length: len }, blank);
+  if (Array.isArray(arr)) arr.forEach((x, i) => { const o = blank(); for (const k of keys) o[k] = String(x?.[k] || ''); out[i] = o; });
   return out;
 };
 
-function _v20PickClamped(o, max) {
+function _v20PickClamped(o, max = 5) {
   const r = {};
   if (o && typeof o === 'object') for (const k in o) r[k] = _clamp(o[k], 0, max);
   return r;
 }
-function _v20PadSlots(arr, n) {
-  const out = Array.from({ length: n }, () => ({ name: '', val: 0 }));
-  if (Array.isArray(arr)) arr.slice(0, n).forEach((x, i) => { out[i] = { name: String(x?.name || ''), val: _clamp05(x?.val) }; });
+function _v20PadSlots(arr, n, max = 5) {
+  const len = Math.max(n, Array.isArray(arr) ? arr.length : 0);
+  const out = Array.from({ length: len }, () => ({ name: '', val: 0 }));
+  if (Array.isArray(arr)) arr.forEach((x, i) => { out[i] = { name: String(x?.name || ''), val: _clamp(x?.val, 0, max) }; });
   return out;
+}
+
+// Baseline row counts for the fixed-length sections that now support «+ Добавить» (see
+// _v20AddRow/_v20RemoveRow below). Mirrors the literal counts already baked into _v20Empty()/
+// _v20Normalize() — kept here as named constants so add/remove logic and the «cannot delete a
+// baseline row» guard read from one place instead of repeating magic numbers.
+const _V20_BASELINE_LEN = { disciplines: 6, psychicPowers: 6, backgrounds: 6, otherTraits: 6, rituals: 6 };
+function _v20AbilityBaselineLen(g) { return V20_ABILITIES[g].length + 2; }
+
+// Append one blank row to a fixed-length array section and re-render. `group` is set only for
+// abilities (talents/skills/knowledges); other sections pass it as null. New rows are plain
+// {name,val} (or {name,level} for rituals) — identical shape to the existing blank slots, so they
+// flow through _v20Set/_v20DotCapFor/_v20ClampToGen without any special-casing.
+function _v20AddRow(section, group) {
+  const m = _v20Model;
+  if (section === 'abilities') {
+    m.abilities[group].push({ name: '', val: 0 });
+  } else if (section === 'rituals') {
+    m.rituals.push({ name: '', level: '' });
+  } else {
+    m[section].push({ name: '', val: 0 });
+  }
+  _v20MarkDirty();
+  _v20RenderSheet(document.getElementById('cdet-sheet-panel'), _v20Ctx.name);
+}
+
+// Remove one row added beyond the baseline count. Baseline/canonical rows (the first
+// _V20_BASELINE_LEN[section] slots, or the fixed canonical abilities + first 2 blank custom
+// slots) can never be removed this way — only rows the «+ Добавить» button itself created.
+function _v20RemoveRow(section, group, idx) {
+  const m = _v20Model;
+  const arr = group ? m.abilities[group] : m[section];
+  const baseline = group ? _v20AbilityBaselineLen(group) : _V20_BASELINE_LEN[section];
+  if (idx < baseline || idx >= arr.length) return;
+  arr.splice(idx, 1);
+  _v20MarkDirty();
+  _v20RenderSheet(document.getElementById('cdet-sheet-panel'), _v20Ctx.name);
+}
+
+// Generation → max dot value for Attributes/Abilities/Disciplines/Backgrounds/«other traits»
+// (RULES_V20.generations[gen].maxDots — «Единая таблица максимума точек», см. character_sheet_v20.md).
+// Falls back to 5 (classic cap) when the generation is unset/unrecognised.
+function _v20MaxDotsForGen(gen) {
+  const info = v20GenerationInfo(gen);
+  return info?.maxDots || 5;
+}
+
+// Dotted model paths whose ceiling is the generation-aware «Единая таблица максимума точек»
+// (Attributes/Abilities/Disciplines/Backgrounds + «other traits» = факты биографии под другим
+// именем). Virtues/Willpower/Humanity keep their own fixed caps (5/10/10) — checked separately,
+// not through this table — so a future «add row» feature can reuse this single check point
+// without re-deriving which categories are generation-capped.
+const _V20_GEN_CAPPED_PREFIXES = ['attributes.', 'abilities.', 'disciplines.', 'backgrounds.', 'otherTraits.'];
+
+// Cap for a given dotted path on the current model: generation-aware max for the four capped
+// categories (vampires only), else the classic fixed cap (10 for humanity/willpower, 5 otherwise).
+function _v20DotCapFor(dpath, m) {
+  const isVamp = (m.lineage || '') === 'vampires';
+  if (isVamp && _V20_GEN_CAPPED_PREFIXES.some(p => dpath.startsWith(p))) return _v20MaxDotsForGen(m.header.generation);
+  if (dpath === 'humanity' || dpath === 'willpower.permanent') return 10;
+  return 5;
+}
+
+// Re-cap Attributes/Abilities/Disciplines/Backgrounds/«other traits» in-place after the user
+// changes the generation field by hand (e.g. 5e → 13e), so a trait raised under a looser cap
+// doesn't render with more filled dots than the new, smaller dot grid has slots for. Also
+// resizes the blood pool grid (or switches to/from the 3e counter) to match the new generation.
+function _v20ClampToGen(m) {
+  if ((m.lineage || '') !== 'vampires') return;
+  const cap = _v20MaxDotsForGen(m.header.generation);
+  for (const g of ['physical', 'social', 'mental']) for (const k in m.attributes[g]) m.attributes[g][k] = _clamp(m.attributes[g][k], 0, cap);
+  for (const g of ['talents', 'skills', 'knowledges']) for (const s of m.abilities[g]) s.val = _clamp(s.val, 0, cap);
+  for (const d of m.disciplines) d.val = _clamp(d.val, 0, cap);
+  for (const b of m.backgrounds) b.val = _clamp(b.val, 0, cap);
+  for (const t of m.otherTraits) t.val = _clamp(t.val, 0, cap);
+  const genInfo = v20GenerationInfo(m.header.generation);
+  const bloodMax = genInfo?.bloodMax;
+  if (bloodMax != null) {
+    const filled = m.bloodPool.filter(Boolean).length;
+    m.bloodPool = _fillBoxes(bloodMax, Math.min(bloodMax, filled));
+  }
 }
 
 // Fill a fresh default with whatever a (possibly partial / legacy) model provides.
@@ -5166,22 +5261,36 @@ function _v20Normalize(m) {
   if (!m || typeof m !== 'object') return e;
   if (m.lineage) e.lineage = m.lineage;
   Object.assign(e.header, m.header || {});
-  for (const g of ['physical', 'social', 'mental']) Object.assign(e.attributes[g], _v20PickClamped(m.attributes?.[g], 5));
+  const isVamp = e.lineage === 'vampires';
+  const maxDots = isVamp ? _v20MaxDotsForGen(e.header.generation) : 5;
+  for (const g of ['physical', 'social', 'mental']) Object.assign(e.attributes[g], _v20PickClamped(m.attributes?.[g], maxDots));
   for (const g of ['talents', 'skills', 'knowledges']) {
     const src = Array.isArray(m.abilities?.[g]) ? m.abilities[g] : [];
-    e.abilities[g] = e.abilities[g].map((slot, i) => {
+    // Baseline template (canonical fixed rows + 2 blank custom slots) never shrinks below its own
+    // length, but grows past it when a saved sheet has more custom slots (rows added via «+ Добавить» —
+    // see _v20AddRow) — same «pad to at least N, never truncate user growth» rule as _v20PadSlots.
+    const base = e.abilities[g];
+    const len = Math.max(base.length, src.length);
+    e.abilities[g] = Array.from({ length: len }, (_, i) => {
+      const slot = base[i] || { name: '', val: 0, fixed: false };
       const s = src[i];
-      return { name: slot.fixed ? slot.name : String(s?.name || ''), val: _clamp05(s?.val ?? slot.val), fixed: slot.fixed };
+      return { name: slot.fixed ? slot.name : String(s?.name || ''), val: _clamp(s?.val ?? slot.val, 0, maxDots), fixed: !!slot.fixed };
     });
   }
-  e.disciplines = _v20PadSlots(m.disciplines, 6);
-  e.backgrounds = _v20PadSlots(m.backgrounds, 6);
+  e.disciplines = _v20PadSlots(m.disciplines, 6, maxDots);
+  // Психические способности не зависят от поколения (мортал его не имеет) — фиксированный max 5,
+  // как и остальные мортал-черты; maxDots здесь уже =5 для немортал-веток не используется.
+  e.psychicPowers = _v20PadSlots(m.psychicPowers, 6, 5);
+  e.backgrounds = _v20PadSlots(m.backgrounds, 6, maxDots);
   Object.assign(e.virtues, _v20PickClamped(m.virtues, 5));
   if (typeof m.meritsFlaws === 'string') e.meritsFlaws = m.meritsFlaws;
   if (m.humanity != null) e.humanity = _clamp(m.humanity, 0, 10);
   if (m.path) e.path = m.path;
   if (m.willpower) { e.willpower.permanent = _clamp(m.willpower.permanent, 0, 10); e.willpower.temp = _boolArr(m.willpower.temp, 10); }
-  if (m.bloodPool) e.bloodPool = _boolArr(m.bloodPool, 20);
+  const genInfo = isVamp ? v20GenerationInfo(e.header.generation) : null;
+  const bloodMax = genInfo?.bloodMax || 20;
+  if (m.bloodPool) e.bloodPool = _boolArr(m.bloodPool, bloodMax);
+  e.bloodPoolCount = _num(m.bloodPoolCount, 0);
   if (m.bloodPerTurn != null) e.bloodPerTurn = _num(m.bloodPerTurn, 1);
   Object.assign(e.health, m.health || {});
   if (typeof m.flaw === 'string') e.flaw = m.flaw;
@@ -5193,7 +5302,7 @@ function _v20Normalize(m) {
   }
   // ── Page 2 ──
   e.specializations = _v20PadPairs(m.specializations, 6, ['ability', 'spec']);
-  e.otherTraits = _v20PadSlots(m.otherTraits, 6);
+  e.otherTraits = _v20PadSlots(m.otherTraits, 6, maxDots);
   e.rituals = _v20PadPairs(m.rituals, 6, ['name', 'level']);
   if (typeof m.history === 'string') e.history = m.history;
   if (typeof m.goals === 'string') e.goals = m.goals;
@@ -5256,6 +5365,10 @@ function _v20ParseMd(md, lineage) {
   disc.forEach((r, i) => { m.disciplines[i] = { name: r.name.replace(/\*\*/g, '').trim(), val: r.val }; });
   const bg = rows.filter(r => /(факт биографии|backgrounds|предыстор)/.test(r.sub) && r.val != null).slice(0, 6);
   bg.forEach((r, i) => { m.backgrounds[i] = { name: r.name.replace(/\*\*/g, '').trim(), val: r.val }; });
+  // Психические способности — мортал-секция «## 🔆 Нумина / Грани» (своя «##», не подсекция
+  // «Преимуществ», в отличие от дисциплин/фактов биографии выше — см. character_sheet_mortal.md).
+  const psy = rows.filter(r => /нумина|грани/.test(r.sec) && r.val != null).slice(0, 6);
+  psy.forEach((r, i) => { m.psychicPowers[i] = { name: r.name.replace(/\*\*/g, '').trim(), val: r.val }; });
   // Virtues
   for (const r of rows) {
     if (!/добродетел/.test(r.sub) || r.val == null) continue;
@@ -5264,6 +5377,8 @@ function _v20ParseMd(md, lineage) {
     else if (/смелост|courage/.test(r.nameNorm)) m.virtues.courage = r.val;
   }
   // Derived (numbers may exceed 5 → read the numeric cell directly)
+  const genInfoForParse = (m.lineage === 'vampires') ? v20GenerationInfo(m.header.generation) : null;
+  const bloodMaxForParse = genInfoForParse?.bloodMax || 20;
   for (const r of rows) {
     if (!/производные/.test(r.sec)) continue;
     const numC = r.cells.find((c, idx) => idx > 0 && /^\d+$/.test(c));
@@ -5272,7 +5387,10 @@ function _v20ParseMd(md, lineage) {
     else if (/человечност|путь/.test(r.nameLow) && n != null) m.humanity = Math.min(10, n);
     else if (/постоянн/.test(r.nameLow) && n != null) m.willpower.permanent = Math.min(10, n);
     else if (/временн/.test(r.nameLow) && n != null) m.willpower.temp = _fillBoxes(10, Math.min(10, n));
-    else if (/(запас крови|blood pool)/.test(r.nameLow) && n != null) m.bloodPool = _fillBoxes(20, Math.min(20, n));
+    else if (/(запас крови|blood pool)/.test(r.nameLow) && n != null) {
+      if (genInfoForParse && genInfoForParse.bloodMax == null) m.bloodPoolCount = n;       // 3-е поколение — счётчик без потолка
+      else m.bloodPool = _fillBoxes(bloodMaxForParse, Math.min(bloodMaxForParse, n));
+    }
     else if (/(предел траты|blood\/turn)/.test(r.nameLow) && n != null) m.bloodPerTurn = n;
   }
 
@@ -5335,14 +5453,35 @@ function _v20DotsHtml(dpath, val, max = 5) {
 function _v20DotRow(label, dpath, val, max = 5) {
   return `<div class="v20-row"><span class="v20-row-name">${escHtml(label)}</span>${_v20DotsHtml(dpath, val, max)}</div>`;
 }
-function _v20NamedDotRow(namePath, nameVal, dpath, val) {
-  return `<div class="v20-row v20-named"><input class="v20-line-input" data-tpath="${namePath}" value="${escAttr(nameVal)}" placeholder="…">${_v20DotsHtml(dpath, val)}</div>`;
+// `removeKey` ('section' or 'section:group', e.g. 'disciplines' / 'abilities:talents') renders a
+// «×» button wired to data-v20-remove/data-v20-remove-idx when present — only passed for rows past
+// the section's baseline count (see _v20AddRow/_v20RemoveRow), so canonical rows never get a «×».
+function _v20NamedDotRow(namePath, nameVal, dpath, val, max = 5, removeKey = '') {
+  const rm = removeKey ? `<button type="button" class="v20-row-remove-btn" data-v20-remove="${escAttr(removeKey)}" data-v20-remove-idx="${dpath.match(/(\d+)/)?.[1] ?? ''}" title="Удалить строку">×</button>` : '';
+  return `<div class="v20-row v20-named">${rm}<input class="v20-line-input" data-tpath="${namePath}" value="${escAttr(nameVal)}" placeholder="…">${_v20DotsHtml(dpath, val, max)}</div>`;
 }
 function _v20BoxesHtml(bpath, arr) {
   return `<span class="v20-boxes">${arr.map((on, i) => `<input type="checkbox" class="v20-box" data-bpath="${bpath}" data-i="${i}"${on ? ' checked' : ''}>`).join('')}</span>`;
 }
 function _v20Field(label, tpath, val, extra = '') {
   return `<label class="v20-field"><span class="v20-field-lbl">${escHtml(label)}</span><input class="v20-field-input" data-tpath="${tpath}" value="${escAttr(val || '')}"${extra}></label>`;
+}
+// «+ Добавить» affordance appended at the end of a fixed-length section's row list. removeKey
+// matches the one passed to _v20NamedDotRow/used by discRow/ritRow — 'section' or 'section:group'.
+function _v20AddRowBtn(removeKey) {
+  return `<button type="button" class="v20-mini-action v20-add-row-btn" data-v20-add="${escAttr(removeKey)}">+ Добавить</button>`;
+}
+
+// Видимый возраст = Год обращения − Год рождения (карточка персонажа). Возвращает целое число
+// при двух валидных числовых годах, иначе null (поле остаётся обычным редактируемым текстом —
+// «⚠️ Не указан» и пр. card placeholders деградируют без NaN/краша, см. web/lib/parsers.js).
+function _v20ComputeApparentAge(card) {
+  if (!card) return null;
+  const by = parseInt(String(card.birthYear ?? '').replace(/[^\d-]/g, ''), 10);
+  const ey = parseInt(String(card.embraceYear ?? '').replace(/[^\d-]/g, ''), 10);
+  if (!Number.isFinite(by) || !Number.isFinite(ey)) return null;
+  const age = ey - by;
+  return age >= 0 ? age : null;
 }
 
 // ── Rules engine: derived stats, auto badges, clan/generation actions, validation ──
@@ -5604,6 +5743,105 @@ document.getElementById('lib-disciplines-body')?.addEventListener('click', e => 
   const item = e.target.closest('[data-disc-slug]'); if (item) { _libRenderDisciplineDetail(item.dataset.discSlug); return; }
 });
 
+// ── Psychic powers reference library (зеркало справочника дисциплин выше) ──────
+// Источник истины — system/library/psychics/*.md (сервер парсит → /api/library/psychics).
+let _psychicsCache = null;
+async function ensurePsychics() {
+  if (_psychicsCache) return _psychicsCache;
+  try {
+    const data = await fetch('/api/library/psychics').then(r => r.json());
+    _psychicsCache = Array.isArray(data) ? data : [];
+  } catch { _psychicsCache = []; }
+  return _psychicsCache;
+}
+function _psyBySlug(slug) { return (_psychicsCache || []).find(p => p.slug === slug) || null; }
+
+function _libPsyDetailHtml(p) {
+  if (!p) return '<div class="v20-disc-empty">Способность не найдена в справочнике.</div>';
+  const body = `${p.note ? `<div class="v20-disc-note">${escHtml(p.note)}</div>` : ''}${(p.levels || []).map(_libPowerHtml).join('')}`;
+  const meta = [p.category, p.roll ? `Бросок: ${p.roll}` : ''].filter(Boolean).join(' · ');
+  return `<div class="v20-disc-detail-head"><h3>${escHtml(p.name)}</h3><span class="v20-disc-clans">${escHtml(meta)}</span></div>${body}`;
+}
+function _libPsyListHtml() {
+  return `<div class="v20-disc-list">${(_psychicsCache || []).map(p =>
+    `<button type="button" class="v20-disc-list-item" data-psy-slug="${escAttr(p.slug)}"><span>${escHtml(p.name)}</span><span class="v20-disc-list-clans">${escHtml(p.category || '')}</span></button>`).join('')}</div>`;
+}
+function _libRenderPsyList() {
+  const body = document.getElementById('lib-psychics-body');
+  if (body) body.innerHTML = _libPsyListHtml();
+}
+function _libRenderPsyDetail(slug) {
+  const body = document.getElementById('lib-psychics-body');
+  if (body) body.innerHTML = `<button type="button" class="v20-disc-back" data-psy-back>← к списку</button>${_libPsyDetailHtml(_psyBySlug(slug))}`;
+}
+async function loadPsychicsLibrary() {
+  const body = document.getElementById('lib-psychics-body');
+  if (body) body.innerHTML = '<div class="loading-state"><div class="spinner"></div>Загрузка...</div>';
+  await ensurePsychics();
+  _libRenderPsyList();
+}
+document.getElementById('lib-psychics-body')?.addEventListener('click', e => {
+  const back = e.target.closest('[data-psy-back]'); if (back) { _libRenderPsyList(); return; }
+  const item = e.target.closest('[data-psy-slug]'); if (item) { _libRenderPsyDetail(item.dataset.psySlug); return; }
+});
+
+// ── Mortal sheet: «Психические способности» row reference (зеркало v20DisciplineKey/
+// _v20OpenDisciplineModal выше, но источник — _psychicsCache/ensurePsychics(), не дисциплины).
+// Имя силы из листа («Психометрия», «Биоконтроль») → slug в справочнике психических способностей.
+function v20PsychicKey(name) {
+  const norm = String(name || '').toLowerCase().replace(/\(.*?\)/g, '').trim();
+  if (!norm) return null;
+  for (const p of (_psychicsCache || [])) {
+    const ru = p.name.toLowerCase().replace(/\(.*?\)/g, '').trim();
+    if (ru === norm || norm.startsWith(ru) || ru.startsWith(norm)) return p.slug;
+  }
+  return null;
+}
+function v20PsychicInfo(name) { const slug = v20PsychicKey(name); return slug ? _psyBySlug(slug) : null; }
+
+function _v20RenderPsychicLibrary() {
+  const body = document.getElementById('v20-disc-modal-body');
+  if (!body) return;
+  body.innerHTML = `<h3>📚 Справочник психических способностей</h3>${_libPsyListHtml()}`;
+}
+function _v20RenderPsychicDetail(slug) {
+  const body = document.getElementById('v20-disc-modal-body');
+  if (!body) return;
+  body.innerHTML = `<button type="button" class="v20-disc-back" data-psy-back>← к списку</button>${_libPsyDetailHtml(_psyBySlug(slug))}`;
+}
+// Reuses the same modal shell/backdrop as _v20OpenDisciplineModal (#v20-disc-modal-backdrop) —
+// only one of the two modals is ever open at a time (vampire sheet has no psychic rows and vice
+// versa), so sharing the DOM node is safe and avoids a near-duplicate modal markup block.
+async function _v20OpenPsychicModal(name) {
+  let modal = document.getElementById('v20-disc-modal-backdrop');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'v20-disc-modal-backdrop';
+    modal.className = 'v20-disc-modal-backdrop';
+    modal.innerHTML = `<div class="v20-disc-modal">
+      <button type="button" class="v20-disc-modal-close" id="v20-disc-modal-close" aria-label="Закрыть справочник">✕</button>
+      <div id="v20-disc-modal-body"></div>
+    </div>`;
+    document.body.appendChild(modal);
+    modal.addEventListener('click', e => { if (e.target === modal) _v20CloseDisciplineModal(); });
+    modal.querySelector('#v20-disc-modal-close').addEventListener('click', _v20CloseDisciplineModal);
+    modal.addEventListener('click', e => {
+      const back = e.target.closest('[data-disc-back]'); if (back) { _v20RenderDisciplineLibrary(); return; }
+      const item = e.target.closest('[data-disc-slug]'); if (item) { _v20RenderDisciplineDetail(item.dataset.discSlug); return; }
+      const pback = e.target.closest('[data-psy-back]'); if (pback) { _v20RenderPsychicLibrary(); return; }
+      const pitem = e.target.closest('[data-psy-slug]'); if (pitem) { _v20RenderPsychicDetail(pitem.dataset.psySlug); return; }
+    });
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') _v20CloseDisciplineModal(); });
+  }
+  modal.classList.add('open');
+  const body = document.getElementById('v20-disc-modal-body');
+  if (body) body.innerHTML = '<div class="loading-state"><div class="spinner"></div>Загрузка справочника…</div>';
+  await ensurePsychics();
+  const slug = name ? v20PsychicKey(name) : null;
+  if (slug) _v20RenderPsychicDetail(slug);
+  else _v20RenderPsychicLibrary();
+}
+
 // ── XP mode: clicking a dot up spends experience instead of a free edit ──
 let _v20XpMode = false;
 
@@ -5654,8 +5892,15 @@ function _v20RunAction(action) {
   } else if (action === 'open-disc-library') {
     _v20OpenDisciplineModal();
     return;
+  } else if (action === 'open-psy-library') {
+    _v20OpenPsychicModal();
+    return;
   } else if (action === 'spend-blood') {
-    if (!_v20SpendPool('bloodPool')) return;
+    const genInfo = (m.lineage || '') === 'vampires' ? v20GenerationInfo(m.header.generation) : null;
+    if (genInfo && genInfo.bloodMax == null) {   // 3-е поколение — счётчик без потолка
+      if (_num(m.bloodPoolCount, 0) <= 0) return;
+      m.bloodPoolCount = _num(m.bloodPoolCount, 0) - 1;
+    } else if (!_v20SpendPool('bloodPool')) return;
   } else if (action === 'spend-willpower') {
     if (!_v20SpendPool('willpower.temp')) return;
   } else return;
@@ -5694,14 +5939,20 @@ function _v20Validate(m) {
     }
   }
   if (lineage === 'vampires') {
-    const gen = parseInt(String(m.header.generation || '').replace(/\D/g, ''), 10);
-    const genAllowsAbove5 = Number.isFinite(gen) && gen <= 7;
+    // Единая таблица максимума точек (см. RULES_V20.generations[gen].maxDots, character_sheet_v20.md)
+    // — потолок для характеристик/способностей/дисциплин/фактов биографии, не только дисциплин.
+    const maxDots = _v20MaxDotsForGen(m.header.generation);
     for (const g of ['physical', 'social', 'mental']) for (const [k, ru] of V20_ATTRS[g]) {
-      if (m.attributes[g][k] > 5 && !genAllowsAbove5) warnings.push({ text: `«${ru}» выше 5 — требуется поколение 7 и ниже (сейчас: ${m.header.generation || '—'})`, level: 'error' });
+      if (m.attributes[g][k] > maxDots) warnings.push({ text: `«${ru}» (${m.attributes[g][k]}) выше максимума для поколения (${maxDots}, сейчас: ${m.header.generation || '—'})`, level: 'error' });
     }
-    const genInfo = v20GenerationInfo(m.header.generation);
-    if (genInfo) for (const d of m.disciplines) {
-      if (d.name && d.val > genInfo.discMax) warnings.push({ text: `«${d.name}» (${d.val}) выше максимума дисциплин для поколения (${genInfo.discMax})`, level: 'error' });
+    for (const g of ['talents', 'skills', 'knowledges']) for (const s of m.abilities[g]) {
+      if (s.name && _num(s.val, 0) > maxDots) warnings.push({ text: `«${s.name}» (${s.val}) выше максимума для поколения (${maxDots})`, level: 'error' });
+    }
+    for (const d of m.disciplines) {
+      if (d.name && d.val > maxDots) warnings.push({ text: `«${d.name}» (${d.val}) выше максимума для поколения (${maxDots})`, level: 'error' });
+    }
+    for (const b of m.backgrounds) {
+      if (b.name && b.val > maxDots) warnings.push({ text: `«${b.name}» (${b.val}) выше максимума для поколения (${maxDots})`, level: 'error' });
     }
   } else {
     for (const g of ['physical', 'social', 'mental']) for (const [k, ru] of V20_ATTRS[g]) {
@@ -5734,17 +5985,19 @@ function _v20RenderSheet(panel, charName) {
   const derived = _v20Derive(m);
   const clanInfo = isVamp ? v20ClanInfo(m.header.clan) : null;
 
+  const genMaxDots = isVamp ? _v20MaxDotsForGen(m.header.generation) : 5;   // Единая таблица максимума точек (атрибуты/способности/дисциплины/факты биографии)
   const rollIcon = (kind, path) => `<button type="button" class="v20-roll-icon-btn" data-roll-seed="${kind}:${path}" title="Бросок">🎲</button>`;
   const attrCol = g => `<div class="v20-col"><div class="v20-col-title">${V20_ATTR_GROUP_LABELS[g]}</div>${V20_ATTRS[g].map(([k, ru]) =>
-    `<div class="v20-row-roll-wrap">${_v20DotRow(ru, `attributes.${g}.${k}`, m.attributes[g][k])}${rollIcon('attr', `attributes.${g}.${k}`)}</div>`).join('')}</div>`;
+    `<div class="v20-row-roll-wrap">${_v20DotRow(ru, `attributes.${g}.${k}`, m.attributes[g][k], genMaxDots)}${rollIcon('attr', `attributes.${g}.${k}`)}</div>`).join('')}</div>`;
   const abilCol = g => {
+    const baseline = _v20AbilityBaselineLen(g);
     const rows = m.abilities[g].map((slot, i) => {
       const rowHtml = slot.fixed
-        ? _v20DotRow(slot.name, `abilities.${g}.${i}.val`, slot.val)
-        : _v20NamedDotRow(`abilities.${g}.${i}.name`, slot.name, `abilities.${g}.${i}.val`, slot.val);
+        ? _v20DotRow(slot.name, `abilities.${g}.${i}.val`, slot.val, genMaxDots)
+        : _v20NamedDotRow(`abilities.${g}.${i}.name`, slot.name, `abilities.${g}.${i}.val`, slot.val, genMaxDots, i >= baseline ? `abilities:${g}` : '');
       return `<div class="v20-row-roll-wrap">${rowHtml}${slot.name ? rollIcon('abil', `abilities.${g}.${i}`) : ''}</div>`;
     }).join('');
-    return `<div class="v20-col"><div class="v20-col-title">${V20_ABILITY_GROUP_LABELS[g]}</div>${rows}</div>`;
+    return `<div class="v20-col"><div class="v20-col-title">${V20_ABILITY_GROUP_LABELS[g]}${_v20AddRowBtn(`abilities:${g}`)}</div>${rows}</div>`;
   };
 
   const header = `
@@ -5774,10 +6027,11 @@ function _v20RenderSheet(panel, charName) {
   const discRow = (d, i) => {
     const known = !!v20DisciplineKey(d.name);
     const infoBtn = known ? `<button type="button" class="v20-disc-info-btn" data-disc-view="${escAttr(d.name)}" title="Силы по уровням: ${escAttr(d.name)}">ℹ</button>` : '';
-    return `<div class="v20-row v20-named v20-disc-row">${infoBtn}<input class="v20-line-input" data-tpath="disciplines.${i}.name" value="${escAttr(d.name)}" placeholder="…">${_v20DotsHtml(`disciplines.${i}.val`, d.val)}</div>`;
+    const rm = i >= _V20_BASELINE_LEN.disciplines ? `<button type="button" class="v20-row-remove-btn" data-v20-remove="disciplines" data-v20-remove-idx="${i}" title="Удалить строку">×</button>` : '';
+    return `<div class="v20-row v20-named v20-disc-row">${rm}${infoBtn}<input class="v20-line-input" data-tpath="disciplines.${i}.name" value="${escAttr(d.name)}" placeholder="…">${_v20DotsHtml(`disciplines.${i}.val`, d.val, genMaxDots)}</div>`;
   };
-  const discCol = `<div class="v20-col"><div class="v20-col-title">Дисциплины${discFillBtn}${discLibBtn}</div>${m.disciplines.map(discRow).join('')}</div>`;
-  const bgCol = `<div class="v20-col"><div class="v20-col-title">Факты биографии</div>${m.backgrounds.map((b, i) => _v20NamedDotRow(`backgrounds.${i}.name`, b.name, `backgrounds.${i}.val`, b.val)).join('')}</div>`;
+  const discCol = `<div class="v20-col"><div class="v20-col-title">Дисциплины${discFillBtn}${discLibBtn}${_v20AddRowBtn('disciplines')}</div>${m.disciplines.map(discRow).join('')}</div>`;
+  const bgCol = `<div class="v20-col"><div class="v20-col-title">Факты биографии${_v20AddRowBtn('backgrounds')}</div>${m.backgrounds.map((b, i) => _v20NamedDotRow(`backgrounds.${i}.name`, b.name, `backgrounds.${i}.val`, b.val, genMaxDots, i >= _V20_BASELINE_LEN.backgrounds ? 'backgrounds' : '')).join('')}</div>`;
   const virtCol = `<div class="v20-col"><div class="v20-col-title">Добродетели</div>
       ${_v20DotRow('Совесть/Решимость', 'virtues.conscience', m.virtues.conscience)}
       ${_v20DotRow('Самоконтроль/Инстинкты', 'virtues.selfcontrol', m.virtues.selfcontrol)}
@@ -5785,6 +6039,26 @@ function _v20RenderSheet(panel, charName) {
   const advantages = `
     <div class="v20-band">Преимущества</div>
     <div class="v20-grid3">${isVamp ? discCol : ''}${bgCol}${virtCol}</div>`;
+
+  // Психические способности — мортал-зеркало дисциплин (см. discCol выше): «Нумина / Грани»
+  // листа смертного (Шаг 8, character_sheet_mortal.md) для экстрасенсов/практиков худо-магии;
+  // у обычного смертного секция рендерится с пустыми/нулевыми строками, как и Дисциплины:0
+  // у вампира без выбранного клана. Только для мортал-линейки — вампиры/ченджлинги её не видят.
+  const isMortal = (m.lineage || '') === 'mortals';
+  const psyLibBtn = `<button type="button" class="v20-mini-action" data-v20-action="open-psy-library" title="Открыть справочник психических способностей">📚</button>`;
+  const psyRow = (p, i) => {
+    const known = !!v20PsychicKey(p.name);
+    const infoBtn = known ? `<button type="button" class="v20-disc-info-btn" data-psy-view="${escAttr(p.name)}" title="Силы по уровням: ${escAttr(p.name)}">ℹ</button>` : '';
+    const rm = i >= _V20_BASELINE_LEN.psychicPowers ? `<button type="button" class="v20-row-remove-btn" data-v20-remove="psychicPowers" data-v20-remove-idx="${i}" title="Удалить строку">×</button>` : '';
+    return `<div class="v20-row v20-named v20-disc-row">${rm}${infoBtn}<input class="v20-line-input" data-tpath="psychicPowers.${i}.name" value="${escAttr(p.name)}" placeholder="…">${_v20DotsHtml(`psychicPowers.${i}.val`, p.val, 5)}</div>`;
+  };
+  const psychics = isMortal ? `
+    <div class="v20-band">Психические способности</div>
+    <div class="v20-grid3">
+      <div class="v20-col"><div class="v20-col-title">Нумина / Грани${psyLibBtn}${_v20AddRowBtn('psychicPowers')}</div>${m.psychicPowers.map(psyRow).join('')}</div>
+      <div class="v20-col"></div>
+      <div class="v20-col"></div>
+    </div>` : '';
 
   const healthRows = V20_HEALTH.map(([k, ru, pen]) =>
     `<label class="v20-health-row"><input type="checkbox" class="v20-box" data-bpath="health.${k}"${m.health[k] ? ' checked' : ''}><span class="v20-health-name">${escHtml(ru)}</span><span class="v20-health-pen">${escHtml(pen)}</span></label>`).join('');
@@ -5810,9 +6084,11 @@ function _v20RenderSheet(panel, charName) {
           ${_v20BoxesHtml('willpower.temp', m.willpower.temp)}
         </div>
         ${isVamp ? `<div class="v20-stat-block">
-          <div class="v20-stat-title">Запас крови${derived.gen ? `<span class="v20-gen-info" title="Поколение ${escAttr(m.header.generation)}: max ${derived.gen.bloodMax}, предел/ход ${derived.gen.bloodPerTurn}, max дисциплины ${derived.gen.discMax}">ⓘ</span>` : ''}<button type="button" class="v20-mini-action" data-v20-action="spend-blood" title="Потратить 1 пункт крови">−1</button></div>
-          ${_v20BoxesHtml('bloodPool', m.bloodPool)}
-          <label class="v20-inline-field">Предел траты в ход ${derived.gen ? _v20AutoBadge(m.bloodPerTurn, derived.gen.bloodPerTurn, 'bloodPerTurn', 'text') : ''}<input class="v20-mini-input" data-tpath="bloodPerTurn" value="${escAttr(m.bloodPerTurn)}"></label>
+          <div class="v20-stat-title">Запас крови${derived.gen ? `<span class="v20-gen-info" title="Поколение ${escAttr(m.header.generation)}: max ${derived.gen.bloodMax ?? '— (счётчик)'}, предел/ход ${derived.gen.bloodPerTurn ?? '—'}, max точек (атрибуты/способности/дисциплины/факты биографии) ${derived.gen.maxDots}">ⓘ</span>` : ''}<button type="button" class="v20-mini-action" data-v20-action="spend-blood" title="Потратить 1 пункт крови">−1</button></div>
+          ${derived.gen && derived.gen.bloodMax == null
+            ? `<input type="number" min="0" class="v20-mini-input v20-blood-counter" data-tpath="bloodPoolCount" value="${escAttr(m.bloodPoolCount)}" title="3-е поколение — запас крови без фиксированного потолка">`
+            : _v20BoxesHtml('bloodPool', m.bloodPool)}
+          <label class="v20-inline-field">Предел траты в ход ${derived.gen && derived.gen.bloodPerTurn != null ? _v20AutoBadge(m.bloodPerTurn, derived.gen.bloodPerTurn, 'bloodPerTurn', 'text') : ''}<input class="v20-mini-input" data-tpath="bloodPerTurn" value="${escAttr(m.bloodPerTurn)}"></label>
         </div>` : ''}
       </div>
       <div class="v20-col">
@@ -5833,11 +6109,25 @@ function _v20RenderSheet(panel, charName) {
 
   const specRows = m.specializations.map((s, i) =>
     `<div class="v20-pair-row"><input class="v20-line-input" data-tpath="specializations.${i}.ability" value="${escAttr(s.ability)}" placeholder="способность"><input class="v20-line-input" data-tpath="specializations.${i}.spec" value="${escAttr(s.spec)}" placeholder="специализация"></div>`).join('');
-  const otRows = m.otherTraits.map((t, i) => _v20NamedDotRow(`otherTraits.${i}.name`, t.name, `otherTraits.${i}.val`, t.val)).join('');
-  const ritRows = m.rituals.map((r, i) =>
-    `<div class="v20-pair-row"><input class="v20-line-input" data-tpath="rituals.${i}.name" value="${escAttr(r.name)}" placeholder="ритуал"><input class="v20-line-input v20-ritual-lvl" data-tpath="rituals.${i}.level" value="${escAttr(r.level)}" placeholder="ур."></div>`).join('');
+  const otRows = m.otherTraits.map((t, i) => _v20NamedDotRow(`otherTraits.${i}.name`, t.name, `otherTraits.${i}.val`, t.val, genMaxDots, i >= _V20_BASELINE_LEN.otherTraits ? 'otherTraits' : '')).join('');
+  const ritRows = m.rituals.map((r, i) => {
+    const rm = i >= _V20_BASELINE_LEN.rituals ? `<button type="button" class="v20-row-remove-btn" data-v20-remove="rituals" data-v20-remove-idx="${i}" title="Удалить строку">×</button>` : '';
+    return `<div class="v20-pair-row">${rm}<input class="v20-line-input" data-tpath="rituals.${i}.name" value="${escAttr(r.name)}" placeholder="ритуал"><input class="v20-line-input v20-ritual-lvl" data-tpath="rituals.${i}.level" value="${escAttr(r.level)}" placeholder="ур."></div>`;
+  }).join('');
   const V20_DESC = [['birthDate', 'Дата рождения'], ['apparentAge', 'Видимый возраст'], ['deathDate', 'Дата смерти'], ['gender', 'Пол'], ['race', 'Раса'], ['hair', 'Волосы'], ['eyes', 'Глаза'], ['heightWeight', 'Рост/Вес'], ['build', 'Телосложение'], ['nationality', 'Национальность']];
-  const descFields = V20_DESC.map(([k, l]) => _v20Field(l, `description.${k}`, m.description[k])).join('');
+  // Видимый возраст = Год обращения − Год рождения (карточка, web/lib/parsers.js: c.birthYear/
+  // c.embraceYear) — «замер на моменте Объятия» (character_sheet_v20.md, «Ограничения»). Если
+  // поле листа пустое/0 (т.е. ИИ/пользователь его не задавал), предзаполняем расчётом, но
+  // оставляем редактируемым — Рассказчик может переопределить по нестандартным лоровым причинам.
+  // Деградация: при отсутствии/нечисловых годах (напр. «⚠️ Не указан») — обычный текстовый ввод.
+  const apparentAgeComputed = _v20ComputeApparentAge(_v20Ctx?.card);
+  if (apparentAgeComputed != null && !String(m.description.apparentAge || '').trim()) m.description.apparentAge = String(apparentAgeComputed);
+  const descFields = V20_DESC.map(([k, l]) => {
+    if (k !== 'apparentAge' || apparentAgeComputed == null) return _v20Field(l, `description.${k}`, m.description[k]);
+    const isComputed = String(m.description[k] || '').trim() === String(apparentAgeComputed);
+    const badge = _v20AutoBadge(m.description[k], apparentAgeComputed, 'description.apparentAge', 'text');
+    return `<label class="v20-field"><span class="v20-field-lbl">${escHtml(l)}${badge}</span><input class="v20-field-input" data-tpath="description.${k}" value="${escAttr(m.description[k] || '')}" title="${isComputed ? 'Рассчитано: Год обращения − Год рождения' : ''}"></label>`;
+  }).join('');
   const V20_COMBAT_COLS = ['weapon', 'diff', 'damage', 'range', 'rate', 'clip', 'size'];
   const combatHead = `<div class="v20-combat-row v20-combat-head"><span>Оружие/атака</span><span>Сложн.</span><span>Урон</span><span>Дальн.</span><span>Скор.</span><span>Магазин</span><span>Размер</span></div>`;
   const combatRows = m.combat.map((c, i) =>
@@ -5847,8 +6137,8 @@ function _v20RenderSheet(panel, charName) {
     <div class="v20-band">Специализации · параметры${isVamp ? ' · ритуалы' : ''}</div>
     <div class="v20-grid3">
       <div class="v20-col"><div class="v20-col-title">Специализации</div>${specRows}</div>
-      <div class="v20-col"><div class="v20-col-title">Другие параметры</div>${otRows}</div>
-      ${isVamp ? `<div class="v20-col"><div class="v20-col-title">Ритуалы</div>${ritRows}</div>` : '<div class="v20-col"></div>'}
+      <div class="v20-col"><div class="v20-col-title">Другие параметры${_v20AddRowBtn('otherTraits')}</div>${otRows}</div>
+      ${isVamp ? `<div class="v20-col"><div class="v20-col-title">Ритуалы${_v20AddRowBtn('rituals')}</div>${ritRows}</div>` : '<div class="v20-col"></div>'}
     </div>
     <div class="v20-band">История и описание</div>
     <div class="v20-grid3">
@@ -5882,7 +6172,7 @@ function _v20RenderSheet(panel, charName) {
       <span class="v20-status" id="v20-status"></span>
     </div>
     <div class="v20-val-report" id="v20-validate-report"></div>
-    <div class="v20-sheet">${header}${attributes}${abilities}${advantages}${bottom}${page2}</div>
+    <div class="v20-sheet">${header}${attributes}${abilities}${advantages}${psychics}${bottom}${page2}</div>
     <div class="v20-foot">Создание: Характеристики 7/5/3 · Способности 13/9/5 · Дисциплины 3 · Факты биографии 5 · Добродетели 7 · Свободные пункты 15</div>`;
 
   document.getElementById('v20-save').addEventListener('click', _v20Save);
@@ -5911,7 +6201,8 @@ function _v20BindPanel(panel) {
     const span = dot.closest('.v20-dots'); if (!span) return;
     const dpath = span.dataset.dpath, d = +dot.dataset.d;
     const cur = _v20Get(_v20Model, dpath) || 0;
-    const nv = (cur === d) ? d - 1 : d;     // click filled max → step down; else set to d
+    const cap = _v20DotCapFor(dpath, _v20Model);
+    const nv = Math.min(cap, (cur === d) ? d - 1 : d);     // click filled max → step down; else set to d (clamped to generation/trait cap)
     if (_v20XpMode && nv > cur) {
       const info = _v20XpKindFromPath(dpath, _v20Model);
       if (info) {
@@ -5935,9 +6226,20 @@ function _v20BindPanel(panel) {
     const badge = e.target.closest('.v20-auto-badge'); if (badge) { _v20ApplyAutoBadge(badge); return; }
     const action = e.target.closest('[data-v20-action]'); if (action) { _v20RunAction(action.dataset.v20Action); return; }
     const discView = e.target.closest('[data-disc-view]'); if (discView) { _v20OpenDisciplineModal(discView.dataset.discView); return; }
+    const psyView = e.target.closest('[data-psy-view]'); if (psyView) { _v20OpenPsychicModal(psyView.dataset.psyView); return; }
     const rollBtn = e.target.closest('.v20-roll-icon-btn'); if (rollBtn) {
       const [kind, path] = rollBtn.dataset.rollSeed.split(':');
       _v20OpenRollModal(kind === 'attr' ? { attr: path } : { abil: path });
+      return;
+    }
+    const addBtn = e.target.closest('[data-v20-add]'); if (addBtn) {
+      const [section, group] = addBtn.dataset.v20Add.split(':');
+      _v20AddRow(section, group || null);
+      return;
+    }
+    const rmBtn = e.target.closest('[data-v20-remove]'); if (rmBtn) {
+      const [section, group] = rmBtn.dataset.v20Remove.split(':');
+      _v20RemoveRow(section, group || null, +rmBtn.dataset.v20RemoveIdx);
       return;
     }
   });
@@ -5955,7 +6257,10 @@ function _v20BindPanel(panel) {
       return;
     }
     const t = e.target.closest('[data-tpath="header.clan"], [data-tpath="header.generation"]');
-    if (t) _v20RenderSheet(panel, _v20Ctx.name);  // refresh clan/gen-derived badges & actions
+    if (t) {
+      if (t.dataset.tpath === 'header.generation') _v20ClampToGen(_v20Model);   // generation dropped → re-cap traits already above the new ceiling
+      _v20RenderSheet(panel, _v20Ctx.name);  // refresh clan/gen-derived badges & actions
+    }
   });
   panel.addEventListener('input', e => {
     const t = e.target.closest('[data-tpath]'); if (!t) return;
@@ -5983,6 +6288,7 @@ async function _v20Save() {
   _v20Model.experience.total = _num(_v20Model.experience.total, 0);
   _v20Model.experience.spent = _num(_v20Model.experience.spent, 0);
   _v20Model.bloodPerTurn = _num(_v20Model.bloodPerTurn, 0);
+  _v20Model.bloodPoolCount = _num(_v20Model.bloodPoolCount, 0);
   try {
     const r = await fetch(`/api/characters/${encodeURIComponent(_charSlug(_v20Ctx.name))}/sheet-data${location.search}`,
       { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ data: _v20Model }) }
@@ -6021,9 +6327,20 @@ async function _loadCharSheet(charName) {
   if (!panel) return;
   panel.dataset.loaded = '1';
   panel.innerHTML = '<div class="loading-state"><div class="spinner"></div>Загрузка листа…</div>';
-  _v20Ctx = { name: charName }; _v20DirtyFlag = false; _v20XpMode = false;
+  // Card-level birthYear/embraceYear (already parsed by parseCharacter, см. web/lib/parsers.js)
+  // — used to auto-fill description.apparentAge = embraceYear − birthYear (Шаг: апп. возраст).
+  const card = (STATE.characters || []).find(ch => ch.name === charName) || null;
+  _v20Ctx = { name: charName, card }; _v20DirtyFlag = false; _v20XpMode = false;
   let d;
-  try { d = await fetch(`/api/characters/${encodeURIComponent(_charSlug(charName))}/sheet-data${location.search}`).then(r => r.json()); }
+  try {
+    // Prefetch in parallel (cached after first call) so the ℹ-lookup buttons in psyRow/discRow
+    // already know which rows match the library on the very first render, not only after the
+    // user opens the 📚 reference modal once.
+    [d] = await Promise.all([
+      fetch(`/api/characters/${encodeURIComponent(_charSlug(charName))}/sheet-data${location.search}`).then(r => r.json()),
+      ensurePsychics(),
+    ]);
+  }
   catch (e) { panel.innerHTML = `<div class="cdet-empty">Ошибка загрузки: ${escHtml(e.message)}</div>`; return; }
   _v20Model = _v20ModelFrom(d);
   _v20RenderSheet(panel, charName);
@@ -6429,7 +6746,7 @@ async function _confirmDeleteChar(name) {
   const artNote = pv.art ? ` (арт: ${pv.art} — сохранится в архиве)` : '';
 
   const ov = document.createElement('div');
-  ov.className = 'chr-modal-backdrop';
+  ov.className = 'chr-modal-backdrop open';
   ov.innerHTML = `
     <div class="chr-modal">
       <div class="chr-modal-title">🗑 Удалить персонажа</div>
@@ -8482,7 +8799,15 @@ document.querySelectorAll('.lineage-pick-btn').forEach(btn => {
       const datalist = f.options
         ? `<datalist id="${listId}">${f.options.map(o => `<option value="${escHtml(o)}">`).join('')}</datalist>`
         : '';
-      const control = f.textarea
+      // Generation is a closed enum (unlike clan/sect/nature/demeanor, which allow
+      // free text via datalist) — render a real <select> so it can't be typo'd or
+      // left in a non-canonical format; mirrors the <select> in _enterInfoEdit.
+      const control = f.param === 'generation'
+        ? `<select class="form-control" data-param="${f.param}">
+            <option value="">— выбрать —</option>
+            ${VAMPIRE_GENERATIONS.map(o => `<option value="${escHtml(o)}">${escHtml(o)}</option>`).join('')}
+          </select>`
+        : f.textarea
         ? `<textarea class="form-control" data-param="${f.param}" rows="3"
             placeholder="${escHtml(f.placeholder || '')}"></textarea>`
         : `<input class="form-control" data-param="${f.param}"
