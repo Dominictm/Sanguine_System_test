@@ -1862,6 +1862,14 @@ function _locRowHtml(type = '', name = '', locationNames = _cityEditLocs) {
     <button class="cdet-rel-del-btn" type="button" title="Удалить запись">✕</button>
   </div>`;
 }
+// Строка уезжает (fade+collapse), затем удаляется из DOM — без этого клик по «✕» среди
+// нескольких похожих строк не давал понять, какая именно пропала.
+function _removeRelRow(row) {
+  if (!row) return;
+  row.classList.add('row-exit');
+  row.addEventListener('animationend', () => row.remove(), { once: true });
+  setTimeout(() => row.remove(), 250); // страховка, если animationend не сработает
+}
 
 // HTML-блоки структурных секций для формы _renderCityEdit. Нарратив и структурные
 // записи — два отдельных поля, чтобы не путались при заполнении.
@@ -2105,17 +2113,22 @@ document.getElementById('city-detail-content').addEventListener('click', async e
         if (n1) occ.add(n1); if (n2) occ.add(n2);
       });
       rows.insertAdjacentHTML('beforeend', _polRowHtml('', '', '', _cityEditChars.filter(n => !occ.has(n))));
+      rows.lastElementChild?.classList.add('row-enter');
       rows.lastElementChild?.querySelector('.cdet-pol-name-inp')?.focus();
     }
     return;
   }
-  if (e.target.closest('#cdet-political-rows .cdet-rel-del-btn')) { e.target.closest('.cdet-pol-row')?.remove(); return; }
+  if (e.target.closest('#cdet-political-rows .cdet-rel-del-btn')) { _removeRelRow(e.target.closest('.cdet-pol-row')); return; }
   if (e.target.closest('#cdet-location-add-btn')) {
     const rows = document.getElementById('cdet-location-rows');
-    if (rows) { rows.insertAdjacentHTML('beforeend', _locRowHtml()); rows.lastElementChild?.querySelector('.cdet-loc-name-inp')?.focus(); }
+    if (rows) {
+      rows.insertAdjacentHTML('beforeend', _locRowHtml());
+      rows.lastElementChild?.classList.add('row-enter');
+      rows.lastElementChild?.querySelector('.cdet-loc-name-inp')?.focus();
+    }
     return;
   }
-  if (e.target.closest('#cdet-location-rows .cdet-rel-del-btn')) { e.target.closest('.cdet-loc-row')?.remove(); return; }
+  if (e.target.closest('#cdet-location-rows .cdet-rel-del-btn')) { _removeRelRow(e.target.closest('.cdet-loc-row')); return; }
 
   if (e.target.closest('[data-city-edit]'))   { _renderCityEdit(); return; }
   if (e.target.closest('[data-city-cancel]')) { _renderCityView(); return; }

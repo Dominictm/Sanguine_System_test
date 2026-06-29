@@ -2248,6 +2248,12 @@ a:focus-visible {
 .cdet-panels {
   flex: 1;
   overflow-y: auto;
+  /* Скроллбар (5px, см. ::-webkit-scrollbar) рендерится у самой border-box-границы
+     элемента — padding-right тут бессилен, он лишь раздвигает контент и скроллбар
+     между собой, а не сам скроллбар от края. Margin отделяет от модалки сам
+     скролл-контейнер (а с ним и скроллбар), оставляя шапку/таб-бар/футер
+     edge-to-edge, как и задумано их собственным дизайном. */
+  margin-right: 10px;
 }
 
 .cdet-panel {
@@ -2521,6 +2527,19 @@ a:focus-visible {
   align-items: center;
 }
 
+/* Новая строка («+ Добавить запись») въезжает, удалённая — уезжает: подтверждает клик
+   среди нескольких похожих строк, где иначе непонятно, что именно изменилось. */
+@keyframes row-enter {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes row-exit {
+  from { opacity: 1; transform: translateX(0); }
+  to   { opacity: 0; transform: translateX(8px); }
+}
+.cdet-rel-row.row-enter { animation: row-enter var(--dur-fast) var(--ease); }
+.cdet-rel-row.row-exit  { animation: row-exit var(--dur-fast) var(--ease) forwards; }
+
 .cdet-rel-name-inp, .cdet-rel-type-inp {
   background: var(--bg);
   color: var(--text);
@@ -2627,11 +2646,14 @@ a:focus-visible {
   font-family: var(--f-body);
   font-size: var(--fs-sm);
   padding: 6px 16px;
-  transition: background .15s, border-color .15s, color .15s;
+  transition: background .15s, border-color .15s, color .15s, transform .12s var(--ease);
 }
 .cdet-faction-chip:hover {
   border-color: var(--accent);
   color: var(--text);
+}
+.cdet-faction-chip:active {
+  transform: scale(.96);
 }
 .cdet-faction-chip[aria-pressed="true"] {
   background: color-mix(in srgb, var(--accent) 22%, transparent);
