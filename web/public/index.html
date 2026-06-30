@@ -129,12 +129,15 @@
           <option value="mortal">🧑 Смертные</option>
           <option value="werewolf">🐺 Оборотни</option>
           <option value="mage">🔮 Маги</option>
+          <option value="hunter">🏹 Охотники</option>
         </select>
         <select class="filter-select" id="filter-status">
           <option value="all">Все статусы</option>
           <option value="active">Жив / Жива</option>
           <option value="torpor">Торпор</option>
           <option value="dead">Мёртв / Мертва</option>
+          <option value="missing">Пропал</option>
+          <option value="unknown">Неизвестно</option>
         </select>
         <!-- impeccable-variants-start c906fd2d -->
         <div data-impeccable-variants="c906fd2d" data-impeccable-mode="insert" data-impeccable-variant-count="3" style="display: contents">
@@ -264,6 +267,7 @@
           </div>
           <div class="chr-detail-header-btns">
             <button class="chp-create-btn" id="btn-create-module-in-chr" style="display:none">+ Модуль</button>
+            <button class="chd-dir-btn" id="chd-director-btn" title="AI Director — предложения следующей сцены">🎭 Директор</button>
             <button class="chr-detail-close" id="chr-detail-close" aria-label="Закрыть">✕</button>
           </div>
         </div>
@@ -278,6 +282,7 @@
           </div>
         </div>
         <div id="chd-recap-panel" class="chd-recap-panel" style="display:none"></div>
+        <div id="chd-director-panel" class="chd-director-panel" style="display:none"></div>
         <div id="chr-detail-body" class="chr-detail-body">
           <div class="loading-state"><div class="spinner"></div>Загрузка...</div>
         </div>
@@ -479,6 +484,7 @@
     <section id="page-locations" class="page">
       <div class="page-header">
         <span class="page-sub" id="locations-sub">Локации</span>
+        <button class="chr-modal-btn create" id="loc-page-create-btn" style="padding:5px 12px;font-size:var(--fs-sm)">+ Создать локацию</button>
       </div>
       <div class="filter-bar">
         <input class="filter-input" id="loc-search" placeholder="Поиск по названию...">
@@ -959,6 +965,93 @@
   <div class="modal-box modal-loc-detail">
     <button class="modal-close" id="loc-detail-close" aria-label="Закрыть">✕</button>
     <div id="loc-detail-content"></div>
+  </div>
+</div>
+
+<!-- ── Location Edit/Create Modal ── -->
+<div id="loc-edit-modal" class="chr-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="loc-edit-title">
+  <div class="chr-modal loc-edit-modal">
+    <div class="chr-modal-title" id="loc-edit-title">Локация</div>
+    <div class="chr-modal-body loc-edit-body">
+
+      <div class="loc-edit-gen-row">
+        <button class="chr-modal-btn loc-edit-gen-full-btn" id="loc-edit-gen-full-btn" title="Сгенерировать полную карточку">🪄 Сгенерировать карточку</button>
+        <span class="loc-edit-gen-hint" id="loc-edit-gen-hint"></span>
+      </div>
+
+      <div class="chr-form-group">
+        <label class="chr-form-label" for="loc-edit-name">Название <span class="loc-edit-req">*</span></label>
+        <input class="chr-form-input" id="loc-edit-name" type="text" placeholder="Название локации" autocomplete="off">
+      </div>
+
+      <div class="loc-edit-row2">
+        <div class="chr-form-group">
+          <label class="chr-form-label" for="loc-edit-district">Район (папка)</label>
+          <input class="chr-form-input" id="loc-edit-district" type="text" placeholder="Другие" autocomplete="off">
+        </div>
+        <div class="chr-form-group">
+          <label class="chr-form-label" for="loc-edit-neighborhood">Квартал</label>
+          <input class="chr-form-input" id="loc-edit-neighborhood" type="text" placeholder="Район" autocomplete="off">
+        </div>
+      </div>
+
+      <div class="chr-form-group">
+        <label class="chr-form-label" for="loc-edit-address">Адрес</label>
+        <input class="chr-form-input" id="loc-edit-address" type="text" placeholder="Адрес" autocomplete="off">
+      </div>
+
+      <div class="loc-edit-row2">
+        <div class="chr-form-group">
+          <label class="chr-form-label" for="loc-edit-zone">Зона</label>
+          <select class="chr-form-input" id="loc-edit-zone">
+            <option value="">—</option>
+            <option value="🟢">🟢 Безопасная</option>
+            <option value="🟡">🟡 Нейтральная</option>
+            <option value="🔴">🔴 Опасная</option>
+          </select>
+        </div>
+        <div class="chr-form-group">
+          <label class="chr-form-label" for="loc-edit-control">Контроль</label>
+          <input class="chr-form-input" id="loc-edit-control" type="text" placeholder="Фракция" autocomplete="off">
+        </div>
+      </div>
+
+      <div class="chr-form-group loc-edit-field-with-gen">
+        <div class="loc-edit-field-header">
+          <label class="chr-form-label" for="loc-edit-atmosphere">Атмосфера</label>
+          <button class="loc-edit-regen-btn" data-field="atmosphere" title="Перегенерировать">🔄</button>
+        </div>
+        <textarea class="chr-form-textarea" id="loc-edit-atmosphere" rows="3" placeholder="2–3 предложения об атмосфере..."></textarea>
+      </div>
+
+      <div class="chr-form-group loc-edit-field-with-gen">
+        <div class="loc-edit-field-header">
+          <label class="chr-form-label" for="loc-edit-hooks">Сценарные крючки</label>
+          <button class="loc-edit-regen-btn" data-field="hooks" title="Перегенерировать">🔄</button>
+        </div>
+        <textarea class="chr-form-textarea" id="loc-edit-hooks" rows="3" placeholder="1. Крючок&#10;2. Крючок&#10;3. Крючок"></textarea>
+      </div>
+
+      <div class="chr-form-group loc-edit-field-with-gen">
+        <div class="loc-edit-field-header">
+          <label class="chr-form-label" for="loc-edit-image-prompt">Промт изображения (EN)</label>
+          <button class="loc-edit-regen-btn" data-field="imagePrompt" title="Перегенерировать">🔄</button>
+        </div>
+        <textarea class="chr-form-textarea" id="loc-edit-image-prompt" rows="3" placeholder="A dark Parisian street..."></textarea>
+      </div>
+
+      <div class="chr-form-group">
+        <label class="chr-form-label" for="loc-edit-context">Контекст для генерации</label>
+        <input class="chr-form-input" id="loc-edit-context" type="text" placeholder="Что здесь происходит по сценарию" autocomplete="off">
+      </div>
+
+      <div id="loc-edit-error" class="chr-modal-warn" style="display:none"></div>
+    </div>
+    <div class="chr-modal-actions">
+      <button class="chr-modal-btn cancel" id="loc-edit-cancel">Отмена</button>
+      <button class="chr-modal-btn loc-edit-delete-btn" id="loc-edit-delete-btn" style="display:none">🗑 Удалить</button>
+      <button class="chr-modal-btn create" id="loc-edit-save-btn">Сохранить</button>
+    </div>
   </div>
 </div>
 

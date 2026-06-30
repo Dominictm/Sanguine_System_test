@@ -38,7 +38,7 @@ const LINEAGE_ICONS = {
 };
 
 const STATUS_LABELS = {
-  active: 'Жив / Жива', torpor: 'Торпор', dead: 'Мёртв / Мертва', unknown: 'Неизвестно'
+  active: 'Жив / Жива', torpor: 'Торпор', dead: 'Мёртв / Мертва', missing: 'Пропал', unknown: 'Неизвестно'
 };
 const LINEAGE_LABELS = {
   vampire: '🧛 Вампир', fairy: '🧚 Фея', mortal: '🧑 Смертный',
@@ -962,10 +962,16 @@ const OPENAI_MODELS = [
   { id: 'gpt-4.1',      label: 'GPT-4.1 — высокое качество' },
   { id: 'gpt-4.1-mini', label: 'GPT-4.1 mini' },
 ];
+const GEMINI_MODELS = [
+  { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash — быстро и дёшево' },
+  { id: 'gemini-2.5-pro',   label: 'Gemini 2.5 Pro — сложная проза' },
+  { id: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash' },
+];
 // Resolve a feature's model list by provider.
 function _modelsForProvider(provider, orModels) {
-  if (provider === 'claude') return CLAUDE_MODELS;
-  if (provider === 'openai') return OPENAI_MODELS;
+  if (provider === 'claude')  return CLAUDE_MODELS;
+  if (provider === 'openai')  return OPENAI_MODELS;
+  if (provider === 'gemini')  return GEMINI_MODELS;
   return orModels;
 }
 
@@ -996,6 +1002,7 @@ function _renderFeatCard(feat, icon, label, desc, pref, orModels) {
           ${radio('openrouter', 'OpenRouter')}
           ${radio('openai', 'GPT')}
           ${radio('claude', 'Claude')}
+          ${radio('gemini', 'Gemini')}
         </div>
       </div>
       <select class="ais-feat-model-select" id="feat-${feat}-model">${opts}</select>
@@ -1098,6 +1105,32 @@ async function loadAiSettings() {
 
         <button class="ais-confirm-btn" id="ais-openai-save">✓ Подтвердить OpenAI</button>
         <div class="ais-status" id="ais-openai-status"></div>
+      </div>
+
+      <!-- Google Gemini section -->
+      <div class="ais-section">
+        <div class="ais-section-title">♊ Google Gemini — AI-проза</div>
+        <div class="ais-section-hint">Доступ через Google AI Studio API Key. Поддерживает Gemini 2.5 Pro/Flash для генерации прозы и сценариев. Назначается на функции в «⚡ Назначение провайдеров».</div>
+
+        <div class="ais-field">
+          <label class="ais-label">API Key
+            <span class="ais-key-state ${orSettings.hasGeminiKey ? 'ok' : ''}">${orSettings.hasGeminiKey ? '● задан' : '○ не задан'}</span>
+          </label>
+          <input class="ais-input" id="ais-gemini-key" type="password"
+            placeholder="${orSettings.hasGeminiKey ? '•••••• (задан)' : 'AIza...'}"
+            autocomplete="new-password">
+          <div class="ais-field-hint">Оставь пустым — ключ не изменится. Очисти и подтверди — удалить ключ.</div>
+        </div>
+
+        <div class="ais-field">
+          <label class="ais-label">Модель по умолчанию</label>
+          <select class="ais-input" id="ais-gemini-model">
+            ${GEMINI_MODELS.map(m => `<option value="${escHtml(m.id)}" ${(orSettings.GEMINI_MODEL || 'gemini-2.5-flash') === m.id ? 'selected' : ''}>${escHtml(m.label)}</option>`).join('')}
+          </select>
+        </div>
+
+        <button class="ais-confirm-btn" id="ais-gemini-save">✓ Подтвердить Gemini</button>
+        <div class="ais-status" id="ais-gemini-status"></div>
       </div>
 
       <!-- Claude / Anthropic section -->
@@ -1230,6 +1263,30 @@ async function loadAiSettings() {
     () => _saveKey('ais-or-save', 'ais-or-status', 'ais-or-key', 'OPENROUTER_API_KEY', '✓ Подтвердить OpenRouter'));
   document.getElementById('ais-openai-save').addEventListener('click',
     () => _saveKey('ais-openai-save', 'ais-openai-status', 'ais-openai-key', 'OPENAI_API_KEY', '✓ Подтвердить OpenAI'));
+  document.getElementById('ais-gemini-save').addEventListener('click', async () => {
+    const btn    = document.getElementById('ais-gemini-save');
+    const status = document.getElementById('ais-gemini-status');
+    const key    = document.getElementById('ais-gemini-key').value;
+    const model  = document.getElementById('ais-gemini-model').value;
+    btn.disabled = true; btn.textContent = '⏳…';
+    status.className = 'ais-status'; status.textContent = '';
+    try {
+      const body = { restart: true };
+      if (key !== '') body.GEMINI_API_KEY = key;
+      if (model)       body.GEMINI_MODEL  = model;
+      const d = await fetch('/api/settings', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      }).then(r => r.json());
+      if (!d.ok) throw new Error(d.error);
+      status.textContent = d.needsRestart ? '✓ Сохранено — сервер перезапускается...' : '✓ Сохранено';
+      status.classList.add('ok');
+      _aiSettingsLoaded = false;
+      if (d.needsRestart) setTimeout(() => { _aiSettingsLoaded = false; loadAiSettings(); }, 2500);
+    } catch (e) {
+      status.textContent = '✗ Ошибка: ' + e.message; status.classList.add('err');
+    } finally { btn.disabled = false; btn.textContent = '✓ Подтвердить Gemini'; }
+  });
   document.getElementById('ais-anthropic-save').addEventListener('click',
     () => _saveKey('ais-anthropic-save', 'ais-anthropic-status', 'ais-anthropic-key', 'ANTHROPIC_API_KEY', '✓ Подтвердить Claude'));
 
@@ -2327,9 +2384,11 @@ async function openChrDetail(slug, display, tab) {
 
   periodWrap.style.display = _chrDetailTab === 'events' ? '' : 'none';
 
-  // Reset the recap panel on every (re)open / tab switch
+  // Reset the recap + director panels on every (re)open / tab switch
   const recapPanel = document.getElementById('chd-recap-panel');
   if (recapPanel) { recapPanel.style.display = 'none'; recapPanel.innerHTML = ''; }
+  const dirPanel = document.getElementById('chd-director-panel');
+  if (dirPanel) { dirPanel.style.display = 'none'; dirPanel.innerHTML = ''; }
 
   if (_chrDetailTab === 'modules') {
     periodInput.value = '';
@@ -2546,6 +2605,110 @@ async function _generateChrRecap(slug) {
     _recapRunning = false;
     if (btn) { btn.disabled = false; btn.textContent = origLabel || '📺 Ранее в хронике…'; }
   }
+}
+
+// ── AI Director — propose next scene ─────────────────────────────────────────
+let _directorRunning = false;
+document.getElementById('chd-director-btn').addEventListener('click', () => {
+  if (_chrDetailSlug) _runDirector(_chrDetailSlug);
+});
+
+async function _runDirector(slug) {
+  if (_directorRunning) return;
+  _directorRunning = true;
+  const btn   = document.getElementById('chd-director-btn');
+  const panel = document.getElementById('chd-director-panel');
+  const orig  = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = '⏳…'; }
+  if (panel) {
+    panel.style.display = '';
+    panel.innerHTML = '<div class="chd-recap-loading"><div class="spinner"></div>Анализирую хронику…</div>';
+  }
+  try {
+    const qs   = window.location.search;
+    const resp = await fetch(`/api/director/propose${qs}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chronicle: slug }),
+    });
+    const d = await resp.json().catch(() => ({}));
+    if (!resp.ok || !d.ok) {
+      panel.innerHTML = `<div class="chd-recap-err">⚠ ${escHtml(d.error || 'Не удалось получить предложения')}</div>`;
+      return;
+    }
+    panel.innerHTML = _renderDirectorPanel(d);
+    panel.querySelector('.chd-dir-close')?.addEventListener('click', () => {
+      panel.style.display = 'none'; panel.innerHTML = '';
+    });
+  } catch (e) {
+    if (panel) panel.innerHTML = `<div class="chd-recap-err">⚠ ${escHtml(e.message)}</div>`;
+  } finally {
+    _directorRunning = false;
+    if (btn) { btn.disabled = false; btn.textContent = orig || '🎭 Директор'; }
+  }
+}
+
+function _renderDirectorPanel(d) {
+  const tension = d.tension_now ?? 0;
+  const forecast = d.tension_forecast ?? tension;
+  const phase = d.phase || 'setup';
+  const phaseLabel = { setup: 'Завязка', conflict: 'Конфликт', climax: 'Кульминация' }[phase] || phase;
+
+  // Tension bar color
+  const barColor = tension <= 3 ? 'var(--c-info)' : tension <= 6 ? 'var(--gold)' : 'var(--crimson)';
+  const barPct   = Math.round((tension / 10) * 100);
+
+  // Scenes
+  const scenesHtml = (d.suggested_scenes || []).map(s => `
+    <div class="chd-dir-scene">
+      <div class="chd-dir-scene-title">${escHtml(s.title || '')}</div>
+      ${s.hook ? `<div class="chd-dir-scene-goal chd-dir-scene-hook">🔗 ${escHtml(s.hook)}</div>` : ''}
+      ${s.goal ? `<div class="chd-dir-scene-goal">↳ ${escHtml(s.goal)}</div>` : ''}
+      ${s.recommended_characters?.length ? `<div class="chd-dir-scene-chars">Персонажи: ${s.recommended_characters.map(escHtml).join(', ')}</div>` : ''}
+      ${s.tension_after != null ? `<div class="chd-dir-scene-chars">Напряжение после: ${s.tension_after}/10</div>` : ''}
+    </div>`).join('');
+
+  // Warnings
+  const warnsHtml = (d.warnings || []).length ? `
+    <div class="chd-dir-section-label">Предупреждения</div>
+    <div class="chd-dir-warnings">
+      ${d.warnings.map(w => `<div class="chd-dir-warning">⚠ ${escHtml(w)}</div>`).join('')}
+    </div>` : '';
+
+  // World flags
+  const flagsHtml = (d.world_flags || []).length ? `
+    <div class="chd-dir-section-label">Активные нити мира</div>
+    <div class="chd-dir-flags">${d.world_flags.slice(0, 5).map(f =>
+      `<span class="chd-dir-flag">${escHtml(f)}</span>`
+    ).join('')}</div>` : '';
+
+  return `
+    <div class="chd-dir-head">
+      <span class="chd-dir-title">🎭 AI Director</span>
+      <span class="chd-dir-meta">${escHtml(d.phase_goal || '')}</span>
+      <button class="chd-dir-close" title="Закрыть">✕</button>
+    </div>
+
+    <div class="chd-dir-phase-row">
+      <span class="chd-dir-phase chd-dir-phase--${escHtml(phase)}">${escHtml(phaseLabel)}</span>
+      <span class="chd-dir-phase-goal">${escHtml(d.phase_goal || '')}</span>
+    </div>
+
+    <div class="chd-dir-tension-wrap">
+      <span class="chd-dir-tension-label">Напряжение</span>
+      <div class="chd-dir-tension-bar">
+        <div class="chd-dir-tension-fill" style="transform:scaleX(${barPct / 100});background:${barColor}"></div>
+      </div>
+      <span class="chd-dir-tension-val">${tension}→${forecast}</span>
+    </div>
+
+    <div class="chd-dir-section-label">Предложения сцен</div>
+    <div class="chd-dir-scenes">${scenesHtml || '<div class="chd-recap-err">Нет данных о событиях хроники</div>'}</div>
+
+    ${flagsHtml}
+    ${warnsHtml}
+
+    <div class="chd-dir-disclaimer">AI предлагает · Рассказчик решает</div>`;
 }
 
 // ── Create module ─────────────────────────────────────────────────────────────
@@ -3081,6 +3244,18 @@ function _renderModuleNpcGroups(groups) {
                <button class="modp-sheet-btn ghost" data-sheet-act="edit" title="Редактировать лист">✏</button>`
             : `<button class="modp-sheet-btn" data-sheet-act="gen">📋 Сгенерировать лист</button>` }
         </div>` : '';
+      // Promote button — only for modular NPCs
+      let promoteCtl = '';
+      if (g.kind === 'modular' && e.slug) {
+        const pc = e.promoteCheck;
+        const allMet = pc && pc.survived && pc.inFinale && pc.inMultipleModules;
+        const tip = pc
+          ? `${pc.survived ? '✓' : '✗'} выжил · ${pc.inFinale ? '✓' : '✗'} в финале · ${pc.inMultipleModules ? '✓' : '✗'} 2+ модулей`
+          : 'Условия не проверены';
+        promoteCtl = `<button class="modp-promote-btn${allMet ? ' ready' : ''}"
+          data-promote-slug="${escAttr(e.slug)}" data-promote-name="${escAttr(e.name)}"
+          title="${escAttr(tip)}">⬆ В канон</button>`;
+      }
       // Реплики — только для НПС (ПК озвучивают игроки, не Мастер)
       const dlg = g.kind !== 'pc' ? `
         <div class="modp-npc-dlg">
@@ -3091,7 +3266,7 @@ function _renderModuleNpcGroups(groups) {
       return `<div class="modp-npc-entry">
         <div class="modp-npc-head">
           <div class="modp-npc-head-main">${nameHtml}${descHtml}</div>
-          ${sheetCtl}
+          <div class="modp-npc-actions">${sheetCtl}${promoteCtl}</div>
         </div>
         ${dlg}
       </div>`;
@@ -3315,17 +3490,7 @@ function renderModulePage(data) {
   }
 
   // ── ЛОКАЦИИ ──
-  if (data.locations?.length) {
-    document.getElementById('modp-panel-locations').innerHTML =
-      data.locations.map(loc => `
-        <div class="modp-location">
-          <div class="modp-location-name">${escHtml(loc.name)}</div>
-          <div class="modp-location-desc">${escHtml(loc.description)}</div>
-        </div>`).join('');
-  } else {
-    document.getElementById('modp-panel-locations').innerHTML =
-      '<div class="modp-empty"><div class="modp-empty-icon">📍</div>Локации не найдены в scenario.md</div>';
-  }
+  _renderModuleLocPanel(data);
 
   // ── НИТИ ──
   document.getElementById('modp-panel-threads').innerHTML = data.openThreads
@@ -3534,9 +3699,66 @@ document.getElementById('modp-panel-npcs').addEventListener('click', e => {
   if (dlgBtn) { _genModuleNpcDialogue(dlgBtn); return; }
   const sheetBtn = e.target.closest('.modp-sheet-btn');
   if (sheetBtn) { _onModuleSheetBtn(sheetBtn); return; }
+  const promoteBtn = e.target.closest('.modp-promote-btn');
+  if (promoteBtn) { _onPromoteNpc(promoteBtn); return; }
   const link = e.target.closest('[data-open-char]');
   if (link) { e.preventDefault(); openCharDetail(link.dataset.openChar); }
 });
+
+// Promote episodic NPC to canonical character
+async function _onPromoteNpc(btn) {
+  if (!STATE.currentModule) return;
+  const { chronicle, name: mod } = STATE.currentModule;
+  const slug    = btn.dataset.promoteSlug;
+  const npcName = btn.dataset.promoteName;
+  const isReady = btn.classList.contains('ready');
+
+  const LINEAGES = [
+    { value: 'vampires', label: '🧛 Вампир' },
+    { value: 'mortals',  label: '🧑 Смертный' },
+    { value: 'fairies',  label: '🧚 Фея' },
+    { value: 'werewolves', label: '🐺 Оборотень' },
+    { value: 'mages',    label: '🔮 Маг' },
+    { value: 'hunters',  label: '🏹 Охотник' },
+  ];
+
+  const condMsg = btn.title ? `\nУсловия: ${btn.title}` : '';
+  const forceMsg = isReady ? '' : '\n⚠️ Не все условия выполнены. Продолжить принудительно?';
+  const lineage  = prompt(
+    `Канонизировать «${npcName}»?${condMsg}${forceMsg}\n\nВыберите линейку:\n` +
+    LINEAGES.map((l, i) => `${i + 1}. ${l.label}`).join('\n') +
+    '\n\nВведите номер (по умолчанию 1):',
+    '1'
+  );
+  if (lineage === null) return;
+  const idx = (parseInt(lineage, 10) || 1) - 1;
+  const chosen = LINEAGES[Math.max(0, Math.min(idx, LINEAGES.length - 1))];
+
+  btn.disabled = true;
+  btn.textContent = '…';
+  try {
+    const r = await fetch(
+      `/api/chronicles/${encodeURIComponent(chronicle)}/modules/${encodeURIComponent(mod)}/npc/${encodeURIComponent(slug)}/promote`,
+      { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lineage: chosen.value, force: !isReady }) }
+    );
+    const d = await r.json();
+    if (!r.ok) {
+      alert(`Ошибка: ${d.error || r.status}\n${d.conditions ? JSON.stringify(d.conditions, null, 2) : ''}`);
+      btn.disabled = false;
+      btn.textContent = '⬆ В канон';
+      return;
+    }
+    btn.textContent = '✓ Канонизирован';
+    btn.style.color = 'var(--gold)';
+    // Refresh module page so the NPC now shows as canonical
+    setTimeout(loadModulePage, 800);
+  } catch (err) {
+    alert(`Ошибка: ${err.message}`);
+    btn.disabled = false;
+    btn.textContent = '⬆ В канон';
+  }
+}
 
 // Handle a sheet button on the module NPC tab (generate / view / regenerate / edit)
 function _onModuleSheetBtn(btn) {
@@ -3585,6 +3807,14 @@ document.getElementById('modp-gen-btn').addEventListener('click', async () => {
     if (d.reusedLocations?.length) lines.push(`♻️ Переиспользовано локаций: ${d.reusedLocations.join(', ')}`);
     if (d.npcs?.length)            lines.push(`🧛 Новых НПС: ${d.npcs.length} (${d.npcs.join(', ')})`);
     if (d.canonNpcs?.length)       lines.push(`♻️ Каноничных НПС: ${d.canonNpcs.join(', ')}`);
+    if (d.timelineWarnings?.length) {
+      lines.push('');
+      lines.push('⚠️ Предупреждения таймлайна:');
+      for (const w of d.timelineWarnings) {
+        const sev = w.severity === 'high' ? '🔴' : '🟡';
+        lines.push(`${sev} ${w.character}: ${w.issue}`);
+      }
+    }
     alert(lines.join('\n'));
     loadModulePage();
   } catch (e) {
@@ -3797,13 +4027,7 @@ async function ensureCharsLoaded() {
     STATE.characters = Array.isArray(data) ? data : [];
   } catch {}
 }
-async function ensureLocsLoaded() {
-  if (STATE.locations.length) return;
-  try {
-    const data = await fetch('/api/locations').then(r => r.json());
-    STATE.locations = Array.isArray(data) ? data : [];
-  } catch {}
-}
+// ensureLocsLoaded is defined at the bottom of the file (city-aware version)
 
 // Resolve a chronicle participant name to a real character card (fuzzy, like the graph)
 function resolveCharByName(raw) {
@@ -8260,6 +8484,7 @@ function openLocDetail(slug, keepTab) {
       <div class="cdet-sticky-header">
         <div class="cdet-name">${escHtml(loc.title || loc.slug)}</div>
         ${loc.subtype ? `<div class="locdet-subtype">${escHtml(loc.subtype)}</div>` : ''}
+        <button class="cdet-edit-btn" id="locdet-open-edit-modal" data-slug="${escHtml(slug)}" style="margin-bottom:6px">✏ Редактировать / Генерация</button>
         <div class="locdet-legend-row">
           <div class="locdet-legend-item">
             <span class="locdet-legend-lbl">Зона контроля</span>
@@ -9056,3 +9281,417 @@ window.addEventListener('load', () => {
   try { seen = localStorage.getItem(TOUR_SEEN_KEY) === '1'; } catch {}
   if (!seen && document.querySelector('.city-switch')) setTimeout(startTour, 900);
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Location Edit / Create Modal
+// ═══════════════════════════════════════════════════════════════════════════
+
+let _locEditSlug = null; // null = create, string = edit
+
+function openLocEditModal(slug) {
+  _locEditSlug = slug || null;
+  const modal = document.getElementById('loc-edit-modal');
+  const title = document.getElementById('loc-edit-title');
+  const delBtn = document.getElementById('loc-edit-delete-btn');
+  const errDiv = document.getElementById('loc-edit-error');
+
+  title.textContent = slug ? 'Редактировать локацию' : 'Создать локацию';
+  delBtn.style.display = slug ? '' : 'none';
+  errDiv.style.display = 'none';
+  errDiv.textContent = '';
+  document.getElementById('loc-edit-gen-hint').textContent = '';
+
+  // Clear fields
+  ['name','district','neighborhood','address','control','atmosphere','hooks','image-prompt','context'].forEach(id => {
+    const el = document.getElementById(`loc-edit-${id}`);
+    if (el) el.value = '';
+  });
+  document.getElementById('loc-edit-zone').value = '';
+
+  if (slug) {
+    const loc = STATE.locations.find(l => l.slug === slug);
+    if (loc) {
+      document.getElementById('loc-edit-name').value        = loc.title || loc.subtype || loc.slug || '';
+      document.getElementById('loc-edit-district').value    = loc.district || '';
+      document.getElementById('loc-edit-neighborhood').value = loc.neighborhood || '';
+      document.getElementById('loc-edit-address').value     = loc.address || '';
+      document.getElementById('loc-edit-control').value     = loc.control || '';
+      document.getElementById('loc-edit-atmosphere').value  = loc.atmosphere || '';
+      document.getElementById('loc-edit-hooks').value       = (loc.hooks || []).join('\n');
+      document.getElementById('loc-edit-image-prompt').value = loc.imagePrompt || '';
+      // Zone: try to match emoji
+      const zv = loc.zone || '';
+      const zoneEl = document.getElementById('loc-edit-zone');
+      for (const opt of zoneEl.options) {
+        if (opt.value && zv.includes(opt.value)) { zoneEl.value = opt.value; break; }
+      }
+    }
+  }
+
+  modal.classList.add('open');
+  document.getElementById('loc-edit-name').focus();
+}
+
+function closeLocEditModal() {
+  document.getElementById('loc-edit-modal').classList.remove('open');
+  _locEditSlug = null;
+}
+
+async function saveLocEdit() {
+  const saveBtn = document.getElementById('loc-edit-save-btn');
+  const errDiv  = document.getElementById('loc-edit-error');
+  const name    = document.getElementById('loc-edit-name').value.trim();
+
+  errDiv.style.display = 'none';
+  if (!name) { errDiv.textContent = 'Укажите название'; errDiv.style.display = ''; return; }
+
+  saveBtn.disabled = true;
+  saveBtn.textContent = 'Сохраняем...';
+
+  try {
+    if (_locEditSlug) {
+      // Edit: update individual fields via PUT /fields
+      // Always include every field so empty string clears the existing value
+      const fields = {
+        atmosphere:  document.getElementById('loc-edit-atmosphere').value.trim(),
+        hooks:       document.getElementById('loc-edit-hooks').value.trim(),
+        imagePrompt: document.getElementById('loc-edit-image-prompt').value.trim(),
+        district:    document.getElementById('loc-edit-district').value.trim(),
+        neighborhood:document.getElementById('loc-edit-neighborhood').value.trim(),
+        address:     document.getElementById('loc-edit-address').value.trim(),
+        control:     document.getElementById('loc-edit-control').value.trim(),
+      };
+
+      const r = await fetch(`/api/locations/${encodeURIComponent(_locEditSlug)}/fields?city=${encodeURIComponent(CITY)}`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fields }),
+      });
+      if (!r.ok) throw new Error((await r.json()).error || r.statusText);
+    } else {
+      // Create
+      const r = await fetch(`/api/locations?city=${encodeURIComponent(CITY)}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name,
+          district: document.getElementById('loc-edit-district').value.trim() || undefined,
+          context: document.getElementById('loc-edit-context').value.trim() || undefined,
+        }),
+      });
+      if (!r.ok) throw new Error((await r.json()).error || r.statusText);
+    }
+
+    // Refresh locations cache
+    STATE.locations = [];
+    closeLocEditModal();
+    await loadLocations();
+  } catch (e) {
+    errDiv.textContent = e.message;
+    errDiv.style.display = '';
+  } finally {
+    saveBtn.disabled = false;
+    saveBtn.textContent = 'Сохранить';
+  }
+}
+
+async function deleteLocCurrent() {
+  if (!_locEditSlug) return;
+  if (!confirm(`Удалить локацию «${_locEditSlug}»? Это действие необратимо.`)) return;
+  const btn = document.getElementById('loc-edit-delete-btn');
+  btn.disabled = true;
+  try {
+    const r = await fetch(`/api/locations/${encodeURIComponent(_locEditSlug)}?city=${encodeURIComponent(CITY)}`, { method: 'DELETE' });
+    if (!r.ok) throw new Error((await r.json()).error || r.statusText);
+    closeLocEditModal();
+    // Close detail modal if open for this slug
+    document.getElementById('loc-detail-modal').classList.remove('open');
+    STATE.locations = [];
+    await loadLocations();
+  } catch (e) {
+    document.getElementById('loc-edit-error').textContent = e.message;
+    document.getElementById('loc-edit-error').style.display = '';
+    btn.disabled = false;
+  }
+}
+
+async function runLocFieldRegen(field) {
+  const slug = _locEditSlug;
+  const name = document.getElementById('loc-edit-name').value.trim();
+  const context = document.getElementById('loc-edit-context').value.trim();
+  const hint = document.getElementById('loc-edit-gen-hint');
+  hint.textContent = '⏳ Генерация...';
+
+  try {
+    const r = await fetch(`/api/locations/generate?city=${encodeURIComponent(CITY)}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ slug, name, field, context }),
+    });
+    if (!r.ok) throw new Error((await r.json()).error || r.statusText);
+    const { value } = await r.json();
+    if (!value) throw new Error('Пустой ответ');
+
+    const fieldMap = { atmosphere: 'atmosphere', imagePrompt: 'image-prompt', hooks: 'hooks' };
+    const elId = fieldMap[field];
+    if (elId) document.getElementById(`loc-edit-${elId}`).value = value;
+    hint.textContent = '✓ Готово';
+  } catch (e) {
+    hint.textContent = `⚠ ${e.message}`;
+  }
+}
+
+async function runLocFullGen() {
+  const slug = _locEditSlug;
+  const name = document.getElementById('loc-edit-name').value.trim();
+  const context = document.getElementById('loc-edit-context').value.trim();
+  if (!name) { document.getElementById('loc-edit-error').textContent = 'Укажите название для генерации'; document.getElementById('loc-edit-error').style.display = ''; return; }
+
+  const hint = document.getElementById('loc-edit-gen-hint');
+  const btn  = document.getElementById('loc-edit-gen-full-btn');
+  hint.textContent = '⏳ Генерирую карточку...';
+  btn.disabled = true;
+
+  try {
+    const r = await fetch(`/api/locations/generate?city=${encodeURIComponent(CITY)}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ slug, name, context }),
+    });
+    if (!r.ok) throw new Error((await r.json()).error || r.statusText);
+    const { content } = await r.json();
+    if (!content) throw new Error('Пустой ответ от AI');
+
+    // Parse generated content into form fields (rough extraction)
+    const atmM = content.match(/##\s*🎭\s*Атмосфера\s*\n+([\s\S]+?)(?=\n##|\n---|$)/i);
+    if (atmM) document.getElementById('loc-edit-atmosphere').value = atmM[1].trim();
+
+    const hooksM = content.match(/##\s*🪝\s*Сценарные крючки\s*\n+([\s\S]+?)(?=\n##|\n---|$)/i);
+    if (hooksM) document.getElementById('loc-edit-hooks').value = hooksM[1].trim();
+
+    const promptM = content.match(/```\s*\n([\s\S]+?)```/);
+    if (promptM) document.getElementById('loc-edit-image-prompt').value = promptM[1].trim();
+
+    hint.textContent = '✓ Карточка сгенерирована — проверьте и сохраните';
+  } catch (e) {
+    hint.textContent = `⚠ ${e.message}`;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// Wire up modal events
+(function _initLocEditModal() {
+  document.getElementById('loc-edit-cancel').addEventListener('click', closeLocEditModal);
+  document.getElementById('loc-edit-save-btn').addEventListener('click', saveLocEdit);
+  document.getElementById('loc-edit-delete-btn').addEventListener('click', deleteLocCurrent);
+  document.getElementById('loc-edit-gen-full-btn').addEventListener('click', runLocFullGen);
+  document.getElementById('loc-edit-modal').addEventListener('click', e => {
+    if (e.target === e.currentTarget) closeLocEditModal();
+  });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && document.getElementById('loc-edit-modal').classList.contains('open')) closeLocEditModal();
+  });
+  document.getElementById('loc-edit-modal').addEventListener('click', e => {
+    const regenBtn = e.target.closest('.loc-edit-regen-btn');
+    if (regenBtn) runLocFieldRegen(regenBtn.dataset.field);
+  });
+
+  // "Create location" button on locations page
+  document.getElementById('loc-page-create-btn')?.addEventListener('click', () => openLocEditModal(null));
+
+  // "Edit" button in loc-detail-modal (delegated)
+  document.getElementById('loc-detail-content').addEventListener('click', e => {
+    const editBtn = e.target.closest('#locdet-open-edit-modal');
+    if (editBtn) openLocEditModal(editBtn.dataset.slug);
+  });
+
+  // Old sidebar new-location button → open new modal
+  document.getElementById('btn-new-loc')?.removeEventListener('click', null);
+})();
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Module Locations Panel
+// ═══════════════════════════════════════════════════════════════════════════
+
+function _renderModuleLocPanel(data) {
+  const panel = document.getElementById('modp-panel-locations');
+  const { chronicle, name: modName } = STATE.currentModule || {};
+
+  const linked   = data.linkedLocations || [];
+  const extracted = data.locations || [];
+
+  const linkedHtml = linked.length
+    ? linked.map(loc => {
+        const title = loc.title || loc.subtype || loc.slug;
+        const meta  = [loc.district, loc.neighborhood].filter(Boolean).join(' · ');
+        return `<button class="modp-loc-chip" data-slug="${escHtml(loc.slug)}">
+          <span class="modp-loc-chip-name">${escHtml(title)}</span>
+          ${meta ? `<span class="modp-loc-chip-meta">${escHtml(meta)}</span>` : ''}
+          <button class="modp-loc-chip-unlink" data-unlink="${escHtml(loc.slug)}" title="Открепить" onclick="event.stopPropagation()">✕</button>
+        </button>`;
+      }).join('')
+    : '<div class="modp-empty" style="padding:8px 0">Связанных локаций нет</div>';
+
+  const extractedHtml = extracted.length
+    ? extracted.map(loc => `
+        <div class="modp-location">
+          <div class="modp-location-name">${escHtml(loc.name)}</div>
+          <div class="modp-location-desc">${escHtml(loc.description || '')}</div>
+        </div>`).join('')
+    : '';
+
+  panel.innerHTML = `
+    <div class="modp-locs-toolbar">
+      <button class="modp-locs-add-btn" id="modp-locs-attach-toggle">📎 Прикрепить локацию</button>
+      <button class="modp-locs-new-btn" id="modp-locs-gen-toggle">✨ Новая локация для сцены</button>
+    </div>
+
+    <div class="modp-loc-attach-panel" id="modp-loc-attach-panel">
+      <input class="chr-form-input modp-loc-attach-search" id="modp-loc-attach-search" placeholder="Поиск по названию..." autocomplete="off">
+      <div class="modp-loc-attach-list" id="modp-loc-attach-list"></div>
+    </div>
+
+    <div class="modp-loc-gen-form" id="modp-loc-gen-form">
+      <div class="chr-form-group">
+        <label class="chr-form-label" for="modp-loc-gen-name">Название</label>
+        <input class="chr-form-input" id="modp-loc-gen-name" placeholder="Бар «Бретонский якорь»" autocomplete="off">
+      </div>
+      <div class="chr-form-group">
+        <label class="chr-form-label" for="modp-loc-gen-context">Контекст сцены</label>
+        <input class="chr-form-input" id="modp-loc-gen-context" placeholder="Что здесь происходит" autocomplete="off">
+      </div>
+      <div class="modp-loc-gen-actions">
+        <button class="chr-modal-btn cancel" id="modp-loc-gen-cancel">Отмена</button>
+        <button class="chr-modal-btn create" id="modp-loc-gen-save">Создать и прикрепить</button>
+      </div>
+    </div>
+
+    <div class="modp-locs-section-title">Связанные локации</div>
+    <div class="modp-loc-chip-list" id="modp-loc-chip-list">${linkedHtml}</div>
+
+    ${extractedHtml ? `<div class="modp-locs-section-title">Упомянуты в сценарии</div>${extractedHtml}` : ''}
+  `;
+
+  // ── Event wiring for this panel ──────────────────────────────────
+  const linkedSlugs = linked.map(l => l.slug);
+
+  // Attach panel toggle
+  document.getElementById('modp-locs-attach-toggle').addEventListener('click', () => {
+    const p = document.getElementById('modp-loc-attach-panel');
+    const isOpen = p.classList.toggle('open');
+    if (isOpen) _fillAttachList(linkedSlugs);
+  });
+
+  // Gen form toggle
+  document.getElementById('modp-locs-gen-toggle').addEventListener('click', () => {
+    document.getElementById('modp-loc-gen-form').classList.toggle('open');
+  });
+  document.getElementById('modp-loc-gen-cancel').addEventListener('click', () => {
+    document.getElementById('modp-loc-gen-form').classList.remove('open');
+  });
+
+  // Search filter for attach list
+  document.getElementById('modp-loc-attach-search').addEventListener('input', e => {
+    _fillAttachList(linkedSlugs, e.target.value);
+  });
+
+  // Chip clicks → open loc detail; unlink buttons
+  document.getElementById('modp-loc-chip-list').addEventListener('click', e => {
+    const unlinkBtn = e.target.closest('[data-unlink]');
+    if (unlinkBtn) {
+      _modLocUnlink(chronicle, modName, unlinkBtn.dataset.unlink);
+      return;
+    }
+    const chip = e.target.closest('.modp-loc-chip');
+    if (chip) {
+      const slug = chip.dataset.slug;
+      if (slug) { ensureLocsLoaded().then(() => openLocDetail(slug)); }
+    }
+  });
+
+  // Create + link
+  document.getElementById('modp-loc-gen-save').addEventListener('click', async () => {
+    const locName = document.getElementById('modp-loc-gen-name').value.trim();
+    const ctx     = document.getElementById('modp-loc-gen-context').value.trim();
+    if (!locName) return;
+    const btn = document.getElementById('modp-loc-gen-save');
+    btn.disabled = true;
+    btn.textContent = 'Создаём...';
+    try {
+      const r = await fetch(`/api/locations?city=${encodeURIComponent(CITY)}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: locName, context: ctx, generate: !!ctx }),
+      });
+      if (!r.ok) throw new Error((await r.json()).error || r.statusText);
+      const { slug } = await r.json();
+      STATE.locations = [];
+      await _modLocLink(chronicle, modName, slug);
+    } catch (e) {
+      alert(e.message);
+      btn.disabled = false;
+      btn.textContent = 'Создать и прикрепить';
+    }
+  });
+}
+
+function _fillAttachList(linkedSlugs, query = '') {
+  const listEl = document.getElementById('modp-loc-attach-list');
+  if (!listEl) return;
+  const q = query.toLowerCase();
+  const items = STATE.locations
+    .filter(l => !q || (l.title || l.slug).toLowerCase().includes(q) || (l.district || '').toLowerCase().includes(q))
+    .slice(0, 40);
+
+  listEl.innerHTML = items.length
+    ? items.map(loc => {
+        const isLinked = linkedSlugs.includes(loc.slug);
+        const title = loc.title || loc.subtype || loc.slug;
+        const meta  = [loc.district, loc.neighborhood].filter(Boolean).join(' · ');
+        return `<div class="modp-loc-attach-item${isLinked ? ' already-linked' : ''}" data-attach="${escHtml(loc.slug)}" title="${escHtml(meta)}">
+          ${escHtml(title)}${meta ? ` <span style="color:var(--muted);font-size:var(--fs-xs)">(${escHtml(meta)})</span>` : ''}
+        </div>`;
+      }).join('')
+    : '<div style="padding:6px;color:var(--muted);font-size:var(--fs-sm)">Локации не найдены</div>';
+
+  listEl.querySelectorAll('.modp-loc-attach-item:not(.already-linked)').forEach(el => {
+    el.addEventListener('click', () => {
+      const { chronicle, name: modName } = STATE.currentModule || {};
+      _modLocLink(chronicle, modName, el.dataset.attach);
+    });
+  });
+}
+
+async function _modLocLink(chronicle, modName, slug) {
+  try {
+    const r = await fetch(
+      `/api/chronicles/${encodeURIComponent(chronicle)}/modules/${encodeURIComponent(modName)}/locations?city=${encodeURIComponent(CITY)}`,
+      { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ slug }) }
+    );
+    if (!r.ok) throw new Error((await r.json()).error || r.statusText);
+    // Re-fetch module detail only — _renderModuleLocPanel uses data.linkedLocations, not STATE.locations
+    const dataR = await fetch(`/api/chronicles/${encodeURIComponent(chronicle)}/modules/${encodeURIComponent(modName)}/detail?city=${encodeURIComponent(CITY)}`);
+    const data  = await dataR.json();
+    _renderModuleLocPanel(data);
+  } catch (e) { alert(e.message); }
+}
+
+async function _modLocUnlink(chronicle, modName, slug) {
+  try {
+    const r = await fetch(
+      `/api/chronicles/${encodeURIComponent(chronicle)}/modules/${encodeURIComponent(modName)}/locations/${encodeURIComponent(slug)}?city=${encodeURIComponent(CITY)}`,
+      { method: 'DELETE' }
+    );
+    if (!r.ok) throw new Error((await r.json()).error || r.statusText);
+    const dataR = await fetch(`/api/chronicles/${encodeURIComponent(chronicle)}/modules/${encodeURIComponent(modName)}/detail?city=${encodeURIComponent(CITY)}`);
+    const data  = await dataR.json();
+    _renderModuleLocPanel(data);
+  } catch (e) { alert(e.message); }
+}
+
+async function ensureLocsLoaded() {
+  if (STATE.locations.length) return;
+  try {
+    const data = await fetch(`/api/locations?city=${encodeURIComponent(CITY)}`).then(r => r.json());
+    STATE.locations = Array.isArray(data) ? data : [];
+    // Only refresh the location filter when on the locations page (element may be absent)
+    const distSel = document.getElementById('loc-filter-district');
+    if (distSel) populateDistrictFilter();
+  } catch {}
+}

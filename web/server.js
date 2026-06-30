@@ -5,6 +5,7 @@ const fs      = require('fs').promises;
 const crypto  = require('crypto');
 const { spawn } = require('child_process');
 const Anthropic = require('@anthropic-ai/sdk');
+const { GoogleGenAI, HarmCategory, HarmBlockThreshold } = require('@google/genai');
 const {
   RU_MONTHS_NOM, THREAD_STATUS, slugify, parseDiary, readPrompt, writePrompt,
   buildCityMd, parseCityMd, cityScaffold,
@@ -17,6 +18,7 @@ const {
 const { parseDisciplineMd } = require('./lib/disciplines');
 const { parsePsychicMd } = require('./lib/psychics');
 const { runMigrations } = require('./lib/migrations');
+const { loadLiteraryStyle, loadDiaryStyleRules, compressEventsToState, compressChronicleEvents, parseEventsText, buildNarrativeContext, findCharacterCard } = require('./lib/context_builder');
 
 // Load .env file (secrets not committed to git)
 try {
@@ -26,6 +28,20 @@ try {
     if (m && !process.env[m[1]]) process.env[m[1]] = m[2].trim();
   }
 } catch {}
+
+// Route fetch through system proxy if HTTPS_PROXY is set (needed for Gemini SDK etc.)
+{
+  const proxyUrl = process.env.HTTPS_PROXY || process.env.HTTP_PROXY || process.env.https_proxy || process.env.http_proxy;
+  if (proxyUrl) {
+    try {
+      const { setGlobalDispatcher, ProxyAgent } = require('undici');
+      setGlobalDispatcher(new ProxyAgent(proxyUrl));
+      console.log('[proxy] fetch routed via', proxyUrl);
+    } catch (e) {
+      console.warn('[proxy] undici ProxyAgent недоступен:', e.message);
+    }
+  }
+}
 
 const app  = express();
 const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3000;
@@ -72,8 +88,10 @@ async function writeFileAtomic(filePath, data, enc) {
   }
 }
 
-let _cache = {};            // city → { chars, ts }
+let _cache    = {};          // city → { chars, ts }
+let _locCache = {};          // city → { locs, ts }
 const CHARS_TTL = 15_000;
+const LOCS_TTL  = 15_000;
 
 // Last known broken-link count from validate_links.ps1.
 // null = never validated; 0 = clean; N = N broken links remaining.
@@ -318,6 +336,9 @@ async function findLocMdPath(slug, city = DEFAULT_CITY) {
 }
 
 async function getAllLocations(city = DEFAULT_CITY) {
+  const lc = _locCache[city];
+  if (lc && Date.now() - lc.ts < LOCS_TTL) return lc.locs;
+
   const locRoot = locsDir(city);
   const result  = [];
 
@@ -350,6 +371,7 @@ async function getAllLocations(city = DEFAULT_CITY) {
   }
 
   await walk(locRoot);
+  _locCache[city] = { locs: result, ts: Date.now() };
   return result;
 }
 
@@ -1642,7 +1664,7 @@ ${content}
 ## 🖼️ Изображения
 - ⏳ Изображение не предоставлено`;
 
-        const allCardsPrompt = `Создай карточки локаций для Vampire: The Masquerade V20, Париж 2010.
+        const allCardsPrompt = `Создай карточки локаций для Vampire: The Masquerade V20, ${city || 'Париж'} 2010.
 
 Правила оформления (кратко):
 ${portretRules.slice(0, 900)}
@@ -1701,7 +1723,7 @@ ${newLocNames.map((n, i) => `${i + 1}. «${n}»`).join('\n')}
         const npcRules  = await fs.readFile(path.join(ROOT, 'system', 'rules', 'npcs_city.md'), 'utf-8').catch(() => '');
         const tmplM     = npcRules.match(/Шаблон Г[\s\S]*?```markdown\n([\s\S]*?)```/);
         const gTemplate = tmplM ? tmplM[1].trim() : '';
-        const npcPrompt = `Создай карточки эпизодических (модульных, неканоничных) НПС для модуля «${modTitle}» — Vampire: The Masquerade V20, Париж 2010.
+        const npcPrompt = `Создай карточки эпизодических (модульных, неканоничных) НПС для модуля «${modTitle}» — Vampire: The Masquerade V20, ${city || 'Париж'} 2010.
 
 Идея модуля:
 ${content.slice(0, 800)}
@@ -1763,6 +1785,44 @@ ${newNpcs.map((n, i) => `${i + 1}. ${n.name}`).join('\n')}
       console.warn('[fill-module] npc.md:', npcMdErr.message);
     }
 
+    // ── Timeline / canon quick-check (non-AI, non-blocking) ──────────────
+    // Scan generated scenario text for obvious contradictions: dead/missing
+    // chars appearing as active participants, and chars mentioned before their
+    // embrace year. Warns the Storyteller without blocking generation.
+    const timelineWarnings = [];
+    try {
+      const textLower = scenarioText.toLowerCase();
+      for (const c of chars) {
+        const nameLower = c.name.toLowerCase();
+        if (!textLower.includes(nameLower)) continue;
+
+        // Dead / missing character acting in scenario
+        if (c.statusType === 'dead' || c.statusType === 'missing') {
+          const label = c.statusType === 'dead' ? 'уничтожен/мёртв' : 'пропал';
+          timelineWarnings.push({
+            severity: 'high',
+            character: c.name,
+            issue: `Персонаж со статусом «${label}» упомянут как активный участник`,
+          });
+        }
+
+        // Mentioned before embrace year
+        if (c.embraceYear && !/⚠️/.test(c.embraceYear) && yearGuess) {
+          const ey = parseInt(c.embraceYear, 10);
+          const my = parseInt(yearGuess, 10);
+          if (!isNaN(ey) && !isNaN(my) && my < ey) {
+            timelineWarnings.push({
+              severity: 'medium',
+              character: c.name,
+              issue: `Год модуля (${my}) предшествует дате обращения персонажа (${ey})`,
+            });
+          }
+        }
+      }
+    } catch (warnErr) {
+      console.warn('[fill-module] timeline check failed:', warnErr.message);
+    }
+
     res.json({
       ok: true,
       file: `chronicles/${chr}/modules/${mod}/scenario.md`,
@@ -1770,6 +1830,7 @@ ${newNpcs.map((n, i) => `${i + 1}. ${n.name}`).join('\n')}
       reusedLocations,
       npcs: createdNpcs,
       canonNpcs: canonNpcs.map(x => x.char.name),
+      timelineWarnings,
     });
   } catch (e) {
     console.error('[fill-module]', e.message);
@@ -2254,6 +2315,7 @@ app.get('/api/chronicles/:chr/modules/:mod/detail', async (req, res) => {
             e.slug = m ? m[1] : slugify(e.name);
             e.sheetScope = 'module';
             e.hasSheet = !!(await fs.stat(path.join(modDir, 'npc', e.slug, `${e.slug}-sheet.md`)).catch(() => null));
+            e.promoteCheck = await _checkNpcPromotion(city, chr, mod, e.slug).catch(() => null);
           } else {
             const ch = allChars.find(c => c.name === e.name) || allChars.find(c => _nameMatch(c.name, e.name));
             e.slug = ch?.slug || null;
@@ -2299,11 +2361,81 @@ app.get('/api/chronicles/:chr/modules/:mod/detail', async (req, res) => {
     //    `- **Name** — desc`, `- Name → 🔗 …` and `### Name` subsection formats).
     result.locations = _parseScenarioLocations(result.scenario);
 
+    // 7. Linked locations — explicit slugs from «## 📍 Связанные локации» in module .md
+    const linkedSlugs = _parseModuleLocSlugs(mainRaw);
+    if (linkedSlugs.length) {
+      const allLocs = await getAllLocations(city);
+      result.linkedLocations = linkedSlugs.map(s => allLocs.find(l => l.slug === s) || { slug: s });
+    } else {
+      result.linkedLocations = [];
+    }
+
     res.json(result);
   } catch (e) {
     console.error('[module-detail]', e.message);
     serverError(res, e);
   }
+});
+
+// ── Module location sub-resource endpoints ────────────────────────────────────
+
+app.get('/api/chronicles/:chr/modules/:mod/locations', async (req, res) => {
+  try {
+    const city = reqCity(req);
+    const { chr, mod } = req.params;
+    const modFile = path.join(chroniclesDir(city), chr, 'modules', mod, `${mod}.md`);
+    if (!await fs.stat(modFile).catch(() => null))
+      return res.status(404).json({ error: 'Модуль не найден' });
+
+    const mainRaw    = await fs.readFile(modFile, 'utf-8').catch(() => '');
+    const linkedSlugs = _parseModuleLocSlugs(mainRaw);
+    const allLocs    = await getAllLocations(city);
+    const linked     = linkedSlugs.map(s => allLocs.find(l => l.slug === s) || { slug: s });
+    res.json({ linked, extracted: _parseScenarioLocations(mainRaw) });
+  } catch (e) { serverError(res, e); }
+});
+
+app.post('/api/chronicles/:chr/modules/:mod/locations', express.json(), async (req, res) => {
+  try {
+    const city = reqCity(req);
+    const { chr, mod } = req.params;
+    const { slug: locSlug } = req.body || {};
+    if (!locSlug) return res.status(400).json({ error: 'slug обязателен' });
+
+    const modFile = path.join(chroniclesDir(city), chr, 'modules', mod, `${mod}.md`);
+    if (!await fs.stat(modFile).catch(() => null))
+      return res.status(404).json({ error: 'Модуль не найден' });
+
+    let raw      = await fs.readFile(modFile, 'utf-8');
+    const existing = _parseModuleLocSlugs(raw);
+    if (!existing.includes(locSlug)) {
+      existing.push(locSlug);
+      raw = _writeModuleLocSlugs(raw, existing);
+      await writeFileAtomic(modFile, raw, 'utf-8');
+    }
+    res.json({ ok: true, slugs: existing });
+  } catch (e) { serverError(res, e); }
+});
+
+app.delete('/api/chronicles/:chr/modules/:mod/locations/:locSlug', async (req, res) => {
+  try {
+    const city       = reqCity(req);
+    const { chr, mod, locSlug } = req.params;
+    const decodedSlug = decodeURIComponent(locSlug);
+
+    const modFile = path.join(chroniclesDir(city), chr, 'modules', mod, `${mod}.md`);
+    if (!await fs.stat(modFile).catch(() => null))
+      return res.status(404).json({ error: 'Модуль не найден' });
+
+    let raw = await fs.readFile(modFile, 'utf-8');
+    const existing = _parseModuleLocSlugs(raw);
+    const filtered = existing.filter(s => s !== decodedSlug);
+    if (filtered.length !== existing.length) {
+      raw = _writeModuleLocSlugs(raw, filtered);
+      await writeFileAtomic(modFile, raw, 'utf-8');
+    }
+    res.json({ ok: true, slugs: filtered });
+  } catch (e) { serverError(res, e); }
 });
 
 app.get('/api/characters/:slug/diary', async (req, res) => {
@@ -2468,7 +2600,7 @@ app.post('/api/characters/:slug/diary/generate', express.json(), async (req, res
     const gen = await makeGenerationClient(preferSource, orModel);
 
     const diaryRules = await fs.readFile(path.join(ROOT, 'system', 'rules', 'diary_rules.md'), 'utf-8').catch(() => '');
-    const litStyle   = await fs.readFile(path.join(ROOT, 'system', 'rules', 'literary_style.md'), 'utf-8').catch(() => '');
+    const litStyle   = await loadLiteraryStyle();
     const card = await fs.readFile(path.join(charsDir(city), char.lineageFolder, char.slug, `${char.slug}.md`), 'utf-8').catch(() => '');
     let eventsText = '';
     try {
@@ -2489,7 +2621,7 @@ app.post('/api/characters/:slug/diary/generate', express.json(), async (req, res
 
     const periodTxt = periodLabel(period) || period;
     const systemPrompt = `Ты — Рассказчик Vampire: The Masquerade V20. Пишешь литературную дневниковую запись от первого лица строго по правилам.
-${litStyle ? `\n# ЛИТЕРАТУРНЫЙ СТИЛЬ (system/rules/literary_style.md)\n${litStyle.slice(0, 3000)}\n` : ''}
+${litStyle ? `\n# ЛИТЕРАТУРНЫЙ СТИЛЬ (system/rules/literary_style.md)\n${litStyle}\n` : ''}
 # ПРАВИЛА ДНЕВНИКОВ
 ${diaryRules.slice(0, 4000)}
 
@@ -2565,13 +2697,13 @@ app.post('/api/characters/:id/dialogue', express.json(), async (req, res) => {
     const diaryRules = await fs.readFile(path.join(ROOT, 'system', 'rules', 'diary_rules.md'), 'utf-8').catch(() => '');
     const stylesM    = diaryRules.match(/##\s*🎭\s*Правила литературной стилизации[\s\S]*?(?=\n##\s|\s*$)/);
     const styles     = stylesM ? stylesM[0] : diaryRules.slice(0, 2500);
-    const litStyle   = await fs.readFile(path.join(ROOT, 'system', 'rules', 'literary_style.md'), 'utf-8').catch(() => '');
+    const litStyle   = await loadLiteraryStyle();
 
     const gen = await makeGenerationClient(req.body?.source || null, req.body?.model || null);
     const systemPrompt = `Ты пишешь РЕПЛИКИ НПС в характере для Vampire: The Masquerade V20.
 Говори ГОЛОСОМ персонажа (поле «Голос» в карточке) и в КЛАНОВОМ СТИЛЕ — строка его клана «${clan || '—'}» в таблице ниже.
 Маскарад: вампирскую природу/дисциплины — только намёками и метафорами. Не выдумывай факты вне карточки. Русский язык.
-${litStyle ? `\n# ЛИТЕРАТУРНЫЙ СТИЛЬ (system/rules/literary_style.md)\n${litStyle.slice(0, 2500)}\n` : ''}
+${litStyle ? `\n# ЛИТЕРАТУРНЫЙ СТИЛЬ (system/rules/literary_style.md)\n${litStyle}\n` : ''}
 # КАРТОЧКА ПЕРСОНАЖА (голос, клан, характер, факты)
 ${card.slice(0, 3000)}
 
@@ -2731,6 +2863,7 @@ app.put('/api/locations/:slug/fields', express.json(), async (req, res) => {
     }
 
     await writeFileAtomic(mdPath, card, 'utf-8');
+    delete _locCache[city];
     res.json({ ok: true });
   } catch (e) { serverError(res, e); }
 });
@@ -2774,6 +2907,173 @@ app.post('/api/locations/:slug/upload-image', express.json({ limit: '20mb' }), a
     const relParts = path.relative(locRoot, locFolder).split(path.sep);
     const url = `/city-img/${city}/locations/` + relParts.map(p => encodeURIComponent(p)).join('/') + '/art/' + encodeURIComponent(filename);
     res.json({ success: true, filename, url });
+  } catch (e) { serverError(res, e); }
+});
+
+// ── Location card template (standalone) ──────────────────────────────────────
+function _locCardTemplate(name, district) {
+  return `# ${name}
+> **Название:** ${name} | **Округ:** ${district || '[округ]'} | **Район:** [район] | **Адрес:** [адрес] | **Зона:** [🟢/🟡/🔴] | **Контроль:** [фракция]
+---
+## 🎭 Атмосфера
+[2–3 предложения]
+## 👁️ Сенсорная палитра
+| Канал | |
+|---|---|
+| **Свет** | |
+| **Звук** | |
+| **Запах** | |
+| **Тактильное** | |
+---
+## 🩸 Контекст Камарильи / Масок
+| | |
+|---|---|
+| **Статус** | |
+| **Фракция** | |
+| **Постоянные фигуры** | |
+| **Угрозы** | |
+| **Маскарад** | 🔴/🟡/🟢 |
+---
+## 🪝 Сценарные крючки
+1. [крючок]
+## 🖼️ Изображения
+- ⏳ Изображение не предоставлено
+## 🎨 Промт для генерации изображения
+\`\`\`
+[промт]
+\`\`\`
+`;
+}
+
+// ── POST /api/locations — create new location ─────────────────────────────────
+app.post('/api/locations', express.json(), async (req, res) => {
+  try {
+    const city = reqCity(req);
+    const { name, district, generate, context, source, model: modelOvr } = req.body || {};
+    if (!name?.trim()) return res.status(400).json({ error: 'name обязателен' });
+
+    const locName  = name.trim();
+    const locSlug  = slugify(locName);
+    if (!locSlug) return res.status(400).json({ error: 'Не удалось построить slug из имени' });
+
+    const distFolder = district?.trim() || 'Другие';
+    const locDir  = path.join(locsDir(city), distFolder, locSlug);
+    const locFile = path.join(locDir, `${locSlug}.md`);
+
+    if (await fs.stat(locFile).catch(() => null))
+      return res.status(409).json({ error: 'Локация уже существует', slug: locSlug });
+
+    await fs.mkdir(locDir, { recursive: true });
+
+    let content = _locCardTemplate(locName, district?.trim() || '');
+
+    if (generate) {
+      try {
+        const gen = await makeGenerationClient(source, modelOvr).catch(() => null);
+        const portretRules = await fs.readFile(path.join(ROOT, 'system', 'rules', 'portret.md'), 'utf-8').catch(() => '');
+        const prompt = `Создай карточку локации «${locName}» для Vampire: The Masquerade V20, ${city || 'Париж'} 2010.
+
+Контекст сцены: ${context || '(без контекста)'}
+Район: ${district?.trim() || '(не указан)'}
+
+Правила оформления:
+${portretRules.slice(0, 900)}
+
+Шаблон:
+${_locCardTemplate(locName, district?.trim() || '')}
+
+Заполни шаблон полностью. Верни только Markdown-карточку без лишнего текста.
+Язык: русский. Стиль: готический нуар VtM.`;
+
+        let raw = '';
+        if (gen && _isOA(gen)) {
+          raw = await _oaCall(gen)(gen.model, '', prompt, [], 60000, 1300);
+        } else if (gen?.client) {
+          const m = await gen.client.messages.create({
+            model: 'claude-haiku-4-5-20251001', max_tokens: 1300,
+            messages: [{ role: 'user', content: prompt }],
+          });
+          raw = m.content[0]?.text || '';
+        }
+        if (raw.trim()) content = raw.trim() + '\n';
+      } catch (genErr) {
+        console.warn('[loc-create] generation failed:', genErr.message);
+      }
+    }
+
+    await writeFileAtomic(locFile, content, 'utf-8');
+    delete _locCache[city];
+    res.json({ ok: true, slug: locSlug, district: distFolder });
+  } catch (e) { serverError(res, e); }
+});
+
+// ── DELETE /api/locations/:slug — remove location folder ──────────────────────
+app.delete('/api/locations/:slug', async (req, res) => {
+  try {
+    const slug   = decodeURIComponent(req.params.slug);
+    const city   = reqCity(req);
+    const mdPath = await findLocMdPath(slug, city);
+    if (!mdPath) return res.status(404).json({ error: 'Локация не найдена' });
+    await fs.rm(path.dirname(mdPath), { recursive: true, force: true });
+    delete _locCache[city];
+    res.json({ ok: true });
+  } catch (e) { serverError(res, e); }
+});
+
+// ── POST /api/locations/generate — AI full-card or single-field generation ────
+app.post('/api/locations/generate', express.json(), async (req, res) => {
+  try {
+    const city = reqCity(req);
+    const { slug, name, field, card, context, source, model: modelOvr } = req.body || {};
+
+    const locName = name?.trim() || slug || '';
+    if (!locName) return res.status(400).json({ error: 'name или slug обязателен' });
+
+    const gen = await makeGenerationClient(source, modelOvr);
+    const portretRules = await fs.readFile(path.join(ROOT, 'system', 'rules', 'portret.md'), 'utf-8').catch(() => '');
+
+    let prompt, maxTok;
+
+    if (field) {
+      const fieldPrompts = {
+        atmosphere: `Напиши раздел "Атмосфера" (2–3 предложения, готический нуар VtM) для локации «${locName}»${context ? `. Контекст: ${context}` : ''}. Верни только текст раздела без заголовка.`,
+        imagePrompt: `Напиши промт для генерации изображения локации «${locName}» (GPT/DALL-E, английский язык, три блока: Локация → Свет/Атмосфера → Стиль).\nПравила:\n${portretRules.slice(0, 600)}\n\nВерни только текст промта.`,
+        hooks: `Напиши 3 сценарных крючка для локации «${locName}» в VtM V20${context ? `. Контекст: ${context}` : ''}. Формат: нумерованный список. Верни только список.`,
+      };
+      prompt  = fieldPrompts[field] || `Напиши поле «${field}» для локации «${locName}» (VtM V20, готический нуар, русский язык)${context ? `. Контекст: ${context}` : ''}.`;
+      maxTok  = 400;
+    } else {
+      const currentCard = card || (slug ? await (async () => {
+        const mdPath = await findLocMdPath(slug, city);
+        return mdPath ? fs.readFile(mdPath, 'utf-8').catch(() => '') : '';
+      })() : '');
+      prompt = `Создай${currentCard ? ' улучшенную версию' : ''} карточку локации «${locName}» для Vampire: The Masquerade V20, ${city || 'Париж'} 2010.
+
+Контекст: ${context || '(нет)'}
+
+Правила:
+${portretRules.slice(0, 900)}
+
+${currentCard ? `Текущий вариант:\n${String(currentCard).slice(0, 600)}\n\n` : ''}Шаблон:
+${_locCardTemplate(locName)}
+
+Заполни полностью. Верни только Markdown без лишнего текста. Язык: русский, стиль: готический нуар VtM.`;
+      maxTok = 1400;
+    }
+
+    let result = '';
+    if (_isOA(gen)) {
+      result = await _oaCall(gen)(gen.model, '', prompt, [], 60000, maxTok);
+    } else if (gen?.client) {
+      const m = await gen.client.messages.create({
+        model: 'claude-haiku-4-5-20251001', max_tokens: maxTok,
+        messages: [{ role: 'user', content: prompt }],
+      });
+      result = m.content[0]?.text || '';
+    }
+
+    if (field) res.json({ value: result.trim() });
+    else       res.json({ content: result.trim() });
   } catch (e) { serverError(res, e); }
 });
 
@@ -2860,13 +3160,18 @@ const _SHEET_LINEAGES = {
   vampire:    { file: 'character_sheet_v20.md',        master: 'Vampire: The Masquerade V20', title: 'V20',        extras: 'клан, поколение, клановые дисциплины и слабость — по справочным таблицам' },
   mortal:     { file: 'character_sheet_mortal.md',      master: 'Classic World of Darkness (смертные)', title: 'Смертный', extras: 'у смертного НЕТ дисциплин, запаса крови, поколения и Пути — только Человечность' },
   changeling: { file: 'character_sheet_changeling.md',  master: 'Changeling: The Dreaming', title: 'Подменыш', extras: 'вместо дисциплин — Искусства и Сферы; вместо крови — Glamour/Banality; стартовые числа помечены как ориентир' },
+  werewolf:   { file: 'character_sheet_werewolf.md',    master: 'Werewolf: The Apocalypse', title: 'Оборотень', extras: 'нет дисциплин и крови; вместо Пути — Репутация (Слава/Честь/Мудрость); Ярость, Гнозис, Дары по племени/касте' },
+  mage:       { file: 'character_sheet_mage.md',        master: 'Mage: The Ascension', title: 'Маг', extras: 'нет дисциплин и крови; магические способности — Сферы; Арете, Квинтэссенция, Парадокс по Традиции' },
 };
 
 // Map a lineage hint (folder name and/or card «Линейка WoD») to a config key.
 function _resolveSheetLineage(hint) {
   const h = (hint || '').toLowerCase();
-  if (/mortal|смертн|гуль|ревенант|hunter|охотник/.test(h))                  return 'mortal';
+  if (/mortal|смертн|гуль|ревенант/.test(h))                                  return 'mortal';
+  if (/hunter|охотник/.test(h))                                                return 'mortal';
   if (/fair|fae|fey|ченджлинг|changeling|подменыш|фея|фейри|пак/.test(h))    return 'changeling';
+  if (/werewolf|оборотн|garou|гару/.test(h))                                  return 'werewolf';
+  if (/mage|маг(?:и|а|е|у|ов)?(?:\s|$)|ascension/.test(h))                   return 'mage';
   return 'vampire';
 }
 
@@ -2878,6 +3183,8 @@ const _SHEET_POOLS = {
   vampire:    { attrs: [7, 5, 3], abilities: [13, 9, 5], disciplines: 3, backgrounds: 5, virtues: 7 },
   mortal:     { attrs: [6, 4, 3], abilities: [11, 7, 4], backgrounds: 5, virtues: 7 },
   changeling: { attrs: [7, 5, 3], abilities: [13, 9, 5], backgrounds: 5, virtues: 7 },
+  werewolf:   { attrs: [7, 5, 3], abilities: [13, 9, 5], gifts: 3, backgrounds: 5, virtues: 7 },
+  mage:       { attrs: [7, 5, 3], abilities: [13, 9, 5], spheres: 6, backgrounds: 7, virtues: 7 },
 };
 
 // Project's canon clan → in-clan-discipline-names table (mirrors «Дисциплины кланов
@@ -2991,6 +3298,8 @@ ${sheetRules.slice(0, 16000)}`;
   const poolsLine = pools
     ? `Атрибуты: ${pools.attrs.join('/')} (по приоритету) · Способности: ${pools.abilities.join('/')} (по приоритету)`
       + (pools.disciplines ? ` · Дисциплины: ${pools.disciplines}` : '')
+      + (pools.gifts       ? ` · Дары: ${pools.gifts}`              : '')
+      + (pools.spheres     ? ` · Сферы: ${pools.spheres}`           : '')
       + ` · Факты биографии: ${pools.backgrounds} · Добродетели: ${pools.virtues}`
     : '';
 
@@ -3044,6 +3353,8 @@ function _warnIfPoolsUnderspent(md, pools, displayName) {
   const checks = [
     ['Способности',         /способност/i,  pools.abilities ? pools.abilities.reduce((a, b) => a + b, 0) : null],
     ['Дисциплины',          /дисциплин/i,    pools.disciplines ?? null],
+    ['Дары',                /дар[ыа]\b/i,    pools.gifts       ?? null],
+    ['Сферы',               /сфер[ыа]\b/i,   pools.spheres     ?? null],
     ['Факты биографии',     /факт.*биограф|backgrounds|предыстор/i, pools.backgrounds ?? null],
     ['Добродетели',         /добродетел/i,   pools.virtues ?? null],
   ];
@@ -3187,6 +3498,146 @@ app.put('/api/chronicles/:chr/modules/:mod/npc/:slug/sheet', express.json(), asy
     await writeFileAtomic(p.sheet, content.replace(/\s*$/, '') + '\n', 'utf-8');
     res.json({ ok: true });
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
+// ── NPC promotion: episodic → canonical character ─────────────────────────────
+
+// Check the three promotion conditions for a modular NPC.
+// Returns { survived, inFinale, inMultipleModules }.
+async function _checkNpcPromotion(city, chr, mod, npcSlug) {
+  const modDir  = path.join(chroniclesDir(city), chr, 'modules', mod);
+  const npcCard = path.join(modDir, 'npc', npcSlug, `${npcSlug}.md`);
+
+  // 1. Survived — status in the modular NPC card is not dead/destroyed
+  let survived = false;
+  try {
+    const card = await fs.readFile(npcCard, 'utf-8');
+    const sl   = (card.match(/\*\*Статус\*\*[^|\n]*\|\s*([^|\n]+)\|/)?.[1] || '').toLowerCase();
+    survived   = !/(мёртв|мертв|уничтожен|погиб|убит|final death)/i.test(sl);
+  } catch { survived = false; }
+
+  // 2. Mentioned in finale.md of this module
+  let inFinale = false;
+  try {
+    const finale = await fs.readFile(path.join(modDir, 'finale.md'), 'utf-8');
+    inFinale = finale.toLowerCase().includes(npcSlug.replace(/-/g, ' '));
+    if (!inFinale) {
+      // Also match slug directly (dashes kept)
+      inFinale = finale.toLowerCase().includes(npcSlug);
+    }
+    if (!inFinale) {
+      // Try matching the name from the card
+      const nameM = (await fs.readFile(npcCard, 'utf-8').catch(() => ''))
+        .match(/^#{1,3}\s+[^\p{L}]*(.+?)(?:\s*[—–].*)?$/mu);
+      if (nameM) inFinale = finale.toLowerCase().includes(nameM[1].trim().toLowerCase());
+    }
+  } catch { inFinale = false; }
+
+  // 3. Appears in 2+ modules (count all modules across all chronicles that have this slug in npc/)
+  let moduleCount = 0;
+  try {
+    const chrs = await fs.readdir(chroniclesDir(city), { withFileTypes: true });
+    for (const cEntry of chrs) {
+      if (!cEntry.isDirectory()) continue;
+      const mods = await fs.readdir(path.join(chroniclesDir(city), cEntry.name, 'modules'), { withFileTypes: true }).catch(() => []);
+      for (const mEntry of mods) {
+        if (!mEntry.isDirectory()) continue;
+        const exists = await fs.stat(
+          path.join(chroniclesDir(city), cEntry.name, 'modules', mEntry.name, 'npc', npcSlug)
+        ).catch(() => null);
+        if (exists) moduleCount++;
+      }
+    }
+  } catch { moduleCount = 1; }
+  const inMultipleModules = moduleCount >= 2;
+
+  return { survived, inFinale, inMultipleModules };
+}
+
+// GET /api/chronicles/:chr/modules/:mod/npc/:slug/promote-check
+app.get('/api/chronicles/:chr/modules/:mod/npc/:slug/promote-check', async (req, res) => {
+  try {
+    const city    = reqCity(req);
+    const { chr, mod, slug } = req.params;
+    const npcSlug = decodeURIComponent(slug);
+    const modDir  = path.join(chroniclesDir(city), chr, 'modules', mod);
+    if (!await fs.stat(path.join(modDir, 'npc', npcSlug)).catch(() => null))
+      return res.status(404).json({ ok: false, error: 'Модульный НПС не найден' });
+    const conditions = await _checkNpcPromotion(city, chr, mod, npcSlug);
+    const canPromote = conditions.survived && conditions.inFinale && conditions.inMultipleModules;
+    res.json({ ok: true, canPromote, conditions });
+  } catch (e) { serverError(res, e); }
+});
+
+// POST /api/chronicles/:chr/modules/:mod/npc/:slug/promote
+// Moves modular NPC into the city's canonical characters folder.
+app.post('/api/chronicles/:chr/modules/:mod/npc/:slug/promote', express.json(), async (req, res) => {
+  try {
+    const city    = reqCity(req);
+    const { chr, mod, slug } = req.params;
+    const npcSlug = decodeURIComponent(slug);
+    const { lineage = 'vampires', force = false } = req.body || {};
+
+    const modDir  = path.join(chroniclesDir(city), chr, 'modules', mod);
+    const npcDir  = path.join(modDir, 'npc', npcSlug);
+    const npcCard = path.join(npcDir, `${npcSlug}.md`);
+
+    if (!await fs.stat(npcCard).catch(() => null))
+      return res.status(404).json({ ok: false, error: 'Карточка модульного НПС не найдена' });
+
+    // Check promotion conditions unless force=true
+    if (!force) {
+      const cond = await _checkNpcPromotion(city, chr, mod, npcSlug);
+      if (!cond.survived || !cond.inFinale || !cond.inMultipleModules)
+        return res.status(422).json({ ok: false, error: 'Условия продвижения не выполнены', conditions: cond });
+    }
+
+    const validLineages = Object.keys(LINEAGE_MAP);
+    if (!validLineages.includes(lineage))
+      return res.status(400).json({ ok: false, error: `Неверная линейка: ${lineage}` });
+
+    const targetDir = path.join(charsDir(city), lineage, npcSlug);
+    if (await fs.stat(targetDir).catch(() => null))
+      return res.status(409).json({ ok: false, error: 'Персонаж с таким слагом уже существует в каноне' });
+
+    // Copy NPC folder (card + any art/sheets) to canonical characters directory
+    await fs.mkdir(targetDir, { recursive: true });
+    const npcFiles = await fs.readdir(npcDir, { withFileTypes: true });
+    for (const f of npcFiles) {
+      const src = path.join(npcDir, f.name);
+      const dst = path.join(targetDir, f.name);
+      if (f.isDirectory()) {
+        await fs.mkdir(dst, { recursive: true });
+        for (const sf of await fs.readdir(src)) {
+          await fs.copyFile(path.join(src, sf), path.join(dst, sf));
+        }
+      } else {
+        await fs.copyFile(src, dst);
+      }
+    }
+
+    // Patch the card: update city field if it has a placeholder
+    const cardContent = await fs.readFile(path.join(targetDir, `${npcSlug}.md`), 'utf-8');
+    const patched = cardContent.replace(
+      /(\*\*Родной\s+город\*\*[^|\n]*\|\s*)(⚠️[^|\n]*|—)(\s*\|)/i,
+      (_, pre, _old, post) => `${pre}${city.charAt(0).toUpperCase() + city.slice(1)}${post}`
+    );
+    if (patched !== cardContent) await writeFileAtomic(path.join(targetDir, `${npcSlug}.md`), patched, 'utf-8');
+
+    // Update characters_index.md
+    const idxPath = path.join(archiveDir(city), 'characters_index.md');
+    const idxRaw  = await fs.readFile(idxPath, 'utf-8').catch(() => '');
+    const name    = (cardContent.match(/^#{1,3}\s+[^\p{L}]*(.+?)(?:\s*[—–].*)?$/mu)?.[1] || npcSlug).trim();
+    const idxLine = `- [${name}](../characters/${lineage}/${npcSlug}/${npcSlug}.md) — продвинут из модуля ${mod}\n`;
+    if (idxRaw && !idxRaw.includes(npcSlug)) {
+      await writeFileAtomic(idxPath, idxRaw.trimEnd() + '\n' + idxLine, 'utf-8');
+    }
+
+    // Invalidate character cache so the new canonical char is visible immediately
+    delete _cache[city];
+
+    res.json({ ok: true, slug: npcSlug, lineage, name });
+  } catch (e) { serverError(res, e); }
 });
 
 // ── Global search ──────────────────────────────────────────────────────────────
@@ -4022,7 +4473,66 @@ app.delete('/api/characters/:slug', express.json(), async (req, res) => {
 });
 
 // ── Generation client factory ─────────────────────────────────────────────────
-// Priority: OpenRouter (.env) → ANTHROPIC_API_KEY → Claude.ai OAuth
+// ── Google Gemini ─────────────────────────────────────────────────────────────
+// Lazy-initialised client; invalidated on /api/settings key change.
+let _geminiClient = null;
+function _getGeminiClient() {
+  if (!process.env.GEMINI_API_KEY)
+    throw Object.assign(new Error('GEMINI_API_KEY не задан. Настрой в Инструменты → Модели AI.'), { status: 503 });
+  if (!_geminiClient) _geminiClient = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+  return _geminiClient;
+}
+
+// Disable all harm-category blocks — VtM content (кровь, насилие, интриги, ужасы)
+// без этого Gemini ложно блокирует даже банальные Gothic-описания.
+const GEMINI_SAFETY = [
+  { category: HarmCategory.HARM_CATEGORY_HARASSMENT,        threshold: HarmBlockThreshold.BLOCK_NONE },
+  { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH,       threshold: HarmBlockThreshold.BLOCK_NONE },
+  { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_NONE },
+  { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_NONE },
+];
+
+// generateGeminiText — изолированный хелпер для текстовой прозы.
+// config: { model, maxTokens, timeoutMs }
+// Модель по умолчанию: GEMINI_MODEL из .env → 'gemini-2.5-flash'.
+async function generateGeminiText(systemInstruction, userPrompt, config = {}) {
+  const ai       = _getGeminiClient();
+  const model    = config.model    || process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+  const maxToks  = config.maxTokens  || 1500;
+  const timeoutMs = config.timeoutMs || 90000;
+
+  const genPromise = ai.models.generateContent({
+    model,
+    contents: userPrompt,
+    config: {
+      systemInstruction,
+      maxOutputTokens: maxToks,
+      safetySettings: GEMINI_SAFETY,
+    },
+  });
+  const timeoutPromise = new Promise((_, rej) =>
+    setTimeout(() => rej(Object.assign(new Error(`Gemini не ответил за ${Math.round(timeoutMs / 1000)}с`), { status: 504 })), timeoutMs)
+  );
+  let response;
+  try {
+    response = await Promise.race([genPromise, timeoutPromise]);
+  } catch (e) {
+    // Wrap low-level network errors with a human-readable message
+    const cause = e?.cause?.code || e?.cause?.message || '';
+    if (e.message === 'fetch failed' || cause.includes('ECONNRESET') || cause.includes('ENOTFOUND')) {
+      throw Object.assign(
+        new Error(`Нет доступа к Google Gemini API. Проверь интернет-соединение и что брандмауэр не блокирует generativelanguage.googleapis.com (причина: ${cause || e.message})`),
+        { status: 503 }
+      );
+    }
+    throw e;
+  }
+  const text = response.text?.trim() || '';
+  if (!text) throw Object.assign(new Error(`Gemini вернул пустой ответ от модели «${model}»`), { status: 502 });
+  return text;
+}
+
+// Priority: Gemini (explicit) → OpenRouter (.env) → ANTHROPIC_API_KEY → Claude.ai OAuth
 
 const CLAUDE_CREDS_PATH = path.join(
   process.env.HOME || process.env.USERPROFILE || '',
@@ -4063,14 +4573,21 @@ const _mockGenClient = {
 
 async function makeGenerationClient(preferSource = null, modelOverride = null) {
   if (process.env.AI_MOCK) return { source: 'mock', model: 'mock-model', client: _mockGenClient };
+  const wantGemini = preferSource === 'gemini';
   const wantOR     = preferSource === 'openrouter';
   const wantOpenAI = preferSource === 'openai' || preferSource === 'gpt';
   const wantClaude = preferSource === 'claude';
-  const wantNonClaude = wantOR || wantOpenAI;
+  const wantNonClaude = wantGemini || wantOR || wantOpenAI;
 
+  const geModel = () => modelOverride || process.env.GEMINI_MODEL || 'gemini-2.5-flash';
   const orModel = () => modelOverride || process.env.OPENROUTER_MODEL || 'openrouter/free';
   const oaModel = () => modelOverride || process.env.OPENAI_MODEL || 'gpt-4o-mini';
   const clModel = () => modelOverride || 'claude-opus-4-8';
+
+  // ── Google Gemini (explicit only) ─────────────────────────────
+  if (wantGemini && process.env.GEMINI_API_KEY) {
+    return { source: 'gemini', model: geModel() };
+  }
 
   // ── OpenAI (explicit) ─────────────────────────────────────────
   if (wantOpenAI && process.env.OPENAI_API_KEY) {
@@ -4078,7 +4595,7 @@ async function makeGenerationClient(preferSource = null, modelOverride = null) {
   }
 
   // ── OpenRouter ────────────────────────────────────────────────
-  if ((wantOR || (!wantClaude && !wantOpenAI && !preferSource)) && process.env.OPENROUTER_API_KEY) {
+  if ((wantOR || (!wantClaude && !wantOpenAI && !wantGemini && !preferSource)) && process.env.OPENROUTER_API_KEY) {
     return { source: 'openrouter', model: orModel() };
   }
 
@@ -4113,9 +4630,11 @@ async function makeGenerationClient(preferSource = null, modelOverride = null) {
   // ── Fallbacks: requested provider has no key — use whatever is configured ──
   if (process.env.OPENAI_API_KEY     && !wantOR && !wantClaude) return { source: 'openai',     model: oaModel() };
   if (process.env.OPENROUTER_API_KEY && !wantClaude)            return { source: 'openrouter', model: orModel() };
+  if (process.env.GEMINI_API_KEY     && !wantClaude)            return { source: 'gemini',     model: geModel() };
 
   throw new Error(
     'Нет источника для генерации. Варианты:\n' +
+    '• web/.env: GEMINI_API_KEY=...\n' +
     '• web/.env: OPENROUTER_API_KEY=sk-or-...\n' +
     '• web/.env: OPENAI_API_KEY=sk-...\n' +
     '• ANTHROPIC_API_KEY в переменных окружения\n' +
@@ -4224,6 +4743,10 @@ const _oaModels = gen => (gen.source === 'openai' ? [gen.model] : [gen.model, ..
 // Anthropic subscription/API keys rate-limit aggressively; this keeps short generations
 // (NPC replies, etc.) from hard-failing — it backs off, then falls back to a free model.
 async function genTextWithRetry(gen, { system, user, maxTokens = 900, fallbackOR = true }) {
+  if (gen.source === 'gemini') {
+    const text = await generateGeminiText(system, user, { model: gen.model, maxTokens });
+    return { text, source: 'gemini', model: gen.model };
+  }
   if (_isOA(gen)) {
     return { text: await _oaCall(gen)(gen.model, system, user, [], 75000, maxTokens), source: gen.source, model: gen.model };
   }
@@ -4261,6 +4784,11 @@ async function genTextWithRetry(gen, { system, user, maxTokens = 900, fallbackOR
 
 app.get('/api/auth-status', async (req, res) => {
   try {
+    // Google Gemini (shown only when explicitly queried; doesn't override OpenRouter default)
+    if (process.env.GEMINI_API_KEY && !process.env.OPENROUTER_API_KEY && !process.env.OPENAI_API_KEY) {
+      return res.json({ source: 'gemini', ok: true, model: process.env.GEMINI_MODEL || 'gemini-2.5-flash' });
+    }
+
     // OpenRouter
     if (process.env.OPENROUTER_API_KEY) {
       return res.json({
@@ -4466,8 +4994,8 @@ app.post('/api/characters/:slug/generate-appearance', express.json(), async (req
       : gender
         ? `\n- Пол персонажа: ${gender}. Используй грамматически верный род (окончания глаголов/прилагательных) — не угадывай по картинке, если она неочевидна.`
         : '';
-    const litStyle = await fs.readFile(path.join(ROOT, 'system', 'rules', 'literary_style.md'), 'utf-8').catch(() => '');
-    const systemPrompt = `Ты — редактор персонажных карточек для настольной RPG Vampire: The Masquerade. Пиши прозу строго по литературному стилю проекта.${litStyle ? `\n\n# ЛИТЕРАТУРНЫЙ СТИЛЬ (system/rules/literary_style.md)\n${litStyle.slice(0, 3500)}` : ''}`;
+    const litStyle = await loadLiteraryStyle();
+    const systemPrompt = `Ты — редактор персонажных карточек для настольной RPG Vampire: The Masquerade. Пиши прозу строго по литературному стилю проекта.${litStyle ? `\n\n# ЛИТЕРАТУРНЫЙ СТИЛЬ (system/rules/literary_style.md)\n${litStyle}` : ''}`;
     const userPrompt   = `Перед тобой ${imageBuffers.length > 1 ? `${imageBuffers.length} изображения` : 'изображение'} ${lineageName} по имени ${char.name}.\n\nОпиши внешность для карточки. Требования:\n- 3–5 конкретных визуальных маркеров (лицо, волосы, кожа, глаза, одежда, характерные детали)\n- Стиль: лаконичный, образный, готический. Без «воды».\n- Язык: русский.\n- Формат: один абзац, без списков и заголовков.\n- Упомяни всё необычное, характерное, запоминающееся.\n- Запрет: не упоминать кровь, раны, увечья, явные признаки насилия — даже если они видны на изображении.${genderNote}`;
 
     let appearance = '';
@@ -4683,8 +5211,8 @@ app.post('/api/characters/:slug/generate-personality', express.json(), async (re
     const orModel      = req.body?.orModel      || null;
     const gen = await makeGenerationClient(preferSource, orModel);
 
-    const litStyle = await fs.readFile(path.join(ROOT, 'system', 'rules', 'literary_style.md'), 'utf-8').catch(() => '');
-    const systemPrompt = `Ты — редактор персонажных карточек для настольной RPG Vampire: The Masquerade. Пиши строго по литературному стилю проекта.${litStyle ? `\n\n# ЛИТЕРАТУРНЫЙ СТИЛЬ (system/rules/literary_style.md)\n${litStyle.slice(0, 3500)}` : ''}`;
+    const [litStyle, diaryStyle] = await Promise.all([loadLiteraryStyle(), loadDiaryStyleRules()]);
+    const systemPrompt = `Ты — редактор персонажных карточек для настольной RPG Vampire: The Masquerade. Пиши строго по литературному стилю проекта.${litStyle ? `\n\n# ЛИТЕРАТУРНЫЙ СТИЛЬ (system/rules/literary_style.md)\n${litStyle}` : ''}${diaryStyle ? `\n\n# КЛАНОВЫЕ СТИЛИ И ТРЕБОВАНИЯ К ПРОЗЕ (diary_rules.md)\n${diaryStyle}` : ''}`;
     const userPrompt = `Персонаж: ${char.name}${infoLines ? `\n\nИнформация:\n${infoLines}` : ''}${appearance ? `\n\nВнешность:\n${appearance}` : ''}${biography ? `\n\nБиография:\n${biography}` : ''}${existingPersonality ? `\n\nЧерновик «Характер» (написан пользователем — возможно общими фразами; используй как базу, но уточни и конкретизируй на основе данных выше, не противоречь им):\n${existingPersonality}` : ''}${existingVoice ? `\n\nЧерновик «Голос» (аналогично — база для уточнения, не финальный текст):\n${existingVoice}` : ''}
 
 На основе этих данных опиши характер и голос персонажа.
@@ -4772,8 +5300,8 @@ app.post('/api/characters/:slug/generate-biography', express.json(), async (req,
     const orModel      = req.body?.orModel      || null;
     const gen = await makeGenerationClient(preferSource, orModel);
 
-    const litStyle = await fs.readFile(path.join(ROOT, 'system', 'rules', 'literary_style.md'), 'utf-8').catch(() => '');
-    const systemPrompt = `Ты — редактор персонажных карточек для настольной RPG Vampire: The Masquerade. Пиши строго по литературному стилю проекта.${litStyle ? `\n\n# ЛИТЕРАТУРНЫЙ СТИЛЬ (system/rules/literary_style.md)\n${litStyle.slice(0, 3500)}` : ''}`;
+    const [litStyle, diaryStyle] = await Promise.all([loadLiteraryStyle(), loadDiaryStyleRules()]);
+    const systemPrompt = `Ты — редактор персонажных карточек для настольной RPG Vampire: The Masquerade. Пиши строго по литературному стилю проекта.${litStyle ? `\n\n# ЛИТЕРАТУРНЫЙ СТИЛЬ (system/rules/literary_style.md)\n${litStyle}` : ''}${diaryStyle ? `\n\n# КЛАНОВЫЕ СТИЛИ И ТРЕБОВАНИЯ К ПРОЗЕ (diary_rules.md)\n${diaryStyle}` : ''}`;
     const userPrompt = `Персонаж: ${char.name}${infoLines ? `\n\nИнформация:\n${infoLines}` : ''}${appearance ? `\n\nВнешность:\n${appearance}` : ''}${relLines ? `\n\nОтношения (обязательно явно отразить смысл КАЖДОЙ связи в тексте биографии — например, родственные/опекунские связи, союзы, конфликты):\n${relLines}` : ''}${existingBio ? `\n\nЧерновик биографии (написан пользователем — используй как базу, дополни и углуби, не противоречь заданной канве):\n${existingBio}` : ''}
 
 Напиши биографию персонажа для карточки.
@@ -5175,6 +5703,24 @@ function _parseScenarioLocations(text) {
   }
   return out;
 }
+// Parse/write the «## 📍 Связанные локации» section of a module .md
+function _parseModuleLocSlugs(raw) {
+  const m = raw.replace(/\r\n/g, '\n').match(/##\s*📍\s*Связанные локации\s*\n([\s\S]*?)(?=\n##|\s*$)/i);
+  if (!m) return [];
+  return m[1].split('\n').map(l => l.match(/^\s*-\s+(\S+)/)?.[1]).filter(Boolean);
+}
+function _writeModuleLocSlugs(raw, slugs) {
+  const n = raw.replace(/\r\n/g, '\n'); // normalise CRLF so \n## lookahead always works
+  if (!slugs.length) {
+    return n.replace(/\n*##\s*📍\s*Связанные локации[ \t]*\n[\s\S]*?(?=\n##|\s*$)/i, '').trimEnd() + '\n';
+  }
+  const section = `## 📍 Связанные локации\n${slugs.map(s => `- ${s}`).join('\n')}\n`;
+  if (/##\s*📍\s*Связанные локации/i.test(n)) {
+    return n.replace(/##\s*📍\s*Связанные локации[ \t]*\n[\s\S]*?(?=\n##|\s*$)/i, section);
+  }
+  return n.trimEnd() + '\n\n' + section;
+}
+
 // Parse sessions.md (Phase B log) into [{title, date, scenes, status, body}]
 function _parseSessions(raw) {
   if (!raw) return [];
@@ -5840,8 +6386,7 @@ async function buildProseContext(city, valid) {
   // 1. diary_rules.md + literary_style.md
   const diaryRules = await fs.readFile(
     path.join(ROOT, 'system', 'rules', 'diary_rules.md'), 'utf-8').catch(() => '');
-  const litStyle = await fs.readFile(
-    path.join(ROOT, 'system', 'rules', 'literary_style.md'), 'utf-8').catch(() => '');
+  const litStyle = await loadLiteraryStyle();
 
   // 2. Read each stub file + extract referenced characters and chronicle facts
   const stubContents = [];
@@ -5879,7 +6424,7 @@ async function buildProseContext(city, valid) {
     if (!ch) continue;
     const cardPath = path.join(charsDir(city), ch.lineageFolder, ch.slug, `${ch.slug}.md`);
     const card = await fs.readFile(cardPath, 'utf-8').catch(() => null);
-    if (card) charCards.push(`### Карточка: ${ch.name}\n${card.slice(0, 3000)}`);
+    if (card) charCards.push(`### Карточка: ${ch.name}\n${card}`);
   }
 
   // 4. Read chronicle events
@@ -5891,6 +6436,112 @@ async function buildProseContext(city, valid) {
 
   return { diaryRules, litStyle, stubContents, charCards, eventsChunks };
 }
+
+// ── Chronicle Scene State ─────────────────────────────────────────────────────
+// GET /api/chronicles/:chr/state?city=paris
+// Reads chronicle events.md → compresses to compact Scene State JSON.
+// Clients can pass this back as `state` in prose generation requests.
+app.get('/api/chronicles/:chr/state', async (req, res) => {
+  try {
+    const city = reqCity(req);
+    const chr  = req.params.chr;
+    if (!chr || !/^[a-z0-9_-]+$/i.test(chr))
+      return res.status(400).json({ error: 'Некорректный slug хроники.' });
+
+    const evPath = path.join(chroniclesDir(city), chr, 'events.md');
+    const raw    = await fs.readFile(evPath, 'utf-8').catch(() => null);
+    if (!raw) return res.status(404).json({ error: 'events.md не найден для этой хроники.' });
+
+    const events = parseEventsText(raw);
+    const state  = compressChronicleEvents(events);
+    state.city      = city;
+    state.chronicle = chr;
+    state.eventsCount = events.length;
+
+    res.json({ ok: true, state });
+  } catch (e) {
+    serverError(res, e);
+  }
+});
+
+// ── AI Director: propose next scene ──────────────────────────────────────────
+// POST /api/director/propose
+// Body: { city, chronicle } OR { state: <Scene State JSON> }
+// Returns scene proposals, NPC suggestions, tension forecast.
+// Human-in-the-loop: the Director PROPOSES, the Storyteller DECIDES.
+app.post('/api/director/propose', express.json(), async (req, res) => {
+  try {
+    const city = reqCity(req);
+    let state  = req.body?.state || null;
+
+    // If no state provided, build from chronicle events.md
+    if (!state && req.body?.chronicle) {
+      const evPath = path.join(chroniclesDir(city), req.body.chronicle, 'events.md');
+      const raw    = await fs.readFile(evPath, 'utf-8').catch(() => null);
+      if (raw) {
+        state = compressChronicleEvents(parseEventsText(raw));
+        state.city      = city;
+        state.chronicle = req.body.chronicle;
+      }
+    }
+    if (!state) return res.status(400).json({ error: 'Нет данных: передай state или chronicle.' });
+
+    const tension  = state.tension || 0;
+    const chars    = Object.keys(state.characters || {});
+    const flags    = Object.keys(state.world_flags || {});
+
+    const PHASES = [
+      { max: 3,  type: 'setup',    goal: 'ввести трение' },
+      { max: 6,  type: 'conflict', goal: 'эскалировать конфликт' },
+      { max: 10, type: 'climax',   goal: 'вынудить необратимое решение' },
+    ];
+    const phase = PHASES.find(p => tension <= p.max) || PHASES.at(-1);
+
+    const warnings = [];
+    if (tension >= 9) warnings.push('перегрузка напряжения — следующая сцена должна дать разрядку или кризис');
+    if (chars.length < 2) warnings.push('меньше 2 активных персонажей — добавь антагониста или свидетеля');
+    const deadNames = chars.filter(n => state.characters[n]?.status === 'dead');
+    if (deadNames.length) warnings.push(`мёртвые персонажи упомянуты как активные: ${deadNames.join(', ')}`);
+
+    const suggestedScenes = [
+      {
+        title: phase.type === 'climax' ? 'Кульминация' : 'Следующая сцена',
+        goal: phase.goal,
+        recommended_characters: chars.slice(0, 3),
+        tension_after: Math.min(10, tension + (phase.type === 'climax' ? 2 : 1)),
+      }
+    ];
+    if (flags.length) {
+      suggestedScenes.push({
+        title: 'Развитие открытой нити',
+        hook: flags[0],
+        goal: 'развить последствия предыдущего события',
+        recommended_characters: chars.slice(0, 2),
+        tension_after: tension,
+      });
+    }
+
+    res.json({
+      ok: true,
+      meta: {
+        ai_suggestion: true,
+        user_can_modify: true,
+        user_can_reject: true,
+        note: 'Рассказчик принимает решение; Director только предлагает.'
+      },
+      phase:            phase.type,
+      phase_goal:       phase.goal,
+      tension_now:      tension,
+      tension_forecast: Math.min(10, tension + 1),
+      active_characters: chars,
+      world_flags:      flags,
+      suggested_scenes: suggestedScenes,
+      warnings,
+    });
+  } catch (e) {
+    serverError(res, e);
+  }
+});
 
 app.post('/api/openrouter/generate-prose', express.json(), async (req, res) => {
   try {
@@ -5911,7 +6562,7 @@ app.post('/api/openrouter/generate-prose', express.json(), async (req, res) => {
     const { diaryRules, litStyle, stubContents, charCards, eventsChunks } = await buildProseContext(city, valid);
 
     const systemPrompt = `Ты — Рассказчик Vampire: The Masquerade V20. Пишешь литературные дневниковые записи персонажей строго по правилам ниже.
-${litStyle ? `\n# ЛИТЕРАТУРНЫЙ СТИЛЬ (system/rules/literary_style.md)\n${litStyle.slice(0, 3000)}\n` : ''}
+${litStyle ? `\n# ЛИТЕРАТУРНЫЙ СТИЛЬ (system/rules/literary_style.md)\n${litStyle}\n` : ''}
 # ПРАВИЛА ДНЕВНИКОВ
 ${diaryRules.slice(0, 4000)}
 
@@ -6143,6 +6794,8 @@ app.get('/api/settings', async (req, res) => {
       OPENAI_MODEL:       env.OPENAI_MODEL       || '',
       hasOpenAIKey:       !!env.OPENAI_API_KEY,
       hasAnthropicKey:    !!env.ANTHROPIC_API_KEY,
+      hasGeminiKey:       !!env.GEMINI_API_KEY,
+      GEMINI_MODEL:       env.GEMINI_MODEL       || '',
       claudeOauth,
     });
   } catch (e) { serverError(res, e); }
@@ -6150,7 +6803,7 @@ app.get('/api/settings', async (req, res) => {
 
 app.post('/api/settings', express.json(), async (req, res) => {
   try {
-    const { OPENROUTER_API_KEY, OPENROUTER_MODEL, OPENAI_API_KEY, OPENAI_MODEL, ANTHROPIC_API_KEY } = req.body || {};
+    const { OPENROUTER_API_KEY, OPENROUTER_MODEL, OPENAI_API_KEY, OPENAI_MODEL, ANTHROPIC_API_KEY, GEMINI_API_KEY, GEMINI_MODEL } = req.body || {};
 
     // Read current .env
     const raw = await fs.readFile(ENV_PATH, 'utf-8').catch(() => '');
@@ -6166,6 +6819,7 @@ app.post('/api/settings', express.json(), async (req, res) => {
     setKey('OPENROUTER_API_KEY', OPENROUTER_API_KEY);
     setKey('OPENAI_API_KEY',     OPENAI_API_KEY);
     setKey('ANTHROPIC_API_KEY',  ANTHROPIC_API_KEY);
+    setKey('GEMINI_API_KEY',     GEMINI_API_KEY);
     if (OPENROUTER_MODEL !== undefined) {
       if (OPENROUTER_MODEL.trim()) env.OPENROUTER_MODEL = OPENROUTER_MODEL.trim();
       else delete env.OPENROUTER_MODEL;
@@ -6174,6 +6828,11 @@ app.post('/api/settings', express.json(), async (req, res) => {
       if (OPENAI_MODEL.trim()) env.OPENAI_MODEL = OPENAI_MODEL.trim();
       else delete env.OPENAI_MODEL;
     }
+    if (GEMINI_MODEL !== undefined) {
+      if (GEMINI_MODEL.trim()) env.GEMINI_MODEL = GEMINI_MODEL.trim();
+      else delete env.GEMINI_MODEL;
+    }
+    _geminiClient = null; // invalidate cached client on key/model change
 
     const newContent = Object.entries(env).map(([k, v]) => `${k}=${v}`).join('\n') + '\n';
     await writeFileAtomic(ENV_PATH, newContent, 'utf-8');

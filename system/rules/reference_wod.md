@@ -2,7 +2,7 @@
 
 > 📌 Протокол работы с внешними источниками для генерации персонажей, сценариев и событий (VtM v20 / CTD 20th / HtV / MtA / WtA). Город-нейтрально.
 > ✅ Сверено со структурой `cities/<город>/`.
-> 🔗 Работает в связке с [`npcs_city.md`](npcs_city.md), [`chronicle.md`](chronicle.md), [`diary_rules.md`](diary_rules.md), [`disciplines.md`](disciplines.md) (полная иерархия дисциплин по уровням). События — `cities/<город>/archive/events.md`; персонажи — `cities/<город>/characters/`.
+> 🔗 Работает в связке с [`npcs_city.md`](npcs_city.md), [`chronicle.md`](chronicle.md), [`diary_rules.md`](diary_rules.md), [`../library/disciplines/`](../library/disciplines/) (полная библиотека дисциплин — по MD-файлу на дисциплину, API `/api/library/disciplines`). События — `cities/<город>/archive/events.md`; персонажи — `cities/<город>/characters/`.
 
 ---
 
@@ -218,7 +218,7 @@
 | Логирование сессии | `cities/<город>/chronicles/<хроника>/events.md` | Шаблон записи + обновление `🌍 Состояние мира` (протокол: [`chronicle.md`](chronicle.md)) |
 | Генерация дневника | `cities/<город>/characters/<линейка>/<slug>/journal/` | Протокол зеркального отражения — [`diary_rules.md`](diary_rules.md) |
 | Проверка канона | `reference_wod.md` | Протокол из 6 шагов + кэш-таблицы |
-| Проверка дисциплины (уровни, силы) | [`disciplines.md`](disciplines.md) | 18 канонических дисциплин V20 по уровням ●○○○○–●●●●●, пути Некромантии/Тауматургии |
+| Проверка дисциплины (уровни, силы) | [`system/library/disciplines/`](../library/disciplines/) | 17 канонических дисциплин V20 — по MD на дисциплину, полные «Литературное описание» + «Система», пути Некромантии/Тауматургии |
 
 ---
 

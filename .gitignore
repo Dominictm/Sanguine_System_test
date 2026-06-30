@@ -17,6 +17,11 @@ desktop.ini
 # Local secrets
 web/.env
 
+# Local proxy tool (binary, not committed)
+TgWsProxy_windows.exe
+TgWsProxy_windows_arm64.exe
+TgWsProxy_data/
+
 # Личный персонаж для внешней хроники — не индексировать
 /Демиан Лорей.md
 **/.impeccable/

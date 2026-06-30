@@ -15,7 +15,7 @@ goto node_ok
 :node_missing
 echo   Node.js not found.
 echo.
-choice /C YN /M "“áâ ­®¢¨âì Node.js  ¢â®¬ â¨ç¥áª¨?"
+choice /C YN /M "ï¿½ï¿½â ­ï¿½ï¿½ï¿½ï¿½ï¿½ Node.js ï¿½ï¿½â®¬ï¿½ï¿½ï¿½áª¨?"
 if errorlevel 2 goto node_manual
 if errorlevel 1 goto node_autoinstall
 
@@ -64,22 +64,22 @@ echo.
 
 :node_ok
 
-rem --- à®¢¥àª  ­ «¨ç¨ï Git ----------------------------------
+rem --- ï¿½à®¢ï¿½àª  ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ Git ----------------------------------
 where git > nul 2>&1
 if %errorlevel% neq 0 goto git_missing
 goto git_ok
 
 :git_missing
-echo   Git ­¥ ­ ©¤¥­.
+echo   Git ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½.
 echo.
-choice /C YN /M "“áâ ­®¢¨âì Git  ¢â®¬ â¨ç¥áª¨ ç¥à¥§ winget?"
+choice /C YN /M "ï¿½ï¿½â ­ï¿½ï¿½ï¿½ï¿½ï¿½ Git ï¿½ï¿½â®¬ï¿½ï¿½ï¿½áª¨ ï¿½à¥§ winget?"
 if errorlevel 2 goto git_manual
 if errorlevel 1 goto git_autoinstall
 
 :git_manual
 echo.
-echo   “áâ ­®¢¨â¥ Git ¢àãç­ãî: https://git-scm.com/download/win
-echo   ‡ â¥¬ § ¯ãáâ¨â¥ start.bat ¥éñ à §.
+echo   ï¿½ï¿½â ­ï¿½ï¿½ï¿½ï¿½ Git ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½: https://git-scm.com/download/win
+echo   ï¿½ï¿½â¥¬ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ start.bat ï¿½ï¿½ï¿½ à §.
 echo.
 pause
 exit /b 1
@@ -87,23 +87,23 @@ exit /b 1
 :git_autoinstall
 where winget > nul 2>&1
 if %errorlevel% neq 0 (
-    echo   winget ­¥¤®áâã¯¥­ ­  íâ®© á¨áâ¥¬¥.
-    echo   “áâ ­®¢¨â¥ Git ¢àãç­ãî: https://git-scm.com/download/win
+    echo   winget ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ã¯¥ï¿½ ï¿½ï¿½ ï¿½â®© ï¿½ï¿½â¥¬ï¿½.
+    echo   ï¿½ï¿½â ­ï¿½ï¿½ï¿½ï¿½ Git ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½: https://git-scm.com/download/win
     pause
     exit /b 1
 )
-echo   “áâ ­ ¢«¨¢ î Git (¬®¦¥â ¯®ï¢¨âìáï § ¯à®á UAC)...
+echo   ï¿½ï¿½â ­ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ Git (ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¢¨ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ UAC)...
 winget install --id Git.Git -e --source winget --accept-package-agreements --accept-source-agreements
-rem ‘¤¥« âì á¢¥¦¥ãáâ ­®¢«¥­­ë© git ¢¨¤¨¬ë¬ ¢ â¥ªãé¥© á¥áá¨¨ ¡¥§ ¯¥à¥§ ¯ãáª .
+rem ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ á¢¥ï¿½ï¿½ï¿½ï¿½â ­ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ git ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ â¥ªï¿½é¥© ï¿½ï¿½á¨¨ ï¿½ï¿½ï¿½ ï¿½ï¿½à¥§ï¿½ï¿½ï¿½áª .
 set PATH=%PATH%;%ProgramFiles%\Git\cmd
 where git > nul 2>&1
 if %errorlevel% neq 0 (
-    echo   Git ãáâ ­®¢«¥­, ­® ­¥ ¢¨¤¥­ ¢ íâ®© á¥áá¨¨.
-    echo   ¥à¥§ ¯ãáâ¨â¥ start.bat ¨«¨ â¥à¬¨­ «.
+    echo   Git ï¿½ï¿½â ­ï¿½ï¿½ï¿½ï¿½ï¿½, ï¿½ï¿½ ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ ï¿½â®© ï¿½ï¿½á¨¨.
+    echo   ï¿½ï¿½à¥§ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ start.bat ï¿½ï¿½ï¿½ ï¿½à¬¨ï¿½ï¿½ï¿½.
     pause
     exit /b 1
 )
-echo   Git ãáâ ­®¢«¥­ ãá¯¥è­®.
+echo   Git ï¿½ï¿½â ­ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½á¯¥è­®.
 echo.
 
 :git_ok
@@ -115,6 +115,21 @@ if %errorlevel% == 0 (
     echo.
 
     exit /b 0
+)
+
+rem --- TgWsProxy (Ð»Ð¾ÐºÐ°Ð»ÑŒÐ½Ñ‹Ð¹ HTTP-Ð¿Ñ€Ð¾ÐºÑÐ¸ Ð´Ð»Ñ Gemini AI) -------------------
+rem ÐÑƒÐ¶ÐµÐ½ Ð´Ð»Ñ Ð´Ð¾ÑÑ‚ÑƒÐ¿Ð° Ðº generativelanguage.googleapis.com Ñ‡ÐµÑ€ÐµÐ· Ñ‚ÑƒÐ½Ð½ÐµÐ»ÑŒ.
+rem ÐšÐ¾Ð½Ñ„Ð¸Ð³ÑƒÑ€Ð°Ñ†Ð¸Ñ: web/.env -> HTTPS_PROXY=http://127.0.0.1:12334
+if exist "%~dp0TgWsProxy_windows.exe" (
+    netstat -ano 2>nul | find "LISTENING" | find ":12334" > nul
+    if %errorlevel% neq 0 (
+        echo   Starting TgWsProxy (AI proxy)...
+        start /B "" "%~dp0TgWsProxy_windows.exe" --portable
+        timeout /t 2 /nobreak > nul
+    ) else (
+        echo   TgWsProxy already running on :12334
+    )
+    echo.
 )
 
 cd /d "%~dp0web"

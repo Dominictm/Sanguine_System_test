@@ -497,6 +497,7 @@ function parseCharacter(rawContent, folderName, lineage) {
   c.statusType = (sl.includes('жив') || sl.includes('жива') || sl.includes('активен') || sl.includes('активна')) ? 'active'
     : sl.includes('торпор') ? 'torpor'
     : (sl.includes('мёртв') || sl.includes('мертва') || sl.includes('погиб') || sl.includes('уничтожен') || sl.includes('убит')) ? 'dead'
+    : sl.includes('пропал') ? 'missing'
     : sl.includes('неизвестно') ? 'unknown'
     : 'unknown';
 
