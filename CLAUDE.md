@@ -61,16 +61,16 @@
 
 Ветка `test` (релиз для Рассказчика, без личных данных городов и без дев-окружения)
 **собирается автоматически** при каждом push в `master` — `.github/workflows/release-test.yml`
-запускает `node tools/build_release.js`, который точечно правит файлы по
-`tools/release-overrides.json` (нейтральный «Активный город», пустой `CITY=` в
-`start.bat`), вычищает `cities/<город>/` и удаляет пути из `tools/release-exclude.json`
+запускает `node .github/workflows/build_release.js`, который точечно правит файлы по
+`.github/workflows/release-overrides.json` (нейтральный «Активный город», пустой `CITY=` в
+`start.bat`), вычищает `cities/<город>/` и удаляет пути из `.github/workflows/release-exclude.json`
 (`.claude`, `.github`, `.vscode`, `.impeccable`, `art-genegic` — дев-окружение,
 Рассказчику не нужно), затем форс-пуш результата в `test`. Ничего не мёрджится —
 `test` каждый раз пересобирается с нуля из текущего `master`, поэтому конфликтов и
 затирания релизных правок не бывает.
 
 Ручной запуск (для проверки): `node tools/build_release.js --dry-run` (без записи)
-или `node tools/build_release.js --root <папка>` (на отдельной копии). Если правка
+или `node .github/workflows/build_release.js --root <папка>` (на отдельной копии). Если правка
 меняет один из файлов в `release-overrides.json` так, что find-якорь больше не
 совпадает — сборка падает с ошибкой; в этом случае обнови якорь в JSON.
 
