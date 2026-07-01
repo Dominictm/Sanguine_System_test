@@ -9620,13 +9620,10 @@ async function runLocFullGen() {
 
     const vtmM = content.match(/##\s*🩸\s*Контекст[^\n]*\n+([\s\S]+?)(?=\n##|\n---|$)/i);
     if (vtmM) {
-      const tableRows = vtmM[1].split('\n').filter(l => l.startsWith('|') && !l.match(/[-]{3}/));
-      if (tableRows.length) {
-        document.getElementById('loc-edit-vtm-context').value = tableRows.join('\n');
-      } else {
-        const prose = vtmM[1].split('\n').filter(l => !l.startsWith('|') && l.trim()).join('\n').trim();
-        if (prose) document.getElementById('loc-edit-vtm-context').value = prose;
-      }
+      // Only extract prose — table rows go through the structural table path,
+      // sending raw table rows as vtmText would prepend them above the existing table
+      const prose = vtmM[1].split('\n').filter(l => !l.startsWith('|') && l.trim()).join('\n').trim();
+      if (prose) document.getElementById('loc-edit-vtm-context').value = prose;
     }
 
     hint.textContent = '✓ Карточка сгенерирована — проверьте и сохраните';
