@@ -9372,7 +9372,7 @@ function openLocEditModal(slug) {
   document.getElementById('loc-edit-gen-hint').textContent = '';
 
   // Clear fields
-  ['name','district','neighborhood','address','control','atmosphere','hooks','image-prompt','context'].forEach(id => {
+  ['name','district','neighborhood','address','control','atmosphere','sensory','vtm-context','hooks','image-prompt','context'].forEach(id => {
     const el = document.getElementById(`loc-edit-${id}`);
     if (el) el.value = '';
   });
@@ -9389,6 +9389,9 @@ function openLocEditModal(slug) {
       document.getElementById('loc-edit-atmosphere').value  = loc.atmosphere || '';
       document.getElementById('loc-edit-hooks').value       = (loc.hooks || []).join('\n');
       document.getElementById('loc-edit-image-prompt').value = loc.imagePrompt || '';
+      document.getElementById('loc-edit-sensory').value =
+        (loc.sensoryPalette || []).map(s => `| **${s.channel}** | ${s.value} |`).join('\n');
+      document.getElementById('loc-edit-vtm-context').value = loc.vtmText || '';
       // Zone: try to match emoji
       const zv = loc.zone || '';
       const zoneEl = document.getElementById('loc-edit-zone');
@@ -9451,6 +9454,8 @@ async function saveLocEdit() {
         address:     document.getElementById('loc-edit-address').value.trim(),
         control:     document.getElementById('loc-edit-control').value.trim(),
         zone:        document.getElementById('loc-edit-zone').value,
+        sensoryPalette: document.getElementById('loc-edit-sensory').value.trim(),
+        vtmText:        document.getElementById('loc-edit-vtm-context').value.trim(),
       };
 
       const r = await fetch(`/api/locations/${encodeURIComponent(_locEditSlug)}/fields?city=${encodeURIComponent(CITY)}`, {
@@ -9480,6 +9485,8 @@ async function saveLocEdit() {
         hooks:        document.getElementById('loc-edit-hooks').value.trim(),
         imagePrompt:  document.getElementById('loc-edit-image-prompt').value.trim(),
         zone:         document.getElementById('loc-edit-zone').value,
+        sensoryPalette: document.getElementById('loc-edit-sensory').value.trim(),
+        vtmText:        document.getElementById('loc-edit-vtm-context').value.trim(),
       };
       const hasExtra = Object.values(extraFields).some(v => v);
       if (hasExtra) {
@@ -9542,7 +9549,7 @@ async function runLocFieldRegen(field) {
     const { value } = await r.json();
     if (!value) throw new Error('Пустой ответ');
 
-    const fieldMap = { atmosphere: 'atmosphere', imagePrompt: 'image-prompt', hooks: 'hooks' };
+    const fieldMap = { atmosphere: 'atmosphere', imagePrompt: 'image-prompt', hooks: 'hooks', vtmText: 'vtm-context' };
     const elId = fieldMap[field];
     if (elId) document.getElementById(`loc-edit-${elId}`).value = value;
     hint.textContent = '✓ Готово';
@@ -9584,6 +9591,23 @@ async function runLocFullGen() {
 
     const promptM = content.match(/```\s*\n([\s\S]+?)```/);
     if (promptM) document.getElementById('loc-edit-image-prompt').value = promptM[1].trim();
+
+    const sensM = content.match(/##\s*👁️\s*Сенсорная палитра\s*\n+([\s\S]+?)(?=\n##|\n---|$)/i);
+    if (sensM) {
+      const tableRows = (sensM[1].match(/^\|[^|\n]+\|[^|\n]+\|/gm) || []).filter(r => !r.match(/[-]{3}/));
+      document.getElementById('loc-edit-sensory').value = tableRows.join('\n');
+    }
+
+    const vtmM = content.match(/##\s*🩸\s*Контекст[^\n]*\n+([\s\S]+?)(?=\n##|\n---|$)/i);
+    if (vtmM) {
+      const tableRows = vtmM[1].split('\n').filter(l => l.startsWith('|') && !l.match(/[-]{3}/));
+      if (tableRows.length) {
+        document.getElementById('loc-edit-vtm-context').value = tableRows.join('\n');
+      } else {
+        const prose = vtmM[1].split('\n').filter(l => !l.startsWith('|') && l.trim()).join('\n').trim();
+        if (prose) document.getElementById('loc-edit-vtm-context').value = prose;
+      }
+    }
 
     hint.textContent = '✓ Карточка сгенерирована — проверьте и сохраните';
   } catch (e) {
