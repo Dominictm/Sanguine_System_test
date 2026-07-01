@@ -8515,7 +8515,7 @@ function openLocDetail(slug, keepTab) {
         </div>`).join('')}</div>`
     : '<div class="cdet-empty">Сенсорная палитра не заполнена</div>';
   const sensRawTable = (loc.sensoryPalette || []).map(s => `| **${s.channel}** | ${s.value} |`).join('\n')
-    || '| **Свет** | |\n| **Звук** | |\n| **Запах** | |\n| **Тактильное** | |';
+    || '| Канал | |\n|---|---|\n| **Свет** | |\n| **Звук** | |\n| **Запах** | |\n| **Тактильное** | |';
   const sensEditHtml = `<textarea class="cdet-edit-textarea" id="locdet-sens-ta" rows="8">${escHtml(sensRawTable)}</textarea>`;
 
   const hooksViewHtml = loc.hooks?.length
