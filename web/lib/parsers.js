@@ -544,6 +544,20 @@ function parseLocation(rawContent, folderName) {
   const atmM = content.match(/## (?:🎭\s+)?Атмосфера[^\n]*\n+([\s\S]+?)(?=\n## |\n---)/);
   if (atmM) loc.atmosphere = atmM[1].trim();
 
+  // Sensory palette — raw table text
+  const sensM = content.match(/## (?:👁️\s+)?Сенсорная палитра[^\n]*\n+([\s\S]+?)(?=\n## |\n---)/i);
+  if (sensM) {
+    loc.sensoryPalette = (sensM[1].match(/^\|[^|\n]+\|[^|\n]+\|/gm) || [])
+      .filter(r => !r.match(/[-]{3}/))
+      .map(r => {
+        const cells = r.split('|').slice(1, -1).map(c => c.replace(/\*\*/g, '').trim());
+        return { channel: cells[0], value: cells[1] };
+      })
+      .filter(r => r.channel && r.value);
+  } else {
+    loc.sensoryPalette = [];
+  }
+
   // VtM table fields
   for (const [label, key] of [
     ['Статус',            'locStatus'],

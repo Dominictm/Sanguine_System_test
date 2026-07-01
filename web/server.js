@@ -2875,6 +2875,13 @@ app.put('/api/locations/:slug/fields', express.json(), async (req, res) => {
         );
         continue;
       }
+      if (key === 'sensoryPalette') {
+        card = card.replace(
+          /(## (?:👁️\s+)?Сенсорная палитра[^\n]*\n+)([\s\S]+?)(\n## |\n---|$)/i,
+          (_, hdr, _old, tail) => `${hdr}${value}\n${tail}`
+        );
+        continue;
+      }
       // Inline metadata fields
       const fieldMap = { district: 'Округ', neighborhood: 'Район', address: 'Адрес', control: 'Контроль', zone: 'Зона' };
       const mdKey = fieldMap[key];
