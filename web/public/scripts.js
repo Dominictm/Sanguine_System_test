@@ -1681,8 +1681,8 @@ document.getElementById('btn-new-npc').addEventListener('click', async () => {
   }
 });
 
-document.getElementById('btn-goto-chronicles').addEventListener('click', () => {
-  navigate('chronicles-page');
+document.getElementById('btn-create-module-tools').addEventListener('click', () => {
+  openModCreateModal(true);
 });
 
 document.getElementById('btn-validate').addEventListener('click', () => {
