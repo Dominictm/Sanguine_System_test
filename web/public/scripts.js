@@ -2846,13 +2846,15 @@ document.getElementById('mod-create-submit').addEventListener('click', async () 
   if (!/\b(?:19|20)\d{2}\b/.test(time) &&
       !confirm('В поле «Время» нет года. Без года проверка таймлайна менее точна. Всё равно создать?')) return;
   errEl.style.display = 'none';
+
+  const chr = _getModCreateChr();
+  if (!chr) { errEl.textContent = 'Выбери хронику'; errEl.style.display = ''; return; }
+
   btn.disabled = true;
   btn.textContent = '⏳ Создание...';
 
   try {
     const qs = window.location.search;
-    const chr = _getModCreateChr();
-    if (!chr) { errEl.textContent = 'Выбери хронику'; errEl.style.display = ''; return; }
     const d  = await fetch(`/api/chronicles/${encodeURIComponent(chr)}/modules${qs}`,
       { method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, time, slug, pcs: _createPCs, npcs: _createNPCs, content }) }
