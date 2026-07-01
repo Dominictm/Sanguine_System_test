@@ -2859,8 +2859,8 @@ app.put('/api/locations/:slug/fields', express.json(), async (req, res) => {
         continue;
       }
       if (key === 'subtype') {
-        // Update H1
-        card = card.replace(/^(#\s+).+$/m, `$1${value}`);
+        // Update H1 (preserve emoji, handle BOM)
+        card = card.replace(/^(﻿?#\s+(?:[\p{Emoji}\p{Mark}]+\s+)?).*$/mu, `$1${value}`);
         // Update inline metadata field **Название:**
         card = card.replace(
           /(\*\*Название:\*\*)\s*([^|\n]+?)(?=\s*\||\s*\n|$)/m,
