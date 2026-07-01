@@ -1904,6 +1904,76 @@ app.put('/api/chronicles/:chr/modules/:mod/session/:idx', express.json(), async 
   }
 });
 
+// ── Edit module fields ─────────────────────────────────────────────────────────
+
+app.put('/api/chronicles/:chr/modules/:mod/fields', express.json(), async (req, res) => {
+  try {
+    const city = reqCity(req);
+    const { chr, mod } = req.params;
+    const fields = req.body?.fields || {};
+
+    const modPath = path.join(chroniclesDir(city), chr, 'modules', mod, `${mod}.md`);
+    let raw = await fs.readFile(modPath, 'utf-8').catch(() => null);
+    if (!raw) return res.status(404).json({ error: 'Файл модуля не найден' });
+
+    for (const [key, val] of Object.entries(fields)) {
+      if (val === undefined || val === null) continue;
+
+      if (key === 'title') {
+        const v = String(val).trim();
+        if (v) raw = raw.replace(/^#\s+.+$/m, `# ${v}`);
+
+      } else if (['type', 'time', 'location', 'tone', 'format'].includes(key)) {
+        const labels = { type: 'Тип', time: 'Время', location: 'Локация', tone: 'Тон', format: 'Формат' };
+        const label  = labels[key];
+        const v = String(val).trim();
+        const cellRe = new RegExp(`(\\|\\s*\\*\\*${label}\\*\\*\\s*\\|\\s*)([^|\\n]*)(\\|)`);
+        if (cellRe.test(raw)) {
+          raw = raw.replace(cellRe, `$1${v} $3`);
+        }
+
+      } else if (key === 'description') {
+        const v = String(val).trim();
+        // Replace section between «## 💡 Концепция» header and next ## or ---
+        if (/## 💡 Концепция/.test(raw)) {
+          raw = raw.replace(
+            /(## 💡 Концепция\s*\n)([\s\S]*?)(?=\n## |\n---|$)/,
+            `$1\n${v}\n\n`
+          );
+        }
+
+      } else if (key === 'pcs') {
+        const arr = Array.isArray(val) ? val : JSON.parse(String(val) || '[]');
+        const block = arr.length
+          ? arr.map(n => `  - ${n} — Персонаж игрока`).join('\n')
+          : '  - ⚠️ Уточнить';
+        raw = raw.replace(
+          /(\*\*Персонажи игроков:\*\*\s*\n)((?:[ \t]*- [^\n]+\n?)*)/,
+          `$1${block}\n`
+        );
+
+      } else if (key === 'npcs') {
+        const arr = Array.isArray(val) ? val : JSON.parse(String(val) || '[]');
+        const block = arr.length
+          ? arr.map(n => `  - ${n} — НПС`).join('\n')
+          : '  - ⚠️ Уточнить';
+        raw = raw.replace(
+          /(\*\*НПС:\*\*\s*\n)((?:[ \t]*- [^\n]+\n?)*)/,
+          `$1${block}\n`
+        );
+      }
+    }
+
+    await writeFileAtomic(modPath, raw, 'utf-8');
+    delete _cache[city];
+    console.log(`[mod-fields] ${city}/${chr}/${mod} →`, Object.keys(fields).join(', '));
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('[mod-fields]', e.message);
+    serverError(res, e);
+  }
+});
+
 // ── Delete module ─────────────────────────────────────────────────────────────
 
 app.delete('/api/chronicles/:chr/modules/:mod', express.json(), async (req, res) => {
