@@ -1912,6 +1912,8 @@ app.put('/api/chronicles/:chr/modules/:mod/fields', express.json(), async (req, 
   try {
     const city = reqCity(req);
     const { chr, mod } = req.params;
+    if (chr.includes('..') || mod.includes('..'))
+      return res.status(400).json({ error: 'Недопустимое имя' });
     const fields = req.body?.fields || {};
     const skipped = [];
 
@@ -1985,6 +1987,8 @@ app.put('/api/chronicles/:chr/modules/:mod/scenario', express.json(), async (req
   try {
     const city = reqCity(req);
     const { chr, mod } = req.params;
+    if (chr.includes('..') || mod.includes('..'))
+      return res.status(400).json({ error: 'Недопустимое имя' });
     const content = (req.body?.content || '').trim();
     if (!content) return res.status(400).json({ error: 'Пустой сценарий' });
 
