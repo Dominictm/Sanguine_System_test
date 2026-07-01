@@ -346,6 +346,13 @@
               placeholder="Опиши идею модуля — завязку, ключевые сцены, конфликт, НПС, локации..."></textarea>
           </div>
 
+          <div class="mod-create-track-row">
+            <label class="mod-create-track-label">
+              <input type="checkbox" id="mod-create-track" checked>
+              Учитывать события в общей хронике города
+            </label>
+          </div>
+
           <div id="mod-create-error" class="chr-form-error" style="display:none"></div>
         </div>
         <div class="chr-modal-actions">
@@ -514,7 +521,7 @@
           <option value="high">🔴 Высокий</option>
         </select>
       </div>
-      <button class="chr-modal-btn create" id="loc-page-create-btn" style="padding:5px 12px;font-size:var(--fs-sm)">+ Создать локацию</button>
+      <button class="chr-modal-btn create" id="loc-page-create-btn" style=" margin-bottom: 10px; padding:5px 12px;font-size:var(--fs-sm)">+ Создать локацию</button>
       <div id="locs-grid" class="locs-grid">
         <div class="loading-state"><div class="spinner"></div>Загрузка...</div>
       </div>

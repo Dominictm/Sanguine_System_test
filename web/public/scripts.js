@@ -2336,19 +2336,29 @@ function _getModCreateChr() {
   return el ? el.value.trim() : '';
 }
 
+let _chrSelectData = []; // cached chronicle list with hidden flag
+
 async function _loadChrSelect() {
   const sel = document.getElementById('mod-create-chr');
   sel.innerHTML = '<option value="">— выбери хронику —</option>';
   try {
-    const qs   = window.location.search;
-    const list = await fetch(`/api/chronicles${qs}`).then(r => r.json());
-    list.forEach(c => {
+    const qs     = window.location.search;
+    const baseQs = qs ? qs + '&include_hidden=1' : '?include_hidden=1';
+    _chrSelectData = await fetch(`/api/chronicles${baseQs}`).then(r => r.json());
+    _chrSelectData.forEach(c => {
       const opt = document.createElement('option');
       opt.value       = c.slug;
-      opt.textContent = c.display || c.slug;
+      opt.textContent = (c.hidden ? '📂 ' : '') + (c.display || c.slug);
       sel.appendChild(opt);
     });
-  } catch { /* молча — список просто пустой */ }
+  } catch { _chrSelectData = []; }
+}
+
+function _updateTrackCheckbox(chrSlug) {
+  const cb = document.getElementById('mod-create-track');
+  if (!cb) return;
+  const chr = _chrSelectData.find(c => c.slug === chrSlug);
+  cb.checked = chr ? !chr.hidden : true;
 }
 
 function renderModuleCardInChr(m, chrSlug) {
@@ -2787,6 +2797,9 @@ async function openModCreateModal(standalone) {
     document.getElementById('mod-create-error').style.display = 'none';
     _modSlugEdited = false;
 
+    const trackCb = document.getElementById('mod-create-track');
+    if (trackCb) trackCb.checked = true; // default — сбрасывается при выборе хроники
+
     const chrRow = document.getElementById('mod-create-chr-row');
     if (standalone) {
       chrRow.style.display = '';
@@ -2807,6 +2820,7 @@ document.getElementById('mod-create-name').addEventListener('input', e => {
   if (!_modSlugEdited) document.getElementById('mod-create-slug').value = slugifyChr(e.target.value);
 });
 document.getElementById('mod-create-slug').addEventListener('input', () => { _modSlugEdited = true; });
+document.getElementById('mod-create-chr').addEventListener('change', e => { _updateTrackCheckbox(e.target.value); });
 
 document.getElementById('mod-create-add-pc').addEventListener('click', () => {
   const v = document.getElementById('mod-create-pc-input').value.trim();
@@ -2857,7 +2871,8 @@ document.getElementById('mod-create-submit').addEventListener('click', async () 
     const qs = window.location.search;
     const d  = await fetch(`/api/chronicles/${encodeURIComponent(chr)}/modules${qs}`,
       { method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, time, slug, pcs: _createPCs, npcs: _createNPCs, content }) }
+        body: JSON.stringify({ name, time, slug, pcs: _createPCs, npcs: _createNPCs, content,
+          trackInChronology: document.getElementById('mod-create-track')?.checked !== false }) }
     ).then(r => r.json());
 
     if (!d.ok) { errEl.textContent = d.error || 'Ошибка'; errEl.style.display = ''; return; }

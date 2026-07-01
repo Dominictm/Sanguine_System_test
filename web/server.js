@@ -878,12 +878,14 @@ app.get('/api/chronicles', async (req, res) => {
         modules = mods.filter(e => e.isDirectory() && !e.name.startsWith('.')).length;
       } catch {}
 
-      // Status from chronicle.md
+      // Status + hidden flag from chronicle.md
       let status = 'active';
+      let hidden = false;
       const chrMd = await fs.readFile(path.join(chrDir, 'chronicle.md'), 'utf-8').catch(() => null);
       if (chrMd) {
         if (/Закрыта|Завершена|closed/i.test(chrMd)) status = 'closed';
         else if (/Приостановлена|paused/i.test(chrMd)) status = 'paused';
+        if (/\*\*Скрыта\*\*\s*\|\s*да/i.test(chrMd)) hidden = true;
       }
 
       // First event date (oldest = last after desc sort, so min score)
@@ -896,7 +898,7 @@ app.get('/api/chronicles', async (req, res) => {
         }
       }
 
-      out.push({ slug: ch.name, display, events, modules, status, startDate });
+      out.push({ slug: ch.name, display, events, modules, status, startDate, hidden });
     }
 
     // Sort: active first, then by name
@@ -905,7 +907,9 @@ app.get('/api/chronicles', async (req, res) => {
       return a.display.localeCompare(b.display, 'ru');
     });
 
-    res.json(out);
+    // By default hide chronicles marked as hidden; pass ?include_hidden=1 to include them (e.g. module creation dropdown)
+    const includeHidden = req.query.include_hidden === '1';
+    res.json(includeHidden ? out : out.filter(c => !c.hidden));
   } catch (e) { serverError(res, e); }
 });
 
@@ -1392,6 +1396,7 @@ app.post('/api/chronicles/:slug/modules', express.json(), async (req, res) => {
     const pcs       = Array.isArray(req.body.pcs)  ? req.body.pcs  : [];
     const npcs      = Array.isArray(req.body.npcs) ? req.body.npcs : [];
     const concept   = (req.body.content || '').trim();
+    const track     = req.body.trackInChronology !== false; // default true
 
     const pcBlock  = pcs.length  ? pcs.map(n  => `  - ${n} — Персонаж игрока`).join('\n') : '  - ⚠️ Уточнить';
     const npcBlock = npcs.length ? npcs.map(n => `  - ${n} — НПС`).join('\n')             : '  - ⚠️ Уточнить';
@@ -1409,6 +1414,7 @@ app.post('/api/chronicles/:slug/modules', express.json(), async (req, res) => {
       `| **Тип** | Игровая сессия |`,
       `| **Время** | ${timeStr || '⚠️ Уточнить'} |`,
       '| **Локация** |  |',
+      `| **Учитывать в хронологии** | ${track ? 'да' : 'нет'} |`,
       '',
       '---',
       '',
@@ -2063,7 +2069,8 @@ ${playLog}
   - <…>
 
 Верни ТОЛЬКО блок записи, без пояснений. Русский.`, 2000).catch(() => '');
-    if (eventBlock && /###\s*📅/.test(eventBlock)) {
+    const trackInChronology = !/\|\s*\*\*Учитывать в хронологии\*\*\s*\|\s*нет\s*\|/i.test(mainTxt);
+    if (eventBlock && /###\s*📅/.test(eventBlock) && trackInChronology) {
       const evPath     = path.join(chroniclesDir(city), chr, 'events.md');
       const finaleLink = finale ? ` | [Литературный финал](modules/${mod}/finale.md)` : '';
       const block      = eventBlock.trim() + `\n\n> 🔗 [Модуль](modules/${mod}/${mod}.md)${finaleLink}\n`;
