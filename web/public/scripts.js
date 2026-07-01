@@ -2769,6 +2769,10 @@ document.getElementById('btn-create-module-in-chr').addEventListener('click', ()
   openModCreateModal(false);
 });
 
+document.getElementById('btn-create-module-standalone').addEventListener('click', () => {
+  openModCreateModal(true);
+});
+
 async function openModCreateModal(standalone) {
   if (_modCreateOpening) return;
   _modCreateOpening = true;
