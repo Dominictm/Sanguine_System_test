@@ -113,7 +113,7 @@ if %errorlevel% == 0 (
     echo   Server already running at http://localhost:3000
     start http://localhost:3000
     echo.
-
+    pause
     exit /b 0
 )
 
@@ -121,13 +121,13 @@ rem --- TgWsProxy (локальный HTTP-прокси для Gemini AI) ------
 rem Нужен для доступа к generativelanguage.googleapis.com через туннель.
 rem Конфигурация: web/.env -> HTTPS_PROXY=http://127.0.0.1:12334
 if exist "%~dp0TgWsProxy_windows.exe" (
-    netstat -ano 2>nul | find "LISTENING" | find ":12334" > nul
-    if %errorlevel% neq 0 (
-        echo   Starting TgWsProxy (AI proxy)...
+    tasklist /FI "IMAGENAME eq TgWsProxy_windows.exe" 2>nul | find "TgWsProxy_windows.exe" > nul
+    if errorlevel 1 (
+        echo   Starting TgWsProxy - AI proxy...
         start /B "" "%~dp0TgWsProxy_windows.exe" --portable
         timeout /t 2 /nobreak > nul
     ) else (
-        echo   TgWsProxy already running on :12334
+        echo   TgWsProxy already running.
     )
     echo.
 )
@@ -167,4 +167,5 @@ node wrapper.js
 echo.
 echo   Server stopped (code: %errorlevel%).
 echo.
+pause
 
