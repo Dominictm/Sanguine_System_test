@@ -2858,8 +2858,18 @@ app.put('/api/locations/:slug/fields', express.json(), async (req, res) => {
         );
         continue;
       }
+      if (key === 'subtype') {
+        // Update H1
+        card = card.replace(/^(#\s+).+$/m, `$1${value}`);
+        // Update inline metadata field **Название:**
+        card = card.replace(
+          /(\*\*Название:\*\*)\s*([^|\n]+?)(?=\s*\||\s*\n|$)/m,
+          `$1 ${value}`
+        );
+        continue;
+      }
       // Inline metadata fields
-      const fieldMap = { subtype: 'Название', district: 'Округ', neighborhood: 'Район', address: 'Адрес', control: 'Контроль', zone: 'Зона' };
+      const fieldMap = { district: 'Округ', neighborhood: 'Район', address: 'Адрес', control: 'Контроль', zone: 'Зона' };
       const mdKey = fieldMap[key];
       if (mdKey) {
         const esc = mdKey.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
