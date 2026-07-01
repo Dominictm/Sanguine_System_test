@@ -152,6 +152,7 @@ const ACTION_MAP = {
   'GET /api/modules':                         req => `Модули — загрузка (${reqCity(req)})`,
   'GET /api/modules/:name':                   req => `Модуль: ${decodeURIComponent(req.params.name)}`,
   'PUT /api/chronicles/:chr/modules/:mod/fields': req => `✏  Редактирование полей модуля: ${req.params.mod} (${req.params.chr})`,
+  'PUT /api/chronicles/:chr/modules/:mod/scenario': req => `📝 Сценарий модуля: ${req.params.mod} (${req.params.chr})`,
   'GET /api/chronicle':                       req => `Хроника (${reqCity(req)})`,
   'GET /api/threads':                         req => `Открытые нити (${reqCity(req)})`,
   'GET /api/integrity':                       req => `Проверка целостности (${reqCity(req)})`,
@@ -1974,6 +1975,31 @@ app.put('/api/chronicles/:chr/modules/:mod/fields', express.json(), async (req, 
     res.json({ ok: true, ...(skipped.length ? { skipped } : {}) });
   } catch (e) {
     console.error('[mod-fields]', e.message);
+    serverError(res, e);
+  }
+});
+
+// ── Replace scenario.md ────────────────────────────────────────────────────────
+
+app.put('/api/chronicles/:chr/modules/:mod/scenario', express.json(), async (req, res) => {
+  try {
+    const city = reqCity(req);
+    const { chr, mod } = req.params;
+    const content = (req.body?.content || '').trim();
+    if (!content) return res.status(400).json({ error: 'Пустой сценарий' });
+
+    const modDir      = path.join(chroniclesDir(city), chr, 'modules', mod);
+    const scenarioPath = path.join(modDir, 'scenario.md');
+
+    if (!await fs.stat(modDir).catch(() => null))
+      return res.status(404).json({ error: 'Модуль не найден' });
+
+    await writeFileAtomic(scenarioPath, content.endsWith('\n') ? content : content + '\n', 'utf-8');
+    delete _cache[city];
+    console.log(`[mod-scenario] ${city}/${chr}/${mod} scenario.md rewritten`);
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('[mod-scenario]', e.message);
     serverError(res, e);
   }
 });
