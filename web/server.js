@@ -2859,7 +2859,7 @@ app.put('/api/locations/:slug/fields', express.json(), async (req, res) => {
         continue;
       }
       // Inline metadata fields
-      const fieldMap = { subtype: 'Название', district: 'Округ', neighborhood: 'Район', address: 'Адрес', control: 'Контроль' };
+      const fieldMap = { subtype: 'Название', district: 'Округ', neighborhood: 'Район', address: 'Адрес', control: 'Контроль', zone: 'Зона' };
       const mdKey = fieldMap[key];
       if (mdKey) {
         const esc = mdKey.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');

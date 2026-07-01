@@ -9398,8 +9398,28 @@ function openLocEditModal(slug) {
     }
   }
 
+  // Populate factions datalist for the Control field
+  _loadFactionsList();
+
   modal.classList.add('open');
   document.getElementById('loc-edit-name').focus();
+}
+
+async function _loadFactionsList() {
+  const dl = document.getElementById('loc-control-list');
+  if (!dl) return;
+  try {
+    const md = await fetch(`/api/factions?city=${encodeURIComponent(CITY)}`).then(r => r.ok ? r.text() : '');
+    const factions = new Set();
+    for (const line of md.split('\n')) {
+      if (!line.startsWith('|') || /^[|\s-]+$/.test(line)) continue;
+      for (const cell of line.split('|').map(c => c.trim()).filter(Boolean)) {
+        if (cell.length > 1 && !/^(Должность|Персонаж|Клан|Примечание|Статус|Примечан)/.test(cell))
+          factions.add(cell);
+      }
+    }
+    dl.innerHTML = [...factions].map(f => `<option value="${f.replace(/"/g, '&quot;')}">`).join('');
+  } catch { /* молча */ }
 }
 
 function closeLocEditModal() {
@@ -9430,6 +9450,7 @@ async function saveLocEdit() {
         neighborhood:document.getElementById('loc-edit-neighborhood').value.trim(),
         address:     document.getElementById('loc-edit-address').value.trim(),
         control:     document.getElementById('loc-edit-control').value.trim(),
+        zone:        document.getElementById('loc-edit-zone').value,
       };
 
       const r = await fetch(`/api/locations/${encodeURIComponent(_locEditSlug)}/fields?city=${encodeURIComponent(CITY)}`, {
@@ -9448,6 +9469,26 @@ async function saveLocEdit() {
         }),
       });
       if (!r.ok) throw new Error((await r.json()).error || r.statusText);
+      const { slug: newSlug } = await r.json();
+
+      // Write remaining fields that POST /api/locations doesn't accept
+      const extraFields = {
+        neighborhood: document.getElementById('loc-edit-neighborhood').value.trim(),
+        address:      document.getElementById('loc-edit-address').value.trim(),
+        control:      document.getElementById('loc-edit-control').value.trim(),
+        atmosphere:   document.getElementById('loc-edit-atmosphere').value.trim(),
+        hooks:        document.getElementById('loc-edit-hooks').value.trim(),
+        imagePrompt:  document.getElementById('loc-edit-image-prompt').value.trim(),
+        zone:         document.getElementById('loc-edit-zone').value,
+      };
+      const hasExtra = Object.values(extraFields).some(v => v);
+      if (hasExtra) {
+        const rf = await fetch(`/api/locations/${encodeURIComponent(newSlug)}/fields?city=${encodeURIComponent(CITY)}`, {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fields: extraFields }),
+        });
+        if (!rf.ok) console.warn('[loc-create] extra fields save failed:', (await rf.json()).error);
+      }
     }
 
     // Refresh locations cache
