@@ -8506,6 +8506,9 @@ function openLocDetail(slug, keepTab) {
           <div class="locdet-val">${escHtml(kp.desc)}</div>
         </div>`).join('')}</div>`
     : '<div class="cdet-empty">Ключевые точки не заполнены</div>';
+  const keyRawTable = (loc.keyPoints || []).map(kp => `| ${kp.place} | ${kp.desc} |`).join('\n')
+    || '| Место | Описание |\n|---|---|\n| | |';
+  const keyEditHtml = `<textarea class="cdet-edit-textarea" id="locdet-keys-ta" rows="10">${escHtml(keyRawTable)}</textarea>`;
 
   const sensViewHtml = loc.sensoryPalette?.length
     ? `<div class="locdet-table">${loc.sensoryPalette.map(s =>
@@ -8591,7 +8594,7 @@ function openLocDetail(slug, keepTab) {
         <div class="cdet-panel" data-panel="atm">${editPanel('atm', atmViewHtml, atmEditHtml)}</div>
         <div class="cdet-panel" data-panel="vtm">${editPanel('vtm', vtmViewHtml, vtmEditHtml)}</div>
         <div class="cdet-panel" data-panel="sens">${editPanel('sens', sensViewHtml, sensEditHtml)}</div>
-        <div class="cdet-panel" data-panel="keys">${editPanel('keys', keyPointsHtml, '', { noEdit: true })}</div>
+        <div class="cdet-panel" data-panel="keys">${editPanel('keys', keyPointsHtml, keyEditHtml)}</div>
         <div class="cdet-panel" data-panel="hooks">${editPanel('hooks', hooksViewHtml, hooksEditHtml)}</div>
         <div class="cdet-panel" data-panel="images">
           ${galleryHtml}
@@ -8728,6 +8731,8 @@ async function _locSavePanel(panel) {
     fields.vtmText = document.getElementById('locdet-vtm-ta')?.value || '';
   } else if (panel === 'sens') {
     fields.sensoryPalette = document.getElementById('locdet-sens-ta')?.value || '';
+  } else if (panel === 'keys') {
+    fields.keyPoints = document.getElementById('locdet-keys-ta')?.value || '';
   } else if (panel === 'hooks') {
     const hookInputs = document.querySelectorAll('#locdet-hooks-edit-list .hooks-input');
     fields.hooks = Array.from(hookInputs).map(i => i.value.trim()).filter(Boolean).join('\n');
