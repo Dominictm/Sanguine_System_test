@@ -3093,6 +3093,10 @@ a:focus-visible {
   font-size: var(--fs-lg);
 }
 
+.mod-create-chr-row select.chr-form-input {
+  min-height: 44px;
+}
+
 .chr-form-textarea {
   width: 96%;
   resize: vertical;

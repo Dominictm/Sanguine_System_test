@@ -295,6 +295,14 @@
         <div class="chr-modal-title">📖 Новый модуль</div>
         <div class="chr-modal-body mod-fill-body">
 
+          <!-- Показывается только при автономном открытии (не из хроники) -->
+          <div class="chr-form-group mod-create-chr-row" id="mod-create-chr-row" style="display:none">
+            <label class="chr-form-label">Хроника <span style="color:#e87070">*</span></label>
+            <select class="chr-form-input" id="mod-create-chr">
+              <option value="">— выбери хронику —</option>
+            </select>
+          </div>
+
           <div class="chr-form-group">
             <label class="chr-form-label">Название *</label>
             <input class="chr-form-input" id="mod-create-name" placeholder="Встреча в Элизиуме" autocomplete="off">
