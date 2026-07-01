@@ -160,5 +160,5 @@ if ($interactive) {
     try { $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown") } catch { }
 }
 
-# Exit code = number of remaining broken links (useful for pre-commit hooks / CI)
-exit $broken.Count
+# Exit code = broken non-image links only (images are gitignored and absent in CI by design)
+exit (@($broken | Where-Object { -not $_.IsImage }).Count)
