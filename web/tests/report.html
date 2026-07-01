@@ -127,7 +127,7 @@
   }
   .progress-fill {
     height: 100%;
-    width: 97%;
+    width: 98%;
     background: linear-gradient(90deg, var(--crimson), var(--blood));
     transition: width .6s ease;
   }
@@ -240,23 +240,23 @@
 
 <div class="report-header">
   <h1>Vampire: The Masquerade</h1>
-  <p class="subtitle">CHRONICLE MANAGER · TEST REPORT · 23.06.2026, 13:09:10</p>
+  <p class="subtitle">CHRONICLE MANAGER · TEST REPORT · 01.07.2026, 19:18:53</p>
   <span class="status-badge bad">5 FAILED</span>
 </div>
 
 <div class="summary-bar">
-  <div class="stat-box s-total"><span class="val">197</span><span class="lbl">TOTAL</span></div>
-  <div class="stat-box s-pass"> <span class="val">192</span> <span class="lbl">PASSED</span></div>
+  <div class="stat-box s-total"><span class="val">212</span><span class="lbl">TOTAL</span></div>
+  <div class="stat-box s-pass"> <span class="val">207</span> <span class="lbl">PASSED</span></div>
   <div class="stat-box s-fail"> <span class="val">5</span> <span class="lbl">FAILED</span></div>
-  <div class="stat-box s-dur">  <span class="val">2.19s</span><span class="lbl">DURATION</span></div>
-  <div class="stat-box s-pct">  <span class="val">97%</span><span class="lbl">PASS RATE</span></div>
+  <div class="stat-box s-dur">  <span class="val">1.67s</span><span class="lbl">DURATION</span></div>
+  <div class="stat-box s-pct">  <span class="val">98%</span><span class="lbl">PASS RATE</span></div>
 </div>
 <div class="progress-track"><div class="progress-fill"></div></div>
 
 <div class="results">
   
 <details class="suite suite-pass" open>
-  <summary><span class="suite-name">Parsers — unit</span><span class="suite-stat"><span class="s-pass">80✓</span></span></summary>
+  <summary><span class="suite-name">Parsers — unit</span><span class="suite-stat"><span class="s-pass">91✓</span></span></summary>
   <div class="suite-body">
 <details class="suite suite-pass" open>
   <summary><span class="suite-name">readPrompt — Format A (indented)</span><span class="suite-stat"><span class="s-pass">2✓</span></span></summary>
@@ -306,6 +306,25 @@
 <div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">browser parity — public/scripts.js _NTR mirrors CYRILLIC_TR</span></div>
 <div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">browser parity — public/scripts.js _LATIN_TR mirrors LATIN_TR</span></div>
 <div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">non-Cyrillic diacritics fold (Düsseldorf→dusseldorf, Şanlıurfa→sanliurfa)</span></div></div>
+</details>
+
+<details class="suite suite-pass" open>
+  <summary><span class="suite-name">city.md — buildCityMd / parseCityMd</span><span class="suite-stat"><span class="s-pass">5✓</span></span></summary>
+  <div class="suite-body"><div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">round-trip сохраняет display, year, description и все секции</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">description читается из абзаца между H1 и первой секцией, чистит blockquote</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">пустые поля → плейсхолдеры, description дефолтный</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">факции-секция канонична (между political и locations)</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">browser parity — public/scripts.js CITY_SECTION_DEFS зеркалит CITY_SECTIONS</span></div></div>
+</details>
+
+<details class="suite suite-pass" open>
+  <summary><span class="suite-name">cityScaffold — единый каркас города</span><span class="suite-stat"><span class="s-pass">6✓</span></span></summary>
+  <div class="suite-body"><div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">содержит все обязательные файлы каркаса</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">интерполирует display/year в шапки файлов</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">keepDirs: 6 линеек персонажей + chronicles + rules + locations (без районов)</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">районы (CSV или массив) → locations/district_NN/&lt;slug&gt;</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">дедуп районов: одинаковый слаг схлопывается, нумерация подряд</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">source-guard: POST /api/cities и new_city.js вызывают cityScaffold (без хардкода)</span></div></div>
 </details>
 
 <details class="suite suite-pass" open>
@@ -592,7 +611,7 @@
 </details>
 
 <details class="suite suite-fail" open>
-  <summary><span class="suite-name">E2E — сквозной цикл хроники</span><span class="suite-stat"><span class="s-fail">5✗</span>&nbsp;<span class="s-pass">28✓</span></span></summary>
+  <summary><span class="suite-name">E2E — сквозной цикл хроники</span><span class="suite-stat"><span class="s-fail">5✗</span>&nbsp;<span class="s-pass">32✓</span></span></summary>
   <div class="suite-body">
 <details class="suite suite-pass" open>
   <summary><span class="suite-name">1. Город</span><span class="suite-stat"><span class="s-pass">3✓</span></span></summary>
@@ -602,10 +621,14 @@
 </details>
 
 <details class="suite suite-pass" open>
-  <summary><span class="suite-name">1b. CRUD городов (API)</span><span class="suite-stat"><span class="s-pass">8✓</span></span></summary>
+  <summary><span class="suite-name">1b. CRUD городов (API)</span><span class="suite-stat"><span class="s-pass">12✓</span></span></summary>
   <div class="suite-body"><div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">POST /api/cities создаёт город из полей</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">POST пробрасывает description и factions в city.md</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">POST синхронизирует «Карту фракций» (political_state.md) при создании</span></div>
 <div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">POST с уже существующим слагом → 409</span></div>
 <div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">POST без названия → 400</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">POST без года → 400</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">POST с нечисловым годом → 400</span></div>
 <div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">GET detail отдаёт parsed.display/year/секции</span></div>
 <div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">PUT (fields) переписывает display</span></div>
 <div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">PUT (raw cityMd) сохраняет произвольный markdown</span></div>
@@ -675,7 +698,7 @@
 </div>
 
 <div class="report-footer">
-  Generated by <span>Sanguine System</span> test suite &mdash; 23.06.2026, 13:09:10
+  Generated by <span>Sanguine System</span> test suite &mdash; 01.07.2026, 19:18:53
 </div>
 
 </body>
