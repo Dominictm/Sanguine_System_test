@@ -2868,6 +2868,13 @@ app.put('/api/locations/:slug/fields', express.json(), async (req, res) => {
         );
         continue;
       }
+      if (key === 'keyPoints') {
+        card = card.replace(
+          /(## (?:🗺️\s+)?Ключевые точки[^\n]*\n+)([\s\S]+?)(\n## |\n---|$)/i,
+          (_, hdr, _old, tail) => `${hdr}${value}\n${tail}`
+        );
+        continue;
+      }
       // Inline metadata fields
       const fieldMap = { district: 'Округ', neighborhood: 'Район', address: 'Адрес', control: 'Контроль', zone: 'Зона' };
       const mdKey = fieldMap[key];
@@ -2951,6 +2958,11 @@ function _locCardTemplate(name, district) {
 | **Постоянные фигуры** | |
 | **Угрозы** | |
 | **Маскарад** | 🔴/🟡/🟢 |
+---
+## 🗺️ Ключевые точки
+| Место | Описание |
+|---|---|
+| | |
 ---
 ## 🪝 Сценарные крючки
 1. [крючок]
