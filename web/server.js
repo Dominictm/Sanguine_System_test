@@ -151,6 +151,7 @@ const ACTION_MAP = {
   'POST /api/chronicles/:slug/recap':         req => `📺 Рекап «Ранее в хронике…»: ${req.params.slug}`,
   'GET /api/modules':                         req => `Модули — загрузка (${reqCity(req)})`,
   'GET /api/modules/:name':                   req => `Модуль: ${decodeURIComponent(req.params.name)}`,
+  'PUT /api/chronicles/:chr/modules/:mod/fields': req => `✏  Редактирование полей модуля: ${req.params.mod} (${req.params.chr})`,
   'GET /api/chronicle':                       req => `Хроника (${reqCity(req)})`,
   'GET /api/threads':                         req => `Открытые нити (${reqCity(req)})`,
   'GET /api/integrity':                       req => `Проверка целостности (${reqCity(req)})`,
@@ -1911,6 +1912,7 @@ app.put('/api/chronicles/:chr/modules/:mod/fields', express.json(), async (req, 
     const city = reqCity(req);
     const { chr, mod } = req.params;
     const fields = req.body?.fields || {};
+    const skipped = [];
 
     const modPath = path.join(chroniclesDir(city), chr, 'modules', mod, `${mod}.md`);
     let raw = await fs.readFile(modPath, 'utf-8').catch(() => null);
@@ -1930,6 +1932,8 @@ app.put('/api/chronicles/:chr/modules/:mod/fields', express.json(), async (req, 
         const cellRe = new RegExp(`(\\|\\s*\\*\\*${label}\\*\\*\\s*\\|\\s*)([^|\\n]*)(\\|)`);
         if (cellRe.test(raw)) {
           raw = raw.replace(cellRe, `$1${v} $3`);
+        } else {
+          skipped.push(key);
         }
 
       } else if (key === 'description') {
@@ -1967,7 +1971,7 @@ app.put('/api/chronicles/:chr/modules/:mod/fields', express.json(), async (req, 
     await writeFileAtomic(modPath, raw, 'utf-8');
     delete _cache[city];
     console.log(`[mod-fields] ${city}/${chr}/${mod} →`, Object.keys(fields).join(', '));
-    res.json({ ok: true });
+    res.json({ ok: true, ...(skipped.length ? { skipped } : {}) });
   } catch (e) {
     console.error('[mod-fields]', e.message);
     serverError(res, e);
