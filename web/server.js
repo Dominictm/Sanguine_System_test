@@ -153,6 +153,7 @@ const ACTION_MAP = {
   'GET /api/modules/:name':                   req => `Модуль: ${decodeURIComponent(req.params.name)}`,
   'PUT /api/chronicles/:chr/modules/:mod/fields': req => `✏  Редактирование полей модуля: ${req.params.mod} (${req.params.chr})`,
   'PUT /api/chronicles/:chr/modules/:mod/scenario': req => `📝 Сценарий модуля: ${req.params.mod} (${req.params.chr})`,
+  'POST /api/chronicles/:chr/modules/:mod/npc': req => `👤 Добавление НПС в модуль: ${req.params.mod} (${req.params.chr})`,
   'GET /api/chronicle':                       req => `Хроника (${reqCity(req)})`,
   'GET /api/threads':                         req => `Открытые нити (${reqCity(req)})`,
   'GET /api/integrity':                       req => `Проверка целостности (${reqCity(req)})`,
@@ -2004,6 +2005,131 @@ app.put('/api/chronicles/:chr/modules/:mod/scenario', express.json(), async (req
     res.json({ ok: true });
   } catch (e) {
     console.error('[mod-scenario]', e.message);
+    serverError(res, e);
+  }
+});
+
+// ── Add single NPC to module ───────────────────────────────────────────────────
+
+app.post('/api/chronicles/:chr/modules/:mod/npc', express.json(), async (req, res) => {
+  try {
+    const city = reqCity(req);
+    const { chr, mod } = req.params;
+    if (chr.includes('..') || mod.includes('..'))
+      return res.status(400).json({ error: 'Недопустимое имя' });
+
+    const { name, group = 'modular', initOnly = false } = req.body || {};
+
+    const modDir = path.join(chroniclesDir(city), chr, 'modules', mod);
+    if (!await fs.stat(modDir).catch(() => null))
+      return res.status(404).json({ error: 'Модуль не найден' });
+
+    const npcMdPath = path.join(modDir, 'npc.md');
+
+    // initOnly: create skeleton npc.md without adding any NPC line
+    if (initOnly) {
+      if (!await fs.stat(npcMdPath).catch(() => null)) {
+        const mainTxt2  = await fs.readFile(path.join(modDir, `${mod}.md`), 'utf-8').catch(() => '');
+        const titleM2   = mainTxt2.match(/^#\s+(.+)$/m);
+        const modTitle2 = titleM2 ? titleM2[1].replace(/[*[\]]/g, '').trim() : mod;
+        const skeleton = [
+          `# НПС модуля: ${modTitle2}`, ``,
+          `## 🎭 Игровые персонажи (ПК)`, ``,
+          `## 📚 Каноничные НПС`, ``,
+          `## 🆕 Модульные НПС`, ``,
+        ].join('\n');
+        await writeFileAtomic(npcMdPath, skeleton, 'utf-8');
+      }
+      delete _cache[city];
+      return res.json({ ok: true, initOnly: true });
+    }
+
+    if (!name?.trim()) return res.status(400).json({ error: 'Укажи имя' });
+
+    const nm     = name.trim();
+    const mainTxt  = await fs.readFile(path.join(modDir, `${mod}.md`), 'utf-8').catch(() => '');
+    const titleM   = mainTxt.match(/^#\s+(.+)$/m);
+    const modTitle = titleM ? titleM[1].replace(/[*[\]]/g, '').trim() : mod;
+
+    const allChars = await getAllCharacters(city);
+
+    let cardHref = '';
+    let createdCard = false;
+
+    if (group === 'modular') {
+      const npcSlug = slugify(nm);
+      if (!npcSlug) return res.status(400).json({ error: 'Не удалось сформировать slug из имени' });
+      const npcDir  = path.join(modDir, 'npc', npcSlug);
+      const npcFile = path.join(npcDir, `${npcSlug}.md`);
+      if (!await fs.stat(npcFile).catch(() => null)) {
+        await fs.mkdir(npcDir, { recursive: true });
+        const stub = [
+          `# 🎭 ${nm}`,
+          ``,
+          `> 🔗 [Модуль](../../${mod}.md)`,
+          ``,
+          `- **Слаг:** ${npcSlug}`,
+          `- **Родной город:** ${city}`,
+          `- **Линейка WoD:** mortals`,
+          `- **Статус:** 🔵 Активен`,
+          `- **Принадлежность:** Эпизодический персонаж`,
+          ``,
+          `## 🖼️ Изображения`,
+          `- ⏳ Изображение не предоставлено`,
+        ].join('\n');
+        await writeFileAtomic(npcFile, stub + '\n', 'utf-8');
+        createdCard = true;
+      }
+      cardHref = `npc/${npcSlug}/${npcSlug}.md`;
+
+    } else if (group === 'canon') {
+      const ch = allChars.find(c => _nameMatch(nm, c.name));
+      if (ch) cardHref = `../../../../characters/${ch.lineageFolder}/${ch.slug}/${ch.slug}.md`;
+
+    } else if (group === 'pc') {
+      const ch = allChars.find(c => _nameMatch(nm, c.name));
+      if (ch) cardHref = `../../../../characters/${ch.lineageFolder}/${ch.slug}/${ch.slug}.md`;
+    }
+
+    // Read current npc.md (create skeleton if missing)
+    let npcRaw = await fs.readFile(npcMdPath, 'utf-8').catch(() => '');
+    if (!npcRaw) {
+      npcRaw = [
+        `# НПС модуля: ${modTitle}`,
+        ``,
+        `## 🎭 Игровые персонажи (ПК)`,
+        ``,
+        `## 📚 Каноничные НПС`,
+        ``,
+        `## 🆕 Модульные НПС`,
+        ``,
+      ].join('\n');
+    }
+
+    // Build new line
+    const line = cardHref
+      ? `- ${nm} — ${group === 'pc' ? 'Персонаж игрока' : 'НПС'} → 🔗 [Карточка](${cardHref})`
+      : `- ${nm} — ${group === 'pc' ? 'Персонаж игрока' : 'НПС'}`;
+
+    // Insert line under the appropriate section heading
+    const headings = {
+      pc:      /^## 🎭 Игровые персонажи/m,
+      canon:   /^## 📚 Каноничные НПС/m,
+      modular: /^## 🆕 Модульные НПС/m,
+    };
+    const re = headings[group];
+    if (re && re.test(npcRaw)) {
+      npcRaw = npcRaw.replace(re, (heading) => `${heading}\n${line}`);
+    } else {
+      npcRaw += `\n${line}\n`;
+    }
+
+    await writeFileAtomic(npcMdPath, npcRaw, 'utf-8');
+    delete _cache[city];
+    console.log(`[mod-npc-add] ${city}/${chr}/${mod} → ${nm} (${group})`);
+    res.json({ ok: true, name: nm, group, createdCard, cardHref });
+  } catch (e) {
+    console.error('[mod-npc-add]', e.message);
     serverError(res, e);
   }
 });
