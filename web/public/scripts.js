@@ -2328,11 +2328,12 @@ let _modDeleteTarget  = null; // { chr, mod }
 let _modDeleteSource  = 'chr-detail'; // 'chr-detail' | 'modules-page'
 let _modSlugEdited    = false;
 let _modCreateStandalone = false; // true — открыт не из хроники, нужен select
+let _modCreateOpening = false;
 
 function _getModCreateChr() {
-  return _modCreateStandalone
-    ? document.getElementById('mod-create-chr').value.trim()
-    : _chrDetailSlug;
+  if (!_modCreateStandalone) return _chrDetailSlug;
+  const el = document.getElementById('mod-create-chr');
+  return el ? el.value.trim() : '';
 }
 
 async function _loadChrSelect() {
@@ -2769,27 +2770,33 @@ document.getElementById('btn-create-module-in-chr').addEventListener('click', ()
 });
 
 async function openModCreateModal(standalone) {
-  _modCreateStandalone = standalone;
-  _createPCs  = []; _createNPCs = [];
-  ['mod-create-name','mod-create-time','mod-create-slug','mod-create-content'].forEach(id => {
-    const el = document.getElementById(id); if (el) el.value = '';
-  });
-  document.getElementById('mod-create-pcs').innerHTML  = '';
-  document.getElementById('mod-create-npcs').innerHTML = '';
-  document.getElementById('mod-create-error').style.display = 'none';
-  _modSlugEdited = false;
+  if (_modCreateOpening) return;
+  _modCreateOpening = true;
+  try {
+    _modCreateStandalone = standalone;
+    _createPCs  = []; _createNPCs = [];
+    ['mod-create-name','mod-create-time','mod-create-slug','mod-create-content'].forEach(id => {
+      const el = document.getElementById(id); if (el) el.value = '';
+    });
+    document.getElementById('mod-create-pcs').innerHTML  = '';
+    document.getElementById('mod-create-npcs').innerHTML = '';
+    document.getElementById('mod-create-error').style.display = 'none';
+    _modSlugEdited = false;
 
-  const chrRow = document.getElementById('mod-create-chr-row');
-  if (standalone) {
-    chrRow.style.display = '';
-    await _loadChrSelect();
-  } else {
-    chrRow.style.display = 'none';
+    const chrRow = document.getElementById('mod-create-chr-row');
+    if (standalone) {
+      chrRow.style.display = '';
+      await _loadChrSelect();
+    } else {
+      chrRow.style.display = 'none';
+    }
+
+    document.getElementById('mod-create-modal').classList.add('open');
+    setTimeout(() => document.getElementById('mod-create-name').focus(), 50);
+    _populateCharDatalist('mod-create-pc-list', 'mod-create-npc-list');
+  } finally {
+    _modCreateOpening = false;
   }
-
-  document.getElementById('mod-create-modal').classList.add('open');
-  setTimeout(() => document.getElementById('mod-create-name').focus(), 50);
-  _populateCharDatalist('mod-create-pc-list', 'mod-create-npc-list');
 }
 
 document.getElementById('mod-create-name').addEventListener('input', e => {
