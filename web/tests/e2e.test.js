@@ -270,7 +270,7 @@ describe('E2E — сквозной цикл хроники', () => {
   // Пишущая генерация (лист V20) безопасна — всё внутри одноразового города.
 
   describe('2b. AI-генерация (mock)', () => {
-    const VICTOR = encodeURIComponent('Виктор Ламбер');
+    const VICTOR = 'viktor_lamber'; // slug, не имя — API принимает только slug
 
     it('POST sheet/generate создаёт и сохраняет лист V20', async () => {
       const r = await post(`/api/characters/${VICTOR}/sheet/generate?city=${CITY}`, {});
@@ -315,7 +315,7 @@ describe('E2E — сквозной цикл хроники', () => {
     });
 
     it('DELETE архивирует папку в _deleted', async () => {
-      const r = await httpReq('DELETE', `/api/characters/${encodeURIComponent(DELNAME)}?city=${CITY}`, null);
+      const r = await httpReq('DELETE', `/api/characters/${DELSLUG}?city=${CITY}`, null);
       assert.strictEqual(r.status, 200, `HTTP ${r.status}: ${r.raw}`);
       assert.ok(r.json?.ok, `ok=false: ${r.raw}`);
       assert.ok(!fileExists(`cities/${CITY}/characters/mortals/${DELSLUG}/`), 'исходная папка осталась');
