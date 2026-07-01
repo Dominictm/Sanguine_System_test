@@ -9195,6 +9195,10 @@ tr.rumor-told:hover .rumor-cb-cell {
   padding: 10px 0 4px;
 }
 
+.loc-gen-spinner {
+  flex-shrink: 0;
+}
+
 .loc-edit-gen-hint {
   font-size: var(--fs-sm);
   color: var(--muted);

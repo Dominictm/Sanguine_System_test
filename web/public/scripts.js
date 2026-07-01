@@ -9487,8 +9487,10 @@ async function runLocFieldRegen(field) {
   const slug = _locEditSlug;
   const name = document.getElementById('loc-edit-name').value.trim();
   const context = document.getElementById('loc-edit-context').value.trim();
-  const hint = document.getElementById('loc-edit-gen-hint');
-  hint.textContent = '⏳ Генерация...';
+  const hint    = document.getElementById('loc-edit-gen-hint');
+  const spinner = document.getElementById('loc-gen-spinner');
+  hint.textContent = '';
+  spinner.style.display = '';
 
   try {
     const r = await fetch(`/api/locations/generate?city=${encodeURIComponent(CITY)}`, {
@@ -9505,6 +9507,8 @@ async function runLocFieldRegen(field) {
     hint.textContent = '✓ Готово';
   } catch (e) {
     hint.textContent = `⚠ ${e.message}`;
+  } finally {
+    spinner.style.display = 'none';
   }
 }
 
@@ -9514,10 +9518,12 @@ async function runLocFullGen() {
   const context = document.getElementById('loc-edit-context').value.trim();
   if (!name) { document.getElementById('loc-edit-error').textContent = 'Укажите название для генерации'; document.getElementById('loc-edit-error').style.display = ''; return; }
 
-  const hint = document.getElementById('loc-edit-gen-hint');
-  const btn  = document.getElementById('loc-edit-gen-full-btn');
-  hint.textContent = '⏳ Генерирую карточку...';
+  const hint    = document.getElementById('loc-edit-gen-hint');
+  const btn     = document.getElementById('loc-edit-gen-full-btn');
+  const spinner = document.getElementById('loc-gen-spinner');
+  hint.textContent = '';
   btn.disabled = true;
+  spinner.style.display = '';
 
   try {
     const r = await fetch(`/api/locations/generate?city=${encodeURIComponent(CITY)}`, {
@@ -9543,6 +9549,7 @@ async function runLocFullGen() {
     hint.textContent = `⚠ ${e.message}`;
   } finally {
     btn.disabled = false;
+    spinner.style.display = 'none';
   }
 }
 
