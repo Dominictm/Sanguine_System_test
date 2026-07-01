@@ -117,21 +117,6 @@ if %errorlevel% == 0 (
     exit /b 0
 )
 
-rem --- TgWsProxy (локальный HTTP-прокси для Gemini AI) -------------------
-rem Нужен для доступа к generativelanguage.googleapis.com через туннель.
-rem Конфигурация: web/.env -> HTTPS_PROXY=http://127.0.0.1:12334
-if exist "%~dp0TgWsProxy_windows.exe" (
-    tasklist /FI "IMAGENAME eq TgWsProxy_windows.exe" 2>nul | find "TgWsProxy_windows.exe" > nul
-    if errorlevel 1 (
-        echo   Starting TgWsProxy - AI proxy...
-        start /B "" "%~dp0TgWsProxy_windows.exe" --portable
-        timeout /t 2 /nobreak > nul
-    ) else (
-        echo   TgWsProxy already running.
-    )
-    echo.
-)
-
 cd /d "%~dp0web"
 
 if not exist "node_modules\" (

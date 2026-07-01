@@ -1833,8 +1833,9 @@ ${newNpcs.map((n, i) => `${i + 1}. ${n.name}`).join('\n')}
       timelineWarnings,
     });
   } catch (e) {
-    console.error('[fill-module]', e.message);
-    res.status(500).json({ ok: false, error: e.message });
+    console.error('[fill-module]', e.message, e.cause || e.stack || '');
+    const detail = e.cause ? `${e.message}: ${e.cause?.message || e.cause}` : e.message;
+    res.status(500).json({ ok: false, error: detail });
   }
 });
 

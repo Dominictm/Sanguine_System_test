@@ -17,7 +17,8 @@ desktop.ini
 # Local secrets
 web/.env
 
-# TgWsProxy config/data (binary committed, data ignored)
+# Local proxy tool (binary, not committed)
+TgWsProxy_windows.exe
 TgWsProxy_windows_arm64.exe
 TgWsProxy_data/
 
