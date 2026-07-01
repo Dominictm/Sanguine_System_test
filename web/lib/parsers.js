@@ -584,7 +584,7 @@ function parseLocation(rawContent, folderName) {
     : [];
 
   // Key points table (## Ключевые точки...)
-  const keyM = content.match(/## (?:Ключевые точки[^\n]*)\n+([\s\S]+?)(?=\n## |\n---|$)/i);
+  const keyM = content.match(/## (?:🗺️\s+)?Ключевые точки[^\n]*\n+([\s\S]+?)(?=\n## |\n---|$)/i);
   if (keyM) {
     loc.keyPoints = (keyM[1].match(/^\|[^|\n]+\|[^|\n]+\|/gm) || [])
       .filter(r => !r.match(/[-]{3}/) && !r.match(/^\|\s*\*?\*?(?:Место|Place|Параметр)\*?\*?\s*\|/i))
