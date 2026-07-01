@@ -162,9 +162,23 @@ function cityScaffold(fields = {}) {
 `,
   };
 
+  files['chronicles/sluchaynye_sobytiya/chronicle.md'] =
+`# 📂 Случайные события
+
+| **Статус:** | 🟡 Активна |
+| **Скрыта** | да |
+
+> Хроника для случайных/фоновых событий города. Не отображается в индексе хроник.
+`;
+  files['chronicles/sluchaynye_sobytiya/events.md'] =
+`# 📅 События — Случайные события
+
+`;
+
   const keepDirs = [
     ...['vampires', 'fairies', 'mortals', 'werewolves', 'mages', 'hunters'].map(l => `characters/${l}`),
     'chronicles',
+    'chronicles/sluchaynye_sobytiya/modules',
     'rules',
   ];
   if (districts.length) {
