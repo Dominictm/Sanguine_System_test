@@ -352,7 +352,7 @@ async function findLocMdPath(slug, city = DEFAULT_CITY) {
     let entries;
     try { entries = await fs.readdir(dir, { withFileTypes: true }); } catch { return null; }
     for (const e of entries) {
-      if (e.name.startsWith('.')) continue;
+      if (e.name.startsWith('.') || e.name.startsWith('_')) continue;
       const full = path.join(dir, e.name);
       if (e.isDirectory()) { const r = await walk(full); if (r) return r; }
       else if (e.name.endsWith('.md')) {
@@ -376,7 +376,7 @@ async function getAllLocations(city = DEFAULT_CITY) {
     let entries;
     try { entries = await fs.readdir(dir, { withFileTypes: true }); } catch { return; }
     for (const entry of entries) {
-      if (entry.name.startsWith('.') || entry.name === '.gitkeep') continue;
+      if (entry.name.startsWith('.') || entry.name.startsWith('_') || entry.name === '.gitkeep') continue;
       const fullPath = path.join(dir, entry.name);
       if (entry.isDirectory()) {
         await walk(fullPath);
@@ -3377,16 +3377,22 @@ ${_locCardTemplate(locName, district?.trim() || '')}
   } catch (e) { serverError(res, e); }
 });
 
-// ── DELETE /api/locations/:slug — remove location folder ──────────────────────
+// ── DELETE /api/locations/:slug — soft-delete (move to locations/_deleted/) ───
+// Обратимо, по аналогии с персонажами и городами: папка локации переезжает в
+// locations/_deleted/<slug>_<timestamp>/, обходы локаций пропускают _-папки.
 app.delete('/api/locations/:slug', async (req, res) => {
   try {
     const slug   = decodeURIComponent(req.params.slug);
     const city   = reqCity(req);
     const mdPath = await findLocMdPath(slug, city);
     if (!mdPath) return res.status(404).json({ error: 'Локация не найдена' });
-    await fs.rm(path.dirname(mdPath), { recursive: true, force: true });
+    const trashRoot = path.join(locsDir(city), '_deleted');
+    await fs.mkdir(trashRoot, { recursive: true });
+    const dst = path.join(trashRoot, `${slug}_${Date.now()}`);
+    await fs.rename(path.dirname(mdPath), dst);
     delete _locCache[city];
-    res.json({ ok: true });
+    console.log(`[delete-location] ${city}/${slug} → locations/_deleted/${path.basename(dst)}`);
+    res.json({ ok: true, movedTo: `locations/_deleted/${path.basename(dst)}` });
   } catch (e) { serverError(res, e); }
 });
 
