@@ -29,6 +29,7 @@ const {
 const { C, serverError, aiRateLimit } = require('./lib/http');
 const { router: libraryRouter, loadDisciplines, loadPsychics } = require('./routes/library');
 const { router: citiesRouter } = require('./routes/cities');
+const { router: archiveRouter } = require('./routes/archive');
 // Load .env file (secrets not committed to git)
 try {
   const envRaw = require('fs').readFileSync(path.join(__dirname, '.env'), 'utf-8');
@@ -177,6 +178,7 @@ app.use((req, res, next) => {
 // ── Доменные роутеры (routes/*.js) ────────────────────────────────────────────
 app.use(libraryRouter);
 app.use(citiesRouter);
+app.use(archiveRouter);
 
 // ── Markdown / card / chronicle parsers ───────────────────────────────────────
 // categorizeRel, parseCharacter, parseLocation, parseChronicle* and the md* helpers
@@ -2944,55 +2946,6 @@ app.get('/api/chronicle', async (req, res) => {
     const parsed = parseChronicle(raw);          // title + World State from archive/events.md
     parsed.events = await aggregateEvents(city); // full events from chronicles/<chr>/events.md
     res.json({ exists: true, ...parsed });
-  } catch (e) { serverError(res, e); }
-});
-
-// Raw markdown archive docs — rendered client-side with the lore renderer.
-const archiveDoc = file => async (req, res) => {
-  try {
-    const content = await fs.readFile(path.join(archiveDir(reqCity(req)), file), 'utf-8').catch(() => null);
-    res.json({ exists: content !== null, content: content || '' });
-  } catch (e) { serverError(res, e); }
-};
-app.get('/api/timeline', archiveDoc('timeline.md'));          // historical lore (B3)
-app.get('/api/factions', archiveDoc('political_state.md'));   // C1 — faction map
-app.get('/api/visitors', archiveDoc('visitors.md'));          // C3 — cross-city guests
-
-// C2 — rumor tables (Elysium d20 / Dreaming d20)
-app.get('/api/rumors', async (req, res) => {
-  try {
-    const which = req.query.type === 'dreaming' ? 'rumors_dreaming.md' : 'rumors_elysium.md';
-    const content = await fs.readFile(path.join(archiveDir(reqCity(req)), which), 'utf-8').catch(() => null);
-    res.json({ exists: content !== null, content: content || '', type: req.query.type === 'dreaming' ? 'dreaming' : 'elysium' });
-  } catch (e) { serverError(res, e); }
-});
-
-// PUT — write archive docs back to disk
-const _writeArchiveDoc = (file) => async (req, res) => {
-  try {
-    const city    = reqCity(req);
-    const content = req.body?.content;
-    if (typeof content !== 'string') return res.status(400).json({ error: 'content required' });
-    const dir = archiveDir(city);
-    await fs.mkdir(dir, { recursive: true });
-    await writeFileAtomic(path.join(dir, file), content, 'utf-8');
-    res.json({ ok: true });
-  } catch (e) { serverError(res, e); }
-};
-app.put('/api/timeline', express.json(), _writeArchiveDoc('timeline.md'));
-app.put('/api/factions', express.json(), _writeArchiveDoc('political_state.md'));
-app.put('/api/visitors', express.json(), _writeArchiveDoc('visitors.md'));
-app.put('/api/rumors', express.json(), async (req, res) => {
-  try {
-    const city    = reqCity(req);
-    const type    = req.body?.type === 'dreaming' ? 'dreaming' : 'elysium';
-    const content = req.body?.content;
-    if (typeof content !== 'string') return res.status(400).json({ error: 'content required' });
-    const file = type === 'dreaming' ? 'rumors_dreaming.md' : 'rumors_elysium.md';
-    const dir  = archiveDir(city);
-    await fs.mkdir(dir, { recursive: true });
-    await writeFileAtomic(path.join(dir, file), content, 'utf-8');
-    res.json({ ok: true });
   } catch (e) { serverError(res, e); }
 });
 
