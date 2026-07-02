@@ -10070,7 +10070,8 @@ async function runLocFullGen() {
 // Module Locations Panel
 // ═══════════════════════════════════════════════════════════════════════════
 
-function _renderModuleLocPanel(data) {
+async function _renderModuleLocPanel(data) {
+  await ensureLocsLoaded();
   const panel = document.getElementById('modp-panel-locations');
   const { chronicle, name: modName } = STATE.currentModule || {};
 
@@ -10095,7 +10096,7 @@ function _renderModuleLocPanel(data) {
         ${extracted.map(loc => {
           const locName = loc.name || '';
           const isLinked = linked.some(
-            l => (l.name || l.title || l.slug || '').toLowerCase() === locName.toLowerCase());
+            l => (l.title || '').toLowerCase() === locName.toLowerCase());
           const existsInCity = (STATE.locations || []).find(
             l => (l.name || l.title || '').toLowerCase() === locName.toLowerCase());
           const attachSlug = existsInCity?.slug;
@@ -10185,37 +10186,40 @@ function _renderModuleLocPanel(data) {
   });
 
   // Quick-attach existing location from mentioned list
-  panel.addEventListener('click', e => {
-    const attachBtn = e.target.closest('[data-attach-slug]');
-    if (attachBtn) {
-      const slug = attachBtn.dataset.attachSlug;
-      if (!slug) return;
-      attachBtn.disabled = true;
-      _modLocLink(chronicle, modName, slug).catch(() => { attachBtn.disabled = false; });
-      return;
-    }
+  const mentionedList = panel.querySelector('.modp-locs-mentioned-list');
+  if (mentionedList) {
+    mentionedList.addEventListener('click', e => {
+      const attachBtn = e.target.closest('[data-attach-slug]');
+      if (attachBtn) {
+        const slug = attachBtn.dataset.attachSlug;
+        if (!slug) return;
+        attachBtn.disabled = true;
+        _modLocLink(chronicle, modName, slug).catch(() => { attachBtn.disabled = false; });
+        return;
+      }
 
-    // Create new location card with pre-filled name
-    const createLocBtn = e.target.closest('[data-create-name]');
-    if (createLocBtn) {
-      const locName = createLocBtn.dataset.createName;
-      if (typeof openLocEditModal === 'function') {
-        openLocEditModal(null);
-        // Pre-fill name after modal opens (next tick)
-        setTimeout(() => {
-          const nameInput = document.getElementById('loc-edit-name');
-          if (nameInput) nameInput.value = locName;
-        }, 0);
-      } else {
-        const modal = document.getElementById('loc-edit-modal');
-        if (modal) {
-          modal.style.display = 'flex';
-          const nameInput = document.getElementById('loc-edit-name');
-          if (nameInput) nameInput.value = locName;
+      // Create new location card with pre-filled name
+      const createLocBtn = e.target.closest('[data-create-name]');
+      if (createLocBtn) {
+        const locName = createLocBtn.dataset.createName;
+        if (typeof openLocEditModal === 'function') {
+          openLocEditModal(null);
+          // Pre-fill name after modal opens (next tick)
+          setTimeout(() => {
+            const nameInput = document.getElementById('loc-edit-name');
+            if (nameInput) nameInput.value = locName;
+          }, 0);
+        } else {
+          const modal = document.getElementById('loc-edit-modal');
+          if (modal) {
+            modal.style.display = 'flex';
+            const nameInput = document.getElementById('loc-edit-name');
+            if (nameInput) nameInput.value = locName;
+          }
         }
       }
-    }
-  });
+    });
+  }
 
   // Create + link
   document.getElementById('modp-loc-gen-save').addEventListener('click', async () => {
@@ -10279,7 +10283,7 @@ async function _modLocLink(chronicle, modName, slug) {
     // Re-fetch module detail only — _renderModuleLocPanel uses data.linkedLocations, not STATE.locations
     const dataR = await fetch(`/api/chronicles/${encodeURIComponent(chronicle)}/modules/${encodeURIComponent(modName)}/detail?city=${encodeURIComponent(CITY)}`);
     const data  = await dataR.json();
-    _renderModuleLocPanel(data);
+    await _renderModuleLocPanel(data);
   } catch (e) { alert(e.message); }
 }
 
@@ -10292,7 +10296,7 @@ async function _modLocUnlink(chronicle, modName, slug) {
     if (!r.ok) throw new Error((await r.json()).error || r.statusText);
     const dataR = await fetch(`/api/chronicles/${encodeURIComponent(chronicle)}/modules/${encodeURIComponent(modName)}/detail?city=${encodeURIComponent(CITY)}`);
     const data  = await dataR.json();
-    _renderModuleLocPanel(data);
+    await _renderModuleLocPanel(data);
   } catch (e) { alert(e.message); }
 }
 
