@@ -20,7 +20,7 @@ const {
   ROOT, cityDir, charsDir, locsDir, chroniclesDir, archiveDir,
   reqCity, writeFileAtomic, invalidateChars,
   getAllCharacters, getAllLocations, listModules, tableCell, LINEAGE_MAP,
-  _nameMatch,
+  _nameMatch, rmdir,
 } = require('../lib/db');
 const { slugify, parseEvent } = require('../lib/parsers');
 

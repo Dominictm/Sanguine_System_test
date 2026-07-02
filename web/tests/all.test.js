@@ -1350,6 +1350,28 @@ describe('API — integration', () => {
         { method: 'POST', body: JSON.stringify({ name, description: 'тестовый' }) });
       assert.equal(dup.status, 409);
     });
+
+    it('DELETE /api/chronicles/:chr/modules/:mod — неизвестный модуль → 404', async () => {
+      const { status } = await apiJson(`/api/chronicles/__nochron__/modules/__nomod__${CITY}`, { method: 'DELETE' });
+      assert.equal(status, 404);
+    });
+
+    it('DELETE /api/chronicles/:chr/modules/:mod — создать и удалить модуль (регрессия: rmdir не был импортирован в routes/modules.js)', async () => {
+      if (!chr) return;
+      const delMod = `test_del_mod_${Date.now()}`;
+      const create = await apiJson(`/api/chronicles/${encodeURIComponent(chr)}/modules${CITY}`, {
+        method: 'POST', body: JSON.stringify({ name: delMod, time: '2010', slug: delMod }),
+      });
+      assert.equal(create.status, 200);
+      const delModDir = path.join(CITY_ROOT, 'chronicles', chr, 'modules', delMod);
+      assert.ok(await fs.stat(delModDir).catch(() => null), 'модуль не был создан для теста');
+
+      const del = await apiJson(`/api/chronicles/${encodeURIComponent(chr)}/modules/${encodeURIComponent(delMod)}${CITY}`,
+        { method: 'DELETE' });
+      assert.equal(del.status, 200);
+      assert.ok(del.body.ok);
+      assert.equal(await fs.stat(delModDir).catch(() => null), null, 'папка модуля должна быть удалена');
+    });
   });
 
   // ── Rumors — write round-trip (restores original on teardown) ────────────────
