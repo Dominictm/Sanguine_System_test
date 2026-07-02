@@ -8841,13 +8841,19 @@ async function _reloadModulePage() {
   const chr = STATE.currentModule?.chronicle;
   const mod = STATE.currentModule?.name;
   if (!chr || !mod) return;
-  const activeTab = document.querySelector('.modp-tab.active')?.dataset?.tab || 'info';
+  const activeTab = document.querySelector('.modp-tab.active')?.dataset?.modtab || 'info';
   const data = await fetch(
     `/api/chronicles/${encodeURIComponent(chr)}/modules/${encodeURIComponent(mod)}/detail${window.location.search}`
   ).then(r => r.json()).catch(() => null);
   if (data) {
     STATE.currentModuleData = data;
-    renderModulePage(data, activeTab);
+    renderModulePage(data);
+    if (activeTab && activeTab !== 'info') {
+      document.querySelectorAll('.modp-tab').forEach(b =>
+        b.classList.toggle('active', b.dataset.modtab === activeTab));
+      document.querySelectorAll('.modp-panel').forEach(p =>
+        p.classList.toggle('active', p.id === `modp-panel-${activeTab}`));
+    }
   }
 }
 
