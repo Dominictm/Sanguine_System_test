@@ -1197,6 +1197,88 @@ describe('API — integration', () => {
     });
   });
 
+  // ── Module write endpoints — round-trip (restores originals on teardown) ─────
+  describe('Module write endpoints', () => {
+    let chr = null, mod = null, modDir = null;
+    let origMd = null, origScenario = null, origNpc = null, npcExisted = false, scenarioExisted = false;
+
+    before(async () => {
+      const { body } = await apiJson(`/api/modules${CITY}`);
+      if (Array.isArray(body) && body.length) {
+        const m = body.find(x => x.chronicle && x.name) || body[0];
+        chr = m.chronicle; mod = m.name;
+        modDir = path.join(CITY_ROOT, 'chronicles', chr, 'modules', mod);
+        origMd       = await fs.readFile(path.join(modDir, `${mod}.md`), 'utf-8').catch(() => null);
+        origScenario = await fs.readFile(path.join(modDir, 'scenario.md'), 'utf-8').catch(() => null);
+        scenarioExisted = origScenario !== null;
+        origNpc      = await fs.readFile(path.join(modDir, 'npc.md'), 'utf-8').catch(() => null);
+        npcExisted   = origNpc !== null;
+      }
+    });
+    after(async () => {
+      if (!modDir) return;
+      if (origMd !== null) await fs.writeFile(path.join(modDir, `${mod}.md`), origMd, 'utf-8');
+      if (scenarioExisted) await fs.writeFile(path.join(modDir, 'scenario.md'), origScenario, 'utf-8');
+      else await fs.unlink(path.join(modDir, 'scenario.md')).catch(() => {});
+      if (npcExisted) await fs.writeFile(path.join(modDir, 'npc.md'), origNpc, 'utf-8');
+      else await fs.unlink(path.join(modDir, 'npc.md')).catch(() => {});
+    });
+
+    it('PUT /fields — path traversal → 400', async () => {
+      const { status } = await apiJson(`/api/chronicles/..%2F..%2Fetc/modules/x/fields${CITY}`,
+        { method: 'PUT', body: JSON.stringify({ fields: { title: 'x' } }) });
+      assert.ok(status === 400 || status === 404);
+    });
+    it('PUT /fields — unknown module → 404', async () => {
+      const { status } = await apiJson(`/api/chronicles/__nochron__/modules/__nomod__/fields${CITY}`,
+        { method: 'PUT', body: JSON.stringify({ fields: { title: 'x' } }) });
+      assert.equal(status, 404);
+    });
+    it('PUT /fields — title round-trip', async () => {
+      if (!modDir || origMd === null) return;
+      const marker = `__FLDTEST__ ${Date.now()}`;
+      const put = await apiJson(`/api/chronicles/${encodeURIComponent(chr)}/modules/${encodeURIComponent(mod)}/fields${CITY}`,
+        { method: 'PUT', body: JSON.stringify({ fields: { title: marker } }) });
+      assert.equal(put.status, 200); assert.ok(put.body.ok);
+      const raw = await fs.readFile(path.join(modDir, `${mod}.md`), 'utf-8');
+      assert.ok(raw.includes(`# ${marker}`));
+    });
+
+    it('PUT /scenario — empty → 400', async () => {
+      const { status } = await apiJson(`/api/chronicles/${CHR}/modules/${MOD}/scenario${CITY}`,
+        { method: 'PUT', body: JSON.stringify({ content: '' }) });
+      assert.equal(status, 400);
+    });
+    it('PUT /scenario — round-trip', async () => {
+      if (!modDir) return;
+      const marker = `__SCNTEST__ ${Date.now()}`;
+      const put = await apiJson(`/api/chronicles/${encodeURIComponent(chr)}/modules/${encodeURIComponent(mod)}/scenario${CITY}`,
+        { method: 'PUT', body: JSON.stringify({ content: marker }) });
+      assert.equal(put.status, 200);
+      const raw = await fs.readFile(path.join(modDir, 'scenario.md'), 'utf-8');
+      assert.ok(raw.includes(marker));
+    });
+
+    it('POST /npc — без имени → 400', async () => {
+      if (!modDir) return;
+      const { status } = await apiJson(`/api/chronicles/${encodeURIComponent(chr)}/modules/${encodeURIComponent(mod)}/npc${CITY}`,
+        { method: 'POST', body: JSON.stringify({}) });
+      assert.equal(status, 400);
+    });
+    it('POST /npc — добавление и дубликат → 409', async () => {
+      if (!modDir) return;
+      const name = `Тест НПС ${Date.now()}`;
+      const post = await apiJson(`/api/chronicles/${encodeURIComponent(chr)}/modules/${encodeURIComponent(mod)}/npc${CITY}`,
+        { method: 'POST', body: JSON.stringify({ name, description: 'тестовый' }) });
+      assert.ok(post.status === 200 || post.status === 201, `unexpected ${post.status}`);
+      const raw = await fs.readFile(path.join(modDir, 'npc.md'), 'utf-8');
+      assert.ok(raw.includes(name));
+      const dup = await apiJson(`/api/chronicles/${encodeURIComponent(chr)}/modules/${encodeURIComponent(mod)}/npc${CITY}`,
+        { method: 'POST', body: JSON.stringify({ name, description: 'тестовый' }) });
+      assert.equal(dup.status, 409);
+    });
+  });
+
   // ── Rumors — write round-trip (restores original on teardown) ────────────────
   describe('Rumors — write round-trip', () => {
     const file = path.join(CITY_ROOT, 'archive', 'rumors_elysium.md');

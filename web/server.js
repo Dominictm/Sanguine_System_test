@@ -1965,6 +1965,8 @@ app.put('/api/chronicles/:chr/modules/:mod/fields', express.json(), async (req, 
     const modPath = path.join(chroniclesDir(city), chr, 'modules', mod, `${mod}.md`);
     let raw = await fs.readFile(modPath, 'utf-8').catch(() => null);
     if (!raw) return res.status(404).json({ error: 'Файл модуля не найден' });
+    // BOM (из PowerShell-редакторов) ломает ^-якоря регексов — H1 молча не патчится
+    if (raw.charCodeAt(0) === 0xFEFF) raw = raw.slice(1);
 
     for (const [key, val] of Object.entries(fields)) {
       if (val === undefined || val === null) continue;
