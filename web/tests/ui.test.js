@@ -19,7 +19,7 @@ const path   = require('path');
 const { spawn } = require('child_process');
 const http   = require('http');
 
-const { Builder, By, until } = require('selenium-webdriver');
+const { Builder, By, until, Select } = require('selenium-webdriver');
 const chromeOpts = require('selenium-webdriver/chrome');
 
 const ROOT    = path.resolve(__dirname, '../..');
@@ -108,6 +108,11 @@ describe('UI — Selenium (Chrome)', () => {
     driver = await new Builder().forBrowser('chrome').setChromeOptions(opts).build();
     driver.manage().setTimeouts({ implicit: 0 });
 
+    // Подавляем онбординг-тур: его backdrop перехватывает клики по сайдбару/вкладкам
+    // в безголовом режиме, где нет реального пользователя, кликающего «Пропустить».
+    await driver.get(BASE);
+    await driver.executeScript("try { localStorage.setItem('sanguine-tour-seen', '1'); } catch (e) {}");
+
     // Bind driver helpers
     css     = (s, t = 15000) => driver.wait(until.elementLocated(By.css(s)), t, `нет элемента: ${s}`);
     id_     = (s, t = 15000) => driver.wait(until.elementLocated(By.id(s)),  t, `нет #${s}`);
@@ -183,7 +188,9 @@ describe('UI — Selenium (Chrome)', () => {
     });
 
     it('счётчик персонажей — число', async () => {
-      const txt = await (await id_('sv-chars')).getText();
+      // sv-modules всегда рендерится (не зависит от того, какие линейки активны
+      // в тестовом городе), в отличие от per-lineage sv-vampires/sv-mortals/...
+      const txt = await (await id_('sv-modules')).getText();
       assert.match(txt, /^\d+$/, `ожидалось число, получено «${txt}»`);
     });
   });
@@ -234,6 +241,11 @@ describe('UI — Selenium (Chrome)', () => {
       await navTo('tools');
       await openTab('new-npc');
       await typeIn('npc-name', 'Тестовый Носферату');
+      // npc-type по умолчанию 'vampire' — Пол/Клан/Секта обязательны, иначе
+      // клиент молча блокирует отправку (showToast) и out-new-npc не заполнится.
+      await new Select(await id_('npc-gender')).selectByValue('Мужской');
+      await typeIn('npc-clan', 'Носферату');
+      await typeIn('npc-sect', 'Камарилья');
       await (await id_('btn-new-npc')).click();
       await waitOut('out-new-npc', /✓|создан/i);
       assert.ok(fileExists(`cities/${UI_CITY}/characters/vampires/testovyy_nosferatu/testovyy_nosferatu.md`));

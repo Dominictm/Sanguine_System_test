@@ -854,27 +854,30 @@ async function runLocFullGen() {
     const { content } = await r.json();
     if (!content) throw new Error('Пустой ответ от AI');
 
-    // Parse generated content into form fields (rough extraction)
-    const atmM = content.match(/##\s*🎭\s*Атмосфера\s*\n+([\s\S]+?)(?=\n##|\n---|$)/i);
-    if (atmM) document.getElementById('loc-edit-atmosphere').value = atmM[1].trim();
+    // Парсинг делегирован /api/locations/parse-generated — тот же parseLocation
+    // (lib/parsers.js), которым парсятся сохранённые карточки локаций.
+    const parseR = await fetch(`/api/locations/parse-generated${window.location.search}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: content }),
+    });
+    if (!parseR.ok) throw new Error((await parseR.json()).error || parseR.statusText);
+    const parsed = await parseR.json();
 
-    const hooksM = content.match(/##\s*🪝\s*Сценарные крючки\s*\n+([\s\S]+?)(?=\n##|\n---|$)/i);
-    if (hooksM) document.getElementById('loc-edit-hooks').value = hooksM[1].trim();
+    if (parsed.atmosphere) document.getElementById('loc-edit-atmosphere').value = parsed.atmosphere;
+    if (parsed.hooks?.length) document.getElementById('loc-edit-hooks').value = parsed.hooks.map(h => `${h}`).join('\n');
 
     const promptM = content.match(/```\s*\n([\s\S]+?)```/);
     if (promptM) document.getElementById('loc-edit-image-prompt').value = promptM[1].trim();
 
-    const sensM = content.match(/##\s*👁️\s*Сенсорная палитра\s*\n+([\s\S]+?)(?=\n##|\n---|$)/i);
-    if (sensM) {
-      const tableRows = (sensM[1].match(/^\|[^|\n]+\|[^|\n]+\|/gm) || []).filter(r => !r.match(/[-]{3}/));
-      document.getElementById('loc-edit-sensory').value = tableRows.join('\n');
+    if (parsed.sensoryPalette?.length) {
+      document.getElementById('loc-edit-sensory').value =
+        parsed.sensoryPalette.map(s => `| **${s.channel}** | ${s.value} |`).join('\n');
     }
 
-    const vtmM = content.match(/##\s*🩸\s*Контекст[^\n]*\n+([\s\S]+?)(?=\n##|\n---|$)/i);
-    if (vtmM) {
-      // Only extract prose — table rows go through the structural table path,
-      // sending raw table rows as vtmText would prepend them above the existing table
-      const prose = vtmM[1].split('\n').filter(l => !l.startsWith('|') && l.trim()).join('\n').trim();
+    // Только проза — табличные строки идут отдельным структурным путём;
+    // отправка их же как vtmText задвоила бы таблицу поверх существующей.
+    if (parsed.vtmText) {
+      const prose = parsed.vtmText.split('\n').filter(l => !l.startsWith('|') && l.trim()).join('\n').trim();
       if (prose) document.getElementById('loc-edit-vtm-context').value = prose;
     }
 

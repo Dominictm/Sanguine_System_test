@@ -16,10 +16,31 @@ set CODE=%errorlevel%
 echo.
 if %CODE% neq 0 (
     echo  [FAILED]  exit code %CODE%
+    echo  Report: web\tests\report.html
+    echo.
+    pause
+    exit /b %CODE%
+)
+
+echo  [OK]  Unit + API + E2E passed
+echo  Report: web\tests\report.html
+echo.
+echo  =======================================================
+echo   UI (Selenium/Chrome, headless)
+echo  =======================================================
+echo.
+
+set HEADLESS=1
+call npm run test:ui
+
+set CODE=%errorlevel%
+
+echo.
+if %CODE% neq 0 (
+    echo  [FAILED]  UI tests, exit code %CODE%
 ) else (
     echo  [OK]  All tests passed
 )
-echo  Report: web\tests\report.html
 echo.
 
 pause

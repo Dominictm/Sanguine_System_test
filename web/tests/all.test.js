@@ -676,6 +676,33 @@ describe('API — integration', () => {
         assert.ok(loc.slug);
       }
     });
+
+    it('POST /api/locations/parse-generated парсит сырой AI-текст (общий с parseLocation)', async () => {
+      const text = `# Тестовая локация
+> **Название:** Тест | **Округ:** 1-й | **Район:** Тест | **Адрес:** ул. Тестовая | **Зона:** 🟡 | **Контроль:** Никто
+---
+## 🎭 Атмосфера
+Тестовая атмосфера в двух предложениях.
+## 🪝 Сценарные крючки
+1. Первый крючок.
+2. Второй крючок.
+`;
+      const { status, body } = await apiJson(`/api/locations/parse-generated${CITY}`, {
+        method: 'POST', body: JSON.stringify({ text }),
+      });
+      assert.equal(status, 200);
+      assert.equal(body.ok, true);
+      assert.match(body.atmosphere, /Тестовая атмосфера/);
+      assert.deepEqual(body.hooks, ['Первый крючок.', 'Второй крючок.']);
+    });
+
+    it('POST /api/locations/parse-generated без text → 400', async () => {
+      const { status, body } = await apiJson(`/api/locations/parse-generated${CITY}`, {
+        method: 'POST', body: JSON.stringify({}),
+      });
+      assert.equal(status, 400);
+      assert.equal(body.ok, false);
+    });
   });
 
   // ── Graph ──────────────────────────────────────────────────────────────────

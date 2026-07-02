@@ -12,7 +12,7 @@ const {
   ROOT, reqCity, locsDir, writeFileAtomic, invalidateLocs,
   getAllLocations, findLocMdPath,
 } = require('../lib/db');
-const { slugify, writePrompt } = require('../lib/parsers');
+const { slugify, writePrompt, parseLocation } = require('../lib/parsers');
 
 // ── Location card template (standalone) ──────────────────────────────────────
 function _locCardTemplate(name, district) {
@@ -341,6 +341,18 @@ ${_locCardTemplate(locName)}
 
       if (field) res.json({ value: result.trim() });
       else       res.json({ content: result.trim() });
+    } catch (e) { serverError(res, e); }
+  });
+
+  // ── POST /api/locations/parse-generated — общий парсер сырого AI-текста ───────
+  // Единый источник истины с parseLocation (lib/parsers.js), которым парсятся
+  // сохранённые карточки — раньше scripts.js дублировал эти regex своей копией.
+  router.post('/api/locations/parse-generated', express.json(), (req, res) => {
+    const { text } = req.body || {};
+    if (!text) return res.status(400).json({ ok: false, error: 'text required' });
+    try {
+      const parsed = parseLocation(text, 'parsed');
+      res.json({ ok: true, ...parsed });
     } catch (e) { serverError(res, e); }
   });
 
