@@ -3678,7 +3678,7 @@ function renderModulePage(data) {
       <input class="moddet-add-input" id="modp-npc-add-name"
         list="modp-npc-add-datalist" placeholder="Имя персонажа…" autocomplete="off" style="width:100%">
       <datalist id="modp-npc-add-datalist">
-        ${(STATE.characters || []).map(c => `<option value="${escHtml(c.name)}">`).join('')}
+        ${(STATE.characters || []).map(c => `<option value="${escAttr(c.name)}">`).join('')}
       </datalist>
     </div>
     <div style="margin-bottom:8px">
@@ -4042,7 +4042,7 @@ document.getElementById('modp-panel-npcs').addEventListener('click', e => {
         const r = await fetch(
           `/api/chronicles/${encodeURIComponent(chr)}/modules/${encodeURIComponent(mod)}/npc${window.location.search}`,
           { method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name: '', group: 'modular', initOnly: true }) }
+            body: JSON.stringify({ initOnly: true }) }
         );
         if (!r.ok) throw new Error(await r.text());
         await _reloadModulePage();
@@ -4067,6 +4067,7 @@ document.getElementById('modp-panel-npcs').addEventListener('click', e => {
       return;
     }
     const btn = e.target;
+    if (msg) { msg.style.display = 'none'; msg.textContent = ''; }
     btn.disabled = true;
     (async () => {
       try {
