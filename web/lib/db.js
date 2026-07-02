@@ -60,6 +60,14 @@ const LOCS_TTL  = 15_000;
 function invalidateChars(city) { if (city) delete _cache[city]; else _cache = {}; }
 function invalidateLocs(city)  { if (city) delete _locCache[city]; else _locCache = {}; }
 
+// Broken-link count from the last validate_links run — null = never validated.
+// Written by runValidationBackground (server.js) and the /api/tool, /api/run-tool
+// routes (routes/tools.js); read by /api/status, /api/integrity (routes/dashboard.js).
+// Shared module-level state so both routers agree without DI plumbing.
+let _brokenLinks = null;
+function getBrokenLinks()      { return _brokenLinks; }
+function setBrokenLinks(v)     { _brokenLinks = v; }
+
 const LINEAGE_MAP = {
   vampires: 'vampire', fairies: 'fairy', mortals: 'mortal',
   werewolves: 'werewolf', mages: 'mage', hunters: 'hunter'
@@ -253,6 +261,46 @@ function eventDateScore(dateStr) {
   return year * 100000000 + month * 1000000 + day * 10000 + hour * 100;
 }
 
+// Fuzzy name resolver (mirrors the /api/graph relationship matcher). Shared by
+// routes/dashboard.js (/api/integrity) and routes/tools.js (buildSessionPlan) — moved
+// here (E1.2d) so both use one implementation instead of drifting.
+function makeNameResolver(names) {
+  const idSet = new Set(names);
+  return function resolve(tgt) {
+    if (!tgt) return null;
+    if (idSet.has(tgt)) return tgt;
+    const tl = tgt.toLowerCase();
+    for (const id of idSet) if (id.toLowerCase() === tl) return id;
+    for (const id of idSet) {
+      const il = id.toLowerCase();
+      if (il.startsWith(tl) || tl.startsWith(il.split(' ')[0])) return id;
+    }
+    return null;
+  };
+}
+
+// charName → { has: bool, files: Set } describing the character's Journal_ folder
+async function getDiaryIndex(city, chars) {
+  const idx = {};
+  for (const c of chars) {
+    const jdir  = path.join(charsDir(city), c.lineageFolder, c.slug, 'journal');
+    const files = await fs.readdir(jdir).catch(() => null);
+    idx[c.name] = files ? { has: true, files: new Set(files) } : { has: false, files: new Set() };
+  }
+  return idx;
+}
+
+function eventMonthKey(dateStr) {
+  const s = (dateStr || '').toLowerCase();
+  const ym = s.match(/(\d{4})/);
+  if (!ym) return null;
+  const year = parseInt(ym[1]);
+  let month = null;
+  for (const [stem, n] of RU_MONTH_STEMS) { if (s.includes(stem)) { month = n; break; } }
+  if (!month) return null;
+  return { year, month, key: `${year}-${String(month).padStart(2, '0')}` };
+}
+
 // Aggregate all ### 📅 events from chronicles/<chr>/events.md (the real per-event detail).
 async function aggregateEvents(city = DEFAULT_CITY) {
   const out = [];
@@ -440,12 +488,14 @@ module.exports = {
   writeFileAtomic,
   CHARS_TTL, LOCS_TTL,
   invalidateChars, invalidateLocs,
+  getBrokenLinks, setBrokenLinks,
   LINEAGE_MAP,
   getAllCharacters, getAllLocations, findLocMdPath, listModules,
   readOpenThreadsRaw,
   countMdFiles, mapLimit, tableCell,
   EDITABLE_FIELD_MAP, SHEET_HEADER_FROM_CARD, _setSheetHeaderCell,
   RU_MONTH_STEMS, eventDateScore, aggregateEvents,
+  makeNameResolver, getDiaryIndex, eventMonthKey,
   renderChronicleEventsSkeleton, renderOpenThreadsSkeleton,
   findMdFiles, rmdir,
   _normName, _nameMatch, _findModularNpcCard,
