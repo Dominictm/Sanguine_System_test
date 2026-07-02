@@ -3750,6 +3750,10 @@ document.getElementById('modp-panel-info').addEventListener('click', e => {
     if (!nm) return;
     const chips  = document.getElementById(`moddet-${group}-chips`);
     if (chips) {
+      if (Array.from(chips.querySelectorAll('.moddet-chip')).some(c => c.dataset.name === nm)) {
+        if (input) input.value = '';
+        return;
+      }
       const div = document.createElement('div');
       div.className = 'moddet-chip';
       div.dataset.name = nm;
