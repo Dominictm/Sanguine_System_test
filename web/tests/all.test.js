@@ -735,6 +735,24 @@ describe('API — integration', () => {
       const { body } = await apiJson(`/api/graph${CITY}`);
       for (const n of body.nodes) { assert.ok('id' in n); assert.ok(n.id); }
     });
+
+    it('GET /api/graph?compact=true → один узел на линейку', async () => {
+      const [full, compact] = await Promise.all([
+        apiJson(`/api/graph${CITY}`),
+        apiJson(`/api/graph${CITY}&compact=true`),
+      ]);
+      const lineages = new Set(full.body.nodes.map(n => n.lineage));
+      assert.equal(compact.status, 200);
+      assert.equal(compact.body.nodes.length, lineages.size);
+      for (const n of compact.body.nodes) {
+        assert.ok(lineages.has(n.lineage));
+        assert.ok(n.count > 0);
+      }
+      for (const l of compact.body.links) {
+        assert.equal(l.type, 'aggregate');
+        assert.ok(l.count > 0);
+      }
+    });
   });
 
   // ── Chronicles & modules ───────────────────────────────────────────────────

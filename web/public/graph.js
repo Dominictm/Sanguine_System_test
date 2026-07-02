@@ -18,7 +18,8 @@ const REL_COLORS = {
   suspicious: '#9B6BAE',
   acquaintance: '#6FA8A8',
   secret:     '#8A4FB0',
-  neutral:    '#555555'
+  neutral:    '#555555',
+  aggregate:  '#7A6A5A', // ?compact=true — агрегированное ребро между линейками
 };
 
 const REL_LABELS = {
@@ -32,7 +33,8 @@ const REL_LABELS = {
   suspicious: 'Подозрение',
   acquaintance: 'Знакомый',
   secret:     'Тайная связь',
-  neutral:    'Нейтральный'
+  neutral:    'Нейтральный',
+  aggregate:  'Агрегировано',
 };
 
 const NODE_COLORS = {
@@ -164,9 +166,18 @@ function renderGraph(data) {
     .force('link',      d3.forceLink(links).id(d => d.id).distance(180).strength(.6))
     .force('charge',    d3.forceManyBody().strength(-320))
     .force('center',    d3.forceCenter(W / 2, H / 2))
-    .force('collision', d3.forceCollide(36));
+    .force('collision', d3.forceCollide(36))
+    // Быстрее стабилизация на больших графах (дефолт D3 ≈ 300 тиков до alphaMin);
+    // 0.05 укладывается в ~90 тиков вместо ~300.
+    .alphaDecay(0.05);
 
   STATE.graph.sim = sim;
+
+  // Жёсткий предохранитель поверх alphaDecay: alphaTarget при драге узла может
+  // держать симуляцию активной дольше расчётного — не даём ей крутиться вечно
+  // и жрать CPU, если что-то помешает естественному затуханию.
+  const MAX_SIM_TICKS = 400;
+  let tickCount = 0;
 
   // ── Zoom ──
   const g = svg.append('g');
@@ -251,6 +262,8 @@ function renderGraph(data) {
       .attr('x1', d => d.source.x).attr('y1', d => d.source.y)
       .attr('x2', d => d.target.x).attr('y2', d => d.target.y);
     nodeG.attr('transform', d => `translate(${d.x},${d.y})`);
+
+    if (++tickCount > MAX_SIM_TICKS) sim.stop();
   });
 }
 

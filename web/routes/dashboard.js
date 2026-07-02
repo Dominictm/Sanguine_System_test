@@ -101,6 +101,33 @@ router.get('/api/graph', async (req, res) => {
       }
     }
 
+    // ?compact=true — агрегация по линейке для больших городов: один узел на
+    // линейку вместо одного на персонажа, чтобы D3-симуляция не захлёбывалась.
+    if (String(req.query.compact) === 'true') {
+      const nodeById = new Map(nodes.map(n => [n.id, n]));
+      const counts   = new Map();
+      for (const n of nodes) counts.set(n.lineage, (counts.get(n.lineage) || 0) + 1);
+
+      const compactNodes = [...counts.entries()].map(([lineage, count]) => ({
+        id: lineage, lineage, count,
+      }));
+
+      const edgeCounts = new Map(); // "lineageA\x00lineageB" → count
+      for (const l of links) {
+        const a = nodeById.get(l.source)?.lineage;
+        const b = nodeById.get(l.target)?.lineage;
+        if (!a || !b || a === b) continue;
+        const key = [a, b].sort().join('\x00');
+        edgeCounts.set(key, (edgeCounts.get(key) || 0) + 1);
+      }
+      const compactLinks = [...edgeCounts.entries()].map(([key, count]) => {
+        const [a, b] = key.split('\x00');
+        return { source: a, target: b, type: 'aggregate', count, label: `${count} связ.` };
+      });
+
+      return res.json({ nodes: compactNodes, links: compactLinks });
+    }
+
     res.json({ nodes, links });
   } catch (e) { serverError(res, e); }
 });
