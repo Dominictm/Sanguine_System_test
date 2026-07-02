@@ -625,9 +625,29 @@ app.use('/api', require('./routes/chronicles'));
 
 **E2.3: Выделить locations.js** — 8 часов (высокий риск — много зависимостей)
 
+**Статус: ОСОЗНАННО ОТЛОЖЕНО (2026-07-02).** При подготовке к извлечению выяснилось,
+что код локаций НЕ единый контигуальный блок: функции разбросаны от строки ~8306
+почти до конца файла (scripts.js ~9950 строк на момент проверки), перемежаясь с
+не связанными разделами (Create Character Modal, Onboarding tour). Это кратно выше
+риск, чем показала практика на E2.1/E2.2 (оба — контигуальные блоки, тем не менее
+потребовавшие точной построчной сверки границ и полной браузерной проверки через
+CDP на каждом шаге).
+
+Извлекать `locations.js` стоит отдельной, неспешной сессией с тем же протоколом
+проверки, что и E2.1/E2.2:
+1. Найти ВСЕ location-функции по всему файлу (`openLocDetail`, `openLocEditModal`,
+   `loadLocations`, `_locSavePanel`, `runLocFullGen` и т.д.) — не только в блоке
+   `// Locations`.
+2. Вырезать по одной логической группе (список/карточка, модалка редактирования,
+   генерация), а не одним куском.
+3. После каждой группы — `node --check`, `npm test`, затем браузерная проверка
+   через `run-sanguine-web` (открыть локацию, отредактировать поле, создать новую,
+   удалить) — как было сделано для графа (клик по узлу, зум).
+4. Коммитить каждую группу отдельно, чтобы откат при находке бага был дешёвым.
+
 - Создать `web/public/locations.js`
 - Зависит от `STATE`, `CITY`, `showToast`, `showConfirm`, `openCharDetail`
-- Делать последним
+- Делать последним, отдельной сессией
 
 **Зависимости E2:** E2.0 → E2.1 → E2.2 → E2.3. B2.1 должен быть завершён до E2.
 
@@ -635,27 +655,27 @@ app.use('/api', require('./routes/chronicles'));
 
 ## Сводная таблица приоритетов
 
-| ID | Задача | Файлы | Трудоём. | Приоритет | Зависит от |
+| ID | Задача | Файлы | Трудоём. | Приоритет | Статус |
 |---|---|---|---|---|---|
-| A | Location Modal (все) | — | 0 ч | — | ✅ ГОТОВО |
-| B1.1 | Soft-delete локаций | `server.js:3352` | 2 ч | P2 | — |
-| B2.1 | showToast/showConfirm | `scripts.js, styles.css, index.html` | 4 ч | **P1** | — |
-| B2.2 | Замена alert() | `scripts.js` (69 штук) | 6 ч | **P1** | B2.1 |
-| B2.3 | Замена confirm() | `scripts.js` (19 штук) | 3 ч | **P1** | B2.1 |
-| C1.1 | Rate-limit middleware | `server.js:100` | 3 ч | P2 | — |
-| C2.1 | Тесты модульных эндпоинтов | `tests/all.test.js` | 3 ч | P2 | — |
-| C3.1 | Shared parse endpoint | `server.js, scripts.js` | 2 ч | P3 | — |
-| D1 | UI-тесты в CI | `tests/run-tests.bat` | 1 ч | P3 | — |
-| D2 | JSDoc аннотации | `parsers.js, server.js` | 8 ч | P3 | — |
-| D3 | Экспорт данных | `server.js` | 4 ч | P3 | — |
-| D4 | Оптимизация D3-графа | `scripts.js:654` | 4 ч | P3 | — |
-| E1.1 | DB helpers (`lib/db.js`) | `server.js`, новый файл | 3 ч | P2 | — |
-| E1.2 | Роутеры (`routes/*.js`) | 6 новых файлов | 8 ч | P2 | E1.1 |
-| E1.3 | server.js как точка входа | `server.js` | 2 ч | P2 | E1.2 |
-| E2.0 | Маркеры-разделители в scripts.js | `scripts.js` | 2 ч | P2 | — |
-| E2.1 | Выделить utils.js | новый `public/utils.js` | 4 ч | P3 | B2.1 |
-| E2.2 | Выделить graph.js | новый `public/graph.js` | 4 ч | P3 | E2.1 |
-| E2.3 | Выделить locations.js | новый `public/locations.js` | 8 ч | P3 | E2.2 |
+| A | Location Modal (все) | — | 0 ч | — | ✅ ГОТОВО (было готово до плана) |
+| B1.1 | Soft-delete локаций | `server.js`→`routes/locations.js` | 2 ч | P2 | ✅ ГОТОВО |
+| B2.1 | showToast/showConfirm | `scripts.js→utils.js, styles.css, index.html` | 4 ч | **P1** | ✅ ГОТОВО |
+| B2.2 | Замена alert() | `scripts.js` (69 штук) | 6 ч | **P1** | ✅ ГОТОВО |
+| B2.3 | Замена confirm() | `scripts.js` (19 штук) | 3 ч | **P1** | ✅ ГОТОВО |
+| C1.1 | Rate-limit middleware | `server.js` / `lib/http.js` | 3 ч | P2 | ✅ ГОТОВО (16 AI-эндпоинтов) |
+| C2.1 | Тесты модульных эндпоинтов | `tests/all.test.js` | 3 ч | P2 | ✅ ГОТОВО (нашли и починили BOM-баг) |
+| C3.1 | Shared parse endpoint | `server.js, scripts.js` | 2 ч | P3 | ⬜ не начато |
+| D1 | UI-тесты в CI | `tests/run-tests.bat` | 1 ч | P3 | ⬜ не начато |
+| D2 | JSDoc аннотации | `parsers.js, server.js` | 8 ч | P3 | ⬜ не начато |
+| D3 | Экспорт данных | `server.js` | 4 ч | P3 | ⬜ не начато |
+| D4 | Оптимизация D3-графа | `graph.js` | 4 ч | P3 | ⬜ не начато |
+| E1.1 | DB/HTTP helpers | `lib/db.js`, `lib/http.js` | 3 ч | P2 | ✅ ГОТОВО |
+| E1.2 | Роутеры (`routes/*.js`) | 11 файлов (library, cities, archive, locations, threads, characters, chronicles, modules, generation, dashboard, tools) | 8 ч | P2 | ✅ ГОТОВО — вышло больше файлов, чем планировалось (полное покрытие, не только 6) |
+| E1.3 | server.js как точка входа | `server.js` | 2 ч | P2 | ✅ ГОТОВО — **7262 → 1005 строк** (86%) |
+| E2.0 | Маркеры-разделители в scripts.js | `scripts.js` | 2 ч | P2 | ➖ не требовалось — маркеры уже были в файле |
+| E2.1 | Выделить utils.js | `public/utils.js` | 4 ч | P3 | ✅ ГОТОВО — проверено в headless Chrome (CDP) |
+| E2.2 | Выделить graph.js | `public/graph.js` | 4 ч | P3 | ✅ ГОТОВО — проверено в headless Chrome, реальный клик по узлу графа |
+| E2.3 | Выделить locations.js | `public/locations.js` | 8 ч | P3 | ⏸ **ОСОЗНАННО ОТЛОЖЕНО** — код не контигуален, нужна отдельная сессия (см. раздел E2.3 выше) |
 
 **Рекомендуемый порядок выполнения:**
 
