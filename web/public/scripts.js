@@ -1603,9 +1603,9 @@ const _cityFactionsCreateHost = document.getElementById('city-factions-editor');
 document.getElementById('btn-new-city').addEventListener('click', async () => {
   const city = cityNameInput.value.trim();
   const year = document.getElementById('city-year').value.trim();
-  if (!city) { alert('Укажите название города'); return; }
-  if (!year) { alert('Укажите год'); return; }
-  if (!/^\d{3,4}$/.test(year)) { alert('Год — это 3–4 цифры (например 2010)'); return; }
+  if (!city) { showToast('Укажите название города', 'warning'); return; }
+  if (!year) { showToast('Укажите год', 'warning'); return; }
+  if (!/^\d{3,4}$/.test(year)) { showToast('Год — это 3–4 цифры (например 2010)', 'warning'); return; }
   // Районы, дающие одинаковую папку (один слаг), будут схлопнуты в один — предупреждаем.
   const districtNames = document.getElementById('city-districts').value.split(',').map(s => s.trim()).filter(Boolean);
   const dSlugs = districtNames.map(d => slugifyJS(d) || d.toLowerCase());
@@ -1662,11 +1662,11 @@ document.getElementById('btn-new-npc').addEventListener('click', async () => {
   const gender = document.getElementById('npc-gender').value.trim();
   const clan = document.getElementById('npc-clan').value.trim();
   const sect = document.getElementById('npc-sect').value.trim();
-  if (!name) { alert('Укажи имя'); return; }
-  if (!gender) { alert('Укажи пол'); return; }
-  if (!CITY) { alert('Сначала выбери город в шапке'); return; }
-  if (isVamp && !clan) { alert('Клан обязателен для вампира'); return; }
-  if (isVamp && !sect) { alert('Секта обязательна для вампира'); return; }
+  if (!name) { showToast('Укажи имя', 'warning'); return; }
+  if (!gender) { showToast('Укажи пол', 'warning'); return; }
+  if (!CITY) { showToast('Сначала выбери город в шапке', 'warning'); return; }
+  if (isVamp && !clan) { showToast('Клан обязателен для вампира', 'warning'); return; }
+  if (isVamp && !sect) { showToast('Секта обязательна для вампира', 'warning'); return; }
 
   const payload = {
     name, lineage, gender, clan, sect,
@@ -1734,7 +1734,7 @@ document.getElementById('btn-validate-fix').addEventListener('click', () => {
 function _moreBtn(id, name, argsFn) {
   const el = document.getElementById(id); if (!el) return;
   el.addEventListener('click', () => {
-    if (!CITY) { alert('Сначала выбери город в шапке'); return; }
+    if (!CITY) { showToast('Сначала выбери город в шапке', 'warning'); return; }
     const args = argsFn(); if (!args) return;
     runNodeTool(name, args, 'out-more', el);
   });
@@ -1742,18 +1742,18 @@ function _moreBtn(id, name, argsFn) {
 _moreBtn('btn-new-loc', 'new_location', () => {
   const d = document.getElementById('loc-district').value.trim();
   const n = document.getElementById('loc-name').value.trim();
-  if (!d || !n) { alert('Укажите округ/код и название'); return null; }
+  if (!d || !n) { showToast('Укажите округ/код и название', 'warning'); return null; }
   return [CITY, d, n, document.getElementById('loc-rayon').value.trim(), document.getElementById('loc-zone').value];
 });
 _moreBtn('btn-migrate', 'migrate_char', () => {
   const slug = document.getElementById('mig-slug').value.trim();
   const to   = document.getElementById('mig-to').value.trim();
-  if (!slug || !to) { alert('Укажите слаг персонажа и город назначения'); return null; }
+  if (!slug || !to) { showToast('Укажите слаг персонажа и город назначения', 'warning'); return null; }
   return ['visit', CITY, document.getElementById('mig-lineage').value, slug, to, document.getElementById('mig-when').value.trim()];
 });
 _moreBtn('btn-close-chr', 'close_chronicle', () => {
   const chr = document.getElementById('close-chr').value.trim();
-  if (!chr) { alert('Укажите слаг хроники'); return null; }
+  if (!chr) { showToast('Укажите слаг хроники', 'warning'); return null; }
   return [CITY, chr, document.getElementById('close-note').value.trim()];
 });
 _moreBtn('btn-rebuild-idx', 'build_city_events', () => [CITY]);
@@ -2339,7 +2339,7 @@ async function _deleteCity() {
 
   try {
     const r = await fetch(`/api/cities/${encodeURIComponent(d.slug)}`, { method: 'DELETE' }).then(r => r.json());
-    if (!r.ok) { alert('Ошибка удаления: ' + (r.error || 'неизвестная')); return; }
+    if (!r.ok) { showToast('Ошибка удаления: ' + (r.error || 'неизвестная'), 'error'); return; }
     document.getElementById('city-detail-modal').classList.remove('open');
     if (d.active) {
       // Удалили активный город — переключаемся на любой оставшийся.
@@ -2347,7 +2347,7 @@ async function _deleteCity() {
       if (cities.length) { location.search = 'city=' + encodeURIComponent(cities[0]); return; }
     }
     if (document.getElementById('cities-grid')) loadCitiesGrid();
-  } catch (err) { alert('Ошибка удаления: ' + err.message); }
+  } catch (err) { showToast('Ошибка удаления: ' + err.message, 'error'); }
 }
 
 const cityDetailModal = document.getElementById('city-detail-modal');
@@ -3012,7 +3012,7 @@ document.getElementById('mod-fill-generate').addEventListener('click', async () 
     const locMsg = d.locations?.length
       ? `\n📍 Создано локаций: ${d.locations.length} (${d.locations.join(', ')})`
       : '';
-    alert(`✓ Сценарий сгенерирован: ${d.file}${locMsg}`);
+    showToast(`✓ Сценарий сгенерирован: ${d.file}${locMsg}`, 'success');
   } catch (e) {
     errEl.textContent = 'Ошибка: ' + e.message; errEl.style.display = '';
   } finally {
@@ -3896,7 +3896,7 @@ document.getElementById('modp-panel-scenario').addEventListener('click', e => {
         if (!r.ok) throw new Error(result.error || 'Ошибка');
         await _reloadModulePage();
       } catch (err) {
-        window.alert('Ошибка генерации: ' + err.message);
+        showToast('Ошибка генерации: ' + err.message, 'error');
       } finally {
         btn.disabled = false;
         btn.textContent = '♻ Перегенерировать';
@@ -4084,7 +4084,7 @@ document.getElementById('modp-panel-npcs').addEventListener('click', e => {
         if (!r.ok) throw new Error(await r.text());
         await _reloadModulePage();
       } catch (err) {
-        window.alert('Ошибка: ' + err.message);
+        showToast('Ошибка: ' + err.message, 'error');
         btn.disabled = false;
       }
     })();
@@ -4164,7 +4164,7 @@ async function _onPromoteNpc(btn) {
     );
     const d = await r.json();
     if (!r.ok) {
-      alert(`Ошибка: ${d.error || r.status}\n${d.conditions ? JSON.stringify(d.conditions, null, 2) : ''}`);
+      showToast(`Ошибка: ${d.error || r.status}\n${d.conditions ? JSON.stringify(d.conditions, null, 2) : ''}`, 'error');
       btn.disabled = false;
       btn.textContent = '⬆ В канон';
       return;
@@ -4174,7 +4174,7 @@ async function _onPromoteNpc(btn) {
     // Refresh module page so the NPC now shows as canonical
     setTimeout(loadModulePage, 800);
   } catch (err) {
-    alert(`Ошибка: ${err.message}`);
+    showToast(`Ошибка: ${err.message}`, 'error');
     btn.disabled = false;
     btn.textContent = '⬆ В канон';
   }
@@ -4220,7 +4220,7 @@ document.getElementById('modp-gen-btn').addEventListener('click', async () => {
         body: JSON.stringify({ pcs, npcs, content: '', locSource: locPref.provider, locModel: locPref.model }) }
     ).then(r => r.json());
 
-    if (!d.ok) { alert('Ошибка генерации: ' + (d.error || 'Неизвестная ошибка')); return; }
+    if (!d.ok) { showToast('Ошибка генерации: ' + (d.error || 'Неизвестная ошибка'), 'error'); return; }
 
     const lines = [`✓ Модуль сгенерирован: ${d.file}`];
     if (d.locations?.length)       lines.push(`📍 Новых локаций: ${d.locations.length} (${d.locations.join(', ')})`);
@@ -4246,7 +4246,7 @@ document.getElementById('modp-gen-btn').addEventListener('click', async () => {
     }
     _reloadModulePage();
   } catch (e) {
-    alert('Ошибка: ' + e.message);
+    showToast('Ошибка: ' + e.message, 'error');
   } finally {
     btn.disabled = false; btn.textContent = '🪄 Сгенерировать';
   }
@@ -4272,15 +4272,15 @@ document.getElementById('modp-close-btn').addEventListener('click', async () => 
       { method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ source: prose.provider, model: prose.model }) }
     ).then(r => r.json());
-    if (!d.ok) { alert('Ошибка закрытия: ' + (d.error || 'Неизвестная ошибка')); return; }
+    if (!d.ok) { showToast('Ошибка закрытия: ' + (d.error || 'Неизвестная ошибка'), 'error'); return; }
     const lines = ['✓ Модуль закрыт (Фаза C)'];
     if (d.finale)  lines.push('📕 Создан finale.md');
     if (d.event)   lines.push('📖 Событие добавлено в хронику');
     if (d.reminders?.length) lines.push('', 'Осталось вручную:', ...d.reminders.map(r => '• ' + r));
-    alert(lines.join('\n'));
+    showToast(lines.join('\n'), 'success');
     loadModulePage();
   } catch (e) {
-    alert('Ошибка: ' + e.message);
+    showToast('Ошибка: ' + e.message, 'error');
   } finally {
     btn.disabled = false; btn.textContent = '🔒 Закрыть модуль';
   }
@@ -4330,10 +4330,10 @@ document.getElementById('modp-del-btn').addEventListener('click', async () => {
         `/api/chronicles/${encodeURIComponent(chronicle)}/modules/${encodeURIComponent(name)}${qs}`,
         { method: 'DELETE', headers: { 'Content-Type': 'application/json' } }
       ).then(r => r.json());
-      if (!d.ok) { alert('Ошибка удаления: ' + (d.error || 'Неизвестная ошибка')); return; }
+      if (!d.ok) { showToast('Ошибка удаления: ' + (d.error || 'Неизвестная ошибка'), 'error'); return; }
       navigate('modules');
     } catch (e) {
-      alert('Ошибка: ' + e.message);
+      showToast('Ошибка: ' + e.message, 'error');
     } finally {
       if (delBtn) { delBtn.disabled = false; delBtn.textContent = '🗑 Удалить модуль'; }
     }
@@ -4440,8 +4440,8 @@ document.getElementById('threads-list')?.addEventListener('change', async e => {
   try {
     const r = await fetch('/api/threads/' + encodeURIComponent(card.dataset.id),
       { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then(r => r.json());
-    if (r.ok) loadThreads(); else alert(r.error || 'Ошибка обновления');
-  } catch (err) { alert('Ошибка: ' + err.message); }
+    if (r.ok) loadThreads(); else showToast(r.error || 'Ошибка обновления', 'error');
+  } catch (err) { showToast('Ошибка: ' + err.message, 'error'); }
 });
 
 // New-thread form toggle + submit
@@ -4826,7 +4826,7 @@ function _archiveRumors(viewEl, type) {
   const told    = new Set(JSON.parse(localStorage.getItem(toldKey) || '[]'));
 
   if (!told.size) {
-    alert('Нет рассказанных слухов.\nОтметь чекбоксы «Рассказан» перед архивированием.');
+    showToast('Нет рассказанных слухов.\nОтметь чекбоксы «Рассказан» перед архивированием.', 'warning');
     return;
   }
 
@@ -4850,7 +4850,7 @@ function _archiveRumors(viewEl, type) {
     });
   }
 
-  if (!rumorData.length) { alert('Не удалось найти данные рассказанных слухов.'); return; }
+  if (!rumorData.length) { showToast('Не удалось найти данные рассказанных слухов.', 'error'); return; }
   rumorData.sort((a, b) => a.num - b.num);
 
   // Save to archive
@@ -7000,7 +7000,7 @@ async function _v20Regen(btn) {
     _v20DirtyFlag = false;
     _v20RenderSheet(document.getElementById('cdet-sheet-panel'), _v20Ctx.name);
   } catch (e) {
-    alert('Ошибка: ' + e.message);
+    showToast('Ошибка: ' + e.message, 'error');
     btn.disabled = false; btn.textContent = old;
   }
 }
@@ -7209,7 +7209,7 @@ async function _generateSheet(ctx, btn) {
     if (!d.ok) throw new Error(d.error || 'не удалось');
     ctx.onSaved?.();
     return true;
-  } catch (e) { alert('Ошибка генерации листа: ' + e.message); return false; }
+  } catch (e) { showToast('Ошибка генерации листа: ' + e.message, 'error'); return false; }
   finally { if (btn) { btn.disabled = false; btn.textContent = old; } }
 }
 
@@ -7371,10 +7371,10 @@ async function _regenerateDiaryEntry(charName, period) {
     const r = await fetch(`/api/characters/${encodeURIComponent(_charSlug(charName))}/diary/generate`,
       { method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ period, session: sessionTa?.value.trim() || '', draft, preferSource, orModel }) }).then(r => r.json());
-    if (r.error) { alert('Ошибка генерации: ' + r.error); return; }
+    if (r.error) { showToast('Ошибка генерации: ' + r.error, 'error'); return; }
     textTa.value = r.text || '';
   } catch (e) {
-    alert('Ошибка: ' + e.message);
+    showToast('Ошибка: ' + e.message, 'error');
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = '🔄 Перегенерировать'; }
   }
@@ -7384,7 +7384,7 @@ async function _saveDiaryEntryEdit(charName, period, file) {
   const textTa = document.getElementById('diary-entry-text-ta');
   const sessionTa = document.getElementById('diary-entry-session-ta');
   const text = textTa?.value.trim() || '';
-  if (!text) { alert('Пустой текст записи'); return; }
+  if (!text) { showToast('Пустой текст записи', 'warning'); return; }
 
   const btn = document.querySelector('.diary-entry-save-btn');
   if (btn) { btn.disabled = true; btn.textContent = '⏳...'; }
@@ -7392,11 +7392,11 @@ async function _saveDiaryEntryEdit(charName, period, file) {
     const r = await fetch(`/api/characters/${encodeURIComponent(_charSlug(charName))}/diary`,
       { method: 'PUT', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ period, session: sessionTa?.value.trim() || '', text, mode: 'replace' }) }).then(r => r.json());
-    if (r.error) { alert('Ошибка сохранения: ' + r.error); return; }
+    if (r.error) { showToast('Ошибка сохранения: ' + r.error, 'error'); return; }
     STATE.characters = []; await ensureCharsLoaded();
     await loadDiaryEntry(charName, file);
   } catch (e) {
-    alert('Ошибка: ' + e.message);
+    showToast('Ошибка: ' + e.message, 'error');
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = 'Сохранить'; }
   }
@@ -7407,13 +7407,13 @@ async function _deleteDiaryEntry(charName, file, title) {
   try {
     const r = await fetch(`/api/characters/${encodeURIComponent(_charSlug(charName))}/diary?file=${encodeURIComponent(file)}`,
       { method: 'DELETE' }).then(r => r.json());
-    if (!r.ok) { alert('Ошибка удаления: ' + (r.error || '')); return; }
+    if (!r.ok) { showToast('Ошибка удаления: ' + (r.error || ''), 'error'); return; }
     STATE.characters = []; await ensureCharsLoaded();
     const c = STATE.characters.find(ch => ch.name === charName);
     const panel = document.querySelector('#char-detail-content [data-panel="diaries"]');
     if (panel && c) panel.innerHTML = renderDiaryList(c);
   } catch (e) {
-    alert('Ошибка: ' + e.message);
+    showToast('Ошибка: ' + e.message, 'error');
   }
 }
 
@@ -7421,8 +7421,8 @@ async function _deleteDiaryEntry(charName, file, title) {
 async function _confirmDeleteChar(name) {
   let pv;
   try { pv = await fetch(`/api/characters/${encodeURIComponent(_charSlug(name))}/delete-preview${location.search}`).then(r => r.json()); }
-  catch (e) { alert('Не удалось получить предпросмотр: ' + e.message); return; }
-  if (pv.error) { alert(pv.error); return; }
+  catch (e) { showToast('Не удалось получить предпросмотр: ' + e.message, 'error'); return; }
+  if (pv.error) { showToast(pv.error, 'error'); return; }
 
   const list = arr => arr.length
     ? `<ul>${arr.slice(0, 12).map(f => `<li>${escHtml(f)}</li>`).join('')}${arr.length > 12 ? `<li>…ещё ${arr.length - 12}</li>` : ''}</ul>`
@@ -7469,7 +7469,7 @@ async function _confirmDeleteChar(name) {
       }).catch(() => { STATE.characters = []; });
     } catch (e) {
       btn.disabled = false; btn.textContent = 'Удалить';
-      alert('Ошибка удаления: ' + e.message);
+      showToast('Ошибка удаления: ' + e.message, 'error');
     }
   });
 }
@@ -7981,7 +7981,7 @@ async function _savePanelEdit(panel, charName) {
         document.getElementById('cdet-desc-view').innerHTML = descHtml || '<div class="cdet-empty">Описание не заполнено</div>';
       }
     }
-  } catch(e) { alert('Ошибка: ' + e.message); }
+  } catch(e) { showToast('Ошибка: ' + e.message, 'error'); }
 
   save.disabled = false;
   save.textContent = 'Сохранить';
@@ -8013,10 +8013,10 @@ async function _generateAppearance(charName) {
     );
     const d = await resp.json();
     if (resp.status === 429 || d.rateLimited) {
-      alert('Превышен лимит запросов к API.\n\nПодождите минуту и попробуйте снова, или смените модель в Настройках AI.');
+      showToast('Превышен лимит запросов к API.\n\nПодождите минуту и попробуйте снова, или смените модель в Настройках AI.', 'warning');
       return;
     }
-    if (!d.ok) { alert('Ошибка генерации: ' + (d.error || 'неизвестная ошибка')); return; }
+    if (!d.ok) { showToast('Ошибка генерации: ' + (d.error || 'неизвестная ошибка'), 'error'); return; }
 
     // 2. Автосохраняем в карточку персонажа
     if (btn) btn.textContent = '💾 Сохранение...';
@@ -8026,7 +8026,7 @@ async function _generateAppearance(charName) {
         body: JSON.stringify({ fields: { appearance: d.appearance } }) }
     );
     const saveData = await saveResp.json();
-    if (!saveData.ok) { alert('Ошибка сохранения: ' + (saveData.error || '')); return; }
+    if (!saveData.ok) { showToast('Ошибка сохранения: ' + (saveData.error || ''), 'error'); return; }
 
     // 3. Обновляем STATE
     const ch = STATE.characters.find(c => c.name === charName);
@@ -8058,7 +8058,7 @@ async function _generateAppearance(charName) {
 
     if (btn) btn.title = `Изображений проанализировано: ${d.imagesUsed} | ${d.source}`;
   } catch(e) {
-    alert('Ошибка соединения: ' + e.message);
+    showToast('Ошибка соединения: ' + e.message, 'error');
   } finally {
     _genAppearanceRunning = false;
     if (btn) { btn.disabled = false; btn.textContent = '👁 Внешность по арту'; }
@@ -8104,7 +8104,7 @@ async function _deleteCharImage(charName, filename) {
       { method: 'DELETE' }
     );
     const d = await resp.json();
-    if (!d.ok) { alert('Ошибка удаления: ' + (d.error || '')); return; }
+    if (!d.ok) { showToast('Ошибка удаления: ' + (d.error || ''), 'error'); return; }
 
     // Remove thumbnail from gallery
     const wrap = document.querySelector(`.cdet-img-del-btn[data-file="${CSS.escape(filename)}"]`)?.closest('.cdet-img-thumb-wrap');
@@ -8141,7 +8141,7 @@ async function _deleteCharImage(charName, filename) {
       _gridImages[charName] = _gridImages[charName].filter(u => !u.includes(encodedFile) && !u.includes(filename));
     }
   } catch (e) {
-    alert('Ошибка: ' + e.message);
+    showToast('Ошибка: ' + e.message, 'error');
   }
 }
 
@@ -8243,11 +8243,11 @@ async function _generatePrompt(charName) {
     const d = await resp.json();
 
     if (resp.status === 429 || d.rateLimited) {
-      alert('Превышен лимит запросов к API.\n\nПодождите минуту и попробуйте снова, или смените модель в Настройках AI.');
+      showToast('Превышен лимит запросов к API.\n\nПодождите минуту и попробуйте снова, или смените модель в Настройках AI.', 'warning');
       return;
     }
     if (!d.ok) {
-      alert('Ошибка генерации промта: ' + (d.error || 'неизвестная ошибка'));
+      showToast('Ошибка генерации промта: ' + (d.error || 'неизвестная ошибка'), 'error');
       return;
     }
 
@@ -8257,7 +8257,7 @@ async function _generatePrompt(charName) {
       body: JSON.stringify({ fields: { imagePrompt: d.positive, negativePrompt: d.negative } }),
     });
     const saveData = await saveResp.json();
-    if (!saveData.ok) { alert('Ошибка сохранения промта: ' + (saveData.error || '')); return; }
+    if (!saveData.ok) { showToast('Ошибка сохранения промта: ' + (saveData.error || ''), 'error'); return; }
 
     Object.assign(c, { imagePrompt: d.positive, negativePrompt: d.negative });
 
@@ -8280,7 +8280,7 @@ async function _generatePrompt(charName) {
     if (negTa) negTa.value = d.negative || '';
 
   } catch (e) {
-    alert('Ошибка: ' + e.message);
+    showToast('Ошибка: ' + e.message, 'error');
   } finally {
     _genPromptRunning = false;
     if (btn) { btn.disabled = false; btn.textContent = '🎨 Промт'; }
@@ -8298,7 +8298,7 @@ async function _generatePersonality(charName) {
   const hasAppearance = c.appearance && !c.appearance.includes('⚠️');
   const hasBio        = c.biography && !c.biography.includes('⚠️');
   if (!hasAppearance && !hasBio) {
-    alert('Заполните «Внешность» или «Биография» перед генерацией характера и голоса.');
+    showToast('Заполните «Внешность» или «Биография» перед генерацией характера и голоса.', 'warning');
     return;
   }
 
@@ -8326,11 +8326,11 @@ async function _generatePersonality(charName) {
     const d = await resp.json();
 
     if (resp.status === 429 || d.rateLimited) {
-      alert('Превышен лимит запросов к API.\n\nПодождите минуту и попробуйте снова, или смените модель в Настройках AI.');
+      showToast('Превышен лимит запросов к API.\n\nПодождите минуту и попробуйте снова, или смените модель в Настройках AI.', 'warning');
       return;
     }
     if (!d.ok) {
-      alert('Ошибка генерации характера: ' + (d.error || 'неизвестная ошибка'));
+      showToast('Ошибка генерации характера: ' + (d.error || 'неизвестная ошибка'), 'error');
       return;
     }
 
@@ -8342,7 +8342,7 @@ async function _generatePersonality(charName) {
       body: JSON.stringify({ fields }),
     });
     const saveData = await saveResp.json();
-    if (!saveData.ok) { alert('Ошибка сохранения: ' + (saveData.error || '')); return; }
+    if (!saveData.ok) { showToast('Ошибка сохранения: ' + (saveData.error || ''), 'error'); return; }
 
     Object.assign(c, fields);
 
@@ -8365,7 +8365,7 @@ async function _generatePersonality(charName) {
       if (voiceTa) voiceTa.value = d.voice;
     }
   } catch (e) {
-    alert('Ошибка: ' + e.message);
+    showToast('Ошибка: ' + e.message, 'error');
   } finally {
     _genPersonalityRunning = false;
     if (btn) { btn.disabled = false; btn.textContent = '🎭 Характер и голос'; }
@@ -8404,11 +8404,11 @@ async function _generateBiography(charName) {
     const d = await resp.json();
 
     if (resp.status === 429 || d.rateLimited) {
-      alert('Превышен лимит запросов к API.\n\nПодождите минуту и попробуйте снова, или смените модель в Настройках AI.');
+      showToast('Превышен лимит запросов к API.\n\nПодождите минуту и попробуйте снова, или смените модель в Настройках AI.', 'warning');
       return;
     }
     if (!d.ok) {
-      alert('Ошибка генерации биографии: ' + (d.error || 'неизвестная ошибка'));
+      showToast('Ошибка генерации биографии: ' + (d.error || 'неизвестная ошибка'), 'error');
       return;
     }
 
@@ -8418,7 +8418,7 @@ async function _generateBiography(charName) {
       body: JSON.stringify({ fields: { biography: d.biography } }),
     });
     const saveData = await saveResp.json();
-    if (!saveData.ok) { alert('Ошибка сохранения биографии: ' + (saveData.error || '')); return; }
+    if (!saveData.ok) { showToast('Ошибка сохранения биографии: ' + (saveData.error || ''), 'error'); return; }
 
     c.biography = d.biography;
 
@@ -8427,7 +8427,7 @@ async function _generateBiography(charName) {
     const bioTa = document.getElementById('cdet-bio-ta');
     if (bioTa) bioTa.value = d.biography || '';
   } catch (e) {
-    alert('Ошибка: ' + e.message);
+    showToast('Ошибка: ' + e.message, 'error');
   } finally {
     _genBiographyRunning = false;
     if (btn) { btn.disabled = false; btn.textContent = '📖 Сгенерировать биографию'; }
@@ -8625,10 +8625,10 @@ async function _saveInfoFields() {
       msg.classList.add('show');
       setTimeout(() => msg.classList.remove('show'), 2500);
     } else {
-      alert('Ошибка: ' + (d.error || 'не удалось сохранить'));
+      showToast('Ошибка: ' + (d.error || 'не удалось сохранить'), 'error');
     }
   } catch(e) {
-    alert('Ошибка соединения: ' + e.message);
+    showToast('Ошибка соединения: ' + e.message, 'error');
   } finally {
     saveBtn.disabled = false;
     saveBtn.textContent = 'Сохранить';
@@ -8689,9 +8689,9 @@ async function triggerImageUpload(charName) {
       const b = document.querySelector('.cdet-upload-btn');
       if (b) { b.textContent = '📷 Загрузить изображение'; b.disabled = false; }
       if (isOffline) {
-        alert('Сервер недоступен. Перезапустите start.bat и попробуйте снова.');
+        showToast('Сервер недоступен. Перезапустите start.bat и попробуйте снова.', 'error');
       } else {
-        alert('Ошибка загрузки: ' + err.message);
+        showToast('Ошибка загрузки: ' + err.message, 'error');
       }
     }
   };
@@ -10316,7 +10316,7 @@ async function _renderModuleLocPanel(data) {
       STATE.locations = [];
       await _modLocLink(chronicle, modName, slug);
     } catch (e) {
-      alert(e.message);
+      showToast(e.message, 'error');
       btn.disabled = false;
       btn.textContent = 'Создать и прикрепить';
     }
@@ -10361,7 +10361,7 @@ async function _modLocLink(chronicle, modName, slug) {
     const dataR = await fetch(`/api/chronicles/${encodeURIComponent(chronicle)}/modules/${encodeURIComponent(modName)}/detail?city=${encodeURIComponent(CITY)}`);
     const data  = await dataR.json();
     await _renderModuleLocPanel(data);
-  } catch (e) { alert(e.message); }
+  } catch (e) { showToast(e.message, 'error'); }
 }
 
 async function _modLocUnlink(chronicle, modName, slug) {
@@ -10374,7 +10374,7 @@ async function _modLocUnlink(chronicle, modName, slug) {
     const dataR = await fetch(`/api/chronicles/${encodeURIComponent(chronicle)}/modules/${encodeURIComponent(modName)}/detail?city=${encodeURIComponent(CITY)}`);
     const data  = await dataR.json();
     await _renderModuleLocPanel(data);
-  } catch (e) { alert(e.message); }
+  } catch (e) { showToast(e.message, 'error'); }
 }
 
 async function ensureLocsLoaded() {
