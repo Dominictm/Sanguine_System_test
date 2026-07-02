@@ -1080,8 +1080,13 @@ module.exports = function modulesRouter({
           const cellRe = new RegExp(`(\\|\\s*\\*\\*${label}\\*\\*\\s*\\|\\s*)([^|\\n]*)(\\|)`);
           if (cellRe.test(raw)) {
             raw = raw.replace(cellRe, `$1${v} $3`);
-          } else {
-            skipped.push(key);
+          } else if (v) {
+            // Строки ещё нет в файле (модуль создан до появления поля, либо файл
+            // собран вручную/ИИ без него) — добавляем новую строку в таблицу
+            // параметров, а не молча теряем значение.
+            const sepRe = /(\|\s*Параметр\s*\|\s*Значение\s*\|\n\|---\|---\|\n)/;
+            if (sepRe.test(raw)) raw = raw.replace(sepRe, `$1| **${label}** | ${v} |\n`);
+            else skipped.push(key);
           }
 
         } else if (key === 'description') {

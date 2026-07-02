@@ -3100,31 +3100,8 @@ function renderModulePage(data) {
   }
 
   // ── Info tab ──────────────────────────────────────────────────────────────────
-  const mod = data.name || '';
-
-  // Title panel
-  const titleViewHtml = `<div class="modp-info-title">${escHtml(data.title || mod)}</div>`;
-  const titleEditHtml = `<input class="moddet-add-input" id="moddet-title-input" value="${escHtml(data.title || mod)}" style="font-size:var(--fs-md,14px);width:100%">`;
-
-  // Meta table panel
-  const metaFields = [
-    ['type',     'Тип',     data.type     || ''],
-    ['time',     'Время',   data.time     || ''],
-    ['location', 'Локация', data.location || ''],
-    ['tone',     'Тон',     data.tone     || ''],
-    ['format',   'Формат',  data.format   || ''],
-  ];
-  const metaViewHtml = `<table class="modp-info-table">
-  ${metaFields.filter(([,, v]) => v).map(([, label, v]) =>
-    `<tr><td class="modp-info-lbl">${escHtml(label)}</td><td>${escHtml(v)}</td></tr>`
-  ).join('')}
-</table>`;
-  const metaEditHtml = metaFields.map(([key, label, v]) =>
-    `<div style="margin-bottom:8px">
-    <label style="display:block;font-size:var(--fs-sm,12px);color:var(--text2,#999);margin-bottom:2px">${escHtml(label)}</label>
-    <input class="moddet-add-input" id="moddet-meta-${key}" value="${escHtml(v)}" style="width:100%">
-  </div>`
-  ).join('');
+  // Название/Тип/Время/Тон/Формат/Хроника редактируются в шапке (modp-header-edit) —
+  // здесь дублировать их не нужно.
 
   // Description panel
   const descViewHtml = data.description
@@ -3148,10 +3125,6 @@ function renderModulePage(data) {
   </div>`;
 
   const infoHtml = `
-  ${modPanel('title', titleViewHtml, titleEditHtml)}
-  <div class="modp-section-divider"></div>
-  ${modPanel('meta', metaViewHtml, metaEditHtml)}
-  <div class="modp-section-divider"></div>
   <div class="modp-section-label">💡 Концепция</div>
   ${modPanel('desc', descViewHtml, descEditHtml)}
   <div class="modp-section-divider"></div>
@@ -3815,6 +3788,7 @@ document.getElementById('modp-header-edit-btn').addEventListener('click', async 
   document.getElementById('modp-hedit-type').value  = data.type  || '';
   document.getElementById('modp-hedit-time').value  = data.time  || '';
   document.getElementById('modp-hedit-tone').value  = data.tone  || '';
+  document.getElementById('modp-hedit-format').value = data.format || '';
 
   document.getElementById('modp-title').style.display  = 'none';
   document.getElementById('modp-badges').style.display  = 'none';
@@ -3850,8 +3824,9 @@ document.getElementById('modp-hedit-save').addEventListener('click', async () =>
   const title = document.getElementById('modp-hedit-title').value.trim();
   const type  = document.getElementById('modp-hedit-type').value.trim();
   const time  = document.getElementById('modp-hedit-time').value.trim();
-  const tone  = document.getElementById('modp-hedit-tone').value.trim();
-  const toChr = document.getElementById('modp-hedit-chronicle').value;
+  const tone   = document.getElementById('modp-hedit-tone').value.trim();
+  const format = document.getElementById('modp-hedit-format').value.trim();
+  const toChr  = document.getElementById('modp-hedit-chronicle').value;
 
   if (!title) { showToast('Название не может быть пустым', 'warning'); return; }
   if (!time)  { showToast('Укажи дату/время', 'warning'); return; }
@@ -3860,7 +3835,7 @@ document.getElementById('modp-hedit-save').addEventListener('click', async () =>
   try {
     const r = await fetch(`/api/chronicles/${encodeURIComponent(chronicle)}/modules/${encodeURIComponent(name)}/fields${qs}`, {
       method: 'PUT', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ fields: { title, type, time, tone } }),
+      body: JSON.stringify({ fields: { title, type, time, tone, format } }),
     });
     if (!r.ok) throw new Error((await r.json()).error || r.statusText);
 
@@ -8410,16 +8385,7 @@ async function _modSavePanel(panel) {
   const msgEl  = document.getElementById(`moddet-${panel}-msg`);
   const fields = {};
 
-  if (panel === 'title') {
-    fields.title = document.getElementById('moddet-title-input')?.value || '';
-
-  } else if (panel === 'meta') {
-    for (const key of ['type', 'time', 'location', 'tone', 'format']) {
-      const el = document.getElementById(`moddet-meta-${key}`);
-      if (el) fields[key] = el.value;
-    }
-
-  } else if (panel === 'desc') {
+  if (panel === 'desc') {
     fields.description = document.getElementById('moddet-desc-ta')?.value || '';
 
   } else if (panel === 'participants') {
