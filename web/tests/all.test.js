@@ -290,13 +290,14 @@ describe('Parsers — unit', () => {
 
     it('source-guard: POST /api/cities и new_city.js вызывают cityScaffold (без хардкода)', () => {
       const fs = require('fs');
-      const server = fs.readFileSync(path.join(__dirname, '../server.js'), 'utf-8');
-      const cli    = fs.readFileSync(path.join(__dirname, '../../tools/new_city.js'), 'utf-8');
-      assert.match(server, /cityScaffold\(/, 'server.js должен звать cityScaffold');
-      assert.match(cli,    /cityScaffold\(/, 'new_city.js должен звать cityScaffold');
+      // POST /api/cities живёт в routes/cities.js (модуляризация E1.2).
+      const citiesRoute = fs.readFileSync(path.join(__dirname, '../routes/cities.js'), 'utf-8');
+      const cli         = fs.readFileSync(path.join(__dirname, '../../tools/new_city.js'), 'utf-8');
+      assert.match(citiesRoute, /cityScaffold\(/, 'routes/cities.js должен звать cityScaffold');
+      assert.match(cli,         /cityScaffold\(/, 'new_city.js должен звать cityScaffold');
       // Старые хардкод-литералы каркаса не должны вернуться в вызывающие файлы.
-      assert.doesNotMatch(server, /Сводная хроника событий/, 'каркас events.md не должен дублироваться в server.js');
-      assert.doesNotMatch(cli,    /Сводная хроника событий/, 'каркас events.md не должен дублироваться в new_city.js');
+      assert.doesNotMatch(citiesRoute, /Сводная хроника событий/, 'каркас events.md не должен дублироваться в routes/cities.js');
+      assert.doesNotMatch(cli,         /Сводная хроника событий/, 'каркас events.md не должен дублироваться в new_city.js');
     });
   });
 

@@ -173,6 +173,22 @@ async function getAllLocations(city = DEFAULT_CITY) {
   return result;
 }
 
+// Все модули города: chronicles/<хроника>/modules/<модуль>/ → { name, chronicle, dir }.
+async function listModules(city = DEFAULT_CITY) {
+  const out = [];
+  let chrs;
+  try { chrs = await fs.readdir(chroniclesDir(city), { withFileTypes: true }); } catch { return out; }
+  for (const ch of chrs) {
+    if (!ch.isDirectory()) continue;
+    const mdir = path.join(chroniclesDir(city), ch.name, 'modules');
+    let mods; try { mods = await fs.readdir(mdir, { withFileTypes: true }); } catch { continue; }
+    for (const m of mods)
+      if (m.isDirectory() && !m.name.startsWith('.'))
+        out.push({ name: m.name, chronicle: ch.name, dir: path.join(mdir, m.name) });
+  }
+  return out;
+}
+
 // ── Misc shared helpers ────────────────────────────────────────────────────────
 async function countMdFiles(dir) {
   let n = 0;
@@ -215,6 +231,6 @@ module.exports = {
   CHARS_TTL, LOCS_TTL,
   invalidateChars, invalidateLocs,
   LINEAGE_MAP,
-  getAllCharacters, getAllLocations, findLocMdPath,
+  getAllCharacters, getAllLocations, findLocMdPath, listModules,
   countMdFiles, mapLimit, tableCell,
 };
