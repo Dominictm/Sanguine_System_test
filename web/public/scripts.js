@@ -3393,6 +3393,20 @@ function _dlgFallbackNote(source) {
 }
 
 function renderModulePage(data) {
+  function modPanel(id, viewHtml, editHtml) {
+    return `
+    <div class="cdet-info-header">
+      <button class="modp-edit-btn" data-editmod="${id}">✏ Редактировать</button>
+    </div>
+    <div id="moddet-${id}-view">${viewHtml}</div>
+    <div id="moddet-${id}-edit" style="display:none">${editHtml}</div>
+    <div class="modp-edit-bar" id="moddet-${id}-bar">
+      <button class="modp-save-btn" data-savemod="${id}">Сохранить</button>
+      <button class="modp-cancel-btn" data-cancelmod="${id}">Отмена</button>
+      <span class="modp-save-msg" id="moddet-${id}-msg" style="display:none">✓ Сохранено</span>
+    </div>`;
+  }
+
   STATE.currentModuleData = data;
   // Header
   document.getElementById('modp-title').textContent = data.title || data.name;
@@ -3415,34 +3429,67 @@ function renderModulePage(data) {
     closeBtn.textContent = isClosed ? '🔒 Закрыт' : '🔒 Закрыть модуль';
   }
 
-  // ── КРАТКОЕ ──
-  const descHtml = data.description
-    ? `<div class="modp-section"><div class="modp-section-title">Описание</div><div class="modp-description">${escHtml(data.description)}</div></div>`
-    : '';
+  // ── Info tab ──────────────────────────────────────────────────────────────────
+  const mod = data.name || '';
 
-  // Тип и Время не дублируем — они уже в бейджах шапки.
-  const infoCards = [
-    data.tone     && `<div class="modp-info-card"><div class="modp-info-label">Тон</div><div class="modp-info-value">${escHtml(data.tone)}</div></div>`,
-    data.format   && `<div class="modp-info-card"><div class="modp-info-label">Формат</div><div class="modp-info-value">${escHtml(data.format)}</div></div>`,
-    data.location && `<div class="modp-info-card"><div class="modp-info-label">Локация</div><div class="modp-info-value">${escHtml(data.location)}</div></div>`,
-  ].filter(Boolean).join('');
+  // Title panel
+  const titleViewHtml = `<div class="modp-info-title">${escHtml(data.title || mod)}</div>`;
+  const titleEditHtml = `<input class="moddet-add-input" id="moddet-title-input" value="${escHtml(data.title || mod)}" style="font-size:var(--fs-md,14px);width:100%">`;
 
-  const pcsHtml = data.pcs?.length
-    ? `<div class="modp-section"><div class="modp-section-title">👤 Персонажи игроков</div>
-        <div class="modp-char-list">${data.pcs.map(p =>
-          `<div class="modp-char-item"><span class="modp-char-name">${escHtml(p.name)}</span><span class="modp-char-role">${escHtml(p.role)}</span></div>`
-        ).join('')}</div></div>` : '';
+  // Meta table panel
+  const metaFields = [
+    ['type',     'Тип',     data.type     || ''],
+    ['time',     'Время',   data.time     || ''],
+    ['location', 'Локация', data.location || ''],
+    ['tone',     'Тон',     data.tone     || ''],
+    ['format',   'Формат',  data.format   || ''],
+  ];
+  const metaViewHtml = `<table class="modp-info-table">
+  ${metaFields.filter(([,, v]) => v).map(([, label, v]) =>
+    `<tr><td class="modp-info-lbl">${escHtml(label)}</td><td>${escHtml(v)}</td></tr>`
+  ).join('')}
+</table>`;
+  const metaEditHtml = metaFields.map(([key, label, v]) =>
+    `<div style="margin-bottom:8px">
+    <label style="display:block;font-size:var(--fs-sm,12px);color:var(--text2,#999);margin-bottom:2px">${escHtml(label)}</label>
+    <input class="moddet-add-input" id="moddet-meta-${key}" value="${escHtml(v)}" style="width:100%">
+  </div>`
+  ).join('');
 
-  const npcsShortHtml = data.npcs?.length
-    ? `<div class="modp-section"><div class="modp-section-title">🎭 НПС</div>
-        <div class="modp-char-list">${data.npcs.map(p =>
-          `<div class="modp-char-item"><span class="modp-char-name">${escHtml(p.name)}</span><span class="modp-char-role">${escHtml(p.role)}</span></div>`
-        ).join('')}</div></div>` : '';
+  // Description panel
+  const descViewHtml = data.description
+    ? `<div class="modp-concept-text">${escHtml(data.description)}</div>`
+    : '<div class="cdet-empty">Концепция не заполнена</div>';
+  const descEditHtml = `<textarea class="cdet-edit-textarea" id="moddet-desc-ta" rows="8" style="width:100%">${escHtml(data.description || '')}</textarea>`;
 
-  document.getElementById('modp-panel-info').innerHTML =
-    (infoCards ? `<div class="modp-info-grid">${infoCards}</div>` : '') +
-    descHtml + pcsHtml + npcsShortHtml ||
-    '<div class="modp-empty"><div class="modp-empty-icon">📄</div>Нет данных</div>';
+  // Participants display (read-only, editing in Task 7)
+  const pcList  = (data.pcs  || []).map(p => `<li>${escHtml(typeof p === 'string' ? p : p.name || '')}${p.role ? ` <span class="modp-role">${escHtml(p.role)}</span>` : ''}</li>`).join('');
+  const npcList = (data.npcs || []).map(p => `<li>${escHtml(typeof p === 'string' ? p : p.name || '')}${p.role ? ` <span class="modp-role">${escHtml(p.role)}</span>` : ''}</li>`).join('');
+  const participantsHtml = `
+  <div class="modp-participants-section">
+    <div class="modp-part-col">
+      <div class="modp-part-title">🎭 Персонажи игроков</div>
+      ${pcList ? `<ul class="modp-part-list">${pcList}</ul>` : '<div class="cdet-empty">Не указаны</div>'}
+    </div>
+    <div class="modp-part-col">
+      <div class="modp-part-title">👤 НПС</div>
+      ${npcList ? `<ul class="modp-part-list">${npcList}</ul>` : '<div class="cdet-empty">Не указаны</div>'}
+    </div>
+  </div>`;
+
+  const infoHtml = `
+  ${modPanel('title', titleViewHtml, titleEditHtml)}
+  <div class="modp-section-divider"></div>
+  ${modPanel('meta', metaViewHtml, metaEditHtml)}
+  <div class="modp-section-divider"></div>
+  <div class="modp-section-label">💡 Концепция</div>
+  ${modPanel('desc', descViewHtml, descEditHtml)}
+  <div class="modp-section-divider"></div>
+  <div class="modp-section-label">👥 Участники</div>
+  ${participantsHtml}
+  <button class="modp-edit-btn" id="modp-edit-participants-btn" style="margin-top:8px">✏ Редактировать участников</button>`;
+
+  document.getElementById('modp-panel-info').innerHTML = infoHtml;
 
   // ── СЦЕНАРИЙ ──
   document.getElementById('modp-panel-scenario').innerHTML = data.scenario
@@ -3626,6 +3673,17 @@ document.getElementById('modp-tabbar').addEventListener('click', e => {
   const tab = btn.dataset.modtab;
   document.querySelectorAll('.modp-tab').forEach(b => b.classList.toggle('active', b === btn));
   document.querySelectorAll('.modp-panel').forEach(p => p.classList.toggle('active', p.id === `modp-panel-${tab}`));
+});
+
+// Info panel: edit / save / cancel panel handlers
+document.getElementById('modp-panel-info').addEventListener('click', e => {
+  const editModBtn   = e.target.closest('[data-editmod]');
+  const saveModBtn   = e.target.closest('[data-savemod]');
+  const cancelModBtn = e.target.closest('[data-cancelmod]');
+
+  if (editModBtn)   { _modToggleEdit(editModBtn.dataset.editmod, true);      return; }
+  if (cancelModBtn) { _modToggleEdit(cancelModBtn.dataset.cancelmod, false);  return; }
+  if (saveModBtn)   { _modSavePanel(saveModBtn.dataset.savemod);              return; }
 });
 
 // Add an in-play session entry (Phase B)

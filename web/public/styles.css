@@ -8541,6 +8541,21 @@ a.md-link-loc:hover {
 }
 .modp-save-msg { font-size: var(--fs-sm); color: var(--c-success); }
 
+/* Info tab panels */
+.modp-info-title { font-size: var(--fs-lg, 18px); font-weight: 600; margin-bottom: 4px; }
+.modp-info-table { border-collapse: collapse; width: 100%; }
+.modp-info-table td { padding: 3px 8px 3px 0; font-size: var(--fs-sm, 12px); vertical-align: top; }
+.modp-info-lbl { color: var(--text2, #999); white-space: nowrap; padding-right: 12px; }
+.modp-concept-text { white-space: pre-wrap; font-size: var(--fs-sm, 12px); line-height: 1.5; }
+.modp-section-divider { height: 1px; background: var(--border, #333); margin: 12px 0; }
+.modp-section-label { font-size: var(--fs-sm, 12px); color: var(--text2, #999); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 6px; }
+.modp-participants-section { display: flex; gap: 16px; }
+.modp-part-col { flex: 1; }
+.modp-part-title { font-size: var(--fs-sm, 12px); font-weight: 600; margin-bottom: 4px; }
+.modp-part-list { list-style: none; padding: 0; margin: 0; font-size: var(--fs-sm, 12px); }
+.modp-part-list li { padding: 2px 0; }
+.modp-role { color: var(--text2, #999); }
+
 /* Participants chips */
 .moddet-chips-wrap { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 10px; }
 .moddet-chip {
