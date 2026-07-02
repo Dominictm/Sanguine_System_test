@@ -3119,6 +3119,7 @@ a:focus-visible {
 
 .chr-form-textarea {
   width: 96%;
+  font-size: 22px;
   resize: vertical;
   min-height: 90px;
   font-family: var(--text2);
@@ -4352,7 +4353,7 @@ a:focus-visible {
 
 /* ── Location Detail Modal ──────────────────────────────────── */
 .modal-loc-detail {
-  width: min(1000px, 96vw);
+  width: min(1300px, 96vw);
   height: min(82vh, 750px);
   padding: 0;
   overflow: hidden;
@@ -9258,7 +9259,7 @@ tr.rumor-told:hover .rumor-cb-cell {
 /* ── Location Edit/Create Modal ─────────────────────────────────────────── */
 
 .loc-edit-modal {
-  width: min(620px, 96vw);
+  width: min(1300px, 96vw);
   max-height: 90vh;
   overflow: hidden;
   display: flex;

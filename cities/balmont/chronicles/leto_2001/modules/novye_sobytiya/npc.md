@@ -8,6 +8,7 @@
 ## 🎭 Игровые персонажи (ПК)
 
 - джу — Персонаж игрока
+- джуди — Персонаж игрока → 🔗 [Карточка](../../../../characters/mortals/dzhudi/dzhudi.md)
 
 ---
 
@@ -22,8 +23,6 @@
 
 > Карточки в `npc/`. Условия продвижения — `system/rules/module_rules.md`.
 
-- джу — роль → 🔗 [Карточка](npc/dzhu/dzhu.md)
-- Уличные Банды — роль → 🔗 [Карточка](npc/ulichnye_bandy/ulichnye_bandy.md)
-- Куратор сцены — роль → 🔗 [Карточка](npc/kurator_stseny/kurator_stseny.md)
-- Старый граф, соблюдающий традиции, его мотивация — роль → 🔗 [Карточка](npc/staryy_graf_soblyudayuschiy_traditsii_ego_motivatsiya/staryy_graf_soblyudayuschiy_traditsii_ego_motivatsiya.md)
-- Их роль — роль → 🔗 [Карточка](npc/ih_rol/ih_rol.md)
+- Маркус Вэйн — роль → 🔗 [Карточка](npc/markus_veyn/markus_veyn.md)
+- Саймон — роль → 🔗 [Карточка](npc/saymon/saymon.md)
+- Администратор магазина Мистер Гейтс — роль → 🔗 [Карточка](npc/administrator_magazina_mister_geyts/administrator_magazina_mister_geyts.md)
