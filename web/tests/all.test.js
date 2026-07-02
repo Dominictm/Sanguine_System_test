@@ -1362,6 +1362,7 @@ describe('API — integration', () => {
       const raw = await fs.readFile(path.join(typedDir, `${namedType}.md`), 'utf-8');
       assert.match(raw, /\|\s*\*\*Тип\*\*\s*\|\s*Сольник\s*\|/);
       assert.match(raw, /\|\s*\*\*Тон\*\*\s*\|\s*Городской нуар\s*\|/);
+      assert.doesNotMatch(raw, /\|\s*\*\*Локация\*\*\s*\|/);
       await apiJson(`/api/chronicles/${encodeURIComponent(chr)}/modules/${encodeURIComponent(namedType)}${CITY}`, { method: 'DELETE' });
 
       const noType = `test_notype_mod_${Date.now()}`;
