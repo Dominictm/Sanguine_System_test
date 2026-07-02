@@ -240,6 +240,59 @@ function tableCell(content, label) {
   return m ? m[1].trim() : null;
 }
 
+// ── Character card: editable field labels ────────────────────────────────────
+// Разделяется routes/characters.js (PUT /fields) и server.js (charInfoLines —
+// подмешивание карточных фактов в AI-промты генерации).
+const EDITABLE_FIELD_MAP = {
+  clan:         'Клан',
+  sect:         'Секта',
+  generation:   'Поколение',
+  birthYear:    'Год рождения',
+  embraceYear:  'Год обращения',
+  sire:         'Сир',
+  childe:       'Дитя',
+  location:     'Домен / Локация',
+  hierarchy:    'Иерархия в городе',
+  derangements: 'Деранжементы / Особенности',
+  disciplines:  'Дисциплины',
+  profession:   'Профессия',
+  role:         'Роль',
+  belonging:    'Принадлежность',
+  biography:    'Биография',
+  appearance:   'Внешность',
+  voice:        'Голос',
+  personality:  'Характер',
+  nature:       'Натура',
+  demeanor:     'Маска',
+  concept:      'Амплуа',
+  // ── Линейко-специфичные поля (феи/смертные/иное) ──
+  race:         'Раса',
+  kith:         'Род',
+  court:        'Двор',
+  title:        'Титул',
+  features:     'Особенности / Способности',
+  relatives:    'Родственники',
+  attitude:     'Отношение к сверхъестественному',
+};
+
+// Card fields that are mirrored in the V20 sheet's «🧩 Шапка» header table — kept in
+// sync both ways: edits to the card push into an existing sheet (see _syncSheetHeader),
+// and a freshly (re)generated sheet has these re-stamped from the card so the AI can't
+// drift them from what's already known (see _generateV20Sheet's post-process below).
+const SHEET_HEADER_FROM_CARD = {
+  name: 'Имя', clan: 'Клан', generation: 'Поколение', sire: 'Сир',
+  nature: 'Натура', demeanor: 'Маска', concept: 'Амплуа',
+};
+
+// Replace the value cell of a «| **Label...** | value |» row in the sheet's header
+// table. Matches the label by prefix (handles suffixes like «Клан (Clan)»). No-op if
+// the row isn't found — never fabricates table structure that isn't already there.
+function _setSheetHeaderCell(md, labelPrefix, value) {
+  const escaped = String(labelPrefix).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const re = new RegExp(`^(\\|\\s*\\*\\*${escaped}[^*]*\\*\\*\\s*\\|\\s*)[^|]*(\\|)`, 'm');
+  return re.test(md) ? md.replace(re, (_, pre, post) => `${pre}${value} ${post}`) : md;
+}
+
 module.exports = {
   ROOT, CITIES_DIR, DEFAULT_CITY,
   cityDir, charsDir, locsDir, chroniclesDir, archiveDir,
@@ -251,4 +304,5 @@ module.exports = {
   getAllCharacters, getAllLocations, findLocMdPath, listModules,
   readOpenThreadsRaw,
   countMdFiles, mapLimit, tableCell,
+  EDITABLE_FIELD_MAP, SHEET_HEADER_FROM_CARD, _setSheetHeaderCell,
 };
