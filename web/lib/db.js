@@ -6,7 +6,7 @@
 
 const path = require('path');
 const fs   = require('fs').promises;
-const { parseCharacter, parseLocation } = require('./parsers');
+const { parseCharacter, parseLocation, parseEvent } = require('./parsers');
 
 const ROOT = path.join(__dirname, '..', '..');
 
@@ -206,6 +206,146 @@ async function readOpenThreadsRaw(city = DEFAULT_CITY) {
   return all;
 }
 
+// ── Chronicle event aggregation ────────────────────────────────────────────────
+// Shared by routes/chronicles.js (chronicle-level views) and server.js
+// (/api/status, /api/integrity, /api/run-tool) — moved here (E1.2) so both sides
+// use one implementation instead of drifting.
+const RU_MONTH_STEMS = [
+  ['январ', 1], ['феврал', 2], ['март', 3], ['апрел', 4], ['мая', 5], ['май', 5],
+  ['июн', 6], ['июл', 7], ['август', 8], ['сентябр', 9], ['октябр', 10], ['ноябр', 11], ['декабр', 12]
+];
+
+// Numeric sort score for event dates: larger = more recent.
+// Handles "Декабрь 2010, начало месяца", "Ноябрь 2010, суббота ~22:00",
+// ISO "2010-11-15", plain "март 2010", etc.
+function eventDateScore(dateStr) {
+  const s = (dateStr || '').toLowerCase();
+
+  // Year
+  const yearM = s.match(/(\d{4})/);
+  const year  = yearM ? parseInt(yearM[1]) : 0;
+
+  // Month
+  let month = 0;
+  for (const [stem, n] of RU_MONTH_STEMS) { if (s.includes(stem)) { month = n; break; } }
+  // ISO fallback: YYYY-MM or YYYY-MM-DD
+  if (!month) { const mm = s.match(/\d{4}-(\d{2})/); if (mm) month = parseInt(mm[1]); }
+
+  // Day within month (1-31 → position 1–31; qualifiers below)
+  let day = 15; // default: middle of month
+  const isoDay = s.match(/\d{4}-\d{2}-(\d{2})/);
+  if (isoDay) {
+    day = parseInt(isoDay[1]);
+  } else {
+    const dayM = s.match(/\b(\d{1,2})\s*(?:числ|д\.)/);
+    if (dayM) day = parseInt(dayM[1]);
+    else if (/начал|начало/.test(s)) day = 3;
+    else if (/середин/.test(s))     day = 15;
+    else if (/конец|конца|конц/.test(s)) day = 27;
+    else if (/конец\s*мес|late/i.test(s)) day = 27;
+  }
+
+  // Hour (for intra-day ordering): "~22:00", "04:00" etc.
+  let hour = 12;
+  const hrM = s.match(/(\d{1,2}):(\d{2})/);
+  if (hrM) hour = parseInt(hrM[1]);
+
+  return year * 100000000 + month * 1000000 + day * 10000 + hour * 100;
+}
+
+// Aggregate all ### 📅 events from chronicles/<chr>/events.md (the real per-event detail).
+async function aggregateEvents(city = DEFAULT_CITY) {
+  const out = [];
+  let chrs;
+  try { chrs = await fs.readdir(chroniclesDir(city), { withFileTypes: true }); } catch { return out; }
+  for (const ch of chrs) {
+    if (!ch.isDirectory()) continue;
+    const raw = await fs.readFile(path.join(chroniclesDir(city), ch.name, 'events.md'), 'utf-8').catch(() => null);
+    if (!raw) continue;
+    const content = raw.replace(/^﻿/, '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+    content.split(/\n(?=###\s*📅)/).filter(c => /^###\s*📅/.test(c.trim()))
+      .forEach(c => { const ev = parseEvent(c.trim(), out.length); ev.chronicle = ch.name; out.push(ev); });
+  }
+  // Sort newest → oldest by event date
+  out.sort((a, b) => eventDateScore(b.date) - eventDateScore(a.date));
+  // Re-assign sequential IDs after sort
+  out.forEach((ev, i) => { ev.id = i; });
+  return out;
+}
+
+// Skeleton content for a brand-new chronicle's events.md / open_threads.md.
+// Shared by routes/chronicles.js (chronicle create) and server.js (/api/run-tool
+// session-plan builder, which can recreate these files for an existing chronicle).
+function renderChronicleEventsSkeleton(displayName) {
+  return `# 📖 ${displayName} — События\n\n> Хроника города · сводка города — [events.md](../../archive/events.md)\n> Протокол записей — [chronicle.md](../../../../system/rules/chronicle.md)\n\n---\n\n`;
+}
+function renderOpenThreadsSkeleton(displayName) {
+  return `# 🧵 Открытые нити — ${displayName}\n\n| # | Нить | Источник | Статус | Приоритет |\n|---|---|---|---|---|\n\n## 🗂️ Архив закрытых\n\n*(пусто)*\n`;
+}
+
+// Recursively find/delete — shared by routes/chronicles.js (chronicle delete
+// preview + delete) and routes/modules.js (module delete).
+async function findMdFiles(dir) {
+  const result = [];
+  const entries = await fs.readdir(dir, { withFileTypes: true }).catch(() => []);
+  for (const e of entries) {
+    const full = path.join(dir, e.name);
+    if (e.isDirectory()) result.push(...await findMdFiles(full));
+    else if (e.name.endsWith('.md')) result.push(full);
+  }
+  return result;
+}
+async function rmdir(dir) {
+  const entries = await fs.readdir(dir, { withFileTypes: true }).catch(() => []);
+  for (const e of entries) {
+    const p = path.join(dir, e.name);
+    if (e.isDirectory()) await rmdir(p);
+    else await fs.unlink(p);
+  }
+  await fs.rmdir(dir);
+}
+
+// ── Fuzzy name matching ────────────────────────────────────────────────────────
+// Shared by server.js (/api/characters/:id/dialogue, module-only NPC fallback)
+// and routes/modules.js (NPC/location reuse during module fill, npc.md lookups).
+// Normalize a name for fuzzy matching (lowercase, ё→е, drop punctuation/emoji)
+function _normName(s) {
+  return String(s).toLowerCase().replace(/ё/g, 'е')
+    .replace(/[^\p{L}\s]/gu, ' ').replace(/\s+/g, ' ').trim();
+}
+// True if two names plausibly refer to the same entity (token-subset on tokens ≥3 chars)
+function _nameMatch(a, b) {
+  const na = _normName(a), nb = _normName(b);
+  if (!na || !nb) return false;
+  if (na === nb) return true;
+  const ta = na.split(' ').filter(t => t.length >= 3);
+  const tb = nb.split(' ').filter(t => t.length >= 3);
+  if (!ta.length || !tb.length) return false;
+  const [short, long] = ta.length <= tb.length ? [ta, tb] : [tb, ta];
+  return short.every(t => long.includes(t));
+}
+// Find a modular (non-canon) NPC card inside a module's npc/ folder by character name.
+async function _findModularNpcCard(npcRoot, name) {
+  const dirs = await fs.readdir(npcRoot, { withFileTypes: true }).catch(() => []);
+  for (const d of dirs) {
+    if (!d.isDirectory()) continue;
+    const card = await fs.readFile(path.join(npcRoot, d.name, `${d.name}.md`), 'utf-8').catch(() => '');
+    if (!card) continue;
+    // First heading of any level → strip emoji and «Карточка НПС:»-style prefixes, take part before « — »
+    const head = (card.match(/^#{1,6}\s+(.+)$/m)?.[1] || '')
+      .replace(/^[^\p{L}]+/u, '')
+      .replace(/^карточка\s+нпс\s*:?\s*/i, '')
+      .replace(/^нпс\s*:?\s*/i, '');
+    const cardName = head.split(/\s*[—–]\s*/)[0];      // «Гиль — модульный НПС» → «Гиль»
+    if (_nameMatch(cardName, name) || _nameMatch(head, name) || _normName(head).includes(_normName(name))) {
+      const clan = (card.match(/\*\*Клан(?:\s*\/\s*Раса)?:\*\*\s*([^\n|]+)/)?.[1]
+                 || card.match(/\|\s*\*\*Клан\*\*\s*\|\s*([^\n|]+)/)?.[1] || '').trim();
+      return { card, clan };
+    }
+  }
+  return null;
+}
+
 // ── Misc shared helpers ────────────────────────────────────────────────────────
 async function countMdFiles(dir) {
   let n = 0;
@@ -305,4 +445,8 @@ module.exports = {
   readOpenThreadsRaw,
   countMdFiles, mapLimit, tableCell,
   EDITABLE_FIELD_MAP, SHEET_HEADER_FROM_CARD, _setSheetHeaderCell,
+  RU_MONTH_STEMS, eventDateScore, aggregateEvents,
+  renderChronicleEventsSkeleton, renderOpenThreadsSkeleton,
+  findMdFiles, rmdir,
+  _normName, _nameMatch, _findModularNpcCard,
 };
