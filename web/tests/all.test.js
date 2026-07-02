@@ -163,22 +163,22 @@ describe('Parsers — unit', () => {
     it('already-ASCII slug is stable', () =>
       assert.equal(slugify('gerson'), 'gerson'));
 
-    it('browser parity — public/scripts.js _NTR mirrors CYRILLIC_TR', () => {
+    it('browser parity — public/utils.js _NTR mirrors CYRILLIC_TR', () => {
       const src = require('fs').readFileSync(
-        path.join(__dirname, '../public/scripts.js'), 'utf-8');
+        path.join(__dirname, '../public/utils.js'), 'utf-8');
       const m = src.match(/const _NTR\s*=\s*(\{[^}]*\})/);
-      assert.ok(m, '_NTR literal not found in scripts.js');
+      assert.ok(m, '_NTR literal not found in utils.js');
       // eslint-disable-next-line no-new-func
       const browserMap = (new Function(`return (${m[1]})`))();
       assert.deepEqual(browserMap, CYRILLIC_TR,
         'browser _NTR has diverged from canonical CYRILLIC_TR — keep them in sync');
     });
 
-    it('browser parity — public/scripts.js _LATIN_TR mirrors LATIN_TR', () => {
+    it('browser parity — public/utils.js _LATIN_TR mirrors LATIN_TR', () => {
       const src = require('fs').readFileSync(
-        path.join(__dirname, '../public/scripts.js'), 'utf-8');
+        path.join(__dirname, '../public/utils.js'), 'utf-8');
       const m = src.match(/const _LATIN_TR\s*=\s*(\{[^}]*\})/);
-      assert.ok(m, '_LATIN_TR literal not found in scripts.js');
+      assert.ok(m, '_LATIN_TR literal not found in utils.js');
       // eslint-disable-next-line no-new-func
       const browserMap = (new Function(`return (${m[1]})`))();
       assert.deepEqual(browserMap, LATIN_TR,
