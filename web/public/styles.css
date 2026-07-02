@@ -9522,6 +9522,24 @@ tr.rumor-told:hover .rumor-cb-cell {
   justify-content: flex-end;
 }
 
+/* Locations tab — mentioned list */
+.modp-locs-mentioned-list { list-style: none; padding: 0; margin: 0; }
+.modp-locs-mentioned-item {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 0; border-bottom: 1px solid var(--border, #333);
+  gap: 8px;
+}
+.modp-locs-mentioned-item:last-child { border-bottom: none; }
+.modp-locs-linked-badge { font-size: var(--fs-sm, 12px); color: var(--c-success, #4caf50); }
+.modp-locs-attach-btn, .modp-locs-create-btn {
+  background: none; border: 1px solid var(--border, #444);
+  color: var(--accent, #8b0000); padding: 2px 10px;
+  border-radius: 3px; font-size: var(--fs-sm, 12px); cursor: pointer;
+  white-space: nowrap; flex-shrink: 0;
+}
+.modp-locs-attach-btn:hover, .modp-locs-create-btn:hover { background: rgba(139,0,0,.12); }
+.modp-locs-attach-btn:disabled { opacity: .5; cursor: default; }
+
 /* Tablets in portrait (iPad classic/mini 768px, iPad Air 820px) and large
    phones: stack the detail modals (image over content) so the fixed image
    column never crushes the text column down to an unreadable sliver.

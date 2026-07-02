@@ -10089,12 +10089,30 @@ function _renderModuleLocPanel(data) {
       }).join('')
     : '<div class="modp-empty" style="padding:8px 0">Связанных локаций нет</div>';
 
-  const extractedHtml = extracted.length
-    ? extracted.map(loc => `
-        <div class="modp-location">
-          <div class="modp-location-name">${escHtml(loc.name)}</div>
-          <div class="modp-location-desc">${escHtml(loc.description || '')}</div>
-        </div>`).join('')
+  // «Mentioned in scenario» — with quick-attach buttons
+  const mentionedHtml = extracted.length
+    ? `<ul class="modp-locs-mentioned-list">
+        ${extracted.map(loc => {
+          const locName = loc.name || '';
+          const isLinked = linked.some(
+            l => (l.name || l.title || l.slug || '').toLowerCase() === locName.toLowerCase());
+          const existsInCity = (STATE.locations || []).find(
+            l => (l.name || l.title || '').toLowerCase() === locName.toLowerCase());
+          const attachSlug = existsInCity?.slug;
+          return `<li class="modp-locs-mentioned-item">
+            <span>${escHtml(locName)}</span>
+            ${isLinked
+              ? `<span class="modp-locs-linked-badge">✓ Прикреплена</span>`
+              : attachSlug
+                ? `<button class="modp-locs-attach-btn"
+                     data-attach-slug="${escHtml(attachSlug)}"
+                     data-attach-name="${escHtml(locName)}">📎 Прикрепить</button>`
+                : `<button class="modp-locs-create-btn"
+                     data-create-name="${escHtml(locName)}">✨ Создать карточку</button>`
+            }
+          </li>`;
+        }).join('')}
+      </ul>`
     : '';
 
   panel.innerHTML = `
@@ -10126,7 +10144,7 @@ function _renderModuleLocPanel(data) {
     <div class="modp-locs-section-title">Связанные локации</div>
     <div class="modp-loc-chip-list" id="modp-loc-chip-list">${linkedHtml}</div>
 
-    ${extractedHtml ? `<div class="modp-locs-section-title">Упомянуты в сценарии</div>${extractedHtml}` : ''}
+    ${mentionedHtml ? `<div class="modp-locs-section-title">Упомянуты в сценарии</div>${mentionedHtml}` : ''}
   `;
 
   // ── Event wiring for this panel ──────────────────────────────────
@@ -10163,6 +10181,39 @@ function _renderModuleLocPanel(data) {
     if (chip) {
       const slug = chip.dataset.slug;
       if (slug) { ensureLocsLoaded().then(() => openLocDetail(slug)); }
+    }
+  });
+
+  // Quick-attach existing location from mentioned list
+  panel.addEventListener('click', e => {
+    const attachBtn = e.target.closest('[data-attach-slug]');
+    if (attachBtn) {
+      const slug = attachBtn.dataset.attachSlug;
+      if (!slug) return;
+      attachBtn.disabled = true;
+      _modLocLink(chronicle, modName, slug).catch(() => { attachBtn.disabled = false; });
+      return;
+    }
+
+    // Create new location card with pre-filled name
+    const createLocBtn = e.target.closest('[data-create-name]');
+    if (createLocBtn) {
+      const locName = createLocBtn.dataset.createName;
+      if (typeof openLocEditModal === 'function') {
+        openLocEditModal(null);
+        // Pre-fill name after modal opens (next tick)
+        setTimeout(() => {
+          const nameInput = document.getElementById('loc-edit-name');
+          if (nameInput) nameInput.value = locName;
+        }, 0);
+      } else {
+        const modal = document.getElementById('loc-edit-modal');
+        if (modal) {
+          modal.style.display = 'flex';
+          const nameInput = document.getElementById('loc-edit-name');
+          if (nameInput) nameInput.value = locName;
+        }
+      }
     }
   });
 
