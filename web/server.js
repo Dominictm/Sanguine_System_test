@@ -27,6 +27,7 @@ const {
 } = require('./lib/db');
 
 const { C, serverError, aiRateLimit } = require('./lib/http');
+const { router: libraryRouter, loadDisciplines, loadPsychics } = require('./routes/library');
 // Load .env file (secrets not committed to git)
 try {
   const envRaw = require('fs').readFileSync(path.join(__dirname, '.env'), 'utf-8');
@@ -170,6 +171,10 @@ app.use((req, res, next) => {
 
   next();
 });
+
+
+// ── Доменные роутеры (routes/*.js) ────────────────────────────────────────────
+app.use(libraryRouter);
 
 // ── Markdown / card / chronicle parsers ───────────────────────────────────────
 // categorizeRel, parseCharacter, parseLocation, parseChronicle* and the md* helpers
@@ -2844,65 +2849,6 @@ ${styles.slice(0, 2000)}`;
   }
 });
 
-// ── Библиотека: справочник дисциплин (system/library/disciplines/*.md) ──────────
-// Город-нейтральные данные → кэшируются по mtime каталога.
-let _discCache = null; // { sig, list }
-const DISC_DIR = path.join(ROOT, 'system', 'library', 'disciplines');
-
-async function loadDisciplines() {
-  const files = (await fs.readdir(DISC_DIR).catch(() => null));
-  if (!files) return [];
-  const mds = files.filter(f => f.endsWith('.md') && f.toLowerCase() !== 'readme.md').sort();
-
-  // Сигнатура по mtime каждого файла: правка содержимого существующего .md
-  // не меняет mtime каталога, поэтому ключевать по нему нельзя (иначе кэш не сбросится).
-  const stats = await Promise.all(mds.map(f => fs.stat(path.join(DISC_DIR, f)).catch(() => null)));
-  const sig = mds.map((f, i) => `${f}:${stats[i] ? stats[i].mtimeMs : 0}`).join('|');
-  if (_discCache && _discCache.sig === sig) return _discCache.list;
-
-  const list = [];
-  for (const f of mds) {
-    const slug = f.replace(/\.md$/, '');
-    const md = await fs.readFile(path.join(DISC_DIR, f), 'utf-8').catch(() => '');
-    if (md) list.push(parseDisciplineMd(md, slug));
-  }
-  _discCache = { sig, list };
-  return list;
-}
-
-app.get('/api/library/disciplines', async (_req, res) => {
-  try { res.json(await loadDisciplines()); }
-  catch (e) { serverError(res, e); }
-});
-
-// ── Библиотека: справочник психических способностей (system/library/psychics/*.md) ──
-// Город-нейтральные данные → тот же mtime-кэш, что и у дисциплин (см. выше).
-let _psyCache = null; // { sig, list }
-const PSY_DIR = path.join(ROOT, 'system', 'library', 'psychics');
-
-async function loadPsychics() {
-  const files = (await fs.readdir(PSY_DIR).catch(() => null));
-  if (!files) return [];
-  const mds = files.filter(f => f.endsWith('.md') && f.toLowerCase() !== 'readme.md').sort();
-
-  const stats = await Promise.all(mds.map(f => fs.stat(path.join(PSY_DIR, f)).catch(() => null)));
-  const sig = mds.map((f, i) => `${f}:${stats[i] ? stats[i].mtimeMs : 0}`).join('|');
-  if (_psyCache && _psyCache.sig === sig) return _psyCache.list;
-
-  const list = [];
-  for (const f of mds) {
-    const slug = f.replace(/\.md$/, '');
-    const md = await fs.readFile(path.join(PSY_DIR, f), 'utf-8').catch(() => '');
-    if (md) list.push(parsePsychicMd(md, slug));
-  }
-  _psyCache = { sig, list };
-  return list;
-}
-
-app.get('/api/library/psychics', async (_req, res) => {
-  try { res.json(await loadPsychics()); }
-  catch (e) { serverError(res, e); }
-});
 
 app.get('/api/locations', async (req, res) => {
   try { res.json(await getAllLocations(reqCity(req))); }
