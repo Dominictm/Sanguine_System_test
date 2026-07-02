@@ -3392,6 +3392,27 @@ function _dlgFallbackNote(source) {
   return '';
 }
 
+function _renderParticipantChips(group, items) {
+  const chips = items.map(p => {
+    const nm = typeof p === 'string' ? p : (p.name || '');
+    return `<div class="moddet-chip" data-name="${escHtml(nm)}">
+      ${escHtml(nm)}
+      <button class="moddet-chip-rm" data-rmname="${escHtml(nm)}" data-rmgroup="${group}" title="Удалить">×</button>
+    </div>`;
+  }).join('');
+  return `
+    <div class="moddet-chips-wrap" id="moddet-${group}-chips">${chips}</div>
+    <div class="moddet-add-row">
+      <input class="moddet-add-input" id="moddet-${group}-add-input"
+        placeholder="${group === 'pcs' ? 'Имя персонажа игрока…' : 'Имя НПС…'}"
+        list="moddet-${group}-datalist" autocomplete="off">
+      <datalist id="moddet-${group}-datalist">
+        ${(STATE.characters || []).map(c => `<option value="${escHtml(c.name)}">`).join('')}
+      </datalist>
+      <button class="modp-save-btn" data-addchip="${group}" style="white-space:nowrap">+ Добавить</button>
+    </div>`;
+}
+
 function renderModulePage(data) {
   function modPanel(id, viewHtml, editHtml) {
     return `
@@ -3488,8 +3509,21 @@ function renderModulePage(data) {
   <div class="modp-section-label">👥 Участники</div>
   ${participantsHtml}
   <button class="modp-edit-btn" id="modp-edit-participants-btn" style="margin-top:8px">✏ Редактировать участников</button>`;
+  const participantsEditHtml = `
+  <div id="moddet-participants-panel" style="display:none;margin-top:12px">
+    <div class="modp-section-label">🎭 Персонажи игроков</div>
+    ${_renderParticipantChips('pcs', data.pcs || [])}
+    <div class="modp-section-label" style="margin-top:12px">👤 НПС</div>
+    ${_renderParticipantChips('npcs', data.npcs || [])}
+    <div class="modp-edit-bar" style="display:flex;margin-top:12px" id="moddet-participants-bar">
+      <button class="modp-save-btn" data-savemod="participants">Сохранить</button>
+      <button class="modp-cancel-btn" id="moddet-participants-cancel">Отмена</button>
+      <span class="modp-save-msg" id="moddet-participants-msg" style="display:none">✓ Сохранено</span>
+    </div>
+  </div>`;
+  const infoHtmlFull = infoHtml + participantsEditHtml;
 
-  document.getElementById('modp-panel-info').innerHTML = infoHtml;
+  document.getElementById('modp-panel-info').innerHTML = infoHtmlFull;
 
   // ── СЦЕНАРИЙ ──
   document.getElementById('modp-panel-scenario').innerHTML = data.scenario
@@ -3684,6 +3718,47 @@ document.getElementById('modp-panel-info').addEventListener('click', e => {
   if (editModBtn)   { _modToggleEdit(editModBtn.dataset.editmod, true);      return; }
   if (cancelModBtn) { _modToggleEdit(cancelModBtn.dataset.cancelmod, false);  return; }
   if (saveModBtn)   { _modSavePanel(saveModBtn.dataset.savemod);              return; }
+
+  // Toggle participants edit panel
+  if (e.target.id === 'modp-edit-participants-btn') {
+    const panel = document.getElementById('moddet-participants-panel');
+    if (panel) panel.style.display = panel.style.display === 'none' ? '' : 'none';
+    return;
+  }
+
+  // Cancel participants editing
+  if (e.target.id === 'moddet-participants-cancel') {
+    const panel = document.getElementById('moddet-participants-panel');
+    if (panel) panel.style.display = 'none';
+    return;
+  }
+
+  // Remove chip
+  const rmBtn = e.target.closest('[data-rmname]');
+  if (rmBtn) {
+    const chip = rmBtn.closest('.moddet-chip');
+    if (chip) chip.remove();
+    return;
+  }
+
+  // Add chip
+  const addChipBtn = e.target.closest('[data-addchip]');
+  if (addChipBtn) {
+    const group  = addChipBtn.dataset.addchip;
+    const input  = document.getElementById(`moddet-${group}-add-input`);
+    const nm     = input?.value?.trim();
+    if (!nm) return;
+    const chips  = document.getElementById(`moddet-${group}-chips`);
+    if (chips) {
+      const div = document.createElement('div');
+      div.className = 'moddet-chip';
+      div.dataset.name = nm;
+      div.innerHTML = `${escHtml(nm)}<button class="moddet-chip-rm" data-rmname="${escHtml(nm)}" data-rmgroup="${group}" title="Удалить">×</button>`;
+      chips.appendChild(div);
+    }
+    if (input) input.value = '';
+    return;
+  }
 });
 
 // Add an in-play session entry (Phase B)
