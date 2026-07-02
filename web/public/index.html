@@ -237,6 +237,8 @@
         </div>
       </div>
 
+      <div id="modp-gen-result" class="modp-gen-result" style="display:none"></div>
+
       <div class="modp-tabbar" id="modp-tabbar">
         <button class="modp-tab active" data-modtab="info">ℹ Краткое</button>
         <button class="modp-tab" data-modtab="scenario">📝 Сценарий</button>
@@ -423,6 +425,23 @@
         <div class="chr-modal-actions">
           <button id="chr-delete-cancel" class="chr-modal-btn cancel">Отмена</button>
           <button id="chr-delete-confirm" class="chr-modal-btn danger" disabled>Удалить</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Module delete confirmation (module detail page) -->
+    <div id="modp-delete-modal" class="chr-modal-backdrop">
+      <div class="chr-modal" style="max-width:440px">
+        <div class="chr-modal-title">🗑 Удалить модуль?</div>
+        <div id="modp-del-preview" class="chr-modal-body"></div>
+        <div style="margin:8px 16px;font-size:var(--fs-sm);color:var(--text2)">
+          <label>
+            <input type="checkbox" id="modp-del-unlock-check"> Я понимаю последствия
+          </label>
+        </div>
+        <div class="chr-modal-actions">
+          <button id="modp-del-cancel-btn" class="chr-modal-btn cancel">Отмена</button>
+          <button id="modp-del-confirm-btn" class="chr-modal-btn danger" disabled>Удалить</button>
         </div>
       </div>
     </div>

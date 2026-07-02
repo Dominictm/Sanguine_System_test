@@ -4198,8 +4198,16 @@ document.getElementById('modp-gen-btn').addEventListener('click', async () => {
         lines.push(`${sev} ${w.character}: ${w.issue}`);
       }
     }
-    alert(lines.join('\n'));
-    loadModulePage();
+    const resultEl = document.getElementById('modp-gen-result');
+    if (resultEl) {
+      resultEl.innerHTML = `<div class="modp-gen-result-inner">
+        <div class="modp-gen-result-title">✅ Сгенерировано</div>
+        ${lines.slice(1).map(l => l ? `<div>${escHtml(l)}</div>` : '').join('')}
+      </div>`;
+      resultEl.style.display = '';
+      setTimeout(() => { resultEl.style.display = 'none'; }, 8000);
+    }
+    _reloadModulePage();
   } catch (e) {
     alert('Ошибка: ' + e.message);
   } finally {
@@ -4245,29 +4253,56 @@ document.getElementById('modp-close-btn').addEventListener('click', async () => 
 document.getElementById('modp-del-btn').addEventListener('click', async () => {
   if (!STATE.currentModule) return;
   const { chronicle, name } = STATE.currentModule;
-  if (!confirm(`Удалить модуль «${name}» безвозвратно?\nБудут удалены: папка модуля, его записи событий из хроники, ссылки из дневников и модульные (неканоничные) НПС.`)) return;
-  if (!confirm('Точно удалить? Отменить нельзя.')) return;
+  const qs = window.location.search;
 
-  const btn = document.getElementById('modp-del-btn');
-  btn.disabled = true; btn.textContent = '⏳ Удаление...';
-  try {
-    const qs = window.location.search;
-    const d  = await fetch(
-      `/api/chronicles/${encodeURIComponent(chronicle)}/modules/${encodeURIComponent(name)}${qs}`,
-      { method: 'DELETE', headers: { 'Content-Type': 'application/json' } }
-    ).then(r => r.json());
-    if (!d.ok) { alert('Ошибка удаления: ' + (d.error || 'Неизвестная ошибка')); return; }
-    const lines = ['✓ Модуль удалён'];
-    if (d.removedEvents)        lines.push(`📖 Удалено событий из хроники: ${d.removedEvents}`);
-    if (d.cleanedChars?.length) lines.push(`📜 Очищены дневники: ${d.cleanedChars.join(', ')}`);
-    if (d.episodicSlugs?.length) lines.push(`🧛 Удалены модульные НПС: ${d.episodicSlugs.join(', ')}`);
-    alert(lines.join('\n'));
-    navigate('modules');
-  } catch (e) {
-    alert('Ошибка: ' + e.message);
-  } finally {
-    btn.disabled = false; btn.textContent = '🗑 Удалить модуль';
+  // Load preview data before showing modal
+  const preview = await fetch(
+    `/api/chronicles/${encodeURIComponent(chronicle)}/modules/${encodeURIComponent(name)}/delete-preview${qs}`
+  ).then(r => r.json()).catch(() => null);
+
+  const previewEl = document.getElementById('modp-del-preview');
+  if (previewEl) {
+    const parts = [];
+    if (preview?.fileCount)           parts.push(`Файлов MD: <b>${preview.fileCount}</b>`);
+    if (preview?.modularNpcs?.length) parts.push(`Модульных НПС: <b>${escHtml(preview.modularNpcs.join(', '))}</b>`);
+    if (preview?.eventCount)          parts.push(`Событий в хронике: <b>${preview.eventCount}</b>`);
+    if (preview?.affectedChars?.length) parts.push(`Дневники: <b>${escHtml(preview.affectedChars.join(', '))}</b>`);
+    previewEl.innerHTML = parts.length
+      ? `<ul style="margin:0;padding-left:18px">${parts.map(p => `<li>${p}</li>`).join('')}</ul>`
+      : '<div style="color:var(--text2)">Данные недоступны</div>';
   }
+
+  const unlockCheck = document.getElementById('modp-del-unlock-check');
+  const confirmBtn  = document.getElementById('modp-del-confirm-btn');
+  if (unlockCheck) unlockCheck.checked = false;
+  if (confirmBtn)  confirmBtn.disabled = true;
+  if (unlockCheck) unlockCheck.onchange = () => {
+    if (confirmBtn) confirmBtn.disabled = !unlockCheck.checked;
+  };
+
+  document.getElementById('modp-del-cancel-btn')?.addEventListener('click', () => {
+    document.getElementById('modp-delete-modal').classList.remove('open');
+  }, { once: true });
+
+  document.getElementById('modp-del-confirm-btn')?.addEventListener('click', async () => {
+    document.getElementById('modp-delete-modal').classList.remove('open');
+    const delBtn = document.getElementById('modp-del-btn');
+    if (delBtn) { delBtn.disabled = true; delBtn.textContent = '⏳ Удаление...'; }
+    try {
+      const d = await fetch(
+        `/api/chronicles/${encodeURIComponent(chronicle)}/modules/${encodeURIComponent(name)}${qs}`,
+        { method: 'DELETE', headers: { 'Content-Type': 'application/json' } }
+      ).then(r => r.json());
+      if (!d.ok) { alert('Ошибка удаления: ' + (d.error || 'Неизвестная ошибка')); return; }
+      navigate('modules');
+    } catch (e) {
+      alert('Ошибка: ' + e.message);
+    } finally {
+      if (delBtn) { delBtn.disabled = false; delBtn.textContent = '🗑 Удалить модуль'; }
+    }
+  }, { once: true });
+
+  document.getElementById('modp-delete-modal').classList.add('open');
 });
 
 // Global click delegation for md-link-char / md-link-loc produced by resolveMdLink()

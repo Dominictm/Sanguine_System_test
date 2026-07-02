@@ -9540,6 +9540,30 @@ tr.rumor-told:hover .rumor-cb-cell {
 .modp-locs-attach-btn:hover, .modp-locs-create-btn:hover { background: rgba(139,0,0,.12); }
 .modp-locs-attach-btn:disabled { opacity: .5; cursor: default; }
 
+/* Module gen result inline panel */
+.modp-gen-result { margin: 6px 0 0; }
+.modp-gen-result-inner {
+  background: var(--bg3);
+  border: 1px solid var(--c-success);
+  border-radius: 6px;
+  padding: 10px 14px;
+  font-size: var(--fs-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.modp-gen-result-title { font-weight: 600; color: var(--c-success); }
+.modp-gen-warn { color: var(--c-danger-text); }
+
+.btn-danger {
+  background: var(--c-danger);
+  color: #fff; border: none;
+  padding: 8px 20px;
+  border-radius: 4px;
+  cursor: pointer; font-size: var(--fs-sm);
+}
+.btn-danger:disabled { opacity: .4; cursor: default; }
+
 /* Tablets in portrait (iPad classic/mini 768px, iPad Air 820px) and large
    phones: stack the detail modals (image over content) so the fixed image
    column never crushes the text column down to an unreadable sliver.
