@@ -3109,28 +3109,31 @@ function renderModulePage(data) {
     : '<div class="cdet-empty">Концепция не заполнена</div>';
   const descEditHtml = `<textarea class="cdet-edit-textarea" id="moddet-desc-ta" rows="8" style="width:100%">${escHtml(data.description || '')}</textarea>`;
 
-  // Participants display (read-only, editing in Task 7)
-  const pcList  = (data.pcs  || []).map(p => `<li>${escHtml(typeof p === 'string' ? p : p.name || '')}${p.role ? ` <span class="modp-role">${escHtml(p.role)}</span>` : ''}</li>`).join('');
-  const npcList = (data.npcs || []).map(p => `<li>${escHtml(typeof p === 'string' ? p : p.name || '')}${p.role ? ` <span class="modp-role">${escHtml(p.role)}</span>` : ''}</li>`).join('');
-  const participantsHtml = `
-  <div class="modp-participants-section">
-    <div class="modp-part-col">
-      <div class="modp-part-title">🎭 Персонажи игроков</div>
-      ${pcList ? `<ul class="modp-part-list">${pcList}</ul>` : '<div class="cdet-empty">Не указаны</div>'}
-    </div>
-    <div class="modp-part-col">
-      <div class="modp-part-title">👤 НПС</div>
-      ${npcList ? `<ul class="modp-part-list">${npcList}</ul>` : '<div class="cdet-empty">Не указаны</div>'}
-    </div>
-  </div>`;
+  // Participants display — двухколоночная таблица: строка на персонажа/НПС,
+  // независимо от того, сколько их в каждой из колонок.
+  const pcNames  = (data.pcs  || []).map(p => typeof p === 'string' ? p : (p.name || ''));
+  const npcNames = (data.npcs || []).map(p => typeof p === 'string' ? p : (p.name || ''));
+  const partRows = Math.max(pcNames.length, npcNames.length);
+  const participantsHtml = partRows
+    ? `<table class="modp-participants-table">
+        <thead><tr><th>🎭 Персонажи игроков</th><th>👤 НПС</th></tr></thead>
+        <tbody>
+          ${Array.from({ length: partRows }, (_, i) =>
+            `<tr><td>${escHtml(pcNames[i] || '')}</td><td>${escHtml(npcNames[i] || '')}</td></tr>`
+          ).join('')}
+        </tbody>
+      </table>`
+    : '<div class="cdet-empty">Участники не указаны</div>';
 
   const infoHtml = `
   <div class="modp-section-label">💡 Концепция</div>
   ${modPanel('desc', descViewHtml, descEditHtml)}
   <div class="modp-section-divider"></div>
-  <div class="modp-section-label">👥 Участники</div>
-  ${participantsHtml}
-  <button class="modp-edit-btn" id="modp-edit-participants-btn" style="margin-top:8px">✏ Редактировать участников</button>`;
+  <div class="modp-section-header-row">
+    <div class="modp-section-label">👥 Участники</div>
+    <button class="modp-edit-btn" id="modp-edit-participants-btn">✏ Редактировать</button>
+  </div>
+  ${participantsHtml}`;
   const participantsEditHtml = `
   <div id="moddet-participants-panel" style="display:none;margin-top:12px">
     <div class="modp-section-label">🎭 Персонажи игроков</div>
