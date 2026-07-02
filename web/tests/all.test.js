@@ -1355,12 +1355,13 @@ describe('API — integration', () => {
       if (!chr) return;
       const namedType = `test_type_mod_${Date.now()}`;
       const created = await apiJson(`/api/chronicles/${encodeURIComponent(chr)}/modules${CITY}`, {
-        method: 'POST', body: JSON.stringify({ name: namedType, time: '2010', slug: namedType, type: 'Сольник' }),
+        method: 'POST', body: JSON.stringify({ name: namedType, time: '2010', slug: namedType, type: 'Сольник', tone: 'Городской нуар' }),
       });
       assert.equal(created.status, 200);
       const typedDir = path.join(CITY_ROOT, 'chronicles', chr, 'modules', namedType);
       const raw = await fs.readFile(path.join(typedDir, `${namedType}.md`), 'utf-8');
       assert.match(raw, /\|\s*\*\*Тип\*\*\s*\|\s*Сольник\s*\|/);
+      assert.match(raw, /\|\s*\*\*Тон\*\*\s*\|\s*Городской нуар\s*\|/);
       await apiJson(`/api/chronicles/${encodeURIComponent(chr)}/modules/${encodeURIComponent(namedType)}${CITY}`, { method: 'DELETE' });
 
       const noType = `test_notype_mod_${Date.now()}`;
@@ -1372,6 +1373,43 @@ describe('API — integration', () => {
       const raw2 = await fs.readFile(path.join(noTypeDir, `${noType}.md`), 'utf-8');
       assert.match(raw2, /\|\s*\*\*Тип\*\*\s*\|\s*Игровая сессия\s*\|/);
       await apiJson(`/api/chronicles/${encodeURIComponent(chr)}/modules/${encodeURIComponent(noType)}${CITY}`, { method: 'DELETE' });
+    });
+
+    it('PUT /api/chronicles/:chr/modules/:mod/move — переносит модуль в другую хронику', async () => {
+      if (!chr) return;
+      const { body: allChrs } = await apiJson(`/api/chronicles${CITY}&include_hidden=1`);
+      const otherChr = (Array.isArray(allChrs) ? allChrs : []).map(c => c.slug).find(s => s !== chr);
+      if (!otherChr) return; // фикстура с одной хроникой — нечего использовать целью
+
+      const moveMod = `test_move_mod_${Date.now()}`;
+      const create = await apiJson(`/api/chronicles/${encodeURIComponent(chr)}/modules${CITY}`, {
+        method: 'POST', body: JSON.stringify({ name: moveMod, time: '2010', slug: moveMod }),
+      });
+      assert.equal(create.status, 200);
+      const srcDir = path.join(CITY_ROOT, 'chronicles', chr, 'modules', moveMod);
+      const dstDir = path.join(CITY_ROOT, 'chronicles', otherChr, 'modules', moveMod);
+
+      const move = await apiJson(`/api/chronicles/${encodeURIComponent(chr)}/modules/${encodeURIComponent(moveMod)}/move${CITY}`, {
+        method: 'PUT', body: JSON.stringify({ toChronicle: otherChr }),
+      });
+      assert.equal(move.status, 200);
+      assert.ok(move.body.ok);
+      assert.equal(move.body.chronicle, otherChr);
+      assert.equal(await fs.stat(srcDir).catch(() => null), null, 'модуль должен исчезнуть из исходной хроники');
+      assert.ok(await fs.stat(dstDir).catch(() => null), 'модуль должен появиться в целевой хронике');
+
+      const dstChrMd = await fs.readFile(path.join(CITY_ROOT, 'chronicles', otherChr, 'chronicle.md'), 'utf-8').catch(() => '');
+      assert.match(dstChrMd, new RegExp(`modules/${moveMod}/`));
+
+      await apiJson(`/api/chronicles/${encodeURIComponent(otherChr)}/modules/${encodeURIComponent(moveMod)}${CITY}`, { method: 'DELETE' });
+    });
+
+    it('PUT /api/chronicles/:chr/modules/:mod/move — целевая хроника не найдена → 404', async () => {
+      if (!chr || !mod) return;
+      const { status } = await apiJson(`/api/chronicles/${encodeURIComponent(chr)}/modules/${encodeURIComponent(mod)}/move${CITY}`, {
+        method: 'PUT', body: JSON.stringify({ toChronicle: '__nosuchchronicle__' }),
+      });
+      assert.equal(status, 404);
     });
 
     it('DELETE /api/chronicles/:chr/modules/:mod — неизвестный модуль → 404', async () => {

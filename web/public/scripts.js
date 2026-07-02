@@ -2432,7 +2432,7 @@ async function openModCreateModal(standalone) {
   try {
     _modCreateStandalone = standalone;
     _createPCs  = []; _createNPCs = [];
-    ['mod-create-name','mod-create-time','mod-create-slug','mod-create-content'].forEach(id => {
+    ['mod-create-name','mod-create-time','mod-create-slug','mod-create-content','mod-create-tone'].forEach(id => {
       const el = document.getElementById(id); if (el) el.value = '';
     });
     document.getElementById('mod-create-type').value = 'Игровая сессия';
@@ -2496,6 +2496,7 @@ document.getElementById('mod-create-submit').addEventListener('click', async () 
   const time    = document.getElementById('mod-create-time').value.trim();
   const slug    = document.getElementById('mod-create-slug').value.trim() || slugifyChr(name);
   const type    = document.getElementById('mod-create-type').value.trim();
+  const tone    = document.getElementById('mod-create-tone').value.trim();
   const content = document.getElementById('mod-create-content').value.trim();
   const errEl   = document.getElementById('mod-create-error');
   const btn     = document.getElementById('mod-create-submit');
@@ -2516,7 +2517,7 @@ document.getElementById('mod-create-submit').addEventListener('click', async () 
     const qs = window.location.search;
     const d  = await fetch(`/api/chronicles/${encodeURIComponent(chr)}/modules${qs}`,
       { method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, time, slug, type, pcs: _createPCs, npcs: _createNPCs, content,
+        body: JSON.stringify({ name, time, slug, type, tone, pcs: _createPCs, npcs: _createNPCs, content,
           trackInChronology: document.getElementById('mod-create-track')?.checked !== false }) }
     ).then(r => r.json());
 
@@ -2905,7 +2906,10 @@ async function loadModulePage() {
   document.querySelectorAll('.modp-tab').forEach(b => b.classList.toggle('active', b.dataset.modtab === 'info'));
   document.querySelectorAll('.modp-panel').forEach(p => p.classList.toggle('active', p.id === 'modp-panel-info'));
 
-  // Show loading state
+  // Show loading state (also closes header quick-edit left open from a previous module)
+  document.getElementById('modp-header-edit').style.display = 'none';
+  document.getElementById('modp-title').style.display  = '';
+  document.getElementById('modp-badges').style.display  = '';
   document.getElementById('modp-title').textContent = '⏳ Загрузка...';
   document.getElementById('modp-badges').innerHTML = '';
   ['info','scenario','events','npcs','locations','threads'].forEach(t =>
@@ -3803,6 +3807,83 @@ async function _onModuleSheetBtn(btn) {
 
 // Back button
 document.getElementById('modp-back-btn').addEventListener('click', () => navigate('modules'));
+
+// ── Header quick-edit: название/тип/дата/тон/хроника ──────────────────────────
+document.getElementById('modp-header-edit-btn').addEventListener('click', async () => {
+  const data = STATE.currentModuleData || {};
+  document.getElementById('modp-hedit-title').value = data.title || data.name || '';
+  document.getElementById('modp-hedit-type').value  = data.type  || '';
+  document.getElementById('modp-hedit-time').value  = data.time  || '';
+  document.getElementById('modp-hedit-tone').value  = data.tone  || '';
+
+  document.getElementById('modp-title').style.display  = 'none';
+  document.getElementById('modp-badges').style.display  = 'none';
+  document.getElementById('modp-header-edit').style.display = '';
+
+  const chrSel = document.getElementById('modp-hedit-chronicle');
+  chrSel.innerHTML = '<option value="">⏳ Загрузка...</option>';
+  try {
+    const qs = window.location.search;
+    const baseQs = qs ? qs + '&include_hidden=1' : '?include_hidden=1';
+    const chrs = await fetch(`/api/chronicles${baseQs}`).then(r => r.json());
+    chrSel.innerHTML = (Array.isArray(chrs) ? chrs : []).map(c =>
+      `<option value="${escAttr(c.slug)}"${c.slug === data.chronicle ? ' selected' : ''}>${escHtml((c.hidden ? '📂 ' : '') + (c.display || c.slug))}</option>`
+    ).join('');
+  } catch {
+    chrSel.innerHTML = `<option value="${escAttr(data.chronicle || '')}">${escHtml(data.chronicle || '')}</option>`;
+  }
+});
+
+document.getElementById('modp-hedit-cancel').addEventListener('click', () => {
+  document.getElementById('modp-header-edit').style.display = 'none';
+  document.getElementById('modp-title').style.display  = '';
+  document.getElementById('modp-badges').style.display  = '';
+});
+
+document.getElementById('modp-hedit-save').addEventListener('click', async () => {
+  if (!STATE.currentModule) return;
+  const { chronicle, name } = STATE.currentModule;
+  const qs    = window.location.search;
+  const msgEl = document.getElementById('modp-hedit-msg');
+  const btn   = document.getElementById('modp-hedit-save');
+
+  const title = document.getElementById('modp-hedit-title').value.trim();
+  const type  = document.getElementById('modp-hedit-type').value.trim();
+  const time  = document.getElementById('modp-hedit-time').value.trim();
+  const tone  = document.getElementById('modp-hedit-tone').value.trim();
+  const toChr = document.getElementById('modp-hedit-chronicle').value;
+
+  if (!title) { showToast('Название не может быть пустым', 'warning'); return; }
+  if (!time)  { showToast('Укажи дату/время', 'warning'); return; }
+
+  btn.disabled = true;
+  try {
+    const r = await fetch(`/api/chronicles/${encodeURIComponent(chronicle)}/modules/${encodeURIComponent(name)}/fields${qs}`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fields: { title, type, time, tone } }),
+    });
+    if (!r.ok) throw new Error((await r.json()).error || r.statusText);
+
+    if (toChr && toChr !== chronicle) {
+      const mv = await fetch(`/api/chronicles/${encodeURIComponent(chronicle)}/modules/${encodeURIComponent(name)}/move${qs}`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ toChronicle: toChr }),
+      }).then(r => r.json());
+      if (!mv.ok) throw new Error(mv.error || 'Не удалось перенести модуль');
+      STATE.currentModule.chronicle = toChr;
+    }
+
+    document.getElementById('modp-header-edit').style.display = 'none';
+    document.getElementById('modp-title').style.display  = '';
+    document.getElementById('modp-badges').style.display  = '';
+    if (msgEl) { msgEl.style.display = ''; setTimeout(() => { msgEl.style.display = 'none'; }, 2000); }
+    await loadModulePage();
+  } catch (e) {
+    showToast('Ошибка: ' + e.message, 'error');
+  } finally {
+    btn.disabled = false;
+  }
+});
 
 // Generate module button — direct generation from existing module data
 document.getElementById('modp-gen-btn').addEventListener('click', async () => {

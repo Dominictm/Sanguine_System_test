@@ -229,12 +229,45 @@
         <div class="modp-header-btns">
           <button class="modp-back-btn" id="modp-back-btn">← Модули</button>
           <button class="modp-gen-btn" id="modp-gen-btn">🪄 Сгенерировать</button>
+          <button class="modp-edit-btn" id="modp-header-edit-btn">✏ Редактировать</button>
           <button class="modp-close-btn" id="modp-close-btn">🔒 Закрыть модуль</button>
           <button class="modp-del-btn" id="modp-del-btn">🗑 Удалить модуль</button>
         </div>
         <div class="modp-header-main">
           <h1 class="modp-title" id="modp-title">Загрузка...</h1>
           <div class="modp-badges" id="modp-badges"></div>
+
+          <div class="modp-header-edit" id="modp-header-edit" style="display:none">
+            <div class="chr-form-group">
+              <label class="chr-form-label">Название</label>
+              <input class="chr-form-input" id="modp-hedit-title">
+            </div>
+            <div class="mod-create-row">
+              <div class="chr-form-group" style="flex:1">
+                <label class="chr-form-label">Тип</label>
+                <input class="chr-form-input" id="modp-hedit-type" list="mod-create-type-list" autocomplete="off">
+              </div>
+              <div class="chr-form-group" style="flex:1">
+                <label class="chr-form-label">Дата / время</label>
+                <input class="chr-form-input" id="modp-hedit-time" autocomplete="off">
+              </div>
+            </div>
+            <div class="mod-create-row">
+              <div class="chr-form-group" style="flex:1">
+                <label class="chr-form-label">Тон</label>
+                <input class="chr-form-input" id="modp-hedit-tone" autocomplete="off">
+              </div>
+              <div class="chr-form-group" style="flex:1">
+                <label class="chr-form-label">Хроника</label>
+                <select class="chr-form-input" id="modp-hedit-chronicle"></select>
+              </div>
+            </div>
+            <div class="modp-edit-bar" style="display:flex">
+              <button class="modp-save-btn" id="modp-hedit-save">Сохранить</button>
+              <button class="modp-cancel-btn" id="modp-hedit-cancel">Отмена</button>
+              <span class="modp-save-msg" id="modp-hedit-msg" style="display:none">✓ Сохранено</span>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -323,14 +356,20 @@
             </div>
           </div>
 
-          <div class="chr-form-group">
-            <label class="chr-form-label">Тип</label>
-            <input class="chr-form-input" id="mod-create-type" list="mod-create-type-list" placeholder="Игровая сессия" autocomplete="off">
-            <datalist id="mod-create-type-list">
-              <option value="Игровая сессия">
-              <option value="Внесессионное событие">
-              <option value="Сольник">
-            </datalist>
+          <div class="mod-create-row">
+            <div class="chr-form-group" style="flex:1">
+              <label class="chr-form-label">Тип</label>
+              <input class="chr-form-input" id="mod-create-type" list="mod-create-type-list" placeholder="Игровая сессия" autocomplete="off">
+              <datalist id="mod-create-type-list">
+                <option value="Игровая сессия">
+                <option value="Внесессионное событие">
+                <option value="Сольник">
+              </datalist>
+            </div>
+            <div class="chr-form-group" style="flex:1">
+              <label class="chr-form-label">Тон <span class="chr-modal-dim">(необязательно)</span></label>
+              <input class="chr-form-input" id="mod-create-tone" placeholder="Городской нуар, мистика перекрёстков" autocomplete="off">
+            </div>
           </div>
 
           <div class="chr-form-group">

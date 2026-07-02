@@ -530,6 +530,7 @@ module.exports = function modulesRouter({
       await fs.mkdir(modDir, { recursive: true });
       const timeStr   = (time || '').trim();
       const typeStr   = (req.body.type || '').trim() || 'Игровая сессия';
+      const toneStr   = (req.body.tone || '').trim();
       const pcs       = Array.isArray(req.body.pcs)  ? req.body.pcs  : [];
       const npcs      = Array.isArray(req.body.npcs) ? req.body.npcs : [];
       const concept   = (req.body.content || '').trim();
@@ -551,6 +552,7 @@ module.exports = function modulesRouter({
         `| **Тип** | ${typeStr} |`,
         `| **Время** | ${timeStr || '⚠️ Уточнить'} |`,
         '| **Локация** |  |',
+        `| **Тон** | ${toneStr} |`,
         `| **Учитывать в хронологии** | ${track ? 'да' : 'нет'} |`,
         '',
         '---',
@@ -1409,6 +1411,48 @@ module.exports = function modulesRouter({
       res.json({ ok: true, mod, removedEvents, cleanedChars, episodicSlugs });
     } catch (e) {
       console.error('[delete-module]', e.message);
+      serverError(res, e);
+    }
+  });
+
+  // ── Move module to another chronicle ────────────────────────────────────────
+  // Moves the whole module directory; events.md entries stay with the ORIGINAL
+  // chronicle (they're written at session-log time and reference that chronicle's
+  // own timeline) — only the module folder + both chronicles' "## 🔗 Модули" link
+  // lists move/update.
+  router.put('/api/chronicles/:chr/modules/:mod/move', express.json(), async (req, res) => {
+    try {
+      const city = reqCity(req);
+      const { chr, mod } = req.params;
+      const toChronicle = (req.body?.toChronicle || '').trim();
+      if (chr.includes('..') || mod.includes('..') || toChronicle.includes('..'))
+        return res.status(400).json({ error: 'Недопустимое имя' });
+      if (!toChronicle) return res.status(400).json({ error: 'Укажи целевую хронику' });
+      if (toChronicle === chr) return res.json({ ok: true, mod, chronicle: chr });
+
+      const modDir = path.join(chroniclesDir(city), chr, 'modules', mod);
+      if (!await fs.stat(modDir).catch(() => null))
+        return res.status(404).json({ error: 'Модуль не найден' });
+
+      const toChrDir = path.join(chroniclesDir(city), toChronicle);
+      if (!await fs.stat(toChrDir).catch(() => null))
+        return res.status(404).json({ error: `Хроника «${toChronicle}» не найдена` });
+
+      const newModDir = path.join(toChrDir, 'modules', mod);
+      if (await fs.stat(newModDir).catch(() => null))
+        return res.status(409).json({ error: `В хронике «${toChronicle}» уже есть модуль «${mod}»` });
+
+      await fs.mkdir(path.join(toChrDir, 'modules'), { recursive: true });
+      await fs.rename(modDir, newModDir);
+
+      await syncChronicleModuleLinks(city, chr);
+      await syncChronicleModuleLinks(city, toChronicle);
+
+      invalidateChars(city);
+      console.log(`[move-module] ${city}: ${chr}/modules/${mod} → ${toChronicle}/modules/${mod}`);
+      res.json({ ok: true, mod, chronicle: toChronicle });
+    } catch (e) {
+      console.error('[move-module]', e.message);
       serverError(res, e);
     }
   });
