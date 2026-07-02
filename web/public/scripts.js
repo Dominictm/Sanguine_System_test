@@ -8769,6 +8769,88 @@ async function _locSavePanel(panel) {
   }
 }
 
+// ── Module page: editPanel helpers ────────────────────────────────────────────
+
+function _modToggleEdit(panel, enter) {
+  const viewEl = document.getElementById(`moddet-${panel}-view`);
+  const editEl = document.getElementById(`moddet-${panel}-edit`);
+  const barEl  = document.getElementById(`moddet-${panel}-bar`);
+  const msgEl  = document.getElementById(`moddet-${panel}-msg`);
+  if (!viewEl || !editEl) return;
+  viewEl.style.display = enter ? 'none' : '';
+  editEl.style.display = enter ? '' : 'none';
+  if (barEl) barEl.style.display = enter ? 'flex' : 'none';
+  if (msgEl) msgEl.style.display = 'none';
+}
+
+async function _modSavePanel(panel) {
+  const d   = STATE.currentModuleData;
+  const chr = d?.chronicle || STATE.currentModule?.chronicle;
+  const mod = d?.name      || STATE.currentModule?.name;
+  if (!chr || !mod) return;
+
+  const msgEl  = document.getElementById(`moddet-${panel}-msg`);
+  const fields = {};
+
+  if (panel === 'title') {
+    fields.title = document.getElementById('moddet-title-input')?.value || '';
+
+  } else if (panel === 'meta') {
+    for (const key of ['type', 'time', 'location', 'tone', 'format']) {
+      const el = document.getElementById(`moddet-meta-${key}`);
+      if (el) fields[key] = el.value;
+    }
+
+  } else if (panel === 'desc') {
+    fields.description = document.getElementById('moddet-desc-ta')?.value || '';
+
+  } else if (panel === 'participants') {
+    const pcChips  = document.querySelectorAll('#moddet-pcs-chips .moddet-chip');
+    const npcChips = document.querySelectorAll('#moddet-npcs-chips .moddet-chip');
+    fields.pcs  = Array.from(pcChips).map(c => c.dataset.name).filter(Boolean);
+    fields.npcs = Array.from(npcChips).map(c => c.dataset.name).filter(Boolean);
+
+  } else if (panel === 'scenario') {
+    const content = document.getElementById('moddet-scenario-ta')?.value || '';
+    try {
+      const r = await fetch(
+        `/api/chronicles/${encodeURIComponent(chr)}/modules/${encodeURIComponent(mod)}/scenario${window.location.search}`,
+        { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content }) }
+      );
+      if (!r.ok) throw new Error(await r.text());
+      if (msgEl) { msgEl.style.display = ''; setTimeout(() => { if (msgEl) msgEl.style.display = 'none'; }, 2500); }
+      _modToggleEdit(panel, false);
+      await _reloadModulePage();
+    } catch { if (msgEl) { msgEl.textContent = '✗ Ошибка'; msgEl.style.display = ''; } }
+    return;
+  }
+
+  try {
+    const r = await fetch(
+      `/api/chronicles/${encodeURIComponent(chr)}/modules/${encodeURIComponent(mod)}/fields${window.location.search}`,
+      { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fields }) }
+    );
+    if (!r.ok) throw new Error(await r.text());
+    if (msgEl) { msgEl.style.display = ''; setTimeout(() => { if (msgEl) msgEl.style.display = 'none'; }, 2500); }
+    _modToggleEdit(panel, false);
+    await _reloadModulePage();
+  } catch { if (msgEl) { msgEl.textContent = '✗ Ошибка'; msgEl.style.display = ''; } }
+}
+
+async function _reloadModulePage() {
+  const chr = STATE.currentModule?.chronicle;
+  const mod = STATE.currentModule?.name;
+  if (!chr || !mod) return;
+  const activeTab = document.querySelector('.modp-tab.active')?.dataset?.tab || 'info';
+  const data = await fetch(
+    `/api/chronicles/${encodeURIComponent(chr)}/modules/${encodeURIComponent(mod)}/detail${window.location.search}`
+  ).then(r => r.json()).catch(() => null);
+  if (data) {
+    STATE.currentModuleData = data;
+    renderModulePage(data, activeTab);
+  }
+}
+
 function _locTriggerUpload(slug) {
   const input = document.createElement('input');
   input.type = 'file';

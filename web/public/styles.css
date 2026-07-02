@@ -8501,6 +8501,76 @@ a.md-link-loc:hover {
   opacity: 0.6;
 }
 
+/* Module page — editPanel */
+.modp-edit-btn {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--accent);
+  padding: 2px 10px;
+  border-radius: 3px;
+  font-size: var(--fs-sm);
+  cursor: pointer;
+  margin-bottom: 6px;
+}
+.modp-edit-btn:hover { background: rgba(139, 0, 0, .12); }
+
+.modp-edit-bar {
+  display: none;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+.modp-save-btn {
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  padding: 4px 14px;
+  border-radius: 3px;
+  font-size: var(--fs-sm);
+  cursor: pointer;
+}
+.modp-save-btn:hover { opacity: .85; }
+.modp-cancel-btn {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text2);
+  padding: 4px 12px;
+  border-radius: 3px;
+  font-size: var(--fs-sm);
+  cursor: pointer;
+}
+.modp-save-msg { font-size: var(--fs-sm); color: var(--c-success); }
+
+/* Participants chips */
+.moddet-chips-wrap { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 10px; }
+.moddet-chip {
+  display: flex; align-items: center; gap: 4px;
+  background: var(--bg4);
+  color: var(--text2);
+  border-radius: 20px;
+  padding: 2px 10px 2px 12px;
+  font-size: var(--fs-sm);
+}
+.moddet-chip-rm {
+  background: none; border: none; cursor: pointer;
+  color: var(--text2); font-size: 13px; line-height: 1;
+  padding: 0 2px;
+}
+.moddet-chip-rm:hover { color: var(--c-danger-text); }
+.moddet-add-row { display: flex; gap: 6px; margin-top: 4px; }
+.moddet-add-input {
+  flex: 1; padding: 4px 10px; border: 1px solid var(--border);
+  border-radius: 3px; background: var(--bg3);
+  color: var(--text); font-size: var(--fs-sm);
+}
+
+/* Scenario toolbar */
+.modp-scenario-toolbar {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
 /* ── Archive doc editing ── */
 .archive-toolbar {
   display: flex;
