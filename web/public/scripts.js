@@ -1611,7 +1611,7 @@ document.getElementById('btn-new-city').addEventListener('click', async () => {
   const dSlugs = districtNames.map(d => slugifyJS(d) || d.toLowerCase());
   const dupSlugs = [...new Set(dSlugs.filter((s, i) => dSlugs.indexOf(s) !== i))];
   if (dupSlugs.length &&
-      !confirm(`Районы дают одинаковую папку (${dupSlugs.join(', ')}) — дубликаты будут пропущены. Продолжить?`)) return;
+      !await showConfirm(`Районы дают одинаковую папку (${dupSlugs.join(', ')}) — дубликаты будут пропущены. Продолжить?`, { confirmText: 'Продолжить' })) return;
   const btn = document.getElementById('btn-new-city');
   const out = document.getElementById('out-new-city');
   const payload = {
@@ -2335,7 +2335,7 @@ async function _deleteCity() {
   const msg = `Удалить домен «${(d.parsed && d.parsed.display) || d.slug}»?` +
     (what ? `\n\nВнутри: ${what}.` : '') +
     `\n\nГород переедет в cities/_deleted/ (обратимо, картинки не стираются).`;
-  if (!confirm(msg)) return;
+  if (!await showConfirm(msg, { danger: true, confirmText: 'Удалить' })) return;
 
   try {
     const r = await fetch(`/api/cities/${encodeURIComponent(d.slug)}`, { method: 'DELETE' }).then(r => r.json());
@@ -2895,7 +2895,7 @@ document.getElementById('mod-create-submit').addEventListener('click', async () 
   if (!name) { errEl.textContent = 'Введи название модуля'; errEl.style.display = ''; return; }
   if (!time) { errEl.textContent = 'Укажи время/дату модуля — нужно для проверки таймлайна (желательно с годом)'; errEl.style.display = ''; return; }
   if (!/\b(?:19|20)\d{2}\b/.test(time) &&
-      !confirm('В поле «Время» нет года. Без года проверка таймлайна менее точна. Всё равно создать?')) return;
+      !await showConfirm('В поле «Время» нет года. Без года проверка таймлайна менее точна. Всё равно создать?', { confirmText: 'Создать' })) return;
   errEl.style.display = 'none';
 
   const chr = _getModCreateChr();
@@ -3874,13 +3874,12 @@ document.getElementById('modp-panel-scenario').addEventListener('click', e => {
     const mod = d?.name      || STATE.currentModule?.name;
     if (!chr || !mod) return;
 
-    const ok = window.confirm('Сгенерировать сценарий заново? Текущий scenario.md будет перезаписан.');
-    if (!ok) return;
-
     const btn = e.target;
-    btn.disabled = true;
-    btn.textContent = '⏳ Генерирую…';
     (async () => {
+      const ok = await showConfirm('Сгенерировать сценарий заново? Текущий scenario.md будет перезаписан.', { danger: true, confirmText: 'Перегенерировать' });
+      if (!ok) return;
+      btn.disabled = true;
+      btn.textContent = '⏳ Генерирую…';
       try {
         const r = await fetch(
           `/api/chronicles/${encodeURIComponent(chr)}/modules/${encodeURIComponent(mod)}/fill${window.location.search}`,
@@ -4181,7 +4180,7 @@ async function _onPromoteNpc(btn) {
 }
 
 // Handle a sheet button on the module NPC tab (generate / view / regenerate / edit)
-function _onModuleSheetBtn(btn) {
+async function _onModuleSheetBtn(btn) {
   const wrap  = btn.closest('.modp-npc-sheet');
   const scope = wrap.dataset.sheetScope;
   const ctx = scope === 'module'
@@ -4190,7 +4189,7 @@ function _onModuleSheetBtn(btn) {
   const act = btn.dataset.sheetAct;
   if (act === 'view') { openSheetOverlay(ctx, 'view'); return; }
   if (act === 'edit') { openSheetOverlay(ctx, 'edit'); return; }
-  if (act === 'regen' && !confirm('Перегенерировать лист? Текущий будет перезаписан.')) return;
+  if (act === 'regen' && !await showConfirm('Перегенерировать лист? Текущий будет перезаписан.', { danger: true, confirmText: 'Перегенерировать' })) return;
   _generateSheet(ctx, btn);
 }
 
@@ -4204,7 +4203,7 @@ document.getElementById('modp-gen-btn').addEventListener('click', async () => {
   const data = STATE.currentModuleData || {};
   const btn  = document.getElementById('modp-gen-btn');
 
-  if (data.scenario && !confirm('Сценарий уже существует. Перегенерировать?')) return;
+  if (data.scenario && !await showConfirm('Сценарий уже существует. Перегенерировать?', { danger: true, confirmText: 'Перегенерировать' })) return;
 
   btn.disabled = true; btn.textContent = '⏳ Генерация...';
   try {
@@ -4258,8 +4257,8 @@ document.getElementById('modp-close-btn').addEventListener('click', async () => 
   const { chronicle, name } = STATE.currentModule;
   const data = STATE.currentModuleData || {};
   if (!(data.sessions || []).length &&
-      !confirm('У модуля нет записей сессий. Закрыть всё равно? (финал/событие будут собраны из сценария)')) return;
-  if (!confirm('Закрыть модуль по правилам Фазы C?\nБудут сгенерированы финал и каноничное событие в хронику. Действие пишет канон.')) return;
+      !await showConfirm('У модуля нет записей сессий. Закрыть всё равно? (финал/событие будут собраны из сценария)', { confirmText: 'Закрыть' })) return;
+  if (!await showConfirm('Закрыть модуль по правилам Фазы C?\nБудут сгенерированы финал и каноничное событие в хронику. Действие пишет канон и необратимо.', { danger: true, confirmText: 'Закрыть модуль' })) return;
 
   const btn = document.getElementById('modp-close-btn');
   btn.disabled = true; btn.textContent = '⏳ Закрытие...';
@@ -6562,7 +6561,7 @@ function _v20SpendPool(path) {
   return false;
 }
 
-function _v20RunAction(action) {
+async function _v20RunAction(action) {
   const m = _v20Model;
   if (action === 'fill-clan-disc') {
     const info = v20ClanInfo(m.header.clan);
@@ -6571,7 +6570,7 @@ function _v20RunAction(action) {
   } else if (action === 'insert-clan-weakness') {
     const info = v20ClanInfo(m.header.clan);
     if (!info || !info.weakness) return;
-    if (m.flaw.trim() && !confirm('Поле «Изъян» не пустое. Заменить текущий текст слабостью клана?')) return;
+    if (m.flaw.trim() && !await showConfirm('Поле «Изъян» не пустое. Заменить текущий текст слабостью клана?', { confirmText: 'Заменить' })) return;
     m.flaw = info.weakness;
   } else if (action === 'open-disc-library') {
     _v20OpenDisciplineModal();
@@ -6881,7 +6880,7 @@ function _v20RebuildDots(span, val) {
 function _v20BindPanel(panel) {
   if (panel._v20Bound) return;
   panel._v20Bound = true;
-  const onDot = dot => {
+  const onDot = async dot => {
     const span = dot.closest('.v20-dots'); if (!span) return;
     const dpath = span.dataset.dpath, d = +dot.dataset.d;
     const cur = _v20Get(_v20Model, dpath) || 0;
@@ -6892,7 +6891,7 @@ function _v20BindPanel(panel) {
       if (info) {
         const cost = v20XpCost(info.kind, cur, nv, info.isClanDisc);
         const avail = _num(_v20Model.experience.total, 0) - _num(_v20Model.experience.spent, 0);
-        if (cost > avail && !confirm(`«${info.label}»: ${cur}→${nv} стоит ${cost} XP, доступно ${avail}. Всё равно повысить?`)) return;
+        if (cost > avail && !await showConfirm(`«${info.label}»: ${cur}→${nv} стоит ${cost} XP, доступно ${avail}. Всё равно повысить?`, { confirmText: 'Повысить' })) return;
         _v20Model.experience.spent = _num(_v20Model.experience.spent, 0) + cost;
         _v20Model.experience.log.unshift({ date: new Date().toISOString().slice(0, 10), text: `${info.label}: ${cur}→${nv}`, cost });
         _v20Set(_v20Model, dpath, nv);
@@ -6988,8 +6987,8 @@ async function _v20Save() {
 }
 
 async function _v20Regen(btn) {
-  if (_v20DirtyFlag && !confirm('Есть несохранённые правки. Перегенерировать числа из ИИ-листа и потерять их?')) return;
-  if (!confirm('Перегенерировать числа из ИИ-листа? Текущие значения формы будут заменены.')) return;
+  if (_v20DirtyFlag && !await showConfirm('Есть несохранённые правки. Перегенерировать числа из ИИ-листа и потерять их?', { danger: true, confirmText: 'Перегенерировать' })) return;
+  else if (!_v20DirtyFlag && !await showConfirm('Перегенерировать числа из ИИ-листа? Текущие значения формы будут заменены.', { confirmText: 'Перегенерировать' })) return;
   const old = btn.textContent; btn.disabled = true; btn.textContent = '⏳ ИИ…';
   try {
     const ok = await _generateSheet({ scope: 'character', name: _v20Ctx.name }, null);
@@ -7360,7 +7359,7 @@ async function _regenerateDiaryEntry(charName, period) {
   if (!textTa) return;
 
   const draft = textTa.value.trim();
-  if (draft && !confirm('Текущий текст будет передан модели как черновик и переписан. Продолжить?')) return;
+  if (draft && !await showConfirm('Текущий текст будет передан модели как черновик и переписан. Продолжить?', { confirmText: 'Продолжить' })) return;
 
   if (btn) { btn.disabled = true; btn.textContent = '⏳ Генерация...'; }
   try {
@@ -7403,7 +7402,7 @@ async function _saveDiaryEntryEdit(charName, period, file) {
 }
 
 async function _deleteDiaryEntry(charName, file, title) {
-  if (!confirm(`Удалить запись дневника «${title || file}»?\nДействие необратимо.`)) return;
+  if (!await showConfirm(`Удалить запись дневника «${title || file}»?\nДействие необратимо.`, { danger: true, confirmText: 'Удалить' })) return;
   try {
     const r = await fetch(`/api/characters/${encodeURIComponent(_charSlug(charName))}/diary?file=${encodeURIComponent(file)}`,
       { method: 'DELETE' }).then(r => r.json());
@@ -8095,7 +8094,7 @@ async function _loadDescImages(charName) {
 }
 
 async function _deleteCharImage(charName, filename) {
-  if (!confirm(`Удалить «${filename}»?\nДействие необратимо.`)) return;
+  if (!await showConfirm(`Удалить «${filename}»?\nДействие необратимо.`, { danger: true, confirmText: 'Удалить' })) return;
 
   const qs = window.location.search;
   try {
@@ -8221,7 +8220,7 @@ async function _generatePrompt(charName) {
   const existingPrompt = (c.imagePrompt || '').trim();
   const isPlaceholder  = !existingPrompt || /⏳|⚠️/.test(existingPrompt);
   if (!isPlaceholder) {
-    if (!confirm('Промт уже существует. Заменить его на сгенерированный?')) return;
+    if (!await showConfirm('Промт уже существует. Заменить его на сгенерированный?', { confirmText: 'Заменить' })) return;
   }
 
   _genPromptRunning = true;
@@ -8304,7 +8303,7 @@ async function _generatePersonality(charName) {
 
   const existingPersonality = (c.personality || '').trim();
   if (existingPersonality && !/⚠️/.test(existingPersonality)) {
-    if (!confirm('Характер уже заполнен. Сгенерировать уточнённую версию на основе информации/биографии/внешности (текущий текст будет использован как черновик)?')) return;
+    if (!await showConfirm('Характер уже заполнен. Сгенерировать уточнённую версию на основе информации/биографии/внешности (текущий текст будет использован как черновик)?', { confirmText: 'Сгенерировать' })) return;
   }
 
   _genPersonalityRunning = true;
@@ -8382,7 +8381,7 @@ async function _generateBiography(charName) {
 
   const existingBio = (c.biography || '').trim();
   if (existingBio && !/⚠️/.test(existingBio)) {
-    if (!confirm('Биография уже заполнена. Сгенерировать уточнённую версию на основе информации/отношений (текущий текст будет использован как черновик)?')) return;
+    if (!await showConfirm('Биография уже заполнена. Сгенерировать уточнённую версию на основе информации/отношений (текущий текст будет использован как черновик)?', { confirmText: 'Сгенерировать' })) return;
   }
 
   _genBiographyRunning = true;
@@ -10011,7 +10010,7 @@ async function saveLocEdit() {
 
 async function deleteLocCurrent() {
   if (!_locEditSlug) return;
-  if (!confirm(`Удалить локацию «${_locEditSlug}»? Это действие необратимо.`)) return;
+  if (!await showConfirm(`Удалить локацию «${_locEditSlug}»? Это действие необратимо.`, { danger: true, confirmText: 'Удалить' })) return;
   const btn = document.getElementById('loc-edit-delete-btn');
   btn.disabled = true;
   try {
