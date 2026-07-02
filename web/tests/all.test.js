@@ -1222,6 +1222,15 @@ describe('API — integration', () => {
       else await fs.unlink(path.join(modDir, 'scenario.md')).catch(() => {});
       if (npcExisted) await fs.writeFile(path.join(modDir, 'npc.md'), origNpc, 'utf-8');
       else await fs.unlink(path.join(modDir, 'npc.md')).catch(() => {});
+      // POST /npc также создаёт папку карточки npc/<slug>/ — убрать тестовые
+      const npcDir = path.join(modDir, 'npc');
+      const entries = await fs.readdir(npcDir).catch(() => []);
+      for (const e of entries) {
+        if (e.startsWith('test_nps_') || e.startsWith('test-nps-'))
+          await fs.rm(path.join(npcDir, e), { recursive: true, force: true }).catch(() => {});
+      }
+      if ((await fs.readdir(npcDir).catch(() => ['x'])).length === 0)
+        await fs.rmdir(npcDir).catch(() => {});
     });
 
     it('PUT /fields — path traversal → 400', async () => {
