@@ -1037,6 +1037,16 @@ async function rmdir(dir) {
 }
 
 // Build preview of what delete would do
+// Resolve city display name from city.md H1
+async function getCityDisplayName(city) {
+  try {
+    const cityMdPath = path.join(__dirname, '..', 'cities', city, 'city.md');
+    const txt = await fs.readFile(cityMdPath, 'utf-8');
+    const m = txt.match(/^#\s+(.+)$/m);
+    return m ? m[1].trim() : city;
+  } catch { return city; }
+}
+
 async function buildChronicleDeletePreview(city, slug) {
   const chrDir  = path.join(chroniclesDir(city), slug);
   const entries = await fs.readdir(chrDir, { withFileTypes: true }).catch(() => null);
@@ -2069,10 +2079,11 @@ app.post('/api/chronicles/:chr/modules/:mod/npc', express.json(), async (req, re
           `> 🔗 [Модуль](../../${mod}.md)`,
           ``,
           `- **Слаг:** ${npcSlug}`,
-          `- **Родной город:** ${city}`,
+          `- **Родной город:** ${await getCityDisplayName(city)}`,
           `- **Линейка WoD:** mortals`,
           `- **Статус:** 🔵 Активен`,
           `- **Принадлежность:** Эпизодический персонаж`,
+          `- **Пол:** Неизвестно`,
           ``,
           `## 🖼️ Изображения`,
           `- ⏳ Изображение не предоставлено`,
@@ -2082,11 +2093,7 @@ app.post('/api/chronicles/:chr/modules/:mod/npc', express.json(), async (req, re
       }
       cardHref = `npc/${npcSlug}/${npcSlug}.md`;
 
-    } else if (group === 'canon') {
-      const ch = allChars.find(c => _nameMatch(nm, c.name));
-      if (ch) cardHref = `../../../../characters/${ch.lineageFolder}/${ch.slug}/${ch.slug}.md`;
-
-    } else if (group === 'pc') {
+    } else if (group === 'canon' || group === 'pc') {
       const ch = allChars.find(c => _nameMatch(nm, c.name));
       if (ch) cardHref = `../../../../characters/${ch.lineageFolder}/${ch.slug}/${ch.slug}.md`;
     }
@@ -2104,6 +2111,11 @@ app.post('/api/chronicles/:chr/modules/:mod/npc', express.json(), async (req, re
         `## 🆕 Модульные НПС`,
         ``,
       ].join('\n');
+    }
+
+    // Prevent duplicate entries
+    if (npcRaw.includes(`- ${nm} —`)) {
+      return res.status(409).json({ ok: false, error: 'НПС уже добавлен', name: nm });
     }
 
     // Build new line
