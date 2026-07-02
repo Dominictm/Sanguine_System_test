@@ -154,7 +154,7 @@ const ACTION_MAP = {
   'PUT /api/chronicles/:chr/modules/:mod/fields': req => `✏  Редактирование полей модуля: ${req.params.mod} (${req.params.chr})`,
   'PUT /api/chronicles/:chr/modules/:mod/scenario': req => `📝 Сценарий модуля: ${req.params.mod} (${req.params.chr})`,
   'POST /api/chronicles/:chr/modules/:mod/npc': req => `👤 Добавление НПС в модуль: ${req.params.mod} (${req.params.chr})`,
-  'GET /api/chronicles/:chr/modules/:mod/delete-preview': req => `🗑 Превью удаления модуля: ${req.params.mod}`,
+  'GET /api/chronicles/:chr/modules/:mod/delete-preview': req => `🗑 Превью удаления модуля: ${req.params.mod} (${req.params.chr})`,
   'GET /api/chronicle':                       req => `Хроника (${reqCity(req)})`,
   'GET /api/threads':                         req => `Открытые нити (${reqCity(req)})`,
   'GET /api/integrity':                       req => `Проверка целостности (${reqCity(req)})`,
@@ -2179,18 +2179,19 @@ app.get('/api/chronicles/:chr/modules/:mod/delete-preview', async (req, res) => 
     } catch {}
 
     // Count events in chronicle events.md referencing this module
+    const escapedMod = mod.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     let eventCount = 0;
     const evTxt = await fs.readFile(
       path.join(chroniclesDir(city), chr, 'events.md'), 'utf-8').catch(() => '');
     if (evTxt) {
-      const modRe = new RegExp(`modules/${mod}/`, 'g');
+      const modRe = new RegExp(`modules/${escapedMod}/`, 'g');
       eventCount = (evTxt.match(modRe) || []).length;
     }
 
     // Find canonical chars whose journal entries mention this module
     const chars = await getAllCharacters(city).catch(() => []);
     const affectedChars = [];
-    const modLinkPat = new RegExp(`modules/${mod}/`);
+    const modLinkPat = new RegExp(`modules/${escapedMod}/`);
     for (const ch of chars) {
       const jDir = path.join(charsDir(city), ch.lineageFolder, ch.slug, 'journal');
       const jFiles = await fs.readdir(jDir).catch(() => []);
