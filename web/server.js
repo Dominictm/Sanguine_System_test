@@ -19,6 +19,12 @@ const { parseDisciplineMd } = require('./lib/disciplines');
 const { parsePsychicMd } = require('./lib/psychics');
 const { runMigrations } = require('./lib/migrations');
 const { loadLiteraryStyle, loadDiaryStyleRules, compressEventsToState, compressChronicleEvents, parseEventsText, buildNarrativeContext, findCharacterCard } = require('./lib/context_builder');
+const {
+  CITIES_DIR, DEFAULT_CITY, cityDir, charsDir, locsDir, chroniclesDir, archiveDir,
+  reqCity, listCities, writeFileAtomic, invalidateChars, invalidateLocs,
+  LINEAGE_MAP, getAllCharacters, getAllLocations, findLocMdPath,
+  countMdFiles, mapLimit, tableCell,
+} = require('./lib/db');
 
 // Load .env file (secrets not committed to git)
 try {
@@ -47,51 +53,8 @@ const app  = express();
 const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3000;
 const ROOT = path.join(__dirname, '..');
 
-// ── City layer (cities/<city>/…) ───────────────────────────────────────────────
-const CITIES_DIR   = path.join(ROOT, 'cities');
-function _firstCity() { try { return (require('fs').readdirSync(CITIES_DIR, { withFileTypes: true }).find(e => e.isDirectory() && !/^[._]/.test(e.name)) || {}).name || ''; } catch { return ''; } }
-const DEFAULT_CITY = process.env.CITY || _firstCity() || '';   // нейтрально: первый существующий город
-const cityDir       = c => path.join(CITIES_DIR, c || DEFAULT_CITY);
-const charsDir      = c => path.join(cityDir(c), 'characters');
-const locsDir       = c => path.join(cityDir(c), 'locations');
-const chroniclesDir = c => path.join(cityDir(c), 'chronicles');
-const archiveDir    = c => path.join(cityDir(c), 'archive');
-const reqCity = req => {
-  const c = (req.query && req.query.city) || DEFAULT_CITY;
-  return /^[a-z0-9_]+$/.test(c) ? c : DEFAULT_CITY;
-};
-async function listCities() {
-  try {
-    const es = await fs.readdir(CITIES_DIR, { withFileTypes: true });
-    // Skip dot-dirs and the _deleted soft-delete bin (and any _-prefixed internal dir).
-    return es.filter(e => e.isDirectory() && !/^[._]/.test(e.name)).map(e => e.name);
-  } catch { return []; }
-}
 
-// ── Atomic file write ──────────────────────────────────────────────────────────
-// Write to a temp file in the SAME directory, then rename() over the target.
-// rename() is atomic on one filesystem, so a crash/kill mid-write can never leave a
-// half-written (truncated) card — readers see either the old file or the new one,
-// never a partial one. (A truncated <slug>-sheet.md is exactly how a card got
-// corrupted before this guard existed.) The dot-prefixed temp name is ignored by
-// every directory scanner in this server (all skip names starting with '.').
-const _rawWriteFile = require('fs').promises.writeFile;
-async function writeFileAtomic(filePath, data, enc) {
-  const tmp = path.join(path.dirname(filePath),
-    `.${path.basename(filePath)}.${process.pid}.${Date.now()}.tmp`);
-  try {
-    await _rawWriteFile(tmp, data, enc);
-    await fs.rename(tmp, filePath);
-  } catch (e) {
-    await fs.unlink(tmp).catch(() => {});
-    throw e;
-  }
-}
 
-let _cache    = {};          // city → { chars, ts }
-let _locCache = {};          // city → { locs, ts }
-const CHARS_TTL = 15_000;
-const LOCS_TTL  = 15_000;
 
 // Last known broken-link count from validate_links.ps1.
 // null = never validated; 0 = clean; N = N broken links remaining.
@@ -255,155 +218,12 @@ app.use((req, res, next) => {
 // categorizeRel, parseCharacter, parseLocation, parseChronicle* and the md* helpers
 // now live in lib/parsers.js (single source of truth — see import at top).
 
-const LINEAGE_MAP = {
-  vampires: 'vampire', fairies: 'fairy', mortals: 'mortal',
-  werewolves: 'werewolf', mages: 'mage', hunters: 'hunter'
-};
 
-async function getAllCharacters(city = DEFAULT_CITY) {
-  const cc = _cache[city];
-  if (cc && Date.now() - cc.ts < CHARS_TTL) return cc.chars;
-
-  // Load and enrich one character folder → char object (or null to skip).
-  const loadOne = async (folder, lineage, entry) => {
-    const charDir = path.join(charsDir(city), folder, entry);
-    const mdPath  = path.join(charDir, `${entry}.md`);
-    try {
-      const [content, hasSheet, artFiles] = await Promise.all([
-        fs.readFile(mdPath, 'utf-8'),
-        fs.access(path.join(charDir, `${entry}-sheet.md`)).then(() => true).catch(() => false),
-        fs.readdir(path.join(charDir, 'art')).catch(() => []),
-      ]);
-      const char = parseCharacter(content, entry, lineage);
-      char.lineageFolder = folder;
-      char.slug = entry;
-      char.city = city;
-      char.hasSheet = hasSheet;
-
-      // Images live in <slug>/art/. Prefer slug_NN.* (web upload), else first image.
-      const slugRe  = new RegExp(`^${entry}_\\d+\\.[a-z]+$`, 'i');
-      const imgFile = artFiles.filter(f => slugRe.test(f)).sort().at(-1)
-        || artFiles.find(f => /\.(jpg|jpeg|png|webp|gif)$/i.test(f));
-      if (imgFile) {
-        char.imageUrl = `/city-img/${city}/characters/${folder}/${encodeURIComponent(entry)}/art/${encodeURIComponent(imgFile)}`;
-      }
-      return char;
-    } catch { return null; /* missing/invalid card → skip */ }
-  };
-
-  // Per lineage: list the folder, then load all its characters in parallel.
-  // Order is preserved (lineage order, then readdir order) via map + flat.
-  const perLineage = await Promise.all(
-    Object.entries(LINEAGE_MAP).map(async ([folder, lineage]) => {
-      let entries;
-      try { entries = await fs.readdir(path.join(charsDir(city), folder)); } catch { return []; }
-      const loaded = await Promise.all(
-        entries.filter(e => e !== '.gitkeep').map(e => loadOne(folder, lineage, e))
-      );
-      return loaded.filter(Boolean);
-    })
-  );
-
-  const result = perLineage.flat();
-  _cache[city] = { chars: result, ts: Date.now() };
-  return result;
-}
-
-async function countMdFiles(dir) {
-  let n = 0;
-  try {
-    for (const item of await fs.readdir(dir, { withFileTypes: true })) {
-      if (item.isDirectory()) n += await countMdFiles(path.join(dir, item.name));
-      else if (item.name.endsWith('.md') && item.name !== 'characters_index.md') n++;
-    }
-  } catch {}
-  return n;
-}
-
-// Run `fn` over `items` with bounded concurrency; preserves input order.
-// Keeps bulk file reads parallel without exhausting file descriptors.
-async function mapLimit(items, limit, fn) {
-  const out = new Array(items.length);
-  let i = 0;
-  const worker = async () => {
-    while (i < items.length) { const idx = i++; out[idx] = await fn(items[idx], idx); }
-  };
-  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
-  return out;
-}
-
-// Extract a markdown table cell "| **Label** | value |" by label → trimmed value or null.
-// Memoizes the compiled regex per label (these run in tight label loops over many cards).
-const _tableCellRe = new Map();
-function tableCell(content, label) {
-  let re = _tableCellRe.get(label);
-  if (!re) { re = new RegExp(`\\|\\s*\\*\\*${label}\\*\\*\\s*\\|\\s*([^|\\n]+)\\|`); _tableCellRe.set(label, re); }
-  const m = content.match(re);
-  return m ? m[1].trim() : null;
-}
 
 // parseDiary lives in lib/parsers.js (single source of truth — see import above)
 
 // parseLocation lives in lib/parsers.js (single source of truth — see import at top).
 
-async function findLocMdPath(slug, city = DEFAULT_CITY) {
-  const locRoot = locsDir(city);
-  async function walk(dir) {
-    let entries;
-    try { entries = await fs.readdir(dir, { withFileTypes: true }); } catch { return null; }
-    for (const e of entries) {
-      if (e.name.startsWith('.') || e.name.startsWith('_')) continue;
-      const full = path.join(dir, e.name);
-      if (e.isDirectory()) { const r = await walk(full); if (r) return r; }
-      else if (e.name.endsWith('.md')) {
-        const parsed = parseLocation(await fs.readFile(full, 'utf-8').catch(() => ''), path.basename(path.dirname(full)));
-        if (parsed.slug === slug) return full;
-      }
-    }
-    return null;
-  }
-  return walk(locRoot);
-}
-
-async function getAllLocations(city = DEFAULT_CITY) {
-  const lc = _locCache[city];
-  if (lc && Date.now() - lc.ts < LOCS_TTL) return lc.locs;
-
-  const locRoot = locsDir(city);
-  const result  = [];
-
-  async function walk(dir) {
-    let entries;
-    try { entries = await fs.readdir(dir, { withFileTypes: true }); } catch { return; }
-    for (const entry of entries) {
-      if (entry.name.startsWith('.') || entry.name.startsWith('_') || entry.name === '.gitkeep') continue;
-      const fullPath = path.join(dir, entry.name);
-      if (entry.isDirectory()) {
-        await walk(fullPath);
-      } else if (entry.name.endsWith('.md')) {
-        try {
-          const content   = await fs.readFile(fullPath, 'utf-8');
-          const locFolder = path.dirname(fullPath);
-          const loc       = parseLocation(content, path.basename(locFolder));
-          const artDir    = path.join(locFolder, 'art');
-          const artFiles  = await fs.readdir(artDir).catch(() => []);
-          const imgFiles  = artFiles.filter(f => /\.(jpg|jpeg|png|webp|gif)$/i.test(f)).sort();
-          if (imgFiles.length) {
-            const relParts = path.relative(locRoot, locFolder).split(path.sep);
-            const base = `/city-img/${city}/locations/` + relParts.map(p => encodeURIComponent(p)).join('/') + '/art/';
-            loc.imageUrl  = base + encodeURIComponent(imgFiles[0]);
-            loc.imageUrls = imgFiles.map(f => base + encodeURIComponent(f));
-          }
-          result.push(loc);
-        } catch {}
-      }
-    }
-  }
-
-  await walk(locRoot);
-  _locCache[city] = { locs: result, ts: Date.now() };
-  return result;
-}
 
 // ── Chronicle parser (Stories_of_*.md) ────────────────────────────────────────
 
@@ -748,7 +568,7 @@ app.post('/api/cities', express.json(), async (req, res) => {
       throw writeErr;
     }
 
-    delete _cache[slug];
+    invalidateChars(slug);
     console.log(`[create-city] ${slug} («${display}», ${year})`);
     res.json({ ok: true, slug, display, year });
   } catch (e) {
@@ -845,7 +665,7 @@ app.put('/api/cities/:slug', express.json(), async (req, res) => {
     if (b.fields && typeof b.fields.political === 'string') {
       await syncPoliticalStateTable(slug, parsePoliticalRecords(b.fields.political.split('\n')), prevRoles).catch(() => {});
     }
-    delete _cache[slug];
+    invalidateChars(slug);
     console.log(`[edit-city] ${slug}`);
     res.json({ ok: true, slug, parsed: parseCityMd(cityMd) });
   } catch (e) {
@@ -869,7 +689,7 @@ app.delete('/api/cities/:slug', async (req, res) => {
     const dest = path.join(deletedDir, `${slug}_${Date.now()}`);
     await fs.rename(cityDir(slug), dest);
 
-    delete _cache[slug];
+    invalidateChars(slug);
     console.log(`[delete-city] ${slug} → ${path.relative(ROOT, dest)}`);
     res.json({ ok: true, slug, movedTo: path.relative(ROOT, dest).replace(/\\/g, '/') });
   } catch (e) {
@@ -1027,7 +847,7 @@ app.post('/api/chronicles', express.json(), async (req, res) => {
       renderOpenThreadsSkeleton(display), 'utf-8');
 
     console.log(`[create-chronicle] ${city}/${slug}: «${display}»`);
-    delete _cache[city];
+    invalidateChars(city);
     res.json({ ok: true, slug, display });
   } catch (e) {
     console.error('[create-chronicle]', e.message);
@@ -1183,7 +1003,7 @@ app.delete('/api/chronicles/:slug', express.json(), async (req, res) => {
     console.log(`[delete-chronicle] deleted: ${slug}`);
 
     // 4. Clear cache
-    delete _cache[city];
+    invalidateChars(city);
     runValidationBackground();
 
     res.json({ ok: true, slug, moved });
@@ -2019,7 +1839,7 @@ app.put('/api/chronicles/:chr/modules/:mod/fields', express.json(), async (req, 
     }
 
     await writeFileAtomic(modPath, raw, 'utf-8');
-    delete _cache[city];
+    invalidateChars(city);
     console.log(`[mod-fields] ${city}/${chr}/${mod} →`, Object.keys(fields).join(', '));
     res.json({ ok: true, ...(skipped.length ? { skipped } : {}) });
   } catch (e) {
@@ -2046,7 +1866,7 @@ app.put('/api/chronicles/:chr/modules/:mod/scenario', express.json(), async (req
       return res.status(404).json({ error: 'Модуль не найден' });
 
     await writeFileAtomic(scenarioPath, content.endsWith('\n') ? content : content + '\n', 'utf-8');
-    delete _cache[city];
+    invalidateChars(city);
     console.log(`[mod-scenario] ${city}/${chr}/${mod} scenario.md rewritten`);
     res.json({ ok: true });
   } catch (e) {
@@ -2086,7 +1906,7 @@ app.post('/api/chronicles/:chr/modules/:mod/npc', express.json(), async (req, re
         ].join('\n');
         await writeFileAtomic(npcMdPath, skeleton, 'utf-8');
       }
-      delete _cache[city];
+      invalidateChars(city);
       return res.json({ ok: true, initOnly: true });
     }
 
@@ -2173,7 +1993,7 @@ app.post('/api/chronicles/:chr/modules/:mod/npc', express.json(), async (req, re
     }
 
     await writeFileAtomic(npcMdPath, npcRaw, 'utf-8');
-    delete _cache[city];
+    invalidateChars(city);
     console.log(`[mod-npc-add] ${city}/${chr}/${mod} → ${nm} (${group})`);
     res.json({ ok: true, name: nm, group, createdCard, cardHref });
   } catch (e) {
@@ -2308,7 +2128,7 @@ app.delete('/api/chronicles/:chr/modules/:mod', express.json(), async (req, res)
     }
     console.log(`[delete-module] ${city}/${chr}/modules/${mod} | events: ${removedEvents} | diaries: ${cleanedChars.join(', ') || '—'} | npcs: ${episodicSlugs.join(', ') || '—'}`);
 
-    delete _cache[city];
+    invalidateChars(city);
     res.json({ ok: true, mod, removedEvents, cleanedChars, episodicSlugs });
   } catch (e) {
     console.error('[delete-module]', e.message);
@@ -2428,7 +2248,7 @@ ${playLog}
         ps.on('close', () => resolve()); ps.on('error', () => resolve());
       });
     }
-    delete _cache[city];
+    invalidateChars(city);
 
     // 5. Remaining Phase-C steps needing per-character / manual attention
     const reminders = [
@@ -2820,7 +2640,7 @@ app.delete('/api/characters/:slug/diary', async (req, res) => {
     await fs.unlink(filePath).catch(() => {});
     await removeDiaryLink(city, char, file.replace(/^\/+/, ''));
 
-    delete _cache[city];
+    invalidateChars(city);
     res.json({ ok: true });
   } catch (e) { serverError(res, e); }
 });
@@ -2922,7 +2742,7 @@ app.put('/api/characters/:slug/diary', express.json(), async (req, res) => {
     const linkLabel = title !== periodLabel(per) ? `${periodLabel(per)} — ${title}` : periodLabel(per);
     if (mode === 'replace') await upsertDiaryLink(city, char, per, linkLabel);
     else await ensureDiaryLink(city, char, per, linkLabel);
-    delete _cache[city];
+    invalidateChars(city);
     res.json({ ok: true, file: `journal/${per}.md` });
   } catch (e) { serverError(res, e); }
 });
@@ -3228,7 +3048,7 @@ app.put('/api/locations/:slug/fields', express.json(), async (req, res) => {
     }
 
     await writeFileAtomic(mdPath, card, 'utf-8');
-    delete _locCache[city];
+    invalidateLocs(city);
     res.json({ ok: true });
   } catch (e) { serverError(res, e); }
 });
@@ -3372,7 +3192,7 @@ ${_locCardTemplate(locName, district?.trim() || '')}
     }
 
     await writeFileAtomic(locFile, content, 'utf-8');
-    delete _locCache[city];
+    invalidateLocs(city);
     res.json({ ok: true, slug: locSlug, district: distFolder });
   } catch (e) { serverError(res, e); }
 });
@@ -3390,7 +3210,7 @@ app.delete('/api/locations/:slug', async (req, res) => {
     await fs.mkdir(trashRoot, { recursive: true });
     const dst = path.join(trashRoot, `${slug}_${Date.now()}`);
     await fs.rename(path.dirname(mdPath), dst);
-    delete _locCache[city];
+    invalidateLocs(city);
     console.log(`[delete-location] ${city}/${slug} → locations/_deleted/${path.basename(dst)}`);
     res.json({ ok: true, movedTo: `locations/_deleted/${path.basename(dst)}` });
   } catch (e) { serverError(res, e); }
@@ -4010,7 +3830,7 @@ app.post('/api/chronicles/:chr/modules/:mod/npc/:slug/promote', express.json(), 
     }
 
     // Invalidate character cache so the new canonical char is visible immediately
-    delete _cache[city];
+    invalidateChars(city);
 
     res.json({ ok: true, slug: npcSlug, lineage, name });
   } catch (e) { serverError(res, e); }
@@ -4297,7 +4117,7 @@ app.post('/api/tool/:name', async (req, res) => {
   ps.on('error', e => { clearTimeout(timer); res.json({ ok: false, output: e.message }); });
   ps.on('close', code => {
     clearTimeout(timer);
-    if (code === 0) { _cache = {}; runValidationBackground(); }
+    if (code === 0) { invalidateChars(); runValidationBackground(); }
     res.json({ ok: code === 0, output: (out + err).trim(), exitCode: code });
   });
 });
@@ -4348,7 +4168,7 @@ app.post('/api/run-tool', async (req, res) => {
   ps.on('close', code => {
     clearTimeout(timer);
     if (code === 0) {
-      _cache = {};
+      invalidateChars();
       if (FILE_MUTATING_TOOLS.has(tool)) runValidationBackground();
     }
     // For validate_links the exit code IS the broken link count
@@ -4561,7 +4381,7 @@ app.put('/api/characters/:slug/fields', express.json(), async (req, res) => {
     }
 
     await writeFileAtomic(cardPath, card, 'utf-8');
-    delete _cache[city];
+    invalidateChars(city);
     await _syncSheetHeaderFromCard(city, char, fields);
     res.json({ ok: true });
   } catch (e) {
@@ -4599,7 +4419,7 @@ app.put('/api/characters/:slug/relations', express.json(), async (req, res) => {
     }
 
     await writeFileAtomic(cardPath, card, 'utf-8');
-    delete _cache[city];
+    invalidateChars(city);
     res.json({ ok: true });
   } catch (e) {
     serverError(res, e);
@@ -4723,7 +4543,7 @@ app.post('/api/characters', express.json(), async (req, res) => {
       await writeFileAtomic(idxPath, (bom ? '﻿' : '') + body, 'utf-8');
     }
 
-    delete _cache[city];
+    invalidateChars(city);
     console.log(`[create-character] ${city}/${folder}/${slug}`);
     res.json({ ok: true, slug, name, lineage: folder });
   } catch (e) {
@@ -4838,7 +4658,7 @@ app.delete('/api/characters/:slug', express.json(), async (req, res) => {
     await mapLimit(toDelink, 24, ({ f, out }) => writeFileAtomic(f, out, 'utf-8'));
     const delinked = toDelink.map(({ f }) => path.relative(cityDir(city), f).replace(/\\/g, '/'));
 
-    delete _cache[city];
+    invalidateChars(city);
     runValidationBackground();
     console.log(`[delete-character] ${city}/${lineageFolder}/${slug} → _deleted (${delinked.length} files de-linked)`);
     res.json({ ok: true, slug, movedTo: `characters/_deleted/${path.basename(dst)}`, delinked });
@@ -5802,7 +5622,7 @@ app.post('/api/characters/:slug/upload-image', express.json({ limit: '20mb' }), 
       await writeFileAtomic(cardPath, card, 'utf-8');
     }
 
-    delete _cache[city];
+    invalidateChars(city);
     res.json({
       success: true,
       filename,
@@ -5861,7 +5681,7 @@ app.delete('/api/characters/:slug/images/:filename', async (req, res) => {
       return res.status(404).json({ error: 'Файл не найден' });
     }
 
-    delete _cache[city];
+    invalidateChars(city);
     res.json({ ok: true, filename, fileWasMissing });
   } catch (e) {
     serverError(res, e);
@@ -6684,7 +6504,7 @@ app.post('/api/log-session', async (req, res) => {
       await writeFileAtomic(abs, text, 'utf-8');
       written.push({ rel: c.rel, action: c.action });
     }
-    delete _cache[plan.summary.city];
+    invalidateChars(plan.summary.city);
 
     // Regenerate the city's aggregate event index, then revalidate links.
     await new Promise(resolve => {
@@ -7012,7 +6832,7 @@ ${stubContents.map(s => `\n---\n## ${s.rel}\n${s.txt}`).join('\n')}`;
       return res.status(500).json({ ok: false, error: 'Не удалось разобрать ответ. Проверь формат.', raw: text.slice(0, 800) });
     }
 
-    _cache = {};
+    invalidateChars();
     console.log(`[openrouter-prose] written: ${written.join(', ')}`);
     res.json({ ok: true, written, pending, failed, model });
   } catch (e) {
@@ -7062,7 +6882,7 @@ app.post('/api/claude/generate-prose', aiRateLimit, async (req, res) => {
       const txt = await fs.readFile(path.resolve(ROOT, rel), 'utf-8').catch(() => '');
       (/ОЖИДАЕТ ГЕНЕРАЦИИ/.test(txt) ? pending : written).push(rel);
     }
-    _cache = {};
+    invalidateChars();
 
     res.json({
       ok: !result.is_error && written.length > 0,
