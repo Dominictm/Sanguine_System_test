@@ -1,21 +1,24 @@
 'use strict';
 // Роутер персонажей: список, арты (все изображения / по персонажу), правка полей
 // и отношений, создание карточки, soft-delete с де-линковкой ссылок,
-// загрузка/удаление изображений.
-// Фабрика с DI: runValidationBackground приходит из server.js при монтировании —
-// фоновая валидация ссылок пока живёт там (E1.2). AI-генерация (generate-*),
-// дневники, диалоги и листы остаются в server.js.
+// загрузка/удаление изображений, дневники, диалоги (AI) и V20-лист.
+// Фабрика с DI: runValidationBackground + AI/лист-хелперы приходят из server.js
+// при монтировании (makeGenerationClient/isOA/oaCall/oaModels — общий генератор,
+// generateV20Sheet/ensureSheetLink — используются также modules.js для НПС модулей,
+// поэтому сама реализация остаётся в server.js, а сюда приходит только вызов).
 
 const express = require('express');
 const path    = require('path');
 const fs      = require('fs').promises;
-const { serverError } = require('../lib/http');
+const { serverError, aiRateLimit } = require('../lib/http');
 const {
-  cityDir, charsDir, archiveDir, reqCity, writeFileAtomic, invalidateChars,
+  ROOT, cityDir, charsDir, chroniclesDir, archiveDir, reqCity, writeFileAtomic, invalidateChars,
   getAllCharacters, mapLimit,
   EDITABLE_FIELD_MAP, SHEET_HEADER_FROM_CARD, _setSheetHeaderCell,
+  _nameMatch, _findModularNpcCard,
 } = require('../lib/db');
-const { slugify, writePrompt } = require('../lib/parsers');
+const { slugify, writePrompt, parseDiary, periodLabel } = require('../lib/parsers');
+const { loadLiteraryStyle } = require('../lib/context_builder');
 
 // Переопределение ярлыка карточки по линейке (там, где он отличается от базового).
 // Феи хранят локацию как «Фригольд / Локация» — пишем обратно тем же ярлыком, чтобы
@@ -106,8 +109,12 @@ function _delinkSlug(content, slug) {
   return content.replace(new RegExp(`\\[([^\\]]+)\\]\\(([^)]*${s}/${s}\\.md[^)]*)\\)`, 'g'), '$1');
 }
 
-// Фабрика: server.js передаёт runValidationBackground при монтировании.
-module.exports = function charactersRouter({ runValidationBackground }) {
+// Фабрика: server.js передаёт runValidationBackground + AI-хелперы при монтировании.
+module.exports = function charactersRouter({
+  runValidationBackground,
+  makeGenerationClient, isOA, oaCall, oaModels, genTextWithRetry,
+  generateV20Sheet, ensureSheetLink,
+}) {
   const router = express.Router();
 
   router.get('/api/characters', async (req, res) => {
@@ -570,5 +577,391 @@ module.exports = function charactersRouter({ runValidationBackground }) {
     }
   });
 
+  // ── Diary (journal/<period>.md) ────────────────────────────────────────────────
+
+  router.get('/api/characters/:slug/diary', async (req, res) => {
+    try {
+      const slug = decodeURIComponent(req.params.slug);
+      const file = req.query.file;
+      if (!file) return res.status(400).json({ error: 'file param required' });
+
+      const city  = reqCity(req);
+      const chars = await getAllCharacters(city);
+      const char  = chars.find(c => c.slug === slug);
+      if (!char) return res.status(404).json({ error: 'Персонаж не найден' });
+
+      const charDir  = path.resolve(charsDir(city), char.lineageFolder, char.slug);
+      const filePath = path.resolve(charDir, file);
+      if (!filePath.startsWith(charDir + path.sep) && filePath !== charDir)
+        return res.status(403).json({ error: 'Forbidden' });
+
+      const content = await fs.readFile(filePath, 'utf-8');
+      res.json(parseDiary(content));
+    } catch (e) { serverError(res, e); }
+  });
+
+  // Delete a diary entry file (journal/<period>.md) and drop its link from the card.
+  router.delete('/api/characters/:slug/diary', async (req, res) => {
+    try {
+      const slug = decodeURIComponent(req.params.slug);
+      const file = req.query.file;
+      if (!file) return res.status(400).json({ error: 'file param required' });
+
+      const city  = reqCity(req);
+      const chars = await getAllCharacters(city);
+      const char  = chars.find(c => c.slug === slug);
+      if (!char) return res.status(404).json({ error: 'Персонаж не найден' });
+
+      const charDir  = path.resolve(charsDir(city), char.lineageFolder, char.slug);
+      const filePath = path.resolve(charDir, file);
+      if (!filePath.startsWith(charDir + path.sep) && filePath !== charDir)
+        return res.status(403).json({ error: 'Forbidden' });
+
+      await fs.unlink(filePath).catch(() => {});
+      await removeDiaryLink(city, char, file.replace(/^\/+/, ''));
+
+      invalidateChars(city);
+      res.json({ ok: true });
+    } catch (e) { serverError(res, e); }
+  });
+
+  // Create or append a diary entry (journal/<period>.md), then link it from the card.
+  router.put('/api/characters/:slug/diary', express.json(), async (req, res) => {
+    try {
+      const city = reqCity(req);
+      const slug = decodeURIComponent(req.params.slug);
+      const { period, session = '', text = '', mode = 'append' } = req.body || {};
+      const per = String(period || '').trim();
+      if (!/^(\d{4}-\d{2}|retrospective)$/.test(per)) return res.status(400).json({ error: 'Период: ГГГГ-ММ или retrospective' });
+      if (!String(text).trim()) return res.status(400).json({ error: 'Пустой текст записи' });
+
+      const chars = await getAllCharacters(city);
+      const char  = chars.find(c => c.slug === slug);
+      if (!char) return res.status(404).json({ error: 'Персонаж не найден' });
+
+      const jdir = path.join(charsDir(city), char.lineageFolder, char.slug, 'journal');
+      await fs.mkdir(jdir, { recursive: true });
+      const file = path.join(jdir, `${per}.md`);
+
+      const title   = String(session).trim() || periodLabel(per);
+      const indented = String(text).trim().split('\n').map(l => l.trim() ? '  ' + l : '').join('\n');
+      const section  = `### 📅 ${title}\n\n- **👤 Автор:** ${char.name}\n\n- **📖 Текст записи:**\n\n${indented}\n`;
+
+      const existing = await fs.readFile(file, 'utf-8').catch(() => null);
+      // 'replace' always overwrites — used when editing/regenerating an existing single-entry
+      // record; 'create'/'append' (default) preserve the original add-entry-form behaviour.
+      const out = (existing === null || mode === 'create' || mode === 'replace')
+        ? `# 📖 Дневник ${char.name} — ${periodLabel(per)}\n\n---\n\n${section}`
+        : existing.replace(/\s*$/, '') + `\n\n---\n\n${section}`;
+      await writeFileAtomic(file, out, 'utf-8');
+
+      const linkLabel = title !== periodLabel(per) ? `${periodLabel(per)} — ${title}` : periodLabel(per);
+      if (mode === 'replace') await upsertDiaryLink(city, char, per, linkLabel);
+      else await ensureDiaryLink(city, char, per, linkLabel);
+      invalidateChars(city);
+      res.json({ ok: true, file: `journal/${per}.md` });
+    } catch (e) { serverError(res, e); }
+  });
+
+  // AI-generate diary prose for a character + period (not saved — returned for review).
+  router.post('/api/characters/:slug/diary/generate', aiRateLimit, express.json(), async (req, res) => {
+    try {
+      const city = reqCity(req);
+      const slug = decodeURIComponent(req.params.slug);
+      const { period = '', session = '', hint = '', draft = '', orModel = null, preferSource = null } = req.body || {};
+
+      const chars = await getAllCharacters(city);
+      const char  = chars.find(c => c.slug === slug);
+      if (!char) return res.status(404).json({ error: 'Персонаж не найден' });
+
+      const gen = await makeGenerationClient(preferSource, orModel);
+
+      const diaryRules = await fs.readFile(path.join(ROOT, 'system', 'rules', 'diary_rules.md'), 'utf-8').catch(() => '');
+      const litStyle   = await loadLiteraryStyle();
+      const card = await fs.readFile(path.join(charsDir(city), char.lineageFolder, char.slug, `${char.slug}.md`), 'utf-8').catch(() => '');
+      let eventsText = '';
+      try {
+        const chrs = (await fs.readdir(chroniclesDir(city), { withFileTypes: true })).filter(e => e.isDirectory());
+        // Sort newest-first by mtime — most relevant for recent diary entries
+        const withMtime = await Promise.all(chrs.map(async e => {
+          const st = await fs.stat(path.join(chroniclesDir(city), e.name)).catch(() => ({ mtimeMs: 0 }));
+          return { name: e.name, mtime: st.mtimeMs };
+        }));
+        withMtime.sort((a, b) => b.mtime - a.mtime);
+        const EVENTS_BUDGET = 8000;
+        for (const { name } of withMtime) {
+          if (eventsText.length >= EVENTS_BUDGET) break;
+          const ev = await fs.readFile(path.join(chroniclesDir(city), name, 'events.md'), 'utf-8').catch(() => null);
+          if (ev) eventsText += `\n### ${name}\n${ev.slice(0, Math.max(1500, EVENTS_BUDGET - eventsText.length))}`;
+        }
+      } catch {}
+
+      const periodTxt = periodLabel(period) || period;
+      const systemPrompt = `Ты — Рассказчик Vampire: The Masquerade V20. Пишешь литературную дневниковую запись от первого лица строго по правилам.
+${litStyle ? `\n# ЛИТЕРАТУРНЫЙ СТИЛЬ (system/rules/literary_style.md)\n${litStyle}\n` : ''}
+# ПРАВИЛА ДНЕВНИКОВ
+${diaryRules.slice(0, 4000)}
+
+# КАРТОЧКА ПЕРСОНАЖА (голос, характер, факты)
+${card.slice(0, 3000)}
+
+# СОБЫТИЯ ХРОНИКИ (ИСТОЧНИК ФАКТОВ — не выдумывай вне этого)
+${eventsText.slice(0, 8000) || '(не найдены)'}`;
+
+      const draftTxt = String(draft || '').trim();
+      const userPrompt = `Напиши дневниковую запись персонажа «${char.name}» за период ${periodTxt}${session ? ` (${session})` : ''}.
+${hint ? `Акцент/пожелание: ${hint}\n` : ''}${draftTxt ? `\nЧерновик записи (уже существует, написан ранее — используй как базу, дополни и доработай стиль, сохраняя заданную канву и факты, не противоречь им):\n${draftTxt}\n` : ''}Требования:
+- От первого лица, голосом персонажа (см. карточку).
+- Только факты из событий хроники; канон не выдумывай.
+${draftTxt ? '- Сохрани канву и факты черновика выше, углуби и доработай стиль/детали — не противоречь содержанию.\n' : ''}- Лаконично и литературно, по правилам diary_rules.md.
+- Верни ТОЛЬКО текст записи (без заголовков и markdown-полей).`;
+
+      let text = '';
+      if (isOA(gen)) {
+        const models = oaModels(gen);
+        let lastErr;
+        for (const m of models) {
+          try { text = await oaCall(gen)(m, systemPrompt, userPrompt, []); if (m !== gen.model) console.log(`[diary-gen] fallback model: ${m}`); break; }
+          catch (e) {
+            lastErr = e;
+            const retry = e.status === 404 || e.status === 429 || e.status === 502 || (e.status === 400 && /not a valid model|No endpoints/i.test(e.message));
+            if (!retry) throw e;
+          }
+        }
+        if (!text) throw lastErr;
+      } else {
+        const msg = await gen.client.messages.create({
+          model: gen.model, max_tokens: 1200, system: systemPrompt,
+          messages: [{ role: 'user', content: userPrompt }],
+        });
+        text = msg.content[0]?.text?.trim() || '';
+      }
+      res.json({ ok: true, text, source: gen.source });
+    } catch (e) {
+      const status = e.status ?? 500;
+      res.status(status >= 400 && status < 600 ? status : 500).json({ error: e.message ?? String(e) });
+    }
+  });
+
+  // ── NPC in-character dialogue (AI) — Voice field + clan style from diary_rules ──
+
+  // :id accepts either a real character's slug or a module-only NPC's display name
+  // (module-listed NPCs have no slug — see _findModularNpcCard fallback below).
+  router.post('/api/characters/:id/dialogue', aiRateLimit, express.json(), async (req, res) => {
+    try {
+      const city = reqCity(req);
+      const id   = decodeURIComponent(req.params.id);
+      const name = id;
+      const situation = String(req.body?.situation || '').trim();
+      const count = Math.min(Math.max(parseInt(req.body?.count, 10) || 4, 1), 8);
+      if (!situation) return res.status(400).json({ ok: false, error: 'Опиши ситуацию для реплик' });
+
+      const chars = await getAllCharacters(city);
+      let   char  = chars.find(c => c.slug === id) || chars.find(c => c.name === id) || chars.find(c => _nameMatch(c.name, id));
+      let   card  = '';
+      let   clan  = '';
+      if (char) {
+        card = await fs.readFile(path.join(charsDir(city), char.lineageFolder, char.slug, `${char.slug}.md`), 'utf-8').catch(() => '');
+        clan = char.clan || '';
+      } else if (req.body?.chr && req.body?.mod) {
+        // Модульный (неканоничный) НПС — карточка лежит в папке npc/ модуля
+        const npcRoot = path.join(chroniclesDir(city), String(req.body.chr), 'modules', String(req.body.mod), 'npc');
+        const found = await _findModularNpcCard(npcRoot, name);
+        if (found) { card = found.card; clan = found.clan; }
+      }
+      if (!card) return res.status(404).json({ ok: false, error: 'Персонаж не найден' });
+
+      const diaryRules = await fs.readFile(path.join(ROOT, 'system', 'rules', 'diary_rules.md'), 'utf-8').catch(() => '');
+      const stylesM    = diaryRules.match(/##\s*🎭\s*Правила литературной стилизации[\s\S]*?(?=\n##\s|\s*$)/);
+      const styles     = stylesM ? stylesM[0] : diaryRules.slice(0, 2500);
+      const litStyle   = await loadLiteraryStyle();
+
+      const gen = await makeGenerationClient(req.body?.source || null, req.body?.model || null);
+      const systemPrompt = `Ты пишешь РЕПЛИКИ НПС в характере для Vampire: The Masquerade V20.
+Говори ГОЛОСОМ персонажа (поле «Голос» в карточке) и в КЛАНОВОМ СТИЛЕ — строка его клана «${clan || '—'}» в таблице ниже.
+Маскарад: вампирскую природу/дисциплины — только намёками и метафорами. Не выдумывай факты вне карточки. Русский язык.
+${litStyle ? `\n# ЛИТЕРАТУРНЫЙ СТИЛЬ (system/rules/literary_style.md)\n${litStyle}\n` : ''}
+# КАРТОЧКА ПЕРСОНАЖА (голос, клан, характер, факты)
+${card.slice(0, 3000)}
+
+# КЛАНОВЫЕ / ТИПОВЫЕ СТИЛИ (diary_rules.md)
+${styles.slice(0, 2000)}`;
+
+      const userPrompt = `Ситуация: ${situation}
+
+Сгенерируй ${count} реплик(и) НПС «${name}» в этой ситуации — в его характере, голосе и клановом стиле.
+Каждая реплика с новой строки, в кавычках «…». Допустима краткая ремарка действия в скобках. Без нумерации, без пояснений вне реплик.`;
+
+      const out = await genTextWithRetry(gen, { system: systemPrompt, user: userPrompt, maxTokens: 900 });
+      res.json({ ok: true, text: out.text, source: out.source });
+    } catch (e) {
+      const status = e.status ?? 500;
+      const msg = status === 429
+        ? 'Лимит запросов исчерпан (Claude и резервный OpenRouter). Подожди минуту или выбери OpenRouter в «⚡ Назначение провайдеров → Генерация фраз».'
+        : (e.message ?? String(e));
+      res.status(status >= 400 && status < 600 ? status : 500).json({ ok: false, error: msg });
+    }
+  });
+
+  // ── C4 — V20 character sheet (<slug>-sheet.md next to the card) ───────────────
+
+  router.get('/api/characters/:slug/sheet', async (req, res) => {
+    try {
+      const city  = reqCity(req);
+      const slug  = decodeURIComponent(req.params.slug);
+      const chars = await getAllCharacters(city);
+      const char  = chars.find(c => c.slug === slug);
+      if (!char) return res.status(404).json({ error: 'Персонаж не найден' });
+      const file = path.join(charsDir(city), char.lineageFolder, char.slug, `${char.slug}-sheet.md`);
+      const content = await fs.readFile(file, 'utf-8').catch(() => null);
+      res.json({ exists: content !== null, content: content || '' });
+    } catch (e) { serverError(res, e); }
+  });
+
+  // Generate (or regenerate) a canonical character's sheet
+  router.post('/api/characters/:slug/sheet/generate', aiRateLimit, express.json(), async (req, res) => {
+    try {
+      const city  = reqCity(req);
+      const slug  = decodeURIComponent(req.params.slug);
+      const chars = await getAllCharacters(city);
+      const char  = chars.find(c => c.slug === slug);
+      if (!char) return res.status(404).json({ ok: false, error: 'Персонаж не найден' });
+      const dir  = path.join(charsDir(city), char.lineageFolder, char.slug);
+      const card = await fs.readFile(path.join(dir, `${char.slug}.md`), 'utf-8').catch(() => '');
+      if (!card) return res.status(404).json({ ok: false, error: 'Карточка персонажа не найдена' });
+      const gen  = await makeGenerationClient(req.body?.source || null, req.body?.model || null);
+      let text = await generateV20Sheet({ card, displayName: char.name, gen, lineage: char.lineageFolder });
+      if (!text) return res.status(500).json({ ok: false, error: 'ИИ вернул пустой лист' });
+      // Re-stamp header fields already known from the card — the AI is given the card
+      // text but can still paraphrase/invent name·clan·generation·sire; force them back
+      // to the card's own values so the sheet never disagrees with «Информация».
+      for (const [key, label] of Object.entries(SHEET_HEADER_FROM_CARD)) {
+        const v = String(char[key] || '').trim();
+        if (v && !v.includes('⚠️')) text = _setSheetHeaderCell(text, label, v);
+      }
+      await writeFileAtomic(path.join(dir, `${char.slug}-sheet.md`), text + '\n', 'utf-8');
+      await ensureSheetLink(path.join(dir, `${char.slug}.md`), `${char.slug}-sheet.md`);
+      res.json({ ok: true, content: text });
+    } catch (e) { res.status(e.status >= 400 && e.status < 600 ? e.status : 500).json({ ok: false, error: e.message }); }
+  });
+
+  // Save an edited canonical sheet (raw markdown from the editor)
+  router.put('/api/characters/:slug/sheet', express.json(), async (req, res) => {
+    try {
+      const city  = reqCity(req);
+      const slug  = decodeURIComponent(req.params.slug);
+      const content = String(req.body?.content || '');
+      if (!content.trim()) return res.status(400).json({ ok: false, error: 'Пустой лист' });
+      const chars = await getAllCharacters(city);
+      const char  = chars.find(c => c.slug === slug);
+      if (!char) return res.status(404).json({ ok: false, error: 'Персонаж не найден' });
+      const dir = path.join(charsDir(city), char.lineageFolder, char.slug);
+      await writeFileAtomic(path.join(dir, `${char.slug}-sheet.md`), content.replace(/\s*$/, '') + '\n', 'utf-8');
+      await ensureSheetLink(path.join(dir, `${char.slug}.md`), `${char.slug}-sheet.md`);
+      res.json({ ok: true });
+    } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+  });
+
+  // ── Structured V20 sheet data (JSON sidecar) ──────────────────────────────────
+  // Source of truth for the interactive blank on the «Лист V20» tab. Falls back to
+  // parsing the AI markdown sheet (client-side) when no JSON exists yet, or when
+  // ?fromMd=1 forces a reseed after an AI (re)generation.
+  router.get('/api/characters/:slug/sheet-data', async (req, res) => {
+    try {
+      const city  = reqCity(req);
+      const slug  = decodeURIComponent(req.params.slug);
+      const chars = await getAllCharacters(city);
+      const char  = chars.find(c => c.slug === slug);
+      if (!char) return res.status(404).json({ error: 'Персонаж не найден' });
+      const dir   = path.join(charsDir(city), char.lineageFolder, char.slug);
+      const fromMd = req.query.fromMd === '1';
+      if (!fromMd) {
+        const raw = await fs.readFile(path.join(dir, `${char.slug}-sheet.json`), 'utf-8').catch(() => null);
+        if (raw) { try { return res.json({ exists: true, source: 'json', lineage: char.lineageFolder, data: JSON.parse(raw) }); } catch { /* corrupt → fall through to md */ } }
+      }
+      const md = await fs.readFile(path.join(dir, `${char.slug}-sheet.md`), 'utf-8').catch(() => null);
+      res.json({ exists: md !== null, source: md ? 'md' : 'empty', lineage: char.lineageFolder, md: md || '' });
+    } catch (e) { serverError(res, e); }
+  });
+
+  router.put('/api/characters/:slug/sheet-data', express.json({ limit: '1mb' }), async (req, res) => {
+    try {
+      const city  = reqCity(req);
+      const slug  = decodeURIComponent(req.params.slug);
+      const data  = req.body?.data;
+      if (!data || typeof data !== 'object') return res.status(400).json({ ok: false, error: 'Нет данных листа' });
+      const chars = await getAllCharacters(city);
+      const char  = chars.find(c => c.slug === slug);
+      if (!char) return res.status(404).json({ ok: false, error: 'Персонаж не найден' });
+      const dir   = path.join(charsDir(city), char.lineageFolder, char.slug);
+      await writeFileAtomic(path.join(dir, `${char.slug}-sheet.json`), JSON.stringify(data, null, 2), 'utf-8');
+      res.json({ ok: true });
+    } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+  });
+
   return router;
 };
+
+// Add a [label](journal/<period>.md) link to the card's "📖 Дневники" field if absent.
+async function ensureDiaryLink(city, char, period, label) {
+  const cardPath = path.join(charsDir(city), char.lineageFolder, char.slug, `${char.slug}.md`);
+  let card = await fs.readFile(cardPath, 'utf-8').catch(() => null);
+  if (card === null) return;
+  const href = `journal/${period}.md`;
+  if (card.includes(href)) return;                       // already linked
+  const link = `[${label}](${href})`;
+  const fieldRe = /^- \*\*📖 Дневники:\*\*\s*(.*)$/m;
+  if (fieldRe.test(card)) {
+    card = card.replace(fieldRe, (_, cur) => `- **📖 Дневники:** ${cur.trim() ? cur.trim() + ' · ' + link : link}`);
+  } else {
+    // Insert after the last "- **Field:**" metadata bullet
+    const lastM = [...card.matchAll(/^- \*\*[^*:\n]+[^*]*:\*\*\s*.+$/gm)].at(-1);
+    const line = `- **📖 Дневники:** ${link}`;
+    if (lastM) { const pos = lastM.index + lastM[0].length; card = card.slice(0, pos) + '\n' + line + card.slice(pos); }
+    else return;
+  }
+  await writeFileAtomic(cardPath, card, 'utf-8');
+}
+
+// Like ensureDiaryLink, but replaces an existing link's label instead of leaving it
+// untouched — used when an entry is edited/regenerated and its title may have changed.
+async function upsertDiaryLink(city, char, period, label) {
+  const cardPath = path.join(charsDir(city), char.lineageFolder, char.slug, `${char.slug}.md`);
+  let card = await fs.readFile(cardPath, 'utf-8').catch(() => null);
+  if (card === null) return;
+  const href = `journal/${period}.md`;
+  const link = `[${label}](${href})`;
+  const fieldRe = /^- \*\*📖 Дневники:\*\*\s*(.*)$/m;
+  const fm = card.match(fieldRe);
+  if (fm) {
+    const hrefEsc = href.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const linkRe = new RegExp(`\\[[^\\]]*\\]\\(${hrefEsc}\\)`);
+    card = linkRe.test(fm[1])
+      ? card.replace(fieldRe, `- **📖 Дневники:** ${fm[1].replace(linkRe, link)}`)
+      : card.replace(fieldRe, `- **📖 Дневники:** ${fm[1].trim() ? fm[1].trim() + ' · ' + link : link}`);
+  } else {
+    const lastM = [...card.matchAll(/^- \*\*[^*:\n]+[^*]*:\*\*\s*.+$/gm)].at(-1);
+    const line = `- **📖 Дневники:** ${link}`;
+    if (lastM) { const pos = lastM.index + lastM[0].length; card = card.slice(0, pos) + '\n' + line + card.slice(pos); }
+    else return;
+  }
+  await writeFileAtomic(cardPath, card, 'utf-8');
+}
+
+// Remove a [label](journal/<period>.md) link from the card's "📖 Дневники" field —
+// drops the whole field line if it was the last link.
+async function removeDiaryLink(city, char, href) {
+  const cardPath = path.join(charsDir(city), char.lineageFolder, char.slug, `${char.slug}.md`);
+  let card = await fs.readFile(cardPath, 'utf-8').catch(() => null);
+  if (card === null) return;
+  const fieldRe = /^- \*\*📖 Дневники:\*\*\s*(.*)$/m;
+  const fm = card.match(fieldRe);
+  if (!fm) return;
+  const hrefEsc = href.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const linkRe = new RegExp(`\\s*·?\\s*\\[[^\\]]*\\]\\(${hrefEsc}\\)`);
+  const rest = fm[1].replace(linkRe, '').replace(/^\s*·\s*/, '').trim();
+  card = rest
+    ? card.replace(fieldRe, `- **📖 Дневники:** ${rest}`)
+    : card.replace(/^- \*\*📖 Дневники:\*\*\s*.*\n?/m, '');
+  await writeFileAtomic(cardPath, card, 'utf-8');
+}
