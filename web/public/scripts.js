@@ -3400,7 +3400,7 @@ function renderModulePage(data) {
     </div>
     <div id="moddet-${id}-view">${viewHtml}</div>
     <div id="moddet-${id}-edit" style="display:none">${editHtml}</div>
-    <div class="modp-edit-bar" id="moddet-${id}-bar">
+    <div class="modp-edit-bar" id="moddet-${id}-bar" style="display:none">
       <button class="modp-save-btn" data-savemod="${id}">Сохранить</button>
       <button class="modp-cancel-btn" data-cancelmod="${id}">Отмена</button>
       <span class="modp-save-msg" id="moddet-${id}-msg" style="display:none">✓ Сохранено</span>
