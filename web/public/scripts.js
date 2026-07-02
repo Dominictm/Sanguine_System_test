@@ -3662,6 +3662,39 @@ function renderModulePage(data) {
     npcPanel.innerHTML =
       '<div class="modp-empty"><div class="modp-empty-icon">👥</div>Файл npc.md отсутствует</div>';
   }
+  // ── NPC toolbar & add-form ──
+  npcPanel.insertAdjacentHTML('beforeend', `
+  <div class="modp-npc-add-toolbar" style="margin-top:16px">
+    ${!data.npcContent
+      ? `<button class="modp-edit-btn" id="modp-init-npcmd-btn">📄 Создать npc.md</button>`
+      : ''
+    }
+    <button class="modp-edit-btn" id="modp-add-npc-btn">+ Добавить НПС</button>
+  </div>
+
+  <div id="modp-npc-add-form" style="display:none;margin-top:12px;padding:12px;border:1px solid var(--border,#444);border-radius:4px">
+    <div style="margin-bottom:8px">
+      <label style="display:block;font-size:var(--fs-sm,12px);color:var(--text2,#999);margin-bottom:2px">Имя</label>
+      <input class="moddet-add-input" id="modp-npc-add-name"
+        list="modp-npc-add-datalist" placeholder="Имя персонажа…" autocomplete="off" style="width:100%">
+      <datalist id="modp-npc-add-datalist">
+        ${(STATE.characters || []).map(c => `<option value="${escHtml(c.name)}">`).join('')}
+      </datalist>
+    </div>
+    <div style="margin-bottom:8px">
+      <label style="display:block;font-size:var(--fs-sm,12px);color:var(--text2,#999);margin-bottom:2px">Группа</label>
+      <select class="moddet-add-input" id="modp-npc-add-group" style="width:100%">
+        <option value="modular">🆕 Модульный НПС (создать карточку)</option>
+        <option value="canon">📚 Каноничный НПС (из персонажей города)</option>
+        <option value="pc">🎭 Персонаж игрока</option>
+      </select>
+    </div>
+    <div style="display:flex;gap:6px;align-items:center">
+      <button class="modp-save-btn" id="modp-npc-add-submit">Добавить</button>
+      <button class="modp-cancel-btn" id="modp-npc-add-cancel">Отмена</button>
+      <span class="modp-save-msg" id="modp-npc-add-msg" style="display:none"></span>
+    </div>
+  </div>`);
 
   // ── ЛОКАЦИИ ──
   _renderModuleLocPanel(data);
@@ -3981,6 +4014,77 @@ document.getElementById('modp-panel-npcs').addEventListener('click', e => {
   if (promoteBtn) { _onPromoteNpc(promoteBtn); return; }
   const link = e.target.closest('[data-open-char]');
   if (link) { e.preventDefault(); openCharDetail(link.dataset.openChar); }
+
+  // Show/hide NPC add form
+  if (e.target.id === 'modp-add-npc-btn') {
+    const form = document.getElementById('modp-npc-add-form');
+    if (form) form.style.display = form.style.display === 'none' ? '' : 'none';
+    return;
+  }
+
+  // Hide NPC add form
+  if (e.target.id === 'modp-npc-add-cancel') {
+    const form = document.getElementById('modp-npc-add-form');
+    if (form) form.style.display = 'none';
+    return;
+  }
+
+  // Init npc.md
+  if (e.target.id === 'modp-init-npcmd-btn') {
+    const d   = STATE.currentModuleData;
+    const chr = d?.chronicle || STATE.currentModule?.chronicle;
+    const mod = d?.name      || STATE.currentModule?.name;
+    if (!chr || !mod) return;
+    const btn = e.target;
+    btn.disabled = true;
+    (async () => {
+      try {
+        const r = await fetch(
+          `/api/chronicles/${encodeURIComponent(chr)}/modules/${encodeURIComponent(mod)}/npc${window.location.search}`,
+          { method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: '', group: 'modular', initOnly: true }) }
+        );
+        if (!r.ok) throw new Error(await r.text());
+        await _reloadModulePage();
+      } catch (err) {
+        window.alert('Ошибка: ' + err.message);
+        btn.disabled = false;
+      }
+    })();
+    return;
+  }
+
+  // Submit NPC add form
+  if (e.target.id === 'modp-npc-add-submit') {
+    const d     = STATE.currentModuleData;
+    const chr   = d?.chronicle || STATE.currentModule?.chronicle;
+    const mod   = d?.name      || STATE.currentModule?.name;
+    const name  = document.getElementById('modp-npc-add-name')?.value?.trim();
+    const group = document.getElementById('modp-npc-add-group')?.value || 'modular';
+    const msg   = document.getElementById('modp-npc-add-msg');
+    if (!name) {
+      if (msg) { msg.textContent = '⚠ Укажи имя'; msg.style.display = ''; }
+      return;
+    }
+    const btn = e.target;
+    btn.disabled = true;
+    (async () => {
+      try {
+        const r = await fetch(
+          `/api/chronicles/${encodeURIComponent(chr)}/modules/${encodeURIComponent(mod)}/npc${window.location.search}`,
+          { method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, group }) }
+        );
+        const result = await r.json();
+        if (!r.ok) throw new Error(result.error || 'Ошибка');
+        await _reloadModulePage();
+      } catch (err) {
+        if (msg) { msg.textContent = '✗ ' + err.message; msg.style.display = ''; }
+        btn.disabled = false;
+      }
+    })();
+    return;
+  }
 });
 
 // Promote episodic NPC to canonical character
