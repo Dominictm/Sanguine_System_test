@@ -4280,11 +4280,11 @@ document.getElementById('modp-del-btn').addEventListener('click', async () => {
     if (confirmBtn) confirmBtn.disabled = !unlockCheck.checked;
   };
 
-  document.getElementById('modp-del-cancel-btn')?.addEventListener('click', () => {
+  document.getElementById('modp-del-cancel-btn').onclick = () => {
     document.getElementById('modp-delete-modal').classList.remove('open');
-  }, { once: true });
+  };
 
-  document.getElementById('modp-del-confirm-btn')?.addEventListener('click', async () => {
+  document.getElementById('modp-del-confirm-btn').onclick = async () => {
     document.getElementById('modp-delete-modal').classList.remove('open');
     const delBtn = document.getElementById('modp-del-btn');
     if (delBtn) { delBtn.disabled = true; delBtn.textContent = '⏳ Удаление...'; }
@@ -4300,9 +4300,14 @@ document.getElementById('modp-del-btn').addEventListener('click', async () => {
     } finally {
       if (delBtn) { delBtn.disabled = false; delBtn.textContent = '🗑 Удалить модуль'; }
     }
-  }, { once: true });
+  };
 
   document.getElementById('modp-delete-modal').classList.add('open');
+});
+
+document.getElementById('modp-delete-modal').addEventListener('click', e => {
+  if (e.target === document.getElementById('modp-delete-modal'))
+    document.getElementById('modp-delete-modal').classList.remove('open');
 });
 
 // Global click delegation for md-link-char / md-link-loc produced by resolveMdLink()
