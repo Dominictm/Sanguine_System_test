@@ -189,6 +189,23 @@ async function listModules(city = DEFAULT_CITY) {
   return out;
 }
 
+// Open threads are now per-chronicle (chronicles/<chr>/open_threads.md); aggregate them.
+async function readOpenThreadsRaw(city = DEFAULT_CITY) {
+  let all = '';
+  // 1. Archive-level file (primary in older layout)
+  const archiveFile = path.join(archiveDir(city), 'open_threads.md');
+  const archiveRaw  = await fs.readFile(archiveFile, 'utf-8').catch(() => null);
+  if (archiveRaw) all += '\n' + archiveRaw;
+  // 2. Per-chronicle files (newer layout)
+  let chrs; try { chrs = await fs.readdir(chroniclesDir(city), { withFileTypes: true }); } catch { chrs = []; }
+  for (const ch of chrs) {
+    if (!ch.isDirectory()) continue;
+    const raw = await fs.readFile(path.join(chroniclesDir(city), ch.name, 'open_threads.md'), 'utf-8').catch(() => null);
+    if (raw) all += '\n' + raw;
+  }
+  return all;
+}
+
 // ── Misc shared helpers ────────────────────────────────────────────────────────
 async function countMdFiles(dir) {
   let n = 0;
@@ -232,5 +249,6 @@ module.exports = {
   invalidateChars, invalidateLocs,
   LINEAGE_MAP,
   getAllCharacters, getAllLocations, findLocMdPath, listModules,
+  readOpenThreadsRaw,
   countMdFiles, mapLimit, tableCell,
 };
