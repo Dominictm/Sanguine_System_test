@@ -63,6 +63,16 @@ module.exports = function locationsRouter({ makeGenerationClient, isOA, oaCall }
     catch (e) { serverError(res, e); }
   });
 
+  // ── Export: все локации города одним файлом для скачивания ────────────────────
+  router.get('/api/export/locations', async (req, res) => {
+    try {
+      const city = reqCity(req);
+      const locs = await getAllLocations(city);
+      res.setHeader('Content-Disposition', `attachment; filename="locations_${city}.json"`);
+      res.json(locs);
+    } catch (e) { serverError(res, e); }
+  });
+
   router.get('/api/locations/:slug/images', async (req, res) => {
     try {
       const slug = decodeURIComponent(req.params.slug);

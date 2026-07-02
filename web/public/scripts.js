@@ -8564,6 +8564,10 @@ function showModalStep(n) {
 }
 
 document.getElementById('btn-open-create-char').addEventListener('click', openCharModal);
+document.getElementById('btn-export-chars')?.addEventListener('click', e => {
+  e.preventDefault();
+  window.location.href = `/api/export/characters${window.location.search}`;
+});
 document.getElementById('modal-close').addEventListener('click', closeCharModal);
 document.getElementById('modal-back').addEventListener('click', () => showModalStep(1));
 charModal.addEventListener('click', e => { if (e.target === charModal) closeCharModal(); });

@@ -910,6 +910,11 @@ async function runLocFullGen() {
   // "Create location" button on locations page
   document.getElementById('loc-page-create-btn')?.addEventListener('click', () => openLocEditModal(null));
 
+  document.getElementById('btn-export-locs')?.addEventListener('click', e => {
+    e.preventDefault();
+    window.location.href = `/api/export/locations${window.location.search}`;
+  });
+
   // "Edit" button in loc-detail-modal (delegated)
   document.getElementById('loc-detail-content').addEventListener('click', e => {
     const editBtn = e.target.closest('#locdet-open-edit-modal');

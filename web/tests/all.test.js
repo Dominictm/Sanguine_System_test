@@ -6,7 +6,7 @@ const { describe, it, before, after } = require('node:test');
 const assert = require('node:assert/strict');
 const fs     = require('fs').promises;
 const path   = require('path');
-const { startServer, stopServer, apiJson } = require('./helpers');
+const { startServer, stopServer, apiJson, BASE } = require('./helpers');
 const {
   readPrompt, writePrompt, periodLabel,
   threadStatusKey, parseThreadsContent, THREAD_STATUS,
@@ -660,6 +660,13 @@ describe('API — integration', () => {
       assert.equal(status, 200);
       assert.ok(Array.isArray(body.images));
     });
+    it('GET /api/export/characters → тот же массив + заголовок скачивания', async () => {
+      const { status, body } = await apiJson(`/api/export/characters${CITY}`);
+      assert.equal(status, 200);
+      assert.deepEqual(body, chars);
+      const res = await fetch(BASE + `/api/export/characters${CITY}`);
+      assert.match(res.headers.get('content-disposition') || '', /attachment;.*characters_.*\.json/);
+    });
   });
 
   // ── Locations ──────────────────────────────────────────────────────────────
@@ -702,6 +709,17 @@ describe('API — integration', () => {
       });
       assert.equal(status, 400);
       assert.equal(body.ok, false);
+    });
+
+    it('GET /api/export/locations → тот же массив + заголовок скачивания', async () => {
+      const [plain, exported] = await Promise.all([
+        apiJson(`/api/locations${CITY}`),
+        apiJson(`/api/export/locations${CITY}`),
+      ]);
+      assert.equal(exported.status, 200);
+      assert.deepEqual(exported.body, plain.body);
+      const res = await fetch(BASE + `/api/export/locations${CITY}`);
+      assert.match(res.headers.get('content-disposition') || '', /attachment;.*locations_.*\.json/);
     });
   });
 

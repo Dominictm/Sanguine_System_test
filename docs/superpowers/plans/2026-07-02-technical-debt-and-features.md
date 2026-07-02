@@ -487,21 +487,35 @@ test:ui` упало 10/26: онбординг-тур не подавлялся (
 
 ### D2: JSDoc-аннотации — 8 часов (инкрементально)
 
-Делать при каждом касании файла. Начинать с `web/lib/parsers.js`:
-```js
-/**
- * @param {string} slug — ASCII-слаг папки
- * @param {string} content — содержимое .md файла
- * @returns {{ slug, title, atmosphere, keyPoints, sensoryPalette, ... }}
- */
-function parseLocation(slug, content) { ... }
-```
+**Статус: ✅ ГОТОВО для `web/lib/parsers.js` (2026-07-03).** Все 27 экспортов
+файла аннотированы `@param`/`@returns` (сигнатуры реальные, не из черновика
+плана — например, `parseLocation` на деле `(rawContent, folderName)`, а не
+`(slug, content)`). Задача была изначально размечена «инкрементально, при
+каждом касании файла» — этот файл был единственным реально затронутым в ходе
+исполнения плана (C3.1 трогал `parseLocation`), поэтому дальше по кодовой базе
+(например `server.js`/`routes/*.js`) не расширялось — по духу исходной
+формулировки D2, а не единым проходом по всему проекту. `node --check` + `npm
+test` (221/221) после аннотирования.
 
 ### D3: Экспорт данных — 4 часа
 
-- [ ] `GET /api/export/characters?city=X&format=json` — все персонажи
-- [ ] `GET /api/export/locations?city=X&format=json` — все локации
-- [ ] Кнопка «Экспорт» на страницах Characters и Locations
+**Статус: ✅ ГОТОВО (2026-07-03).** Реализовано в актуальной модульной
+структуре: `GET /api/export/characters` (`routes/characters.js`) и
+`GET /api/export/locations` (`routes/locations.js`) — та же выборка, что
+обычные `GET /api/characters`/`GET /api/locations`, плюс заголовок
+`Content-Disposition: attachment; filename="<тип>_<город>.json"` для скачивания
+браузером (`?format=json` из черновика плана не понадобился — эндпоинт всегда
+отдаёт JSON, формат не параметризован, т.к. другого формата не запрашивалось).
+Кнопки «⇩ Экспорт» — на страницах Characters (рядом с «+ Создать») и Locations
+(рядом с «+ Создать локацию»), обработчик — простой редирект на эндпоинт с
+сохранением текущего `?city=`. 2 новых теста (совпадение данных с обычным
+списком + заголовок скачивания) в `tests/all.test.js`, `npm test` 223/223.
+Браузерная проверка headless Chrome на отдельном тестовом сервере (порт 3099) —
+живой dev-сервер пользователя не трогали.
+
+- [x] `GET /api/export/characters?city=X` — все персонажи
+- [x] `GET /api/export/locations?city=X` — все локации
+- [x] Кнопка «Экспорт» на страницах Characters и Locations
 
 ### D4: Оптимизация D3-графа — 4 часа
 
@@ -665,11 +679,11 @@ app.use('/api', require('./routes/chronicles'));
 | B2.3 | Замена confirm() | `scripts.js` (19 штук) | 3 ч | **P1** | ✅ ГОТОВО |
 | C1.1 | Rate-limit middleware | `server.js` / `lib/http.js` | 3 ч | P2 | ✅ ГОТОВО (16 AI-эндпоинтов) |
 | C2.1 | Тесты модульных эндпоинтов | `tests/all.test.js` | 3 ч | P2 | ✅ ГОТОВО (нашли и починили BOM-баг) |
-| C3.1 | Shared parse endpoint | `server.js, scripts.js` | 2 ч | P3 | ⬜ не начато |
-| D1 | UI-тесты в CI | `tests/run-tests.bat` | 1 ч | P3 | ⬜ не начато |
-| D2 | JSDoc аннотации | `parsers.js, server.js` | 8 ч | P3 | ⬜ не начато |
-| D3 | Экспорт данных | `server.js` | 4 ч | P3 | ⬜ не начато |
-| D4 | Оптимизация D3-графа | `graph.js` | 4 ч | P3 | ⬜ не начато |
+| C3.1 | Shared parse endpoint | `routes/locations.js, public/locations.js` | 2 ч | P3 | ✅ ГОТОВО |
+| D1 | UI-тесты в CI | `tests/run-tests.bat` | 1 ч | P3 | ✅ ГОТОВО — 26/26 headless, 3 найденных бага починены |
+| D2 | JSDoc аннотации | `lib/parsers.js` | 8 ч | P3 | ✅ ГОТОВО (для файла, реально затронутого в этом плане) |
+| D3 | Экспорт данных | `routes/characters.js, routes/locations.js` | 4 ч | P3 | ✅ ГОТОВО |
+| D4 | Оптимизация D3-графа | `public/graph.js` | 4 ч | P3 | ⬜ не начато |
 | E1.1 | DB/HTTP helpers | `lib/db.js`, `lib/http.js` | 3 ч | P2 | ✅ ГОТОВО |
 | E1.2 | Роутеры (`routes/*.js`) | 11 файлов (library, cities, archive, locations, threads, characters, chronicles, modules, generation, dashboard, tools) | 8 ч | P2 | ✅ ГОТОВО — вышло больше файлов, чем планировалось (полное покрытие, не только 6) |
 | E1.3 | server.js как точка входа | `server.js` | 2 ч | P2 | ✅ ГОТОВО — **7262 → 1005 строк** (86%) |

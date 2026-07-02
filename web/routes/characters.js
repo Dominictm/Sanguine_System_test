@@ -122,6 +122,16 @@ module.exports = function charactersRouter({
     catch (e) { serverError(res, e); }
   });
 
+  // ── Export: все персонажи города одним файлом для скачивания ──────────────────
+  router.get('/api/export/characters', async (req, res) => {
+    try {
+      const city = reqCity(req);
+      const chars = await getAllCharacters(city);
+      res.setHeader('Content-Disposition', `attachment; filename="characters_${city}.json"`);
+      res.json(chars);
+    } catch (e) { serverError(res, e); }
+  });
+
   // ── All images for all characters (for grid carousels) ────────────────────────
 
   router.get('/api/characters/all-images', async (req, res) => {

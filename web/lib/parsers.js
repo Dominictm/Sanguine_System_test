@@ -20,6 +20,10 @@ const CYRILLIC_TR = {
 // them) — folded explicitly so international city names slug cleanly (Düsseldorf→
 // dusseldorf, Şanlıurfa→sanliurfa, Malmö→malmo). Mirrored in scripts.js (_LATIN_TR).
 const LATIN_TR = { ø:'o', ł:'l', đ:'d', ı:'i', ß:'ss', æ:'ae', œ:'oe', þ:'th', ð:'d' };
+/**
+ * @param {string} s — произвольная строка (кириллица/латиница/эмодзи)
+ * @returns {string} ASCII-слаг: только `[a-z0-9_]`, без ведущих/двойных `_`
+ */
 function slugify(s) {
   return String(s == null ? '' : s).toLowerCase()
     // Cyrillic first (NFKD would split й→и+◌̆ and corrupt it), then fold Latin diacritics.
@@ -50,7 +54,11 @@ function _citySection(txt) {
 
 const CITY_DEFAULT_DESCRIPTION = 'Опиши здесь свой домен — то, с чем сверяется Рассказчик перед сценой (см. CLAUDE.md → «Активный город»).';
 
-// Build city.md from form fields: { display, year, description, political, locations, leitmotif, specifics, avoid, sources }
+/**
+ * Собирает содержимое city.md из полей формы.
+ * @param {{display?, year?, description?, political?, factions?, locations?, leitmotif?, specifics?, avoid?, sources?}} fields
+ * @returns {string} готовый Markdown city.md
+ */
 function buildCityMd(fields = {}) {
   const display     = String(fields.display || '').trim() || 'Город';
   const year        = String(fields.year || '').trim() || '20XX';
@@ -64,8 +72,12 @@ ${body}
 `;
 }
 
-// Parse city.md back into { display, year, description, sections:{...} } for the edit form
-// and for robust display/year labels (no longer dependent on the exact H1 suffix matching).
+/**
+ * Разбирает city.md обратно в структуру для формы редактирования.
+ * @param {string} raw — содержимое city.md
+ * @returns {{display: string, year: string, description: string, sections: Object<string,string>}}
+ *   sections — по ключам CITY_SECTIONS (political/factions/locations/…), каждый — «плоский» текст без буллетов
+ */
 function parseCityMd(raw) {
   const text = String(raw == null ? '' : raw).replace(/^﻿/, '').replace(/\r\n/g, '\n');
   let display = '', year = '';
@@ -104,6 +116,12 @@ function parseCityMd(raw) {
 // в CLI). До выноса оба пути хардкодили эти шаблоны по отдельности и успели разойтись
 // (в visitors.md) — теперь источник один. Принимает те же поля, что buildCityMd, плюс
 // districts (CSV-строка или массив).
+/**
+ * @param {{display?, year?, districts?: string|string[], ...}} fields — те же поля, что buildCityMd
+ * @returns {{files: Object<string,string>, keepDirs: string[]}}
+ *   files — относительные пути → содержимое (city.md, archive/*.md, стартовая хроника);
+ *   keepDirs — пустые папки под .gitkeep (character-линейки, chronicles/, districts/…)
+ */
 function cityScaffold(fields = {}) {
   const display   = String(fields.display || '').trim() || 'Город';
   const year      = String(fields.year || '').trim() || '20XX';
@@ -223,7 +241,11 @@ const THREAD_STATUS = {
 //        ```
 //        …
 //        ```
-// `which` ∈ 'image' | 'negative'
+/**
+ * @param {string} content — Markdown карточки (персонаж или локация)
+ * @param {'image'|'negative'} which — какой из двух промтов читать
+ * @returns {string|undefined} текст промта, либо undefined если секция отсутствует
+ */
 function readPrompt(content, which) {
   // Format B (fenced) — absent in character cards (no code fences there)
   const fenceLabel = which === 'negative' ? 'Негативный промт' : 'GPT';
@@ -241,6 +263,13 @@ function readPrompt(content, which) {
   return undefined;
 }
 
+/**
+ * @param {string} card — исходный Markdown карточки
+ * @param {'image'|'negative'} which — какой промт записать
+ * @param {string} rawValue — новый текст промта
+ * @param {'fenced'|'indented'} format — layout карточки (locations → 'fenced', characters → 'indented')
+ * @returns {string} обновлённый Markdown карточки (существующая секция заменена, либо вставлена новая)
+ */
 function writePrompt(card, which, rawValue, format) {
   const value = String(rawValue).trim();
   if (format === 'fenced') {
@@ -276,6 +305,10 @@ function writePrompt(card, which, rawValue, format) {
 }
 
 // ── Dates / periods ────────────────────────────────────────────────────────────
+/**
+ * @param {string} period — `'ГГГГ-ММ'` (имя файла дневника) или `'retrospective'`
+ * @returns {string} читаемая метка на русском («Март 2010», «Ретроспектива») — либо исходная строка как есть
+ */
 function periodLabel(period) {
   const m = String(period || '').match(/^(\d{4})-(\d{2})$/);
   if (m) return `${RU_MONTHS_NOM[parseInt(m[2]) - 1] || m[2]} ${m[1]}`;
@@ -284,6 +317,10 @@ function periodLabel(period) {
 }
 
 // ── Threads ────────────────────────────────────────────────────────────────────
+/**
+ * @param {string} cell — ячейка таблицы open_threads.md с эмодзи-статусом
+ * @returns {'active'|'background'|'closed'|'abandoned'|'unknown'}
+ */
 function threadStatusKey(cell) {
   return cell.includes('🔴') ? 'active'
        : cell.includes('🟡') ? 'background'
@@ -291,7 +328,12 @@ function threadStatusKey(cell) {
        : cell.includes('⚫') ? 'abandoned' : 'unknown';
 }
 
-// Parse one open_threads.md table; tags each row with the city-relative source file.
+/**
+ * Разбирает одну таблицу open_threads.md.
+ * @param {string} content — содержимое файла
+ * @param {string} file — city-relative путь источника (проставляется в каждую строку)
+ * @returns {{id: number, title: string, description: string, source: string, status: string, priority: string, file: string}[]}
+ */
 function parseThreadsContent(content, file) {
   const out = [];
   for (const line of content.split('\n')) {
@@ -314,6 +356,12 @@ function parseThreadsContent(content, file) {
 // Single diary file → structured object. Two layouts:
 //   • 'entry'         — one record (author/location/tone/text/crossRefs)
 //   • 'retrospective' — several dated ### 📅 sections
+/**
+ * @param {string} rawContent — содержимое файла дневника (`ГГГГ-ММ.md` или `retrospective.md`)
+ * @returns {{format: 'entry'|'retrospective', title?: string, session?: string, author?: string,
+ *   location?: string, tone?: string, text?: string, crossRefs?: string[],
+ *   sections?: {title: string, body: string}[]}}
+ */
 function parseDiary(rawContent) {
   const content = String(rawContent || '').replace(/^﻿/, '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
   const d = {};
@@ -361,6 +409,7 @@ function parseDiary(rawContent) {
 }
 
 // ── Markdown link helpers ────────────────────────────────────────────────────
+/** @param {string} s @returns {{text: string, href: string}[]} все `[text](href)` в строке */
 function mdExtractLinks(s) {
   const out = [];
   const re = /\[([^\]]+)\]\(([^)]+)\)/g;
@@ -368,9 +417,15 @@ function mdExtractLinks(s) {
   while ((m = re.exec(s)) !== null) out.push({ text: m[1].trim(), href: m[2].trim() });
   return out;
 }
+/** @param {string} s @returns {string} тот же текст, но `[text](href)` → `text` */
 function mdStripLinks(s) { return s.replace(/\[([^\]]+)\]\([^)]*\)/g, '$1'); }
+/** @param {string} s @returns {string} без ссылок, `**bold**`, ведущего маркера списка */
 function mdStripInline(s) { return mdStripLinks(s).replace(/\*\*/g, '').replace(/^\s*[-•]\s*/, '').trim(); }
 
+/**
+ * @param {{text: string, href: string}} link
+ * @returns {{text: string, href: string, kind: 'finale'|'module'|'npc'|'other', module: string|null}}
+ */
 function classifyChronicleLink({ text, href }) {
   const t = text.toLowerCase();
   let kind = 'other';
@@ -385,6 +440,11 @@ function classifyChronicleLink({ text, href }) {
 }
 
 // ── Relationship categoriser ─────────────────────────────────────────────────
+/**
+ * @param {string} desc — свободный текст описания отношения
+ * @returns {'family'|'sire'|'childe'|'enemy'|'ally'|'romantic'|'suspicious'|'loyalty'|'secret'|'acquaintance'|'neutral'}
+ *   первое совпавшее по ключевым словам, иначе 'neutral'
+ */
 function categorizeRel(desc) {
   const d = desc.toLowerCase();
   if (/сестр|брат|мать|отец|семь|родств|племян/.test(d)) return 'family';
@@ -401,6 +461,16 @@ function categorizeRel(desc) {
 }
 
 // ── Character card parser ────────────────────────────────────────────────────
+/**
+ * Разбирает Markdown-карточку персонажа в плоскую структуру для API/фронтенда.
+ * @param {string} rawContent — содержимое `<slug>.md`
+ * @param {string} folderName — имя папки персонажа (fallback для `name`, если нет H1)
+ * @param {string} [lineage] — линейка WoD, если уже известна (иначе выводится из «Линейка WoD»)
+ * @returns {{name: string, lineage: string, lineageLabel?: string, statusType: string,
+ *   relationships: {target: string, description: string, type: string}[], diaries: {title: string, file: string}[],
+ *   imagePrompt?: string, negativePrompt?: string, [field: string]: *}}
+ *   остальные поля (clan, sect, biography, appearance, …) — по маппингу русских лейблов карточки, см. тело функции
+ */
 function parseCharacter(rawContent, folderName, lineage) {
   const content = rawContent.replace(/^﻿/, '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
   const c = { name: folderName, lineage, relationships: [] };
@@ -519,6 +589,19 @@ function parseCharacter(rawContent, folderName, lineage) {
 }
 
 // ── Location card parser ─────────────────────────────────────────────────────
+/**
+ * Разбирает Markdown-карточку локации в плоскую структуру для API/фронтенда.
+ * Тот же источник истины, которым парсится и сохранённая карточка, и сырой
+ * AI-сгенерированный текст (см. `POST /api/locations/parse-generated`).
+ * @param {string} rawContent — содержимое `<slug>.md` (или сырой сгенерированный текст той же структуры)
+ * @param {string} folderName — имя папки локации (кладётся в `slug`)
+ * @returns {{slug: string, title?: string, subtype?: string, district?: string, neighborhood?: string,
+ *   address?: string, zone?: string, control?: string, atmosphere?: string,
+ *   sensoryPalette: {channel: string, value: string}[], locStatus?: string, faction?: string,
+ *   figures?: string, threats?: string, masquerade?: string, masqueradeLevel: 'low'|'medium'|'high'|'unknown',
+ *   vtmText?: string, hooks: string[], keyPoints: {place: string, desc: string}[],
+ *   imagePrompt?: string, negativePrompt?: string}}
+ */
 function parseLocation(rawContent, folderName) {
   const content = rawContent.replace(/^﻿/, '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
   const loc = { slug: folderName };
@@ -622,6 +705,10 @@ function parseLocation(rawContent, folderName) {
 
 // ── Chronicle (events.md) parsers ────────────────────────────────────────────
 // Extract clickable location links (those pointing into locations/) + plain text
+/**
+ * @param {string} rest — текст после «📍 Локация:» в записи события
+ * @returns {{text: string, links: {text: string, slug: string}[]}} ссылки — только ведущие в `locations/`
+ */
 function parseChronicleLocation(rest) {
   const links = mdExtractLinks(rest)
     .filter(l => /locations\//.test(l.href))
@@ -632,7 +719,10 @@ function parseChronicleLocation(rest) {
   return { text: mdStripLinks(rest).trim(), links };
 }
 
-// Participant sub-bullet → { text, name } where name is leading identity for matching
+/**
+ * @param {string} line — под-буллет из «👥 Участники» события
+ * @returns {{text: string, name: string}} name — ведущий идентификатор до первой `(`/`—`/`→`, для сверки с карточками
+ */
 function parseParticipant(line) {
   const clean = mdStripLinks(line.replace(/^\s*-\s*/, '')).replace(/\*\*/g, '').trim();
   // Name = leading text before first " (", " — " or " →"
@@ -640,6 +730,10 @@ function parseParticipant(line) {
   return { text: clean, name };
 }
 
+/**
+ * @param {string[]} lines — строки блока (может содержать не-табличные строки вперемешку)
+ * @returns {{headers: string[], rows: string[][]}|null} null, если строк таблицы меньше 2 (заголовок+разделитель)
+ */
 function parseTable(lines) {
   const rowLines = lines.filter(l => /^\s*\|/.test(l));
   if (rowLines.length < 2) return null;
@@ -649,6 +743,10 @@ function parseTable(lines) {
   return { headers, rows: body };
 }
 
+/**
+ * @param {string} block — блок «## 🌍 Состояние мира» из events.md
+ * @returns {{lastUpdate: string|null, sections: {heading: string, table: {headers: string[], rows: string[][]}|null, prose: string[]}[]}}
+ */
 function parseWorldState(block) {
   const ws = { lastUpdate: null, sections: [] };
   const lu = block.match(/Последнее обновление:\s*\*\*([^*]+)\*\*/);
@@ -669,6 +767,14 @@ function parseWorldState(block) {
   return ws;
 }
 
+/**
+ * @param {string} chunk — один блок `### 📅 …` из events.md
+ * @param {number} id — порядковый номер события в хронике
+ * @returns {{id: number, heading: string, date: string, title: string, parallel: string|null,
+ *   location: {text: string, links: {text: string, slug: string}[]},
+ *   participants: {text: string, name: string}[], eventsText: string,
+ *   consequences: string[], worldChanges: string[], links: object[]}}
+ */
 function parseEvent(chunk, id) {
   const lines = chunk.split('\n');
   const ev = {
@@ -715,6 +821,10 @@ function parseEvent(chunk, id) {
   return ev;
 }
 
+/**
+ * @param {string} raw — содержимое `events.md` хроники
+ * @returns {{title: string, worldState: object|null, events: object[]}} events — см. {@link parseEvent}
+ */
 function parseChronicle(raw) {
   const content = raw.replace(/^﻿/, '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
 
@@ -737,7 +847,11 @@ function parseChronicle(raw) {
   return { title, worldState, events };
 }
 
-// Collect participant display-names from a chronicle's events.md text.
+/**
+ * Собирает уникальные отображаемые имена участников из текста events.md хроники.
+ * @param {string} eventsText
+ * @returns {string[]}
+ */
 function parseChronicleParticipants(eventsText) {
   const names = new Set();
   let inPart = false;
