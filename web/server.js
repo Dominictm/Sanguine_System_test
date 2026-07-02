@@ -154,6 +154,7 @@ const ACTION_MAP = {
   'PUT /api/chronicles/:chr/modules/:mod/fields': req => `✏  Редактирование полей модуля: ${req.params.mod} (${req.params.chr})`,
   'PUT /api/chronicles/:chr/modules/:mod/scenario': req => `📝 Сценарий модуля: ${req.params.mod} (${req.params.chr})`,
   'POST /api/chronicles/:chr/modules/:mod/npc': req => `👤 Добавление НПС в модуль: ${req.params.mod} (${req.params.chr})`,
+  'GET /api/chronicles/:chr/modules/:mod/delete-preview': req => `🗑 Превью удаления модуля: ${req.params.mod}`,
   'GET /api/chronicle':                       req => `Хроника (${reqCity(req)})`,
   'GET /api/threads':                         req => `Открытые нити (${reqCity(req)})`,
   'GET /api/integrity':                       req => `Проверка целостности (${reqCity(req)})`,
@@ -1472,6 +1473,7 @@ app.post('/api/chronicles/:chr/modules/:mod/fill', express.json(), async (req, r
     const { chr, mod } = req.params;
     const { pcs = [], npcs = [] } = req.body || {};
     let content = (req.body.content || '').trim();
+    const cityDisplayName = await getCityDisplayName(city);
 
     // If content not provided, try to read it from the module's 💡 Концепция section
     if (!content) {
@@ -1655,12 +1657,17 @@ ${content}
         const locGen = await makeGenerationClient(locSource, locModel).catch(() => null);
         const portretRules = await fs.readFile(path.join(ROOT, 'system', 'rules', 'portret.md'), 'utf-8').catch(() => '');
 
-        const cardTemplate = (name) =>
-`# ${name}
+        const cardTemplate = (name) => {
+          const locSlug = slugify(name);
+          return `# 📍 ${name}
+- **Слаг:** ${locSlug}
+- **Родной город:** ${cityDisplayName}
+- **Принадлежность:** Локация модуля
+
 > **Название:** ${name} | **Округ:** [округ] | **Район:** [район] | **Адрес:** [адрес] | **Зона:** [🟢/🟡/🔴] | **Контроль:** [фракция]
 ---
 ## 🎭 Атмосфера
-[2–3 предложения]
+[2–3 предложения атмосферного описания]
 ## 👁️ Сенсорная палитра
 | Канал | |
 |---|---|
@@ -1682,6 +1689,7 @@ ${content}
 - [${modTitle}](../../../../chronicles/${chr}/modules/${mod}/${mod}.md)
 ## 🖼️ Изображения
 - ⏳ Изображение не предоставлено`;
+        };
 
         const allCardsPrompt = `Создай карточки локаций для Vampire: The Masquerade V20, ${city || 'Париж'} 2010.
 
@@ -2142,6 +2150,60 @@ app.post('/api/chronicles/:chr/modules/:mod/npc', express.json(), async (req, re
     res.json({ ok: true, name: nm, group, createdCard, cardHref });
   } catch (e) {
     console.error('[mod-npc-add]', e.message);
+    serverError(res, e);
+  }
+});
+
+// ── Delete-preview for module ─────────────────────────────────────────────────
+
+app.get('/api/chronicles/:chr/modules/:mod/delete-preview', async (req, res) => {
+  try {
+    const city = reqCity(req);
+    const { chr, mod } = req.params;
+    if (chr.includes('..') || mod.includes('..'))
+      return res.status(400).json({ error: 'Недопустимое имя' });
+
+    const modDir = path.join(chroniclesDir(city), chr, 'modules', mod);
+    if (!await fs.stat(modDir).catch(() => null))
+      return res.status(404).json({ error: 'Модуль не найден' });
+
+    // Count MD files
+    const allEntries = await fs.readdir(modDir, { recursive: true }).catch(() => []);
+    const fileCount  = allEntries.filter(e => String(e).endsWith('.md')).length;
+
+    // Count modular NPCs (subdirectories of npc/)
+    let modularNpcs = [];
+    try {
+      const npcEntries = await fs.readdir(path.join(modDir, 'npc'), { withFileTypes: true });
+      modularNpcs = npcEntries.filter(e => e.isDirectory()).map(e => e.name);
+    } catch {}
+
+    // Count events in chronicle events.md referencing this module
+    let eventCount = 0;
+    const evTxt = await fs.readFile(
+      path.join(chroniclesDir(city), chr, 'events.md'), 'utf-8').catch(() => '');
+    if (evTxt) {
+      const modRe = new RegExp(`modules/${mod}/`, 'g');
+      eventCount = (evTxt.match(modRe) || []).length;
+    }
+
+    // Find canonical chars whose journal entries mention this module
+    const chars = await getAllCharacters(city).catch(() => []);
+    const affectedChars = [];
+    const modLinkPat = new RegExp(`modules/${mod}/`);
+    for (const ch of chars) {
+      const jDir = path.join(charsDir(city), ch.lineageFolder, ch.slug, 'journal');
+      const jFiles = await fs.readdir(jDir).catch(() => []);
+      for (const f of jFiles) {
+        if (!f.endsWith('.md')) continue;
+        const txt = await fs.readFile(path.join(jDir, f), 'utf-8').catch(() => '');
+        if (modLinkPat.test(txt)) { affectedChars.push(ch.name); break; }
+      }
+    }
+
+    res.json({ ok: true, fileCount, modularNpcs, eventCount, affectedChars });
+  } catch (e) {
+    console.error('[mod-delete-preview]', e.message);
     serverError(res, e);
   }
 });
