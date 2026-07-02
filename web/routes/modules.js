@@ -529,6 +529,7 @@ module.exports = function modulesRouter({
 
       await fs.mkdir(modDir, { recursive: true });
       const timeStr   = (time || '').trim();
+      const typeStr   = (req.body.type || '').trim() || 'Игровая сессия';
       const pcs       = Array.isArray(req.body.pcs)  ? req.body.pcs  : [];
       const npcs      = Array.isArray(req.body.npcs) ? req.body.npcs : [];
       const concept   = (req.body.content || '').trim();
@@ -547,7 +548,7 @@ module.exports = function modulesRouter({
         '',
         '| Параметр | Значение |',
         '|---|---|',
-        `| **Тип** | Игровая сессия |`,
+        `| **Тип** | ${typeStr} |`,
         `| **Время** | ${timeStr || '⚠️ Уточнить'} |`,
         '| **Локация** |  |',
         `| **Учитывать в хронологии** | ${track ? 'да' : 'нет'} |`,

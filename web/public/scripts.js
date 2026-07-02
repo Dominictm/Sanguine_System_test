@@ -2435,6 +2435,7 @@ async function openModCreateModal(standalone) {
     ['mod-create-name','mod-create-time','mod-create-slug','mod-create-content'].forEach(id => {
       const el = document.getElementById(id); if (el) el.value = '';
     });
+    document.getElementById('mod-create-type').value = 'Игровая сессия';
     document.getElementById('mod-create-pcs').innerHTML  = '';
     document.getElementById('mod-create-npcs').innerHTML = '';
     document.getElementById('mod-create-error').style.display = 'none';
@@ -2494,6 +2495,7 @@ document.getElementById('mod-create-submit').addEventListener('click', async () 
   const name    = document.getElementById('mod-create-name').value.trim();
   const time    = document.getElementById('mod-create-time').value.trim();
   const slug    = document.getElementById('mod-create-slug').value.trim() || slugifyChr(name);
+  const type    = document.getElementById('mod-create-type').value.trim();
   const content = document.getElementById('mod-create-content').value.trim();
   const errEl   = document.getElementById('mod-create-error');
   const btn     = document.getElementById('mod-create-submit');
@@ -2514,7 +2516,7 @@ document.getElementById('mod-create-submit').addEventListener('click', async () 
     const qs = window.location.search;
     const d  = await fetch(`/api/chronicles/${encodeURIComponent(chr)}/modules${qs}`,
       { method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, time, slug, pcs: _createPCs, npcs: _createNPCs, content,
+        body: JSON.stringify({ name, time, slug, type, pcs: _createPCs, npcs: _createNPCs, content,
           trackInChronology: document.getElementById('mod-create-track')?.checked !== false }) }
     ).then(r => r.json());
 

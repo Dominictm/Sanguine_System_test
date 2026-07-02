@@ -324,6 +324,16 @@
           </div>
 
           <div class="chr-form-group">
+            <label class="chr-form-label">Тип</label>
+            <input class="chr-form-input" id="mod-create-type" list="mod-create-type-list" placeholder="Игровая сессия" autocomplete="off">
+            <datalist id="mod-create-type-list">
+              <option value="Игровая сессия">
+              <option value="Внесессионное событие">
+              <option value="Сольник">
+            </datalist>
+          </div>
+
+          <div class="chr-form-group">
             <label class="chr-form-label">Персонажи игроков (ПК)</label>
             <div class="mod-fill-chips" id="mod-create-pcs"></div>
             <div class="mod-fill-add-row">

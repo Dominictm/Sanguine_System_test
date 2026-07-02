@@ -1351,6 +1351,29 @@ describe('API — integration', () => {
       assert.equal(dup.status, 409);
     });
 
+    it('POST /api/chronicles/:chr/modules — type пишется в карточку, дефолт «Игровая сессия»', async () => {
+      if (!chr) return;
+      const namedType = `test_type_mod_${Date.now()}`;
+      const created = await apiJson(`/api/chronicles/${encodeURIComponent(chr)}/modules${CITY}`, {
+        method: 'POST', body: JSON.stringify({ name: namedType, time: '2010', slug: namedType, type: 'Сольник' }),
+      });
+      assert.equal(created.status, 200);
+      const typedDir = path.join(CITY_ROOT, 'chronicles', chr, 'modules', namedType);
+      const raw = await fs.readFile(path.join(typedDir, `${namedType}.md`), 'utf-8');
+      assert.match(raw, /\|\s*\*\*Тип\*\*\s*\|\s*Сольник\s*\|/);
+      await apiJson(`/api/chronicles/${encodeURIComponent(chr)}/modules/${encodeURIComponent(namedType)}${CITY}`, { method: 'DELETE' });
+
+      const noType = `test_notype_mod_${Date.now()}`;
+      const created2 = await apiJson(`/api/chronicles/${encodeURIComponent(chr)}/modules${CITY}`, {
+        method: 'POST', body: JSON.stringify({ name: noType, time: '2010', slug: noType }),
+      });
+      assert.equal(created2.status, 200);
+      const noTypeDir = path.join(CITY_ROOT, 'chronicles', chr, 'modules', noType);
+      const raw2 = await fs.readFile(path.join(noTypeDir, `${noType}.md`), 'utf-8');
+      assert.match(raw2, /\|\s*\*\*Тип\*\*\s*\|\s*Игровая сессия\s*\|/);
+      await apiJson(`/api/chronicles/${encodeURIComponent(chr)}/modules/${encodeURIComponent(noType)}${CITY}`, { method: 'DELETE' });
+    });
+
     it('DELETE /api/chronicles/:chr/modules/:mod — неизвестный модуль → 404', async () => {
       const { status } = await apiJson(`/api/chronicles/__nochron__/modules/__nomod__${CITY}`, { method: 'DELETE' });
       assert.equal(status, 404);
