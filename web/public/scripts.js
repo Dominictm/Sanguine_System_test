@@ -3526,9 +3526,32 @@ function renderModulePage(data) {
   document.getElementById('modp-panel-info').innerHTML = infoHtmlFull;
 
   // ── СЦЕНАРИЙ ──
-  document.getElementById('modp-panel-scenario').innerHTML = data.scenario
-    ? `<div class="modp-md">${mdToHtml(data.scenario)}</div>`
-    : '<div class="modp-empty"><div class="modp-empty-icon">📝</div>Файл scenario.md отсутствует</div>';
+  {
+    const scenarioHtml = data.scenario
+      ? mdToHtml(data.scenario)
+      : '<div class="cdet-empty">Сценарий не сгенерирован. Нажми «🪄 Сгенерировать».</div>';
+
+    const scenarioPanelHtml = `
+  <div class="modp-scenario-toolbar">
+    ${data.scenario
+      ? `<button class="modp-edit-btn" data-editmod="scenario">✏ Редактировать</button>
+         <button class="modp-edit-btn" id="modp-regen-scenario-btn" style="margin-left:8px">♻ Перегенерировать</button>`
+      : ''
+    }
+  </div>
+  <div id="moddet-scenario-view">${scenarioHtml}</div>
+  <div id="moddet-scenario-edit" style="display:none">
+    <textarea class="cdet-edit-textarea" id="moddet-scenario-ta" rows="40"
+      style="width:100%;font-family:monospace;font-size:var(--fs-sm,12px)">${escHtml(data.scenario || '')}</textarea>
+  </div>
+  <div class="modp-edit-bar" id="moddet-scenario-bar" style="display:none">
+    <button class="modp-save-btn" data-savemod="scenario">Сохранить</button>
+    <button class="modp-cancel-btn" data-cancelmod="scenario">Отмена</button>
+    <span class="modp-save-msg" id="moddet-scenario-msg" style="display:none">✓ Сохранено</span>
+  </div>`;
+
+    document.getElementById('modp-panel-scenario').innerHTML = scenarioPanelHtml;
+  }
 
   // ── СЕССИИ (Фаза B — ведение во время игры) ──
   const sessions = data.sessions || [];
@@ -3761,6 +3784,54 @@ document.getElementById('modp-panel-info').addEventListener('click', e => {
       chips.appendChild(div);
     }
     if (input) input.value = '';
+    return;
+  }
+});
+
+// Scenario panel: edit / save / cancel / regen handlers
+document.getElementById('modp-panel-scenario').addEventListener('click', e => {
+  const editModBtn   = e.target.closest('[data-editmod]');
+  const saveModBtn   = e.target.closest('[data-savemod]');
+  const cancelModBtn = e.target.closest('[data-cancelmod]');
+
+  if (editModBtn)   { _modToggleEdit(editModBtn.dataset.editmod, true);      return; }
+  if (cancelModBtn) { _modToggleEdit(cancelModBtn.dataset.cancelmod, false);  return; }
+  if (saveModBtn)   { _modSavePanel(saveModBtn.dataset.savemod);              return; }
+
+  if (e.target.id === 'modp-regen-scenario-btn') {
+    const d   = STATE.currentModuleData;
+    const chr = d?.chronicle || STATE.currentModule?.chronicle;
+    const mod = d?.name      || STATE.currentModule?.name;
+    if (!chr || !mod) return;
+
+    const ok = window.confirm('Сгенерировать сценарий заново? Текущий scenario.md будет перезаписан.');
+    if (!ok) return;
+
+    const btn = e.target;
+    btn.disabled = true;
+    btn.textContent = '⏳ Генерирую…';
+    (async () => {
+      try {
+        const r = await fetch(
+          `/api/chronicles/${encodeURIComponent(chr)}/modules/${encodeURIComponent(mod)}/fill${window.location.search}`,
+          { method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              pcs:     (d.pcs  || []).map(p => typeof p === 'string' ? p : p.name),
+              npcs:    (d.npcs || []).map(p => typeof p === 'string' ? p : p.name),
+              content: d.description || ''
+            })
+          }
+        );
+        const result = await r.json();
+        if (!r.ok) throw new Error(result.error || 'Ошибка');
+        await _reloadModulePage();
+      } catch (err) {
+        window.alert('Ошибка генерации: ' + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '♻ Перегенерировать';
+      }
+    })();
     return;
   }
 });
