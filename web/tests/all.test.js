@@ -14,6 +14,7 @@ const {
   mdExtractLinks, mdStripLinks, mdStripInline, classifyChronicleLink,
   categorizeRel, parseCharacter, parseLocation, parseEvent, parseChronicle,
   parseChronicleParticipants,
+  parseScenarioSections, replaceScenarioSection,
   CITY_SECTIONS, buildCityMd, parseCityMd, cityScaffold,
 } = require('../lib/parsers');
 
@@ -568,6 +569,67 @@ describe('Parsers — unit', () => {
     });
     it('empty text → empty array', () =>
       assert.deepEqual(parseChronicleParticipants(''), []));
+  });
+
+  describe('parseScenarioSections / replaceScenarioSection', () => {
+    const SCEN = [
+      '# Сценарий — Тест',
+      '> 🔗 [Модуль](test.md)',
+      '',
+      '---',
+      '',
+      '## Пролог',
+      '',
+      'Завязка событий.',
+      '',
+      '---',
+      '',
+      '## Сцена 1 — Бар',
+      '',
+      'Первая сцена.',
+      'Внутренний разделитель:',
+      '',
+      '---',
+      '',
+      'Продолжение той же сцены.',
+      '',
+      '---',
+      '',
+      '## Финал',
+      '',
+      'Развязка.',
+      '',
+    ].join('\n');
+
+    it('splits into preamble + ## sections, strips only the trailing divider', () => {
+      const { preamble, sections } = parseScenarioSections(SCEN);
+      assert.match(preamble, /^# Сценарий — Тест/);
+      assert.equal(sections.length, 3);
+      assert.deepEqual(sections.map(s => s.heading), ['Пролог', 'Сцена 1 — Бар', 'Финал']);
+      assert.equal(sections[0].body, 'Завязка событий.');
+      // internal "---" (mid-scene pacing divider) must survive, only the trailing one is stripped
+      assert.match(sections[1].body, /Внутренний разделитель:\n\n---\n\nПродолжение той же сцены\./);
+      assert.doesNotMatch(sections[1].body, /---\s*$/);
+    });
+
+    it('no ## headings → whole text is preamble, sections empty', () => {
+      const { preamble, sections } = parseScenarioSections('Просто текст без заголовков.');
+      assert.equal(preamble, 'Просто текст без заголовков.');
+      assert.deepEqual(sections, []);
+    });
+
+    it('replaceScenarioSection swaps only the target section, leaves others intact', () => {
+      const updated = replaceScenarioSection(SCEN, 'Сцена 1 — Бар', 'Полностью новый текст сцены.');
+      const { sections } = parseScenarioSections(updated);
+      assert.deepEqual(sections.map(s => s.heading), ['Пролог', 'Сцена 1 — Бар', 'Финал']);
+      assert.equal(sections[1].body, 'Полностью новый текст сцены.');
+      assert.equal(sections[0].body, 'Завязка событий.');
+      assert.equal(sections[2].body, 'Развязка.');
+    });
+
+    it('replaceScenarioSection — неизвестный заголовок возвращает текст без изменений', () => {
+      assert.equal(replaceScenarioSection(SCEN, '__нет такого__', 'x'), SCEN);
+    });
   });
 
 }); // Parsers — unit
@@ -1330,6 +1392,64 @@ describe('API — integration', () => {
       assert.equal(put.status, 200);
       const raw = await fs.readFile(path.join(modDir, 'scenario.md'), 'utf-8');
       assert.ok(raw.includes(marker));
+    });
+
+    it('PUT /scenario/section — правит один раздел, остальные не трогает', async () => {
+      if (!modDir) return;
+      const seed = [
+        '# Сценарий — Тест', '', '---', '',
+        '## Пролог', '', 'Исходный пролог.', '',
+        '---', '',
+        '## Сцена 1', '', 'Исходная сцена.', '',
+      ].join('\n');
+      await apiJson(`/api/chronicles/${encodeURIComponent(chr)}/modules/${encodeURIComponent(mod)}/scenario${CITY}`,
+        { method: 'PUT', body: JSON.stringify({ content: seed }) });
+
+      const put = await apiJson(`/api/chronicles/${encodeURIComponent(chr)}/modules/${encodeURIComponent(mod)}/scenario/section${CITY}`,
+        { method: 'PUT', body: JSON.stringify({ heading: 'Пролог', content: 'Новый пролог вручную.' }) });
+      assert.equal(put.status, 200);
+      assert.ok(put.body.ok);
+      assert.match(put.body.scenario, /## Пролог\n\nНовый пролог вручную\./);
+      assert.match(put.body.scenario, /## Сцена 1\n\nИсходная сцена\./);
+
+      const raw = await fs.readFile(path.join(modDir, 'scenario.md'), 'utf-8');
+      assert.match(raw, /Новый пролог вручную\./);
+      assert.match(raw, /Исходная сцена\./);
+    });
+
+    it('PUT /scenario/section — неизвестный раздел → 404', async () => {
+      if (!modDir) return;
+      const { status } = await apiJson(`/api/chronicles/${encodeURIComponent(chr)}/modules/${encodeURIComponent(mod)}/scenario/section${CITY}`,
+        { method: 'PUT', body: JSON.stringify({ heading: '__нет такого раздела__', content: 'x' }) });
+      assert.equal(status, 404);
+    });
+
+    it('POST /scenario/section/regenerate — перегенерирует раздел (AI_MOCK), остальные не трогает', async () => {
+      if (!modDir) return;
+      const seed = [
+        '# Сценарий — Тест', '', '---', '',
+        '## Пролог', '', 'Исходный пролог для регена.', '',
+        '---', '',
+        '## Сцена 1', '', 'Эта сцена должна остаться нетронутой.', '',
+      ].join('\n');
+      await apiJson(`/api/chronicles/${encodeURIComponent(chr)}/modules/${encodeURIComponent(mod)}/scenario${CITY}`,
+        { method: 'PUT', body: JSON.stringify({ content: seed }) });
+
+      const regen = await apiJson(
+        `/api/chronicles/${encodeURIComponent(chr)}/modules/${encodeURIComponent(mod)}/scenario/section/regenerate${CITY}`,
+        { method: 'POST', body: JSON.stringify({ heading: 'Пролог', pcs: [], npcs: [] }) });
+      assert.equal(regen.status, 200);
+      assert.ok(regen.body.ok);
+      assert.doesNotMatch(regen.body.scenario, /Исходный пролог для регена\./);
+      assert.match(regen.body.scenario, /## Сцена 1\n\nЭта сцена должна остаться нетронутой\./);
+    });
+
+    it('POST /scenario/section/regenerate — неизвестный раздел → 404', async () => {
+      if (!modDir) return;
+      const { status } = await apiJson(
+        `/api/chronicles/${encodeURIComponent(chr)}/modules/${encodeURIComponent(mod)}/scenario/section/regenerate${CITY}`,
+        { method: 'POST', body: JSON.stringify({ heading: '__нет такого раздела__' }) });
+      assert.equal(status, 404);
     });
 
     it('POST /npc — без имени → 400', async () => {

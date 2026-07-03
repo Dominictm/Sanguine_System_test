@@ -304,6 +304,53 @@ function writePrompt(card, which, rawValue, format) {
   return card.replace(/\s*$/, '\n') + block;
 }
 
+// ── Scenario sections (scenario.md ## split) ─────────────────────────────────
+// Splits a module's scenario.md into independently editable/regenerable blocks
+// by top-level `## ` headings. Real generated scenarios don't follow a fixed
+// heading list (scene titles vary each time — "Пролог", "Сцена 1 — Метро",
+// "Финал — Манеж" …), so this parses by WHATEVER `## ` headings are actually
+// present rather than matching a hardcoded set of names.
+/**
+ * @param {string} raw — содержимое scenario.md
+ * @returns {{preamble: string, sections: {heading: string, body: string}[]}}
+ *   preamble — всё до первого `## ` (H1-заголовок, хлебные крошки, `---`), не редактируется по разделам
+ */
+function parseScenarioSections(raw) {
+  const text = String(raw == null ? '' : raw).replace(/^﻿/, '').replace(/\r\n/g, '\n');
+  const firstIdx = text.search(/^##\s+/m);
+  if (firstIdx === -1) return { preamble: text, sections: [] };
+
+  const preamble = text.slice(0, firstIdx);
+  const rest = text.slice(firstIdx);
+  const parts = rest.split(/\n(?=##\s+)/);
+  const sections = parts.map(part => {
+    const nl = part.indexOf('\n');
+    const heading = (nl === -1 ? part : part.slice(0, nl)).replace(/^##\s+/, '').trim();
+    let body = nl === -1 ? '' : part.slice(nl + 1);
+    // Trailing "---" divider before the NEXT heading belongs to the layout,
+    // not to this section's content — strip only if it's the very last thing.
+    body = body.replace(/\n+---+\s*$/, '').replace(/^\n+/, '').replace(/\s+$/, '');
+    return { heading, body };
+  });
+  return { preamble, sections };
+}
+
+/**
+ * Заменяет содержимое одного раздела (по заголовку) и пересобирает файл целиком.
+ * @param {string} raw — содержимое scenario.md
+ * @param {string} heading — точный текст заголовка (как в `## <heading>`)
+ * @param {string} newBody — новое содержимое раздела (без строки заголовка)
+ * @returns {string} обновлённый полный текст; если заголовок не найден — возвращает raw без изменений
+ */
+function replaceScenarioSection(raw, heading, newBody) {
+  const { preamble, sections } = parseScenarioSections(raw);
+  const idx = sections.findIndex(s => s.heading === heading);
+  if (idx === -1) return raw;
+  sections[idx] = { heading, body: String(newBody == null ? '' : newBody).trim() };
+  const body = sections.map(s => `## ${s.heading}\n\n${s.body}\n`).join('\n---\n\n');
+  return preamble.replace(/\n*$/, '\n\n') + body;
+}
+
 // ── Dates / periods ────────────────────────────────────────────────────────────
 /**
  * @param {string} period — `'ГГГГ-ММ'` (имя файла дневника) или `'retrospective'`
@@ -902,4 +949,6 @@ module.exports = {
   parseEvent,
   parseChronicle,
   parseChronicleParticipants,
+  parseScenarioSections,
+  replaceScenarioSection,
 };

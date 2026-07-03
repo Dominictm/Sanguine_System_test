@@ -8566,7 +8566,7 @@ a.md-link-loc:hover {
 }
 .modp-section-header-row .modp-section-label { margin-bottom: 0; }
 
-.modp-part-list { list-style: none; padding: 0; margin: 0; font-size: var(--fs-sm, 12px); }
+.modp-part-list { list-style: none; padding: 0; margin: 0; font-size: 25px; }
 .modp-part-list li { padding: 2px 0; }
 
 /* Participants chips */
@@ -8598,6 +8598,10 @@ a.md-link-loc:hover {
   gap: 8px;
   margin-bottom: 12px;
 }
+
+/* Scenario split into per-section blocks (## in scenario.md) */
+.modp-scenario-section { margin-bottom: 4px; }
+.modp-scenario-sec-btns { display: flex; gap: 8px; flex-shrink: 0; }
 
 /* ── Archive doc editing ── */
 .archive-toolbar {

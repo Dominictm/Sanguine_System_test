@@ -22,7 +22,7 @@ const {
   getAllCharacters, getAllLocations, listModules, tableCell, LINEAGE_MAP,
   _nameMatch, rmdir,
 } = require('../lib/db');
-const { slugify, parseEvent } = require('../lib/parsers');
+const { slugify, parseEvent, parseScenarioSections, replaceScenarioSection } = require('../lib/parsers');
 
 // Modules now live under chronicles/<chr>/modules/<mod>/ — flatten them with their chronicle.
 const MOD_AUX = n => ['npc.md', 'scenario.md', 'finale.md'].includes(n) || n.endsWith('-sheet.md');
@@ -987,6 +987,123 @@ module.exports = function modulesRouter({
       console.error('[fill-module]', e.message, e.cause || e.stack || '');
       const detail = e.cause ? `${e.message}: ${e.cause?.message || e.cause}` : e.message;
       res.status(500).json({ ok: false, error: detail });
+    }
+  });
+
+  // ── Scenario, per-section: manual edit ──────────────────────────────────────
+  // Replaces one `## <heading>` block of scenario.md, leaves the rest untouched.
+  router.put('/api/chronicles/:chr/modules/:mod/scenario/section', express.json(), async (req, res) => {
+    try {
+      const city = reqCity(req);
+      const { chr, mod } = req.params;
+      if (chr.includes('..') || mod.includes('..'))
+        return res.status(400).json({ ok: false, error: 'Недопустимое имя' });
+      const { heading, content } = req.body || {};
+      if (!heading) return res.status(400).json({ ok: false, error: 'Не указан раздел' });
+
+      const scenarioPath = path.join(chroniclesDir(city), chr, 'modules', mod, 'scenario.md');
+      const raw = await fs.readFile(scenarioPath, 'utf-8').catch(() => null);
+      if (raw == null) return res.status(404).json({ ok: false, error: 'Сценарий не найден' });
+
+      const { sections } = parseScenarioSections(raw);
+      if (!sections.some(s => s.heading === heading))
+        return res.status(404).json({ ok: false, error: `Раздел «${heading}» не найден` });
+
+      const updated = replaceScenarioSection(raw, heading, content || '');
+      await writeFileAtomic(scenarioPath, updated, 'utf-8');
+      invalidateChars(city);
+      console.log(`[scenario-section] ${city}/${chr}/${mod} → «${heading}» отредактирован вручную`);
+      res.json({ ok: true, scenario: updated });
+    } catch (e) { serverError(res, e); }
+  });
+
+  // ── Scenario, per-section: AI regeneration (учитывает остальной сценарий) ──────
+  router.post('/api/chronicles/:chr/modules/:mod/scenario/section/regenerate', aiRateLimit, express.json(), async (req, res) => {
+    try {
+      const city = reqCity(req);
+      const { chr, mod } = req.params;
+      if (chr.includes('..') || mod.includes('..'))
+        return res.status(400).json({ ok: false, error: 'Недопустимое имя' });
+      const { heading, pcs = [], npcs = [] } = req.body || {};
+      if (!heading) return res.status(400).json({ ok: false, error: 'Не указан раздел' });
+
+      const modDir       = path.join(chroniclesDir(city), chr, 'modules', mod);
+      const scenarioPath = path.join(modDir, 'scenario.md');
+      const raw = await fs.readFile(scenarioPath, 'utf-8').catch(() => null);
+      if (raw == null) return res.status(404).json({ ok: false, error: 'Сценарий не найден' });
+
+      const { sections } = parseScenarioSections(raw);
+      const target = sections.find(s => s.heading === heading);
+      if (!target) return res.status(404).json({ ok: false, error: `Раздел «${heading}» не найден` });
+
+      const moduleRules = await fs.readFile(path.join(ROOT, 'system', 'rules', 'module_rules.md'), 'utf-8').catch(() => '');
+      const cityMd      = await fs.readFile(path.join(cityDir(city), 'city.md'), 'utf-8').catch(() => '');
+      const chars       = await getAllCharacters(city);
+      const charCards   = [];
+      for (const name of [...pcs, ...npcs]) {
+        const ch = chars.find(c => c.name === name || c.name.toLowerCase() === name.toLowerCase());
+        if (!ch) continue;
+        const cardPath = path.join(charsDir(city), ch.lineageFolder, ch.slug, `${ch.slug}.md`);
+        const card = await fs.readFile(cardPath, 'utf-8').catch(() => null);
+        if (!card) continue;
+        const kind = pcs.includes(name) ? 'ПК' : 'НПС';
+        charCards.push(`### ${ch.name} (${kind})\n${card.slice(0, 2000)}`);
+      }
+
+      const mainTxt = await fs.readFile(path.join(modDir, `${mod}.md`), 'utf-8').catch(() => '');
+      const titleM  = mainTxt.match(/^#\s+(.+)$/m);
+      const modTitle = titleM ? titleM[1].replace(/[*[\]]/g, '').trim() : mod;
+
+      const systemPrompt = `Ты — Мастер (Рассказчик) в Vampire: The Masquerade V20. Переписываешь ОДИН раздел уже существующего сценария модуля — остальные разделы менять нельзя, только использовать их как контекст для согласованности.
+
+# ПРАВИЛА МОДУЛЕЙ
+${moduleRules.slice(0, 3000)}
+
+# СЕТТИНГ ГОРОДА
+${cityMd.slice(0, 2000)}
+
+# УЧАСТНИКИ МОДУЛЯ
+${charCards.join('\n\n') || '(не указаны)'}`;
+
+      const userPrompt = `Полный текущий сценарий модуля «${modTitle}» (для контекста и согласованности — НЕ переписывать целиком):
+
+${raw}
+
+---
+
+Перепиши ТОЛЬКО раздел «${heading}». Его текущее содержание:
+
+${target.body}
+
+Требования:
+- Учитывай события, имена, локации и факты из ОСТАЛЬНЫХ разделов сценария — новая версия должна оставаться с ними согласованной, не противоречить уже упомянутому за пределами этого раздела.
+- Стиль — тот же, что у остального сценария: готический нуар, VtM атмосфера, русский язык.
+- Верни ТОЛЬКО новый текст раздела — без строки заголовка «## ${heading}» и без обрамляющих markdown-разделителей «---».`;
+
+      const gen = await makeGenerationClient().catch(() => null);
+      let newBody = '';
+      if (gen && isOA(gen)) {
+        newBody = await oaCall(gen)(gen.model, systemPrompt, userPrompt, [], 60000, 2500);
+      } else if (gen?.client) {
+        const msg = await gen.client.messages.create({
+          model: 'claude-opus-4-8', max_tokens: 2500,
+          system: systemPrompt,
+          messages: [{ role: 'user', content: userPrompt }],
+        });
+        newBody = msg.content[0]?.text?.trim() || '';
+      } else {
+        return res.status(503).json({ ok: false, error: 'Нет доступного AI-провайдера. Настрой в Инструменты → Модели AI.' });
+      }
+      if (!newBody) return res.status(500).json({ ok: false, error: 'AI вернул пустой ответ.' });
+
+      const updated = replaceScenarioSection(raw, heading, newBody);
+      await writeFileAtomic(scenarioPath, updated, 'utf-8');
+      invalidateChars(city);
+      console.log(`[scenario-section] ${city}/${chr}/${mod} → «${heading}» перегенерирован`);
+      res.json({ ok: true, scenario: updated });
+    } catch (e) {
+      console.error('[scenario-section-regen]', e.message);
+      serverError(res, e);
     }
   });
 

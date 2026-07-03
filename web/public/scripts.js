@@ -3062,6 +3062,77 @@ function _renderParticipantChips(group, items) {
     </div>`;
 }
 
+// Браузерное зеркало lib/parsers.js: parseScenarioSections/replaceScenarioSection
+// (см. комментарий там же — реальные сценарии не следуют фиксированному списку
+// заголовков, поэтому парсим по ЛЮБЫМ `## `, а не по жёстко заданным именам).
+function _parseScenarioSections(raw) {
+  const text = String(raw == null ? '' : raw).replace(/\r\n/g, '\n');
+  const firstIdx = text.search(/^##\s+/m);
+  if (firstIdx === -1) return { preamble: text, sections: [] };
+  const preamble = text.slice(0, firstIdx);
+  const rest = text.slice(firstIdx);
+  const parts = rest.split(/\n(?=##\s+)/);
+  const sections = parts.map(part => {
+    const nl = part.indexOf('\n');
+    const heading = (nl === -1 ? part : part.slice(0, nl)).replace(/^##\s+/, '').trim();
+    let body = nl === -1 ? '' : part.slice(nl + 1);
+    body = body.replace(/\n+---+\s*$/, '').replace(/^\n+/, '').replace(/\s+$/, '');
+    return { heading, body };
+  });
+  return { preamble, sections };
+}
+
+// Рендерит вкладку «Сценарий» разбитой по разделам (## в scenario.md), каждый
+// со своими кнопками «Редактировать»/«Перегенерировать». Вызывается и из
+// renderModulePage, и повторно — после сохранения/регена одного раздела
+// (без полной перезагрузки страницы модуля).
+function _renderScenarioPanel(data) {
+  const raw = data.scenario || '';
+  const { sections } = _parseScenarioSections(raw);
+  STATE.scenarioSectionHeadings = sections.map(s => s.heading);
+
+  const sectionsHtml = sections.length
+    ? sections.map((s, i) => `
+      <div class="modp-scenario-section">
+        <div class="modp-section-header-row">
+          <div class="modp-section-label">${escHtml(s.heading)}</div>
+          <div class="modp-scenario-sec-btns">
+            <button class="modp-edit-btn" data-editmod="scensec${i}">✏ Редактировать</button>
+            <button class="modp-edit-btn" data-scensec-regen="${i}">🔄 Перегенерировать</button>
+          </div>
+        </div>
+        <div id="moddet-scensec${i}-view">${mdToHtml(s.body)}</div>
+        <div id="moddet-scensec${i}-edit" style="display:none">
+          <textarea class="cdet-edit-textarea" id="moddet-scensec${i}-ta" rows="14"
+            style="width:100%;font-family:monospace;font-size:var(--fs-sm,12px)">${escHtml(s.body)}</textarea>
+        </div>
+        <div class="modp-edit-bar" id="moddet-scensec${i}-bar" style="display:none">
+          <button class="modp-save-btn" data-savemod="scensec${i}">Сохранить</button>
+          <button class="modp-cancel-btn" data-cancelmod="scensec${i}">Отмена</button>
+          <span class="modp-save-msg" id="moddet-scensec${i}-msg" style="display:none">✓ Сохранено</span>
+        </div>
+      </div>
+      ${i < sections.length - 1 ? '<div class="modp-section-divider"></div>' : ''}`
+      ).join('')
+    : (raw ? mdToHtml(raw) : '<div class="cdet-empty">Сценарий не сгенерирован. Нажми «🪄 Сгенерировать».</div>');
+
+  document.getElementById('modp-panel-scenario').innerHTML = `
+  <div class="modp-scenario-toolbar">
+    <button class="modp-edit-btn" data-editmod="scenario">✏ Редактировать весь текст</button>
+    ${raw ? `<button class="modp-edit-btn" id="modp-regen-scenario-btn" style="margin-left:8px">♻ Перегенерировать всё</button>` : ''}
+  </div>
+  <div id="moddet-scenario-view">${sectionsHtml}</div>
+  <div id="moddet-scenario-edit" style="display:none">
+    <textarea class="cdet-edit-textarea" id="moddet-scenario-ta" rows="40"
+      style="width:100%;font-family:monospace;font-size:var(--fs-sm,12px)">${escHtml(raw)}</textarea>
+  </div>
+  <div class="modp-edit-bar" id="moddet-scenario-bar" style="display:none">
+    <button class="modp-save-btn" data-savemod="scenario">Сохранить</button>
+    <button class="modp-cancel-btn" data-cancelmod="scenario">Отмена</button>
+    <span class="modp-save-msg" id="moddet-scenario-msg" style="display:none">✓ Сохранено</span>
+  </div>`;
+}
+
 function renderModulePage(data) {
   function modPanel(id, viewHtml, editHtml) {
     return `
@@ -3148,33 +3219,8 @@ function renderModulePage(data) {
 
   document.getElementById('modp-panel-info').innerHTML = infoHtml;
 
-  // ── СЦЕНАРИЙ ──
-  {
-    const scenarioHtml = data.scenario
-      ? mdToHtml(data.scenario)
-      : '<div class="cdet-empty">Сценарий не сгенерирован. Нажми «🪄 Сгенерировать».</div>';
-
-    const scenarioPanelHtml = `
-  <div class="modp-scenario-toolbar">
-    <button class="modp-edit-btn" data-editmod="scenario">✏ Редактировать</button>
-    ${data.scenario
-      ? `<button class="modp-edit-btn" id="modp-regen-scenario-btn" style="margin-left:8px">♻ Перегенерировать</button>`
-      : ''
-    }
-  </div>
-  <div id="moddet-scenario-view">${scenarioHtml}</div>
-  <div id="moddet-scenario-edit" style="display:none">
-    <textarea class="cdet-edit-textarea" id="moddet-scenario-ta" rows="40"
-      style="width:100%;font-family:monospace;font-size:var(--fs-sm,12px)">${escHtml(data.scenario || '')}</textarea>
-  </div>
-  <div class="modp-edit-bar" id="moddet-scenario-bar" style="display:none">
-    <button class="modp-save-btn" data-savemod="scenario">Сохранить</button>
-    <button class="modp-cancel-btn" data-cancelmod="scenario">Отмена</button>
-    <span class="modp-save-msg" id="moddet-scenario-msg" style="display:none">✓ Сохранено</span>
-  </div>`;
-
-    document.getElementById('modp-panel-scenario').innerHTML = scenarioPanelHtml;
-  }
+  // ── СЦЕНАРИЙ (разбит по разделам — см. _renderScenarioPanel) ──
+  _renderScenarioPanel(data);
 
   // ── СЕССИИ (Фаза B — ведение во время игры) ──
   const sessions = data.sessions || [];
@@ -3470,7 +3516,46 @@ document.getElementById('modp-panel-scenario').addEventListener('click', e => {
         showToast('Ошибка генерации: ' + err.message, 'error');
       } finally {
         btn.disabled = false;
-        btn.textContent = '♻ Перегенерировать';
+        btn.textContent = '♻ Перегенерировать всё';
+      }
+    })();
+    return;
+  }
+
+  const regenSecBtn = e.target.closest('[data-scensec-regen]');
+  if (regenSecBtn) {
+    const idx     = parseInt(regenSecBtn.dataset.scensecRegen, 10);
+    const heading = (STATE.scenarioSectionHeadings || [])[idx];
+    const d       = STATE.currentModuleData;
+    const chr     = d?.chronicle || STATE.currentModule?.chronicle;
+    const mod     = d?.name      || STATE.currentModule?.name;
+    if (heading == null || !chr || !mod) return;
+
+    (async () => {
+      const ok = await showConfirm(`Перегенерировать раздел «${heading}»? Остальной сценарий учитывается как контекст и не меняется.`, { confirmText: 'Перегенерировать' });
+      if (!ok) return;
+      regenSecBtn.disabled = true;
+      const origLabel = regenSecBtn.textContent;
+      regenSecBtn.textContent = '⏳ Генерирую…';
+      try {
+        const r = await fetch(
+          `/api/chronicles/${encodeURIComponent(chr)}/modules/${encodeURIComponent(mod)}/scenario/section/regenerate${window.location.search}`,
+          { method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              heading,
+              pcs:  (d.pcs  || []).map(p => typeof p === 'string' ? p : p.name),
+              npcs: (d.npcs || []).map(p => typeof p === 'string' ? p : p.name),
+            })
+          }
+        );
+        const result = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(result.error || 'Ошибка генерации');
+        STATE.currentModuleData.scenario = result.scenario;
+        _renderScenarioPanel(STATE.currentModuleData);
+      } catch (err) {
+        showToast('Не удалось перегенерировать раздел: ' + err.message, 'error');
+        regenSecBtn.disabled = false;
+        regenSecBtn.textContent = origLabel;
       }
     })();
     return;
@@ -8391,6 +8476,26 @@ async function _modSavePanel(panel) {
       _modToggleEdit(panel, false);
       await _reloadModulePage();
     } catch { if (msgEl) { msgEl.textContent = '✗ Ошибка'; msgEl.style.display = ''; } }
+    return;
+
+  } else if (panel.startsWith('scensec')) {
+    const idx     = parseInt(panel.slice('scensec'.length), 10);
+    const heading = (STATE.scenarioSectionHeadings || [])[idx];
+    const content = document.getElementById(`moddet-${panel}-ta`)?.value || '';
+    if (heading == null) return;
+    try {
+      const r = await fetch(
+        `/api/chronicles/${encodeURIComponent(chr)}/modules/${encodeURIComponent(mod)}/scenario/section${window.location.search}`,
+        { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ heading, content }) }
+      );
+      const result = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(result.error || 'Ошибка сохранения');
+      STATE.currentModuleData.scenario = result.scenario;
+      _renderScenarioPanel(STATE.currentModuleData);
+    } catch (e) {
+      if (msgEl) { msgEl.textContent = '✗ Ошибка'; msgEl.style.display = ''; }
+      showToast('Не удалось сохранить раздел: ' + e.message, 'error');
+    }
     return;
   }
 
