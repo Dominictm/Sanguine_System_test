@@ -3076,6 +3076,22 @@ function renderModulePage(data) {
       <span class="modp-save-msg" id="moddet-${id}-msg" style="display:none">✓ Сохранено</span>
     </div>`;
   }
+  // Как modPanel, но заголовок секции и кнопка «Редактировать» — в одну строку
+  // (см. «Участники»/«НПС»), а не заголовок отдельно + кнопка ниже.
+  function sectionPanel(id, label, viewHtml, editHtml) {
+    return `
+    <div class="modp-section-header-row">
+      <div class="modp-section-label">${label}</div>
+      <button class="modp-edit-btn" data-editmod="${id}">✏ Редактировать</button>
+    </div>
+    <div id="moddet-${id}-view">${viewHtml}</div>
+    <div id="moddet-${id}-edit" style="display:none">${editHtml}</div>
+    <div class="modp-edit-bar" id="moddet-${id}-bar" style="display:none">
+      <button class="modp-save-btn" data-savemod="${id}">Сохранить</button>
+      <button class="modp-cancel-btn" data-cancelmod="${id}">Отмена</button>
+      <span class="modp-save-msg" id="moddet-${id}-msg" style="display:none">✓ Сохранено</span>
+    </div>`;
+  }
 
   STATE.currentModuleData = data;
   // Header
@@ -3109,46 +3125,28 @@ function renderModulePage(data) {
     : '<div class="cdet-empty">Концепция не заполнена</div>';
   const descEditHtml = `<textarea class="cdet-edit-textarea" id="moddet-desc-ta" rows="8" style="width:100%">${escHtml(data.description || '')}</textarea>`;
 
-  // Participants display — двухколоночная таблица: строка на персонажа/НПС,
-  // независимо от того, сколько их в каждой из колонок.
+  // Персонажи игроков / НПС — два независимых раздела, каждый со своей
+  // кнопкой «Редактировать» (не общая на двоих, не таблица).
   const pcNames  = (data.pcs  || []).map(p => typeof p === 'string' ? p : (p.name || ''));
   const npcNames = (data.npcs || []).map(p => typeof p === 'string' ? p : (p.name || ''));
-  const partRows = Math.max(pcNames.length, npcNames.length);
-  const participantsHtml = partRows
-    ? `<table class="modp-participants-table">
-        <thead><tr><th>🎭 Персонажи игроков</th><th>👤 НПС</th></tr></thead>
-        <tbody>
-          ${Array.from({ length: partRows }, (_, i) =>
-            `<tr><td>${escHtml(pcNames[i] || '')}</td><td>${escHtml(npcNames[i] || '')}</td></tr>`
-          ).join('')}
-        </tbody>
-      </table>`
-    : '<div class="cdet-empty">Участники не указаны</div>';
+  const pcViewHtml  = pcNames.length
+    ? `<ul class="modp-part-list">${pcNames.map(n => `<li>${escHtml(n)}</li>`).join('')}</ul>`
+    : '<div class="cdet-empty">Не указаны</div>';
+  const npcViewHtml = npcNames.length
+    ? `<ul class="modp-part-list">${npcNames.map(n => `<li>${escHtml(n)}</li>`).join('')}</ul>`
+    : '<div class="cdet-empty">Не указаны</div>';
+  const pcEditHtml  = _renderParticipantChips('pcs', data.pcs || []);
+  const npcEditHtml = _renderParticipantChips('npcs', data.npcs || []);
 
   const infoHtml = `
   <div class="modp-section-label">💡 Концепция</div>
   ${modPanel('desc', descViewHtml, descEditHtml)}
   <div class="modp-section-divider"></div>
-  <div class="modp-section-header-row">
-    <div class="modp-section-label">👥 Участники</div>
-    <button class="modp-edit-btn" id="modp-edit-participants-btn">✏ Редактировать</button>
-  </div>
-  ${participantsHtml}`;
-  const participantsEditHtml = `
-  <div id="moddet-participants-panel" style="display:none;margin-top:12px">
-    <div class="modp-section-label">🎭 Персонажи игроков</div>
-    ${_renderParticipantChips('pcs', data.pcs || [])}
-    <div class="modp-section-label" style="margin-top:12px">👤 НПС</div>
-    ${_renderParticipantChips('npcs', data.npcs || [])}
-    <div class="modp-edit-bar" style="display:flex;margin-top:12px" id="moddet-participants-bar">
-      <button class="modp-save-btn" data-savemod="participants">Сохранить</button>
-      <button class="modp-cancel-btn" id="moddet-participants-cancel">Отмена</button>
-      <span class="modp-save-msg" id="moddet-participants-msg" style="display:none">✓ Сохранено</span>
-    </div>
-  </div>`;
-  const infoHtmlFull = infoHtml + participantsEditHtml;
+  ${sectionPanel('pcs', '🎭 Персонажи игроков', pcViewHtml, pcEditHtml)}
+  <div class="modp-section-divider"></div>
+  ${sectionPanel('npcs', '👤 НПС', npcViewHtml, npcEditHtml)}`;
 
-  document.getElementById('modp-panel-info').innerHTML = infoHtmlFull;
+  document.getElementById('modp-panel-info').innerHTML = infoHtml;
 
   // ── СЦЕНАРИЙ ──
   {
@@ -3399,20 +3397,6 @@ document.getElementById('modp-panel-info').addEventListener('click', e => {
   if (editModBtn)   { _modToggleEdit(editModBtn.dataset.editmod, true);      return; }
   if (cancelModBtn) { _modToggleEdit(cancelModBtn.dataset.cancelmod, false);  return; }
   if (saveModBtn)   { _modSavePanel(saveModBtn.dataset.savemod);              return; }
-
-  // Toggle participants edit panel
-  if (e.target.id === 'modp-edit-participants-btn') {
-    const panel = document.getElementById('moddet-participants-panel');
-    if (panel) panel.style.display = panel.style.display === 'none' ? '' : 'none';
-    return;
-  }
-
-  // Cancel participants editing
-  if (e.target.id === 'moddet-participants-cancel') {
-    const panel = document.getElementById('moddet-participants-panel');
-    if (panel) panel.style.display = 'none';
-    return;
-  }
 
   // Remove chip
   const rmBtn = e.target.closest('[data-rmname]');
@@ -8391,11 +8375,9 @@ async function _modSavePanel(panel) {
   if (panel === 'desc') {
     fields.description = document.getElementById('moddet-desc-ta')?.value || '';
 
-  } else if (panel === 'participants') {
-    const pcChips  = document.querySelectorAll('#moddet-pcs-chips .moddet-chip');
-    const npcChips = document.querySelectorAll('#moddet-npcs-chips .moddet-chip');
-    fields.pcs  = Array.from(pcChips).map(c => c.dataset.name).filter(Boolean);
-    fields.npcs = Array.from(npcChips).map(c => c.dataset.name).filter(Boolean);
+  } else if (panel === 'pcs' || panel === 'npcs') {
+    const chips = document.querySelectorAll(`#moddet-${panel}-chips .moddet-chip`);
+    fields[panel] = Array.from(chips).map(c => c.dataset.name).filter(Boolean);
 
   } else if (panel === 'scenario') {
     const content = document.getElementById('moddet-scenario-ta')?.value || '';

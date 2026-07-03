@@ -8566,25 +8566,8 @@ a.md-link-loc:hover {
 }
 .modp-section-header-row .modp-section-label { margin-bottom: 0; }
 
-.modp-participants-table { border-collapse: collapse; width: 100%; }
-.modp-participants-table th {
-  text-align: left;
-  font-size: var(--fs-sm, 12px);
-  font-weight: 600;
-  color: var(--text2, #999);
-  padding: 2px 12px 6px 0;
-  border-bottom: 1px solid var(--border, #333);
-}
-.modp-participants-table td {
-  font-size: var(--fs-sm, 12px);
-  padding: 4px 12px 4px 0;
-  vertical-align: top;
-}
-.modp-participants-table th:first-child,
-.modp-participants-table td:first-child {
-  border-right: 1px solid var(--border, #333);
-  padding-right: 16px;
-}
+.modp-part-list { list-style: none; padding: 0; margin: 0; font-size: var(--fs-sm, 12px); }
+.modp-part-list li { padding: 2px 0; }
 
 /* Participants chips */
 .moddet-chips-wrap { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 10px; }
