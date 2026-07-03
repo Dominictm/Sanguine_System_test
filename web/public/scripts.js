@@ -3156,9 +3156,9 @@ function renderModulePage(data) {
 
     const scenarioPanelHtml = `
   <div class="modp-scenario-toolbar">
+    <button class="modp-edit-btn" data-editmod="scenario">✏ Редактировать</button>
     ${data.scenario
-      ? `<button class="modp-edit-btn" data-editmod="scenario">✏ Редактировать</button>
-         <button class="modp-edit-btn" id="modp-regen-scenario-btn" style="margin-left:8px">♻ Перегенерировать</button>`
+      ? `<button class="modp-edit-btn" id="modp-regen-scenario-btn" style="margin-left:8px">♻ Перегенерировать</button>`
       : ''
     }
   </div>
