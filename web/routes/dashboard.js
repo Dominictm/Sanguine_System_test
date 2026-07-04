@@ -13,7 +13,7 @@ const {
   cityDir, locsDir, archiveDir, reqCity, listCities,
   getAllCharacters, listModules, countMdFiles, readOpenThreadsRaw,
   aggregateEvents, makeNameResolver, getDiaryIndex, eventMonthKey,
-  getBrokenLinks,
+  getBrokenLinks, getChronicleDisplay,
 } = require('../lib/db');
 
 const router = express.Router();
@@ -226,6 +226,15 @@ router.get('/api/search', async (req, res) => {
         }
       }
     }
+
+    // Хроники показываются пользователю по-русски (H1 events.md), не голым слагом —
+    // резолвим один раз на уникальный слаг, а не на каждый хит.
+    const chrSlugs = [...new Set([...modules, ...events].map(r => r.chronicle).filter(Boolean))];
+    const chrDisplayMap = Object.fromEntries(
+      await Promise.all(chrSlugs.map(async s => [s, await getChronicleDisplay(city, s)]))
+    );
+    for (const r of modules) r.chronicleDisplay = chrDisplayMap[r.chronicle] || r.chronicle;
+    for (const r of events)  r.chronicleDisplay = chrDisplayMap[r.chronicle] || r.chronicle;
 
     // Archive docs
     const archHits = await walkMd(path.join(cityBase, 'archive'));

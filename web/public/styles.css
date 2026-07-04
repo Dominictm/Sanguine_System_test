@@ -8602,6 +8602,29 @@ a.md-link-loc:hover {
 /* Scenario split into per-section blocks (## in scenario.md) */
 .modp-scenario-section { margin-bottom: 4px; }
 .modp-scenario-sec-btns { display: flex; gap: 8px; flex-shrink: 0; }
+/* Сцены, развёрнутые из общего `## Сцены` (### в исходнике) — лёгкий отступ */
+.modp-scenario-section--sub { padding-left: 16px; border-left: 2px solid var(--border, #333); }
+.modp-scenario-group-label {
+  font-size: var(--fs-sm, 12px);
+  opacity: 0.6;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin: 4px 0;
+}
+
+/* Разделы «🔒 GM-справка» — визуальная пометка + кнопка временно скрыть их
+   (нет отдельного вида для игроков, это чисто страховка при показе экрана). */
+.modp-gm-badge {
+  display: inline-block;
+  font-size: var(--fs-xs, 10px);
+  color: var(--c-error, #e87070);
+  border: 1px solid currentColor;
+  border-radius: 3px;
+  padding: 1px 5px;
+  margin-left: 8px;
+  vertical-align: middle;
+}
+#modp-panel-scenario.modp-hide-gm [data-gm="1"] { display: none; }
 
 /* ── Archive doc editing ── */
 .archive-toolbar {

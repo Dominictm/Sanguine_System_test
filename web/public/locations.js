@@ -322,6 +322,20 @@ document.getElementById('locs-grid').addEventListener('click', e => {
   if (card) openLocDetail(card.dataset.slug);
 });
 
+document.getElementById('btn-export-locs')?.addEventListener('click', e => {
+  e.preventDefault();
+  window.location.href = `/api/export/locations${window.location.search}`;
+});
+document.getElementById('btn-import-locs')?.addEventListener('click', e => {
+  e.preventDefault();
+  document.getElementById('import-locs-file')?.click();
+});
+document.getElementById('import-locs-file')?.addEventListener('change', async e => {
+  const file = e.target.files[0];
+  await importCardsFromFile('locations', file, loadLocations);
+  e.target.value = '';
+});
+
 // Location filter events
 document.getElementById('loc-search').addEventListener('input', e => {
   STATE.locFilter.search = e.target.value;

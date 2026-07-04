@@ -73,6 +73,52 @@ module.exports = function locationsRouter({ makeGenerationClient, isOA, oaCall }
     } catch (e) { serverError(res, e); }
   });
 
+  // ── Import: обратная операция для /api/export/locations — принимает тот же
+  // формат (массив объектов с `raw` — полным содержимием карточки, `dirRelPath` —
+  // путём папки локации относительно locations/) и восстанавливает структуру
+  // district_NN/<район>/<локация>/ в текущем городе. Изображения (art/) не
+  // переносятся — так же, как экспорт их не включает.
+  router.post('/api/import/locations', express.json({ limit: '20mb' }), async (req, res) => {
+    try {
+      const city      = reqCity(req);
+      const items     = Array.isArray(req.body?.locations) ? req.body.locations : [];
+      const overwrite = !!req.body?.overwrite;
+      if (!items.length) return res.status(400).json({ error: 'Пустой список локаций для импорта' });
+
+      const locRoot = locsDir(city);
+      const created = [], skipped = [], errors = [];
+      for (const item of items) {
+        const dirRel = String(item?.dirRelPath || '').trim().replace(/\\/g, '/');
+        const raw    = String(item?.raw || '');
+        const slug   = dirRel.split('/').filter(Boolean).pop() || '';
+        if (!dirRel || dirRel.includes('..') || path.isAbsolute(dirRel)) {
+          errors.push({ dirRelPath: dirRel, error: 'Недопустимый путь' }); continue;
+        }
+        if (!slug) { errors.push({ dirRelPath: dirRel, error: 'Не удалось определить слаг из пути' }); continue; }
+        if (!raw.trim()) { errors.push({ dirRelPath: dirRel, error: 'Пустое содержимое карточки' }); continue; }
+
+        const dir = path.join(locRoot, ...dirRel.split('/'));
+        if (path.relative(locRoot, dir).startsWith('..')) {
+          errors.push({ dirRelPath: dirRel, error: 'Путь выходит за пределы locations/' }); continue;
+        }
+
+        try {
+          const mdPath = path.join(dir, `${slug}.md`);
+          const exists = await fs.stat(mdPath).catch(() => null);
+          if (exists && !overwrite) { skipped.push(dirRel); continue; }
+
+          await fs.mkdir(dir, { recursive: true });
+          await writeFileAtomic(mdPath, raw, 'utf-8');
+          created.push(dirRel);
+        } catch (e) { errors.push({ dirRelPath: dirRel, error: e.message }); }
+      }
+
+      invalidateLocs(city);
+      console.log(`[import-locations] ${city}: created=${created.length} skipped=${skipped.length} errors=${errors.length}`);
+      res.json({ ok: true, created, skipped, errors });
+    } catch (e) { serverError(res, e); }
+  });
+
   router.get('/api/locations/:slug/images', async (req, res) => {
     try {
       const slug = decodeURIComponent(req.params.slug);

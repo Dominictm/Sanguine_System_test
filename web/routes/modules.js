@@ -20,9 +20,9 @@ const {
   ROOT, cityDir, charsDir, locsDir, chroniclesDir, archiveDir,
   reqCity, writeFileAtomic, invalidateChars,
   getAllCharacters, getAllLocations, listModules, tableCell, LINEAGE_MAP,
-  _nameMatch, rmdir,
+  _nameMatch, rmdir, getChronicleDisplay,
 } = require('../lib/db');
-const { slugify, parseEvent, parseScenarioSections, replaceScenarioSection } = require('../lib/parsers');
+const { slugify, parseEvent, parseScenarioSections, replaceScenarioSection, checkScenarioStructure } = require('../lib/parsers');
 
 // Modules now live under chronicles/<chr>/modules/<mod>/ — flatten them with their chronicle.
 const MOD_AUX = n => ['npc.md', 'scenario.md', 'finale.md'].includes(n) || n.endsWith('-sheet.md');
@@ -531,6 +531,7 @@ module.exports = function modulesRouter({
       const timeStr   = (time || '').trim();
       const typeStr   = (req.body.type || '').trim() || 'Игровая сессия';
       const toneStr   = (req.body.tone || '').trim();
+      const formatStr = (req.body.format || '').trim();
       const pcs       = Array.isArray(req.body.pcs)  ? req.body.pcs  : [];
       const npcs      = Array.isArray(req.body.npcs) ? req.body.npcs : [];
       const concept   = (req.body.content || '').trim();
@@ -550,6 +551,7 @@ module.exports = function modulesRouter({
         '| Параметр | Значение |',
         '|---|---|',
         `| **Тип** | ${typeStr} |`,
+        `| **Формат** | ${formatStr} |`,
         `| **Время** | ${timeStr || '⚠️ Уточнить'} |`,
         `| **Тон** | ${toneStr} |`,
         `| **Учитывать в хронологии** | ${track ? 'да' : 'нет'} |`,
@@ -974,6 +976,11 @@ module.exports = function modulesRouter({
         console.warn('[fill-module] timeline check failed:', warnErr.message);
       }
 
+      // Пост-генерационная проверка: AI-промт просит все 9 обязательных блоков
+      // (module_rules.md), но ничего не мешает модели пропустить один из них —
+      // предупреждаем Мастера сразу, а не когда это обнаружится в игре.
+      const { missing: missingTopics } = checkScenarioStructure(scenarioText);
+
       res.json({
         ok: true,
         file: `chronicles/${chr}/modules/${mod}/scenario.md`,
@@ -982,6 +989,7 @@ module.exports = function modulesRouter({
         npcs: createdNpcs,
         canonNpcs: canonNpcs.map(x => x.char.name),
         timelineWarnings,
+        missingTopics,
       });
     } catch (e) {
       console.error('[fill-module]', e.message, e.cause || e.stack || '');
@@ -1206,6 +1214,18 @@ ${target.body}
             else skipped.push(key);
           }
 
+        } else if (key === 'trackInChronology') {
+          const label = 'Учитывать в хронологии';
+          const v = val ? 'да' : 'нет';
+          const cellRe = new RegExp(`(\\|\\s*\\*\\*${label}\\*\\*\\s*\\|\\s*)([^|\\n]*)(\\|)`);
+          if (cellRe.test(raw)) {
+            raw = raw.replace(cellRe, `$1${v} $3`);
+          } else {
+            const sepRe = /(\|\s*Параметр\s*\|\s*Значение\s*\|\n\|---\|---\|\n)/;
+            if (sepRe.test(raw)) raw = raw.replace(sepRe, `$1| **${label}** | ${v} |\n`);
+            else skipped.push(key);
+          }
+
         } else if (key === 'description') {
           const v = String(val).trim();
           // Replace section between «## 💡 Концепция» header and next ## or ---
@@ -1271,6 +1291,31 @@ ${target.body}
       res.json({ ok: true });
     } catch (e) {
       console.error('[mod-scenario]', e.message);
+      serverError(res, e);
+    }
+  });
+
+  router.put('/api/chronicles/:chr/modules/:mod/finale', express.json(), async (req, res) => {
+    try {
+      const city = reqCity(req);
+      const { chr, mod } = req.params;
+      if (chr.includes('..') || mod.includes('..'))
+        return res.status(400).json({ error: 'Недопустимое имя' });
+      const content = (req.body?.content || '').trim();
+      if (!content) return res.status(400).json({ error: 'Пустой финал' });
+
+      const modDir    = path.join(chroniclesDir(city), chr, 'modules', mod);
+      const finalePath = path.join(modDir, 'finale.md');
+
+      if (!await fs.stat(modDir).catch(() => null))
+        return res.status(404).json({ error: 'Модуль не найден' });
+
+      await writeFileAtomic(finalePath, content.endsWith('\n') ? content : content + '\n', 'utf-8');
+      invalidateChars(city);
+      console.log(`[mod-finale] ${city}/${chr}/${mod} finale.md rewritten`);
+      res.json({ ok: true });
+    } catch (e) {
+      console.error('[mod-finale]', e.message);
       serverError(res, e);
     }
   });
@@ -1744,7 +1789,10 @@ ${target.body}
       if (!await fs.stat(modDir).catch(() => null))
         return res.status(404).json({ error: 'Модуль не найден' });
 
-      const result = { name: mod, chronicle: chr, title: mod, pcs: [], npcs: [], locations: [], events: [] };
+      const result = {
+        name: mod, chronicle: chr, chronicleDisplay: await getChronicleDisplay(city, chr),
+        title: mod, pcs: [], npcs: [], locations: [], events: [],
+      };
 
       // 1. Main module file — title, metadata, participants, description
       const mainRaw = await fs.readFile(path.join(modDir, `${mod}.md`), 'utf-8').catch(() => '');
@@ -1757,6 +1805,7 @@ ${target.body}
           const v = tableCell(mc, label);
           if (v != null) result[key] = v;
         }
+        result.trackInChronology = !/\|\s*\*\*Учитывать в хронологии\*\*\s*\|\s*нет\s*\|/i.test(mc);
 
         // Module status (bullet line written on close: «- **Статус модуля:** 🟢 Закрыт …»)
         const stM = mc.match(/^-\s*\*\*Статус(?: модуля)?:\*\*\s*(.+)$/m);
@@ -1835,6 +1884,9 @@ ${target.body}
 
       // 2. Scenario content
       result.scenario = await fs.readFile(path.join(modDir, 'scenario.md'), 'utf-8').catch(() => '');
+
+      // 2b. Literary finale (написан при закрытии модуля — Фаза C)
+      result.finale = await fs.readFile(path.join(modDir, 'finale.md'), 'utf-8').catch(() => '');
 
       // 3. NPC details from npc.md
       result.npcContent = await fs.readFile(path.join(modDir, 'npc.md'), 'utf-8').catch(() => '');

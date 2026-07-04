@@ -6,6 +6,3 @@
 > Спина хроники. События — [events.md](events.md). Нити — [open_threads.md](open_threads.md).
 > Закрыть хронику: `node tools/close_chronicle.js balmont leto_2001 "финал"`
 
-## 🔗 Модули
-
-- [новые события](modules/novye_sobytiya/novye_sobytiya.md)

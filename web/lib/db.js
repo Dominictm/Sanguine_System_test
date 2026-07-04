@@ -92,6 +92,7 @@ async function getAllCharacters(city = DEFAULT_CITY) {
       char.slug = entry;
       char.city = city;
       char.hasSheet = hasSheet;
+      char.raw = content; // полное содержимое карточки — источник для экспорта/импорта
 
       // Images live in <slug>/art/. Prefer slug_NN.* (web upload), else first image.
       const slugRe  = new RegExp(`^${entry}_\\d+\\.[a-z]+$`, 'i');
@@ -161,6 +162,8 @@ async function getAllLocations(city = DEFAULT_CITY) {
           const content   = await fs.readFile(fullPath, 'utf-8');
           const locFolder = path.dirname(fullPath);
           const loc       = parseLocation(content, path.basename(locFolder));
+          loc.raw        = content; // полное содержимое карточки — источник для экспорта/импорта
+          loc.dirRelPath = path.relative(locRoot, locFolder).split(path.sep).join('/');
           const artDir    = path.join(locFolder, 'art');
           const artFiles  = await fs.readdir(artDir).catch(() => []);
           const imgFiles  = artFiles.filter(f => /\.(jpg|jpeg|png|webp|gif)$/i.test(f)).sort();
@@ -195,6 +198,18 @@ async function listModules(city = DEFAULT_CITY) {
         out.push({ name: m.name, chronicle: ch.name, dir: path.join(mdir, m.name) });
   }
   return out;
+}
+
+// Отображаемое название хроники (кириллица) из H1 её events.md — единый источник
+// с /api/chronicles (routes/chronicles.js), чтобы модуль/поиск/т.п. не показывали
+// голый слаг там, где нужно название.
+async function getChronicleDisplay(city, chr) {
+  const evRaw = await fs.readFile(path.join(chroniclesDir(city), chr, 'events.md'), 'utf-8').catch(() => null);
+  if (evRaw) {
+    const m = evRaw.replace(/^﻿/, '').match(/^#\s+(.+?)\s+—\s+События/m);
+    if (m) return m[1].replace(/^[^\p{L}\p{N}]+/u, '').trim();
+  }
+  return chr;
 }
 
 // Open threads are now per-chronicle (chronicles/<chr>/open_threads.md); aggregate them.
@@ -490,7 +505,7 @@ module.exports = {
   invalidateChars, invalidateLocs,
   getBrokenLinks, setBrokenLinks,
   LINEAGE_MAP,
-  getAllCharacters, getAllLocations, findLocMdPath, listModules,
+  getAllCharacters, getAllLocations, findLocMdPath, listModules, getChronicleDisplay,
   readOpenThreadsRaw,
   countMdFiles, mapLimit, tableCell,
   EDITABLE_FIELD_MAP, SHEET_HEADER_FROM_CARD, _setSheetHeaderCell,

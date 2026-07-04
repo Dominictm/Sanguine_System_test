@@ -13,11 +13,11 @@ const fs      = require('fs').promises;
 const { serverError, aiRateLimit } = require('../lib/http');
 const {
   ROOT, cityDir, charsDir, chroniclesDir, archiveDir, reqCity, writeFileAtomic, invalidateChars,
-  getAllCharacters, mapLimit,
+  getAllCharacters, mapLimit, LINEAGE_MAP,
   EDITABLE_FIELD_MAP, SHEET_HEADER_FROM_CARD, _setSheetHeaderCell,
   _nameMatch, _findModularNpcCard,
 } = require('../lib/db');
-const { slugify, writePrompt, parseDiary, periodLabel } = require('../lib/parsers');
+const { slugify, writePrompt, parseDiary, periodLabel, parseCharacter } = require('../lib/parsers');
 const { loadLiteraryStyle } = require('../lib/context_builder');
 
 // Переопределение ярлыка карточки по линейке (там, где он отличается от базового).
@@ -129,6 +129,59 @@ module.exports = function charactersRouter({
       const chars = await getAllCharacters(city);
       res.setHeader('Content-Disposition', `attachment; filename="characters_${city}.json"`);
       res.json(chars);
+    } catch (e) { serverError(res, e); }
+  });
+
+  // ── Import: обратная операция для /api/export/characters — принимает тот же
+  // формат (массив объектов с `raw` — полным содержимием карточки, `slug`,
+  // `lineageFolder`) и записывает карточки в текущий город. По умолчанию не
+  // трогает уже существующие слаги (overwrite:true — перезаписать).
+  router.post('/api/import/characters', express.json({ limit: '20mb' }), async (req, res) => {
+    try {
+      const city      = reqCity(req);
+      const items     = Array.isArray(req.body?.characters) ? req.body.characters : [];
+      const overwrite = !!req.body?.overwrite;
+      if (!items.length) return res.status(400).json({ error: 'Пустой список персонажей для импорта' });
+
+      const created = [], skipped = [], errors = [];
+      for (const item of items) {
+        const slug   = String(item?.slug || '').trim();
+        const folder = String(item?.lineageFolder || '').trim();
+        const raw    = String(item?.raw || '');
+        if (!slug || !/^[a-z0-9_]+$/.test(slug)) { errors.push({ slug, error: 'Недопустимый слаг' }); continue; }
+        if (!LINEAGE_MAP[folder]) { errors.push({ slug, error: `Неизвестная линейка «${folder}»` }); continue; }
+        if (!raw.trim()) { errors.push({ slug, error: 'Пустое содержимое карточки' }); continue; }
+
+        try {
+          const dir     = path.join(charsDir(city), folder, slug);
+          const mdPath  = path.join(dir, `${slug}.md`);
+          const exists  = await fs.stat(mdPath).catch(() => null);
+          if (exists && !overwrite) { skipped.push(slug); continue; }
+
+          await fs.mkdir(path.join(dir, 'art'), { recursive: true });
+          await fs.mkdir(path.join(dir, 'journal'), { recursive: true });
+          await writeFileAtomic(mdPath, raw, 'utf-8');
+
+          // Зарегистрировать в сводном индексе, если там ещё нет этой ссылки
+          // (повторный импорт/перезапись не должны плодить дубли строк).
+          const idxPath = path.join(archiveDir(city), 'characters_index.md');
+          const idxRaw  = await fs.readFile(idxPath, 'utf-8').catch(() => null);
+          const relLink = `../characters/${folder}/${slug}/${slug}.md`;
+          if (idxRaw !== null && !idxRaw.includes(relLink)) {
+            const parsed = parseCharacter(raw, slug, LINEAGE_MAP[folder]);
+            const bom = idxRaw.charCodeAt(0) === 0xFEFF;
+            const body = (bom ? idxRaw.slice(1) : idxRaw).replace(/\s*$/, '') +
+              `\n- [${parsed.name}](${relLink}) — ${parsed.lineageLabel || folder}${parsed.clan ? `, ${parsed.clan}` : ''}\n`;
+            await writeFileAtomic(idxPath, (bom ? '﻿' : '') + body, 'utf-8');
+          }
+
+          created.push(slug);
+        } catch (e) { errors.push({ slug, error: e.message }); }
+      }
+
+      invalidateChars(city);
+      console.log(`[import-characters] ${city}: created=${created.length} skipped=${skipped.length} errors=${errors.length}`);
+      res.json({ ok: true, created, skipped, errors });
     } catch (e) { serverError(res, e); }
   });
 

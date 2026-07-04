@@ -323,15 +323,35 @@ function parseScenarioSections(raw) {
   const preamble = text.slice(0, firstIdx);
   const rest = text.slice(firstIdx);
   const parts = rest.split(/\n(?=##\s+)/);
-  const sections = parts.map(part => {
+  const sections = [];
+  for (const part of parts) {
     const nl = part.indexOf('\n');
     const heading = (nl === -1 ? part : part.slice(0, nl)).replace(/^##\s+/, '').trim();
     let body = nl === -1 ? '' : part.slice(nl + 1);
     // Trailing "---" divider before the NEXT heading belongs to the layout,
     // not to this section's content — strip only if it's the very last thing.
     body = body.replace(/\n+---+\s*$/, '').replace(/^\n+/, '').replace(/\s+$/, '');
-    return { heading, body };
-  });
+
+    // Some модуль-шаблоны вкладывают отдельные сцены как `### ` под одним
+    // общим `## Сцены` — каждая такая сцена должна редактироваться/
+    // перегенерироваться независимо, поэтому разворачиваем их в отдельные
+    // разделы верхнего уровня (level 3, с привязкой к родительскому heading).
+    const h3Idx = body.search(/^###\s+/m);
+    if (h3Idx !== -1) {
+      const intro = body.slice(0, h3Idx).replace(/\s+$/, '');
+      sections.push({ heading, body: intro, level: 2, parent: null });
+      const h3parts = body.slice(h3Idx).split(/\n(?=###\s+)/);
+      for (const h3part of h3parts) {
+        const h3nl = h3part.indexOf('\n');
+        const h3heading = (h3nl === -1 ? h3part : h3part.slice(0, h3nl)).replace(/^###\s+/, '').trim();
+        let h3body = h3nl === -1 ? '' : h3part.slice(h3nl + 1);
+        h3body = h3body.replace(/^\n+/, '').replace(/\s+$/, '');
+        sections.push({ heading: h3heading, body: h3body, level: 3, parent: heading });
+      }
+    } else {
+      sections.push({ heading, body, level: 2, parent: null });
+    }
+  }
   return { preamble, sections };
 }
 
@@ -346,9 +366,55 @@ function replaceScenarioSection(raw, heading, newBody) {
   const { preamble, sections } = parseScenarioSections(raw);
   const idx = sections.findIndex(s => s.heading === heading);
   if (idx === -1) return raw;
-  sections[idx] = { heading, body: String(newBody == null ? '' : newBody).trim() };
-  const body = sections.map(s => `## ${s.heading}\n\n${s.body}\n`).join('\n---\n\n');
-  return preamble.replace(/\n*$/, '\n\n') + body;
+  sections[idx] = { ...sections[idx], body: String(newBody == null ? '' : newBody).trim() };
+
+  // level-3 сцены, развёрнутые из общего `## Сцены`, пишутся обратно как `###`
+  // под своим родителем без `---` между собой; `---` идёт только между
+  // top-level (level 2) блоками.
+  const blocks = [];
+  for (let i = 0; i < sections.length; i++) {
+    const s = sections[i];
+    if (s.level === 3) continue; // handled by its parent below
+    let block = `## ${s.heading}\n\n${s.body ? s.body + '\n' : ''}`;
+    for (let j = i + 1; j < sections.length && sections[j].level === 3 && sections[j].parent === s.heading; j++) {
+      block += `\n### ${sections[j].heading}\n\n${sections[j].body}\n`;
+    }
+    blocks.push(block);
+  }
+  return preamble.replace(/\n*$/, '\n\n') + blocks.join('\n---\n\n');
+}
+
+// Обязательные смысловые блоки сценария по `system/rules/module_rules.md`
+// (раздел «### scenario.md»). Реальные сценарии не используют заголовки
+// дословно (см. комментарий у parseScenarioSections), поэтому каждый пункт —
+// терпимый regex по синонимам, реально встречающимся в существующих файлах,
+// а не точное совпадение с шаблоном. 6 и 7 из спеки («Кульминация» и «Варианты
+// финала») объединены в одну проверку — на практике авторы пишут их одной
+// сценой «Финал», а не двумя отдельными разделами.
+const SCENARIO_REQUIRED_TOPICS = [
+  { key: 'premise',  label: 'Предпосылки',            re: /Предпосылк/i },
+  { key: 'locations',label: 'Локации',                re: /Локаци/i },
+  { key: 'npcs',      label: 'НПС',                    re: /НПС/i },
+  { key: 'hook',      label: 'Завязка',                re: /Завязк/i },
+  { key: 'scenes',    label: 'Сцены',                  re: /Сцен/i },
+  { key: 'climax',    label: 'Кульминация / Варианты финала', re: /Кульминаци|Финал|Развязка|Раскрытие/i },
+  { key: 'threads',   label: 'Открытые нити / Крючки', re: /Открыт|Крючк|Зацепк/i },
+  { key: 'flavor',    label: 'Колорит города',         re: /Колорит/i },
+];
+
+/**
+ * Проверяет, что сгенерированный/отредактированный сценарий покрывает все
+ * обязательные смысловые блоки из module_rules.md — только по заголовкам
+ * разделов (наличие ОТДЕЛЬНОГО раздела на тему, а не просто упоминания).
+ * @param {string} raw — содержимое scenario.md
+ * @returns {{missing: {key:string,label:string}[], present: string[]}}
+ */
+function checkScenarioStructure(raw) {
+  const { sections } = parseScenarioSections(raw);
+  const headings = sections.map(s => s.heading);
+  const joined   = headings.join(' | ');
+  const missing  = SCENARIO_REQUIRED_TOPICS.filter(t => !t.re.test(joined)).map(t => ({ key: t.key, label: t.label }));
+  return { missing, present: headings };
 }
 
 // ── Dates / periods ────────────────────────────────────────────────────────────
@@ -951,4 +1017,5 @@ module.exports = {
   parseChronicleParticipants,
   parseScenarioSections,
   replaceScenarioSection,
+  checkScenarioStructure,
 };

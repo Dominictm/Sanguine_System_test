@@ -2432,7 +2432,7 @@ async function openModCreateModal(standalone) {
   try {
     _modCreateStandalone = standalone;
     _createPCs  = []; _createNPCs = [];
-    ['mod-create-name','mod-create-time','mod-create-slug','mod-create-content','mod-create-tone'].forEach(id => {
+    ['mod-create-name','mod-create-time','mod-create-slug','mod-create-content','mod-create-tone','mod-create-format'].forEach(id => {
       const el = document.getElementById(id); if (el) el.value = '';
     });
     document.getElementById('mod-create-type').value = 'Игровая сессия';
@@ -2497,6 +2497,7 @@ document.getElementById('mod-create-submit').addEventListener('click', async () 
   const slug    = document.getElementById('mod-create-slug').value.trim() || slugifyChr(name);
   const type    = document.getElementById('mod-create-type').value.trim();
   const tone    = document.getElementById('mod-create-tone').value.trim();
+  const format  = document.getElementById('mod-create-format').value.trim();
   const content = document.getElementById('mod-create-content').value.trim();
   const errEl   = document.getElementById('mod-create-error');
   const btn     = document.getElementById('mod-create-submit');
@@ -2517,7 +2518,7 @@ document.getElementById('mod-create-submit').addEventListener('click', async () 
     const qs = window.location.search;
     const d  = await fetch(`/api/chronicles/${encodeURIComponent(chr)}/modules${qs}`,
       { method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, time, slug, type, tone, pcs: _createPCs, npcs: _createNPCs, content,
+        body: JSON.stringify({ name, time, slug, type, tone, format, pcs: _createPCs, npcs: _createNPCs, content,
           trackInChronology: document.getElementById('mod-create-track')?.checked !== false }) }
     ).then(r => r.json());
 
@@ -3072,13 +3073,32 @@ function _parseScenarioSections(raw) {
   const preamble = text.slice(0, firstIdx);
   const rest = text.slice(firstIdx);
   const parts = rest.split(/\n(?=##\s+)/);
-  const sections = parts.map(part => {
+  const sections = [];
+  for (const part of parts) {
     const nl = part.indexOf('\n');
     const heading = (nl === -1 ? part : part.slice(0, nl)).replace(/^##\s+/, '').trim();
     let body = nl === -1 ? '' : part.slice(nl + 1);
     body = body.replace(/\n+---+\s*$/, '').replace(/^\n+/, '').replace(/\s+$/, '');
-    return { heading, body };
-  });
+
+    // Сцены, вложенные как `### ` под общим `## Сцены` — разворачиваем в
+    // отдельные разделы (level 3), чтобы каждая сцена редактировалась/
+    // перегенерировалась независимо. Зеркалит lib/parsers.js.
+    const h3Idx = body.search(/^###\s+/m);
+    if (h3Idx !== -1) {
+      const intro = body.slice(0, h3Idx).replace(/\s+$/, '');
+      sections.push({ heading, body: intro, level: 2, parent: null });
+      const h3parts = body.slice(h3Idx).split(/\n(?=###\s+)/);
+      for (const h3part of h3parts) {
+        const h3nl = h3part.indexOf('\n');
+        const h3heading = (h3nl === -1 ? h3part : h3part.slice(0, h3nl)).replace(/^###\s+/, '').trim();
+        let h3body = h3nl === -1 ? '' : h3part.slice(h3nl + 1);
+        h3body = h3body.replace(/^\n+/, '').replace(/\s+$/, '');
+        sections.push({ heading: h3heading, body: h3body, level: 3, parent: heading });
+      }
+    } else {
+      sections.push({ heading, body, level: 2, parent: null });
+    }
+  }
   return { preamble, sections };
 }
 
@@ -3086,16 +3106,37 @@ function _parseScenarioSections(raw) {
 // со своими кнопками «Редактировать»/«Перегенерировать». Вызывается и из
 // renderModulePage, и повторно — после сохранения/регена одного раздела
 // (без полной перезагрузки страницы модуля).
+// Раздел «🔒 GM-справка — закрытая информация» (и синонимы) — секреты Мастера,
+// вписанные AI прямо в сценарий. Здесь нет ролевой системы/отдельного вида для
+// игроков — это чисто визуальная страховка при демонстрации экрана: пометить
+// такие разделы и дать кнопку временно скрыть их из вида.
+const MODP_GM_SECTION_RE = /🔒|GM[\s-]?справк|только\s+для\s+(мастера|рассказчика)/i;
+
 function _renderScenarioPanel(data) {
   const raw = data.scenario || '';
   const { sections } = _parseScenarioSections(raw);
   STATE.scenarioSectionHeadings = sections.map(s => s.heading);
+  const hasGmSections = sections.some(s => MODP_GM_SECTION_RE.test(s.heading));
 
   const sectionsHtml = sections.length
-    ? sections.map((s, i) => `
-      <div class="modp-scenario-section">
+    ? sections.map((s, i) => {
+        // Обёртка-родитель (напр. «5. Сцены»), из которой развёрнуты дочерние
+        // `### Сцена N` — если у неё нет своего текста, показываем только как
+        // групповой заголовок без кнопок редактирования/перегенерации.
+        const isEmptyWrapper = s.level === 2 && !s.body
+          && sections.some(c => c.level === 3 && c.parent === s.heading);
+        const subClass = s.level === 3 ? ' modp-scenario-section--sub' : '';
+        const isGM = MODP_GM_SECTION_RE.test(s.heading);
+        const gmAttr  = isGM ? ' data-gm="1"' : '';
+        const gmBadge = isGM ? ' <span class="modp-gm-badge">🔒 Только для Мастера</span>' : '';
+
+        if (isEmptyWrapper) {
+          return `<div class="modp-scenario-group-label">${escHtml(s.heading)}</div>`;
+        }
+        return `
+      <div class="modp-scenario-section${subClass}"${gmAttr}>
         <div class="modp-section-header-row">
-          <div class="modp-section-label">${escHtml(s.heading)}</div>
+          <div class="modp-section-label">${escHtml(s.heading)}${gmBadge}</div>
           <div class="modp-scenario-sec-btns">
             <button class="modp-edit-btn" data-editmod="scensec${i}">✏ Редактировать</button>
             <button class="modp-edit-btn" data-scensec-regen="${i}">🔄 Перегенерировать</button>
@@ -3112,14 +3153,17 @@ function _renderScenarioPanel(data) {
           <span class="modp-save-msg" id="moddet-scensec${i}-msg" style="display:none">✓ Сохранено</span>
         </div>
       </div>
-      ${i < sections.length - 1 ? '<div class="modp-section-divider"></div>' : ''}`
-      ).join('')
+      ${i < sections.length - 1 ? '<div class="modp-section-divider"></div>' : ''}`;
+      }).join('')
     : (raw ? mdToHtml(raw) : '<div class="cdet-empty">Сценарий не сгенерирован. Нажми «🪄 Сгенерировать».</div>');
 
-  document.getElementById('modp-panel-scenario').innerHTML = `
+  const panel = document.getElementById('modp-panel-scenario');
+  panel.classList.toggle('modp-hide-gm', !!STATE.hideGmSections);
+  panel.innerHTML = `
   <div class="modp-scenario-toolbar">
     <button class="modp-edit-btn" data-editmod="scenario">✏ Редактировать весь текст</button>
     ${raw ? `<button class="modp-edit-btn" id="modp-regen-scenario-btn" style="margin-left:8px">♻ Перегенерировать всё</button>` : ''}
+    ${hasGmSections ? `<button class="modp-edit-btn" id="modp-toggle-gm-btn" style="margin-left:8px">${STATE.hideGmSections ? '👁 Показать разделы Мастера' : '🙈 Скрыть разделы Мастера'}</button>` : ''}
   </div>
   <div id="moddet-scenario-view">${sectionsHtml}</div>
   <div id="moddet-scenario-edit" style="display:none">
@@ -3175,7 +3219,7 @@ function renderModulePage(data) {
     data.time   && `<span class="modp-badge">📅 ${escHtml(data.time)}</span>`,
     data.tone   && `<span class="modp-badge">🌙 ${escHtml(data.tone)}</span>`,
     data.format && `<span class="modp-badge">📖 ${escHtml(data.format)}</span>`,
-    data.chronicle && `<span class="modp-badge" style="border-color:rgba(184,134,11,0.4);color:var(--text);opacity:0.7">📕 ${escHtml(data.chronicle)}</span>`,
+    data.chronicle && `<span class="modp-badge" style="border-color:rgba(184,134,11,0.4);color:var(--text);opacity:0.7">📕 ${escHtml(data.chronicleDisplay || data.chronicle)}</span>`,
   ].filter(Boolean).join('');
   document.getElementById('modp-badges').innerHTML = badges;
 
@@ -3221,6 +3265,17 @@ function renderModulePage(data) {
 
   // ── СЦЕНАРИЙ (разбит по разделам — см. _renderScenarioPanel) ──
   _renderScenarioPanel(data);
+
+  // ── ФИНАЛ (finale.md — пишется при закрытии модуля, Фаза C) ──
+  const finaleRaw = data.finale || '';
+  const finaleViewHtml = finaleRaw
+    ? `<div class="modp-md">${mdToHtml(finaleRaw)}</div>`
+    : '<div class="modp-empty"><div class="modp-empty-icon">📜</div>Финал ещё не сгенерирован — появится при закрытии модуля («🔒 Закрыть модуль»).</div>';
+  document.getElementById('modp-panel-finale').innerHTML = finaleRaw
+    ? modPanel('finale', finaleViewHtml,
+        `<textarea class="cdet-edit-textarea" id="moddet-finale-ta" rows="20"
+          style="width:100%;font-family:monospace;font-size:var(--fs-sm,12px)">${escHtml(finaleRaw)}</textarea>`)
+    : finaleViewHtml;
 
   // ── СЕССИИ (Фаза B — ведение во время игры) ──
   const sessions = data.sessions || [];
@@ -3476,6 +3531,17 @@ document.getElementById('modp-panel-info').addEventListener('click', e => {
   }
 });
 
+// Finale panel: edit / save / cancel handlers
+document.getElementById('modp-panel-finale').addEventListener('click', e => {
+  const editModBtn   = e.target.closest('[data-editmod]');
+  const saveModBtn   = e.target.closest('[data-savemod]');
+  const cancelModBtn = e.target.closest('[data-cancelmod]');
+
+  if (editModBtn)   { _modToggleEdit(editModBtn.dataset.editmod, true);      return; }
+  if (cancelModBtn) { _modToggleEdit(cancelModBtn.dataset.cancelmod, false);  return; }
+  if (saveModBtn)   { _modSavePanel(saveModBtn.dataset.savemod);              return; }
+});
+
 // Scenario panel: edit / save / cancel / regen handlers
 document.getElementById('modp-panel-scenario').addEventListener('click', e => {
   const editModBtn   = e.target.closest('[data-editmod]');
@@ -3485,6 +3551,12 @@ document.getElementById('modp-panel-scenario').addEventListener('click', e => {
   if (editModBtn)   { _modToggleEdit(editModBtn.dataset.editmod, true);      return; }
   if (cancelModBtn) { _modToggleEdit(cancelModBtn.dataset.cancelmod, false);  return; }
   if (saveModBtn)   { _modSavePanel(saveModBtn.dataset.savemod);              return; }
+
+  if (e.target.id === 'modp-toggle-gm-btn') {
+    STATE.hideGmSections = !STATE.hideGmSections;
+    _renderScenarioPanel(STATE.currentModuleData);
+    return;
+  }
 
   if (e.target.id === 'modp-regen-scenario-btn') {
     const d   = STATE.currentModuleData;
@@ -3861,6 +3933,7 @@ document.getElementById('modp-header-edit-btn').addEventListener('click', async 
   document.getElementById('modp-hedit-time').value  = data.time  || '';
   document.getElementById('modp-hedit-tone').value  = data.tone  || '';
   document.getElementById('modp-hedit-format').value = data.format || '';
+  document.getElementById('modp-hedit-track').checked = data.trackInChronology !== false;
 
   document.getElementById('modp-title').style.display  = 'none';
   document.getElementById('modp-badges').style.display  = 'none';
@@ -3898,6 +3971,7 @@ document.getElementById('modp-hedit-save').addEventListener('click', async () =>
   const time  = document.getElementById('modp-hedit-time').value.trim();
   const tone   = document.getElementById('modp-hedit-tone').value.trim();
   const format = document.getElementById('modp-hedit-format').value.trim();
+  const track  = document.getElementById('modp-hedit-track').checked;
   const toChr  = document.getElementById('modp-hedit-chronicle').value;
 
   if (!title) { showToast('Название не может быть пустым', 'warning'); return; }
@@ -3907,7 +3981,7 @@ document.getElementById('modp-hedit-save').addEventListener('click', async () =>
   try {
     const r = await fetch(`/api/chronicles/${encodeURIComponent(chronicle)}/modules/${encodeURIComponent(name)}/fields${qs}`, {
       method: 'PUT', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ fields: { title, type, time, tone, format } }),
+      body: JSON.stringify({ fields: { title, type, time, tone, format, trackInChronology: track } }),
     });
     if (!r.ok) throw new Error((await r.json()).error || r.statusText);
 
@@ -3969,6 +4043,10 @@ document.getElementById('modp-gen-btn').addEventListener('click', async () => {
         const sev = w.severity === 'high' ? '🔴' : '🟡';
         lines.push(`${sev} ${w.character}: ${w.issue}`);
       }
+    }
+    if (d.missingTopics?.length) {
+      lines.push('');
+      lines.push('⚠️ AI не создал отдельный раздел для: ' + d.missingTopics.map(t => t.label).join(', '));
     }
     const resultEl = document.getElementById('modp-gen-result');
     if (resultEl) {
@@ -5309,7 +5387,7 @@ function _renderSearchResults(data, el, subEl) {
       <div class="srch-row srch-mod" data-chr="${escHtml(m.chronicle)}" data-mod="${escHtml(m.module)}">
         <div class="srch-row-icon">📖</div>
         <div class="srch-row-body">
-          <div class="srch-row-title">${hl(m.title)} <span class="srch-row-tag">${escHtml(m.chronicle)}</span></div>
+          <div class="srch-row-title">${hl(m.title)} <span class="srch-row-tag">${escHtml(m.chronicleDisplay || m.chronicle)}</span></div>
           <div class="srch-row-excerpt">${hl(m.excerpt)}</div>
         </div>
         <button class="srch-open-btn">Открыть →</button>
@@ -5322,7 +5400,7 @@ function _renderSearchResults(data, el, subEl) {
       <div class="srch-row">
         <div class="srch-row-icon">📅</div>
         <div class="srch-row-body">
-          <div class="srch-row-title"><span class="srch-row-tag">${escHtml(e.chronicle)}</span></div>
+          <div class="srch-row-title"><span class="srch-row-tag">${escHtml(e.chronicleDisplay || e.chronicle)}</span></div>
           <div class="srch-row-excerpt">${hl(e.excerpt)}</div>
         </div>
       </div>`).join('');
@@ -8478,6 +8556,20 @@ async function _modSavePanel(panel) {
     } catch { if (msgEl) { msgEl.textContent = '✗ Ошибка'; msgEl.style.display = ''; } }
     return;
 
+  } else if (panel === 'finale') {
+    const content = document.getElementById('moddet-finale-ta')?.value || '';
+    try {
+      const r = await fetch(
+        `/api/chronicles/${encodeURIComponent(chr)}/modules/${encodeURIComponent(mod)}/finale${window.location.search}`,
+        { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content }) }
+      );
+      if (!r.ok) throw new Error(await r.text());
+      if (msgEl) { msgEl.style.display = ''; setTimeout(() => { if (msgEl) msgEl.style.display = 'none'; }, 2500); }
+      _modToggleEdit(panel, false);
+      await _reloadModulePage();
+    } catch { if (msgEl) { msgEl.textContent = '✗ Ошибка'; msgEl.style.display = ''; } }
+    return;
+
   } else if (panel.startsWith('scensec')) {
     const idx     = parseInt(panel.slice('scensec'.length), 10);
     const heading = (STATE.scenarioSectionHeadings || [])[idx];
@@ -8706,6 +8798,15 @@ document.getElementById('btn-open-create-char').addEventListener('click', openCh
 document.getElementById('btn-export-chars')?.addEventListener('click', e => {
   e.preventDefault();
   window.location.href = `/api/export/characters${window.location.search}`;
+});
+document.getElementById('btn-import-chars')?.addEventListener('click', e => {
+  e.preventDefault();
+  document.getElementById('import-chars-file')?.click();
+});
+document.getElementById('import-chars-file')?.addEventListener('change', async e => {
+  const file = e.target.files[0];
+  await importCardsFromFile('characters', file, loadCharacters);
+  e.target.value = '';
 });
 document.getElementById('modal-close').addEventListener('click', closeCharModal);
 document.getElementById('modal-back').addEventListener('click', () => showModalStep(1));

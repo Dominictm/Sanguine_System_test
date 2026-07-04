@@ -146,6 +146,8 @@
         <!-- impeccable-variants-end c906fd2d -->
         <button class="btn-create-char" id="btn-open-create-char">+ Создать</button>
         <a class="chr-modal-btn" id="btn-export-chars" href="#" style="padding:5px 12px;font-size:var(--fs-sm)">⇩ Экспорт</a>
+        <a class="chr-modal-btn" id="btn-import-chars" href="#" style="padding:5px 12px;font-size:var(--fs-sm)">⇧ Импорт</a>
+        <input type="file" id="import-chars-file" accept="application/json,.json" style="display:none">
       </div>
 
       <div id="chars-grid" class="chars-grid">
@@ -266,6 +268,12 @@
               <label class="chr-form-label">Хроника</label>
               <select class="chr-form-input" id="modp-hedit-chronicle"></select>
             </div>
+            <div class="mod-create-track-row">
+              <label class="mod-create-track-label">
+                <input type="checkbox" id="modp-hedit-track">
+                Учитывать события в общей хронике города
+              </label>
+            </div>
             <div class="modp-edit-bar" style="display:flex">
               <button class="modp-save-btn" id="modp-hedit-save">Сохранить</button>
               <button class="modp-cancel-btn" id="modp-hedit-cancel">Отмена</button>
@@ -280,6 +288,7 @@
       <div class="modp-tabbar" id="modp-tabbar">
         <button class="modp-tab active" data-modtab="info">ℹ Краткое</button>
         <button class="modp-tab" data-modtab="scenario">📝 Сценарий</button>
+        <button class="modp-tab" data-modtab="finale">📜 Финал</button>
         <button class="modp-tab" data-modtab="sessions">🎲 Сессии</button>
         <button class="modp-tab" data-modtab="events">📅 События</button>
         <button class="modp-tab" data-modtab="npcs">👥 НПС</button>
@@ -290,6 +299,7 @@
       <div class="modp-body">
         <div class="modp-panel active" id="modp-panel-info"></div>
         <div class="modp-panel" id="modp-panel-scenario"></div>
+        <div class="modp-panel" id="modp-panel-finale"></div>
         <div class="modp-panel" id="modp-panel-sessions"></div>
         <div class="modp-panel" id="modp-panel-events"></div>
         <div class="modp-panel" id="modp-panel-npcs"></div>
@@ -374,6 +384,11 @@
               <label class="chr-form-label">Тон <span class="chr-modal-dim">(необязательно)</span></label>
               <input class="chr-form-input" id="mod-create-tone" placeholder="Городской нуар, мистика перекрёстков" autocomplete="off">
             </div>
+          </div>
+
+          <div class="chr-form-group">
+            <label class="chr-form-label">Формат <span class="chr-modal-dim">(необязательно)</span></label>
+            <input class="chr-form-input" id="mod-create-format" placeholder="Котерия 2–3 игрока, Соло-модуль…" autocomplete="off">
           </div>
 
           <div class="chr-form-group">
@@ -596,6 +611,8 @@
       </div>
       <button class="chr-modal-btn create" id="loc-page-create-btn" style=" margin-bottom: 10px; padding:5px 12px;font-size:var(--fs-sm)">+ Создать локацию</button>
       <a class="chr-modal-btn" id="btn-export-locs" href="#" style="margin-bottom:10px;margin-left:8px;padding:5px 12px;font-size:var(--fs-sm)">⇩ Экспорт</a>
+      <a class="chr-modal-btn" id="btn-import-locs" href="#" style="margin-bottom:10px;margin-left:8px;padding:5px 12px;font-size:var(--fs-sm)">⇧ Импорт</a>
+      <input type="file" id="import-locs-file" accept="application/json,.json" style="display:none">
       <div id="locs-grid" class="locs-grid">
         <div class="loading-state"><div class="spinner"></div>Загрузка...</div>
       </div>

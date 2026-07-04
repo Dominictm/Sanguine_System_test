@@ -14,7 +14,7 @@ const {
   mdExtractLinks, mdStripLinks, mdStripInline, classifyChronicleLink,
   categorizeRel, parseCharacter, parseLocation, parseEvent, parseChronicle,
   parseChronicleParticipants,
-  parseScenarioSections, replaceScenarioSection,
+  parseScenarioSections, replaceScenarioSection, checkScenarioStructure,
   CITY_SECTIONS, buildCityMd, parseCityMd, cityScaffold,
 } = require('../lib/parsers');
 
@@ -630,6 +630,87 @@ describe('Parsers — unit', () => {
     it('replaceScenarioSection — неизвестный заголовок возвращает текст без изменений', () => {
       assert.equal(replaceScenarioSection(SCEN, '__нет такого__', 'x'), SCEN);
     });
+
+    const SCEN_NESTED = [
+      '# Сценарий — Тест',
+      '',
+      '---',
+      '',
+      '## 4. Завязка',
+      '',
+      'Игрок втягивается в события.',
+      '',
+      '---',
+      '',
+      '## 5. Сцены',
+      '',
+      '### Сцена 1: В темноте',
+      'Текст сцены 1.',
+      '',
+      '### Сцена 2: Ловушка',
+      'Текст сцены 2.',
+      '',
+      '---',
+      '',
+      '## 6. Кульминация',
+      '',
+      'Финальное столкновение.',
+      '',
+    ].join('\n');
+
+    it('разворачивает вложенные `### Сцена N` (под общим `## Сцены`) в отдельные разделы верхнего уровня', () => {
+      const { sections } = parseScenarioSections(SCEN_NESTED);
+      assert.deepEqual(sections.map(s => s.heading),
+        ['4. Завязка', '5. Сцены', 'Сцена 1: В темноте', 'Сцена 2: Ловушка', '6. Кульминация']);
+      assert.equal(sections[1].body, ''); // пустая обёртка — весь текст ушёл в дочерние сцены
+      assert.equal(sections[2].body, 'Текст сцены 1.');
+      assert.equal(sections[3].body, 'Текст сцены 2.');
+      assert.equal(sections[2].level, 3);
+      assert.equal(sections[2].parent, '5. Сцены');
+    });
+
+    it('replaceScenarioSection на вложенной сцене меняет только её, сохраняя соседние сцены и обёртку', () => {
+      const updated = replaceScenarioSection(SCEN_NESTED, 'Сцена 1: В темноте', 'Новый текст сцены 1.');
+      const { sections } = parseScenarioSections(updated);
+      assert.deepEqual(sections.map(s => s.heading),
+        ['4. Завязка', '5. Сцены', 'Сцена 1: В темноте', 'Сцена 2: Ловушка', '6. Кульминация']);
+      assert.equal(sections[2].body, 'Новый текст сцены 1.');
+      assert.equal(sections[3].body, 'Текст сцены 2.');
+      assert.equal(sections[0].body, 'Игрок втягивается в события.');
+      assert.equal(sections[4].body, 'Финальное столкновение.');
+    });
+  });
+
+  describe('checkScenarioStructure', () => {
+    it('полный сценарий (все 9 тем module_rules.md) → missing пуст', () => {
+      const full = [
+        '## Предпосылки', 'x', '---',
+        '## Локации', 'x', '---',
+        '## НПС', 'x', '---',
+        '## Завязка', 'x', '---',
+        '## Сцены', 'x', '---',
+        '## Кульминация', 'x', '---',
+        '## Варианты финала', 'x', '---',
+        '## Открытые нити', 'x', '---',
+        '## Колорит города', 'x',
+      ].join('\n');
+      const { missing } = checkScenarioStructure(full);
+      assert.deepEqual(missing, []);
+    });
+
+    it('реальная плоская структура (Пролог/Сцена N/Финал) тоже покрывает Кульминацию и Сцены', () => {
+      const flat = ['## Пролог', 'x', '---', '## Сцена 1 — Бар', 'x', '---', '## Финал', 'x'].join('\n');
+      const { missing } = checkScenarioStructure(flat);
+      assert.ok(!missing.some(m => m.key === 'scenes'));
+      assert.ok(!missing.some(m => m.key === 'climax'));
+      // «Предпосылки»/«Локации»/«НПС»/«Завязка»/«Колорит» реально отсутствуют в этом примере
+      assert.ok(missing.some(m => m.key === 'flavor'));
+    });
+
+    it('пустой сценарий → все 8 тем отсутствуют', () => {
+      const { missing } = checkScenarioStructure('Просто текст без заголовков.');
+      assert.equal(missing.length, 8);
+    });
   });
 
 }); // Parsers — unit
@@ -912,12 +993,12 @@ describe('API — integration', () => {
   // ── Search ─────────────────────────────────────────────────────────────────
   describe('Search', () => {
     it('short query (< 3 chars) → empty results', async () => {
-      const { status, body } = await apiJson(`/api/search?q=ab${CITY}`);
+      const { status, body } = await apiJson(`/api/search?q=ab&city=paris`);
       assert.equal(status, 200);
       assert.equal(body.total, 0);
     });
     it('returns expected shape for real query', async () => {
-      const { status, body } = await apiJson(`/api/search?q=Paris${CITY}`);
+      const { status, body } = await apiJson(`/api/search?q=Paris&city=paris`);
       assert.equal(status, 200);
       assert.ok('results' in body);
       assert.ok('total'   in body);
@@ -929,12 +1010,36 @@ describe('API — integration', () => {
       assert.ok(Array.isArray(r.archive));
     });
     it('character results have slug/name/lineage/excerpt', async () => {
-      const { body } = await apiJson(`/api/search?q=Париж${CITY}`);
+      const { body } = await apiJson(`/api/search?q=Париж&city=paris`);
       for (const c of (body.results?.characters || [])) {
         assert.ok(typeof c.slug    === 'string');
         assert.ok(typeof c.name    === 'string');
         assert.ok(typeof c.excerpt === 'string');
       }
+    });
+    it('module results carry chronicleDisplay (кириллица из events.md), не голый слаг', async () => {
+      // Своя одноразовая хроника, а не первая из общего списка — другие тесты
+      // выполняются конкурентно (node:test по умолчанию) и трогают общие фикстуры.
+      const chrDisplay = `QA Search Хроника ${Date.now()}`;
+      const chrSlug    = `test_search_chr_${Date.now()}`;
+      const created = await apiJson(`/api/chronicles${CITY}`, {
+        method: 'POST', body: JSON.stringify({ name: chrDisplay, slug: chrSlug }),
+      });
+      assert.equal(created.status, 200);
+
+      const marker  = `qa_search_marker_${Date.now()}`;
+      const modSlug = `test_search_mod_${Date.now()}`;
+      await apiJson(`/api/chronicles/${encodeURIComponent(chrSlug)}/modules${CITY}`, {
+        method: 'POST', body: JSON.stringify({ name: marker, time: '2010', slug: modSlug }),
+      });
+      const { body } = await apiJson(`/api/search?q=${encodeURIComponent(marker)}&city=paris`);
+      const hit = (body.results?.modules || []).find(m => m.module === modSlug);
+      assert.ok(hit, 'модуль должен найтись в результатах поиска');
+      assert.equal(hit.chronicle, chrSlug);
+      assert.equal(hit.chronicleDisplay, chrDisplay);
+
+      await apiJson(`/api/chronicles/${encodeURIComponent(chrSlug)}/modules/${encodeURIComponent(modSlug)}${CITY}`, { method: 'DELETE' });
+      await apiJson(`/api/chronicles/${encodeURIComponent(chrSlug)}${CITY}`, { method: 'DELETE' });
     });
   });
 
@@ -1496,6 +1601,66 @@ describe('API — integration', () => {
       await apiJson(`/api/chronicles/${encodeURIComponent(chr)}/modules/${encodeURIComponent(noType)}${CITY}`, { method: 'DELETE' });
     });
 
+    it('POST /api/chronicles/:chr/modules — format пишется в карточку', async () => {
+      if (!chr) return;
+      const namedFmt = `test_format_mod_${Date.now()}`;
+      const created = await apiJson(`/api/chronicles/${encodeURIComponent(chr)}/modules${CITY}`, {
+        method: 'POST', body: JSON.stringify({ name: namedFmt, time: '2010', slug: namedFmt, format: 'Соло-модуль' }),
+      });
+      assert.equal(created.status, 200);
+      const dir = path.join(CITY_ROOT, 'chronicles', chr, 'modules', namedFmt);
+      const raw = await fs.readFile(path.join(dir, `${namedFmt}.md`), 'utf-8');
+      assert.match(raw, /\|\s*\*\*Формат\*\*\s*\|\s*Соло-модуль\s*\|/);
+      await apiJson(`/api/chronicles/${encodeURIComponent(chr)}/modules/${encodeURIComponent(namedFmt)}${CITY}`, { method: 'DELETE' });
+    });
+
+    it('PUT /fields — trackInChronology переключается и отражается в /detail', async () => {
+      if (!modDir) return;
+      const put = await apiJson(`/api/chronicles/${encodeURIComponent(chr)}/modules/${encodeURIComponent(mod)}/fields${CITY}`,
+        { method: 'PUT', body: JSON.stringify({ fields: { trackInChronology: false } }) });
+      assert.equal(put.status, 200);
+      const raw = await fs.readFile(path.join(modDir, `${mod}.md`), 'utf-8');
+      assert.match(raw, /\|\s*\*\*Учитывать в хронологии\*\*\s*\|\s*нет\s*\|/);
+
+      const { body: detail } = await apiJson(`/api/chronicles/${encodeURIComponent(chr)}/modules/${encodeURIComponent(mod)}/detail${CITY}`);
+      assert.equal(detail.trackInChronology, false);
+
+      await apiJson(`/api/chronicles/${encodeURIComponent(chr)}/modules/${encodeURIComponent(mod)}/fields${CITY}`,
+        { method: 'PUT', body: JSON.stringify({ fields: { trackInChronology: true } }) });
+      const { body: detail2 } = await apiJson(`/api/chronicles/${encodeURIComponent(chr)}/modules/${encodeURIComponent(mod)}/detail${CITY}`);
+      assert.equal(detail2.trackInChronology, true);
+    });
+
+    it('GET /detail — chronicleDisplay: кириллическое название хроники, не голый слаг', async () => {
+      if (!modDir) return;
+      const { body: chrs } = await apiJson(`/api/chronicles${CITY}&include_hidden=1`);
+      const expected = (Array.isArray(chrs) ? chrs : []).find(c => c.slug === chr)?.display;
+      const { body: detail } = await apiJson(`/api/chronicles/${encodeURIComponent(chr)}/modules/${encodeURIComponent(mod)}/detail${CITY}`);
+      assert.equal(detail.chronicle, chr);
+      assert.equal(detail.chronicleDisplay, expected);
+    });
+
+    it('PUT /finale — пустой → 400', async () => {
+      const { status } = await apiJson(`/api/chronicles/${CHR}/modules/${MOD}/finale${CITY}`,
+        { method: 'PUT', body: JSON.stringify({ content: '' }) });
+      assert.equal(status, 400);
+    });
+    it('PUT /finale — round-trip, отражается в /detail', async () => {
+      if (!modDir) return;
+      const marker = `__FINALETEST__ ${Date.now()}`;
+      const put = await apiJson(`/api/chronicles/${encodeURIComponent(chr)}/modules/${encodeURIComponent(mod)}/finale${CITY}`,
+        { method: 'PUT', body: JSON.stringify({ content: marker }) });
+      assert.equal(put.status, 200);
+      assert.ok(put.body.ok);
+      const raw = await fs.readFile(path.join(modDir, 'finale.md'), 'utf-8');
+      assert.ok(raw.includes(marker));
+
+      const { body: detail } = await apiJson(`/api/chronicles/${encodeURIComponent(chr)}/modules/${encodeURIComponent(mod)}/detail${CITY}`);
+      assert.ok(detail.finale.includes(marker));
+
+      await fs.unlink(path.join(modDir, 'finale.md')).catch(() => {});
+    });
+
     it('PUT /api/chronicles/:chr/modules/:mod/move — переносит модуль в другую хронику', async () => {
       if (!chr) return;
       const { body: allChrs } = await apiJson(`/api/chronicles${CITY}&include_hidden=1`);
@@ -1553,6 +1718,111 @@ describe('API — integration', () => {
       assert.equal(del.status, 200);
       assert.ok(del.body.ok);
       assert.equal(await fs.stat(delModDir).catch(() => null), null, 'папка модуля должна быть удалена');
+    });
+  });
+
+  // ── Import/Export — обратимость: экспорт → импорт под новым слагом ───────────
+  describe('Import/Export — characters & locations', () => {
+    it('GET /api/export/characters отдаёт raw для каждой карточки', async () => {
+      const { status, body } = await apiJson(`/api/export/characters${CITY}`);
+      assert.equal(status, 200);
+      assert.ok(Array.isArray(body) && body.length > 0);
+      assert.ok(body.every(c => typeof c.raw === 'string' && c.raw.length > 0));
+      assert.ok(body.every(c => c.slug && c.lineageFolder));
+    });
+
+    it('GET /api/export/locations отдаёт raw + dirRelPath для каждой карточки', async () => {
+      const { status, body } = await apiJson(`/api/export/locations${CITY}`);
+      assert.equal(status, 200);
+      assert.ok(Array.isArray(body) && body.length > 0);
+      assert.ok(body.every(l => typeof l.raw === 'string' && l.raw.length > 0));
+      assert.ok(body.every(l => typeof l.dirRelPath === 'string' && l.dirRelPath.length > 0));
+    });
+
+    it('POST /api/import/characters — пустой список → 400', async () => {
+      const { status } = await apiJson(`/api/import/characters${CITY}`,
+        { method: 'POST', body: JSON.stringify({ characters: [] }) });
+      assert.equal(status, 400);
+    });
+
+    it('POST /api/import/characters — создаёт карточку под новым слагом, второй прогон без overwrite пропускает', async () => {
+      const slug = `test_import_char_${Date.now()}`;
+      const raw = `# Тестовый Импорт\n\n- **Родной город:** Париж\n- **Линейка WoD:** Вампир: Маскарад\n- **Клан:** Тореадор\n- **Статус:** Жив\n`;
+      const dir = path.join(CITY_ROOT, 'characters', 'vampires', slug);
+
+      const post = await apiJson(`/api/import/characters${CITY}`, {
+        method: 'POST', body: JSON.stringify({ characters: [{ slug, lineageFolder: 'vampires', raw }] }),
+      });
+      assert.equal(post.status, 200);
+      assert.deepEqual(post.body.created, [slug]);
+      assert.deepEqual(post.body.skipped, []);
+      const written = await fs.readFile(path.join(dir, `${slug}.md`), 'utf-8');
+      assert.equal(written, raw);
+
+      const idx = await fs.readFile(path.join(CITY_ROOT, 'archive', 'characters_index.md'), 'utf-8').catch(() => '');
+      assert.match(idx, new RegExp(`characters/vampires/${slug}/${slug}\\.md`));
+
+      // Повторный импорт того же слага без overwrite — пропускается, а не падает
+      const post2 = await apiJson(`/api/import/characters${CITY}`, {
+        method: 'POST', body: JSON.stringify({ characters: [{ slug, lineageFolder: 'vampires', raw: raw + '\nдоп.' }] }),
+      });
+      assert.equal(post2.status, 200);
+      assert.deepEqual(post2.body.created, []);
+      assert.deepEqual(post2.body.skipped, [slug]);
+      const unchanged = await fs.readFile(path.join(dir, `${slug}.md`), 'utf-8');
+      assert.equal(unchanged, raw, 'без overwrite:true существующая карточка не должна меняться');
+
+      await fs.rm(dir, { recursive: true, force: true });
+      // Импорт дописал строку в characters_index.md — убрать её же, а не весь файл откатывать
+      const idxPath  = path.join(CITY_ROOT, 'archive', 'characters_index.md');
+      const idxAfter = await fs.readFile(idxPath, 'utf-8').catch(() => '');
+      const cleaned  = idxAfter.split('\n').filter(l => !l.includes(`${slug}/${slug}.md`)).join('\n');
+      if (cleaned !== idxAfter) await fs.writeFile(idxPath, cleaned, 'utf-8');
+    });
+
+    it('POST /api/import/characters — неизвестная линейка → errors, недопустимый слаг → errors', async () => {
+      const { status, body } = await apiJson(`/api/import/characters${CITY}`, {
+        method: 'POST', body: JSON.stringify({ characters: [
+          { slug: 'x', lineageFolder: '__nolineage__', raw: '# x' },
+          { slug: 'Bad Slug!', lineageFolder: 'vampires', raw: '# x' },
+        ] }),
+      });
+      assert.equal(status, 200);
+      assert.equal(body.created.length, 0);
+      assert.equal(body.errors.length, 2);
+    });
+
+    it('POST /api/import/locations — создаёт карточку по dirRelPath, второй прогон без overwrite пропускает', async () => {
+      const dirRelPath = `district_99/test_import_district/test_import_loc_${Date.now()}`;
+      const slug = dirRelPath.split('/').pop();
+      const raw = `# Тестовая Импорт-Локация\n> **Название:** Тест\n---\n## 🎭 Атмосфера\nТестовая атмосфера.\n`;
+      const dir = path.join(CITY_ROOT, 'locations', dirRelPath);
+
+      const post = await apiJson(`/api/import/locations${CITY}`, {
+        method: 'POST', body: JSON.stringify({ locations: [{ dirRelPath, raw }] }),
+      });
+      assert.equal(post.status, 200);
+      assert.deepEqual(post.body.created, [dirRelPath]);
+      const written = await fs.readFile(path.join(dir, `${slug}.md`), 'utf-8');
+      assert.equal(written, raw);
+
+      const post2 = await apiJson(`/api/import/locations${CITY}`, {
+        method: 'POST', body: JSON.stringify({ locations: [{ dirRelPath, raw: raw + '\nдоп.' }] }),
+      });
+      assert.deepEqual(post2.body.skipped, [dirRelPath]);
+
+      await fs.rm(path.join(CITY_ROOT, 'locations', 'district_99'), { recursive: true, force: true });
+    });
+
+    it('POST /api/import/locations — путь с «..» отклоняется', async () => {
+      const { status, body } = await apiJson(`/api/import/locations${CITY}`, {
+        method: 'POST', body: JSON.stringify({ locations: [
+          { dirRelPath: '../../etc/evil', raw: '# x' },
+        ] }),
+      });
+      assert.equal(status, 200);
+      assert.equal(body.created.length, 0);
+      assert.equal(body.errors.length, 1);
     });
   });
 

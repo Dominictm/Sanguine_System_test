@@ -1,14 +1,13 @@
-# НПС модуля: новые события
+# НПС модуля: Прогулки по метро-1
 
-> 🔗 [Модуль](novye_sobytiya.md)
+> 🔗 [Модуль](progulki_po_metro.md)
 > ℹ️ Каноничные НПС → ссылка на карточку в `characters/`. Модульные (неканоничные) → карточки в `npc/`.
 
 ---
 
 ## 🎭 Игровые персонажи (ПК)
 
-- джу — Персонаж игрока
-- джуди — Персонаж игрока → 🔗 [Карточка](../../../../characters/mortals/dzhudi/dzhudi.md)
+- Игрок-1 — Персонаж игрока
 
 ---
 
@@ -23,6 +22,5 @@
 
 > Карточки в `npc/`. Условия продвижения — `system/rules/module_rules.md`.
 
-- Маркус Вэйн — роль → 🔗 [Карточка](npc/markus_veyn/markus_veyn.md)
-- Саймон — роль → 🔗 [Карточка](npc/saymon/saymon.md)
-- Администратор магазина Мистер Гейтс — роль → 🔗 [Карточка](npc/administrator_magazina_mister_geyts/administrator_magazina_mister_geyts.md)
+- Шабашит 1 — роль → 🔗 [Карточка](npc/shabashit_1/shabashit_1.md)
+- Шериф Балион — роль → 🔗 [Карточка](npc/sherif_balion/sherif_balion.md)
