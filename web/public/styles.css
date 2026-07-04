@@ -8627,6 +8627,78 @@ a.md-link-loc:hover {
 }
 #modp-panel-scenario.modp-hide-gm [data-gm="1"] { display: none; }
 
+/* ── Faction influence diagram (архив «Фракции») ── */
+.faction-inf-panel {
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.faction-inf-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.faction-inf-title {
+  font-family: var(--f-head);
+  font-size: var(--fs-md);
+  color: var(--gold);
+  letter-spacing: .5px;
+}
+
+.faction-inf-add {
+  display: flex;
+  gap: 8px;
+}
+.faction-inf-add .chr-form-input { width: 180px; }
+
+.faction-inf-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 0;
+}
+
+.faction-inf-name {
+  width: 140px;
+  flex-shrink: 0;
+  font-size: var(--fs-sm);
+  color: var(--text);
+}
+
+.faction-inf-bar-track {
+  flex: 1;
+  height: 10px;
+  background: var(--bg4);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  overflow: hidden;
+}
+
+.faction-inf-bar-fill {
+  height: 100%;
+  background: var(--gold);
+  transition: width .2s var(--ease, ease);
+}
+
+.faction-inf-input {
+  width: 56px;
+  flex-shrink: 0;
+  background: var(--bg4);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--text);
+  font-size: var(--fs-sm);
+  text-align: center;
+  padding: 3px 4px;
+}
+
 /* ── Archive doc editing ── */
 .archive-toolbar {
   display: flex;
@@ -9434,47 +9506,22 @@ tr.rumor-told:hover .rumor-cb-cell {
   margin: 16px 0 6px;
 }
 
-.modp-loc-chip-list {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+/* Связанные локации модуля — переиспользуют .loc-card с главной сетки локаций
+   (см. _locCardHtml в locations.js), а не отдельный обеднённый список-строку. */
+.modp-loc-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 10px;
 }
 
-.modp-loc-chip {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  background: rgba(255, 255, 255, .04);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  padding: 6px 10px;
-  font-size: var(--fs-sm);
-  cursor: pointer;
-  transition: border-color .15s, background .15s;
-  text-align: left;
-  width: 100%;
-}
-
-.modp-loc-chip:hover {
-  border-color: var(--gold);
-  background: rgba(184, 134, 11, .06);
-}
-
-.modp-loc-chip-name {
-  flex: 1;
-  color: var(--text);
-  font-weight: 500;
-}
-
-.modp-loc-chip-meta {
-  color: var(--muted);
-  font-size: var(--fs-xs);
-}
-
-.modp-loc-chip-unlink {
-  background: none;
+.modp-loc-card-unlink {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 1;
+  background: rgba(0, 0, 0, .55);
   border: none;
-  color: var(--muted);
+  color: var(--text);
   cursor: pointer;
   padding: 2px 4px;
   border-radius: 2px;
@@ -9485,14 +9532,15 @@ tr.rumor-told:hover .rumor-cb-cell {
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: color .15s;
+  transition: color .15s, background .15s;
 }
 @media (pointer: coarse) {
-  .modp-loc-chip-unlink { min-width: 44px; min-height: 44px; }
+  .modp-loc-card-unlink { min-width: 44px; min-height: 44px; }
 }
 
-.modp-loc-chip-unlink:hover {
+.modp-loc-card-unlink:hover {
   color: var(--c-danger-text);
+  background: rgba(0, 0, 0, .75);
 }
 
 .modp-loc-attach-panel {

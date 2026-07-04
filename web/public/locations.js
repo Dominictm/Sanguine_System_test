@@ -83,35 +83,43 @@ function renderLocations() {
     grid.innerHTML = '<div class="loading-state" style="height:100px">Локации не найдены</div>';
     return;
   }
-  grid.innerHTML = list.map((loc, i) => {
-    const zc    = zoneClass(loc.zone);
-    const mLvl  = loc.masqueradeLevel || 'unknown';
-    const masqBadge = MASQ_BADGE_LABELS[mLvl]
-      ? `<span class="badge badge-masq-${mLvl}">${MASQ_BADGE_LABELS[mLvl]}</span>`
-      : '';
-    const zoneBadge = `<span class="badge badge-loc-${zc}">${ZONE_CLASS_LABELS[zc]}</span>`;
-
-    const distLine = [loc.district, loc.neighborhood].filter(Boolean).map(escHtml).join(' · ');
-    const cardTitle = loc.subtype || loc.title || loc.slug;
-    const textBlock = `
-      <div class="loc-title">${escHtml(cardTitle)}</div>
-      ${distLine    ? `<div class="loc-district">${distLine}</div>` : ''}
-      ${loc.address ? `<div class="loc-address">${escHtml(loc.address)}</div>` : ''}
-      <div class="loc-badges">${zoneBadge}${masqBadge}</div>`;
-    const delay = `style="animation-delay:${Math.min(i, 12) * 30}ms"`;
-
-    if (loc.imageUrl) {
-      return `<div class="loc-card has-art" data-slug="${escHtml(loc.slug)}" ${delay}>
-        <img class="loc-card-img" src="${loc.imageUrl}" alt="${escHtml(loc.title || loc.slug)}" loading="lazy" decoding="async">
-        <div class="loc-card-overlay">${textBlock}</div>
-      </div>`;
-    }
-    return `<div class="loc-card" data-slug="${escHtml(loc.slug)}" ${delay}>
-      <span class="loc-zone-icon">${ZONE_CLASS_LABELS[zc][0]}</span>
-      ${textBlock}
-    </div>`;
-  }).join('');
+  grid.innerHTML = list.map((loc, i) =>
+    _locCardHtml(loc, { delay: `style="animation-delay:${Math.min(i, 12) * 30}ms"` })
+  ).join('');
   fitLocTitles();
+}
+
+// Карточка локации (`.loc-card`) — общий источник разметки для главной сетки
+// локаций И для «Связанных локаций» на странице модуля (см. _renderModuleLocPanel),
+// чтобы вторая не превращалась в отдельный обеднённый список-строку.
+function _locCardHtml(loc, { delay = '', overlayExtra = '' } = {}) {
+  const zc    = zoneClass(loc.zone);
+  const mLvl  = loc.masqueradeLevel || 'unknown';
+  const masqBadge = MASQ_BADGE_LABELS[mLvl]
+    ? `<span class="badge badge-masq-${mLvl}">${MASQ_BADGE_LABELS[mLvl]}</span>`
+    : '';
+  const zoneBadge = `<span class="badge badge-loc-${zc}">${ZONE_CLASS_LABELS[zc]}</span>`;
+
+  const distLine = [loc.district, loc.neighborhood].filter(Boolean).map(escHtml).join(' · ');
+  const cardTitle = loc.subtype || loc.title || loc.slug;
+  const textBlock = `
+    <div class="loc-title">${escHtml(cardTitle)}</div>
+    ${distLine    ? `<div class="loc-district">${distLine}</div>` : ''}
+    ${loc.address ? `<div class="loc-address">${escHtml(loc.address)}</div>` : ''}
+    <div class="loc-badges">${zoneBadge}${masqBadge}</div>`;
+
+  if (loc.imageUrl) {
+    return `<div class="loc-card has-art" data-slug="${escHtml(loc.slug)}" ${delay}>
+      <img class="loc-card-img" src="${loc.imageUrl}" alt="${escHtml(loc.title || loc.slug)}" loading="lazy" decoding="async">
+      <div class="loc-card-overlay">${textBlock}</div>
+      ${overlayExtra}
+    </div>`;
+  }
+  return `<div class="loc-card" data-slug="${escHtml(loc.slug)}" ${delay}>
+    <span class="loc-zone-icon">${ZONE_CLASS_LABELS[zc][0]}</span>
+    ${textBlock}
+    ${overlayExtra}
+  </div>`;
 }
 
 function fitLocTitles() {
@@ -952,15 +960,9 @@ async function _renderModuleLocPanel(data) {
   const extracted = data.locations || [];
 
   const linkedHtml = linked.length
-    ? linked.map(loc => {
-        const title = loc.title || loc.subtype || loc.slug;
-        const meta  = [loc.district, loc.neighborhood].filter(Boolean).join(' · ');
-        return `<button class="modp-loc-chip" data-slug="${escHtml(loc.slug)}">
-          <span class="modp-loc-chip-name">${escHtml(title)}</span>
-          ${meta ? `<span class="modp-loc-chip-meta">${escHtml(meta)}</span>` : ''}
-          <button class="modp-loc-chip-unlink" data-unlink="${escHtml(loc.slug)}" title="Открепить" onclick="event.stopPropagation()">✕</button>
-        </button>`;
-      }).join('')
+    ? `<div class="modp-loc-cards">${linked.map(loc => _locCardHtml(loc, {
+        overlayExtra: `<button class="modp-loc-card-unlink" data-unlink="${escHtml(loc.slug)}" title="Открепить" onclick="event.stopPropagation()">✕</button>`,
+      })).join('')}</div>`
     : '<div class="modp-empty" style="padding:8px 0">Связанных локаций нет</div>';
 
   // «Mentioned in scenario» — with quick-attach buttons
@@ -1016,7 +1018,7 @@ async function _renderModuleLocPanel(data) {
     </div>
 
     <div class="modp-locs-section-title">Связанные локации</div>
-    <div class="modp-loc-chip-list" id="modp-loc-chip-list">${linkedHtml}</div>
+    <div id="modp-loc-chip-list">${linkedHtml}</div>
 
     ${mentionedHtml ? `<div class="modp-locs-section-title">Упомянуты в сценарии</div>${mentionedHtml}` : ''}
   `;
@@ -1051,9 +1053,9 @@ async function _renderModuleLocPanel(data) {
       _modLocUnlink(chronicle, modName, unlinkBtn.dataset.unlink);
       return;
     }
-    const chip = e.target.closest('.modp-loc-chip');
-    if (chip) {
-      const slug = chip.dataset.slug;
+    const card = e.target.closest('.loc-card');
+    if (card) {
+      const slug = card.dataset.slug;
       if (slug) { ensureLocsLoaded().then(() => openLocDetail(slug)); }
     }
   });

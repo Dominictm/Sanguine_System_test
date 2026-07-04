@@ -7,7 +7,8 @@ const express = require('express');
 const path    = require('path');
 const fs      = require('fs').promises;
 const { serverError } = require('../lib/http');
-const { archiveDir, reqCity, writeFileAtomic } = require('../lib/db');
+const { archiveDir, cityDir, reqCity, writeFileAtomic } = require('../lib/db');
+const { parsePoliticalFactions, setPoliticalFactionInfluence, parseCityMd } = require('../lib/parsers');
 
 const router = express.Router();
 
@@ -21,6 +22,48 @@ const archiveDoc = file => async (req, res) => {
 router.get('/api/timeline', archiveDoc('timeline.md'));          // historical lore (B3)
 router.get('/api/factions', archiveDoc('political_state.md'));   // C1 — faction map
 router.get('/api/visitors', archiveDoc('visitors.md'));          // C3 — cross-city guests
+
+// ── Faction influence diagram — «Баланс сил — обзор» в political_state.md ─────
+// Ручное редактирование 0-100 (шаг 5, см. lib/parsers.js). Список фракций
+// подтягивается из city.md → «## Фракции» (CITY_SECTIONS.factions) — те, что там
+// перечислены, но ещё не имеют строки в political_state.md, показываются с
+// влиянием 0 (виртуально, без записи на диск — станут реальной строкой при
+// первой правке через PUT, который уже умеет добавлять недостающие строки).
+router.get('/api/factions/influence', async (req, res) => {
+  try {
+    const city = reqCity(req);
+    const raw  = await fs.readFile(path.join(archiveDir(city), 'political_state.md'), 'utf-8').catch(() => '');
+    const factions = parsePoliticalFactions(raw);
+
+    const cityRaw = await fs.readFile(path.join(cityDir(city), 'city.md'), 'utf-8').catch(() => '');
+    const cityFactionNames = (parseCityMd(cityRaw).sections.factions || '')
+      .split('\n').map(s => s.trim()).filter(Boolean);
+    const known = new Set(factions.map(f => f.name));
+    for (const name of cityFactionNames) {
+      if (!known.has(name)) { factions.push({ name, influence: 0, territory: '', threat: '' }); known.add(name); }
+    }
+
+    res.json({ factions });
+  } catch (e) { serverError(res, e); }
+});
+
+router.put('/api/factions/influence', express.json(), async (req, res) => {
+  try {
+    const city = reqCity(req);
+    const name = String(req.body?.name || '').trim();
+    const influence = Number(req.body?.influence);
+    if (!name) return res.status(400).json({ error: 'Укажи название фракции' });
+    if (!Number.isFinite(influence) || influence < 0 || influence > 100)
+      return res.status(400).json({ error: 'Влияние: число 0-100' });
+
+    const file = path.join(archiveDir(city), 'political_state.md');
+    const raw  = await fs.readFile(file, 'utf-8').catch(() => '');
+    const updated = setPoliticalFactionInfluence(raw, name, influence);
+    await fs.mkdir(archiveDir(city), { recursive: true });
+    await writeFileAtomic(file, updated, 'utf-8');
+    res.json({ ok: true, factions: parsePoliticalFactions(updated) });
+  } catch (e) { serverError(res, e); }
+});
 
 // C2 — rumor tables (Elysium d20 / Dreaming d20)
 router.get('/api/rumors', async (req, res) => {

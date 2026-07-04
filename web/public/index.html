@@ -515,6 +515,25 @@
       </div>
     </div>
 
+    <!-- Module close confirmation (Фаза C) -->
+    <div id="modp-close-modal" class="chr-modal-backdrop">
+      <div class="chr-modal" style="max-width:460px">
+        <div class="chr-modal-title">🔒 Закрыть модуль?</div>
+        <div class="chr-modal-body">
+          <div class="chr-modal-warn">Будут сгенерированы финал и каноничное событие в хронику. Действие пишет канон и необратимо.</div>
+          <div id="modp-close-nosessions" class="chr-modal-section" style="display:none">⚠️ У модуля нет записей сессий — финал/событие будут собраны из сценария.</div>
+          <label style="display:flex;align-items:center;gap:8px;margin-top:10px;font-size:var(--fs-sm)">
+            <input type="checkbox" id="modp-close-diaries-check">
+            Также сгенерировать дневники участников (по дате модуля)
+          </label>
+        </div>
+        <div class="chr-modal-actions">
+          <button id="modp-close-cancel-btn" class="chr-modal-btn cancel">Отмена</button>
+          <button id="modp-close-confirm-btn" class="chr-modal-btn danger">Закрыть модуль</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Finale preview (клик по «📜 Финал» в связанных файлах модуля) -->
     <div id="finale-preview-modal" class="chr-modal-backdrop">
       <div class="chr-modal" style="max-width:640px">
@@ -574,6 +593,7 @@
         <button class="chron-tab active" data-fac-tab="map">🗺️ Карта фракций</button>
         <button class="chron-tab" data-fac-tab="visitors">🧳 Визитёры</button>
       </div>
+      <div id="factions-influence-panel"></div>
       <div id="factions-content">
         <div class="loading-state"><div class="spinner"></div>Загрузка...</div>
       </div>

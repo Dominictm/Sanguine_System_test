@@ -15,6 +15,7 @@ const {
   categorizeRel, parseCharacter, parseLocation, parseEvent, parseChronicle,
   parseChronicleParticipants,
   parseScenarioSections, replaceScenarioSection, checkScenarioStructure,
+  parsePoliticalFactions, setPoliticalFactionInfluence,
   CITY_SECTIONS, buildCityMd, parseCityMd, cityScaffold,
 } = require('../lib/parsers');
 
@@ -710,6 +711,62 @@ describe('Parsers — unit', () => {
     it('пустой сценарий → все 8 тем отсутствуют', () => {
       const { missing } = checkScenarioStructure('Просто текст без заголовков.');
       assert.equal(missing.length, 8);
+    });
+  });
+
+  describe('parsePoliticalFactions / setPoliticalFactionInfluence', () => {
+    const POL = [
+      '# Карта фракций — Тест',
+      '',
+      '## Баланс сил — обзор',
+      '',
+      '| Фракция | Сила | Территория | Угроза |',
+      '|---|---|---|---|',
+      '| Камарилья | ⬛⬛⬛⬛⬜ | Центр | Интриги |',
+      '| Анархи | ⬛⬛⬜⬜⬜ | Пригороды | Давление |',
+      '',
+      '---',
+      '',
+      '## Прочий раздел',
+      'Проза, не трогаем.',
+    ].join('\n');
+
+    it('парсит легаси-блоки «Сила» (⬛×n⬜×(5-n), шаг 20) — обратная совместимость со старыми файлами', () => {
+      const factions = parsePoliticalFactions(POL);
+      assert.deepEqual(factions.map(f => [f.name, f.influence]), [['Камарилья', 80], ['Анархи', 40]]);
+      assert.equal(factions[0].territory, 'Центр');
+      assert.equal(factions[0].threat, 'Интриги');
+    });
+
+    it('парсит новую процентную запись («80%») наравне с легаси-блоками', () => {
+      const pol = POL.replace('| Камарилья | ⬛⬛⬛⬛⬜ | Центр | Интриги |', '| Камарилья | 85% | Центр | Интриги |');
+      const factions = parsePoliticalFactions(pol);
+      assert.equal(factions[0].influence, 85);
+    });
+
+    it('нет таблицы → пустой массив', () => {
+      assert.deepEqual(parsePoliticalFactions('Просто текст.'), []);
+    });
+
+    it('setPoliticalFactionInfluence меняет только целевую фракцию (переводит её на «%»-запись), остальное не трогает', () => {
+      const updated = setPoliticalFactionInfluence(POL, 'Анархи', 100);
+      const factions = parsePoliticalFactions(updated);
+      assert.deepEqual(factions.map(f => [f.name, f.influence]), [['Камарилья', 80], ['Анархи', 100]]);
+      assert.match(updated, /Анархи \| 100% \|/);
+      assert.match(updated, /Прочий раздел\nПроза, не трогаем\./);
+    });
+
+    it('setPoliticalFactionInfluence округляет до шага 5 и добавляет новую фракцию строкой', () => {
+      const updated = setPoliticalFactionInfluence(POL, 'Феи', 57);
+      const factions = parsePoliticalFactions(updated);
+      assert.deepEqual(factions.map(f => f.name), ['Камарилья', 'Анархи', 'Феи']);
+      assert.equal(factions.find(f => f.name === 'Феи').influence, 55);
+    });
+
+    it('setPoliticalFactionInfluence создаёт таблицу с нуля, если её ещё нет в файле', () => {
+      const updated = setPoliticalFactionInfluence('# Карта фракций\n\nПусто.', 'Шабаш', 20);
+      const factions = parsePoliticalFactions(updated);
+      assert.deepEqual(factions, [{ name: 'Шабаш', influence: 20, territory: '', threat: '' }]);
     });
   });
 
@@ -1411,6 +1468,103 @@ describe('API — integration', () => {
     });
   });
 
+  // ── Faction influence diagram (political_state.md) — restores original on teardown ──
+  describe('Faction influence — GET/PUT', () => {
+    const polFile = path.join(CITY_ROOT, 'archive', 'political_state.md');
+    let original = null;
+
+    before(async () => { original = await fs.readFile(polFile, 'utf-8').catch(() => null); });
+    after(async () => {
+      if (original !== null) await fs.writeFile(polFile, original, 'utf-8');
+    });
+
+    it('GET /api/factions/influence отдаёт распарсенные фракции реального political_state.md', async () => {
+      const { status, body } = await apiJson(`/api/factions/influence${CITY}`);
+      assert.equal(status, 200);
+      assert.ok(Array.isArray(body.factions));
+      assert.ok(body.factions.length > 0);
+      assert.ok(body.factions.every(f => typeof f.name === 'string' && typeof f.influence === 'number'));
+    });
+
+    it('PUT /api/factions/influence — валидация: без имени → 400, влияние вне 0-100 → 400', async () => {
+      const noName = await apiJson(`/api/factions/influence${CITY}`,
+        { method: 'PUT', body: JSON.stringify({ influence: 50 }) });
+      assert.equal(noName.status, 400);
+      const badVal = await apiJson(`/api/factions/influence${CITY}`,
+        { method: 'PUT', body: JSON.stringify({ name: 'Тест', influence: 150 }) });
+      assert.equal(badVal.status, 400);
+    });
+
+    it('PUT /api/factions/influence — round-trip: обновляет существующую фракцию, не трогая остальные', async () => {
+      const before = await apiJson(`/api/factions/influence${CITY}`);
+      const target = before.body.factions[0];
+      const otherInfluence = before.body.factions[1]?.influence;
+
+      const put = await apiJson(`/api/factions/influence${CITY}`,
+        { method: 'PUT', body: JSON.stringify({ name: target.name, influence: 100 }) });
+      assert.equal(put.status, 200);
+      assert.ok(put.body.ok);
+      const updated = put.body.factions.find(f => f.name === target.name);
+      assert.equal(updated.influence, 100);
+      if (before.body.factions[1]) {
+        const other = put.body.factions.find(f => f.name === before.body.factions[1].name);
+        assert.equal(other.influence, otherInfluence);
+      }
+    });
+
+    it('PUT /api/factions/influence — новая фракция добавляется как отдельная строка', async () => {
+      const name = `Тест-фракция ${Date.now()}`;
+      const put = await apiJson(`/api/factions/influence${CITY}`,
+        { method: 'PUT', body: JSON.stringify({ name, influence: 20 }) });
+      assert.equal(put.status, 200);
+      assert.ok(put.body.factions.some(f => f.name === name && f.influence === 20));
+    });
+
+    it('cityScaffold сразу засевает «Баланс сил» фракциями из поля factions (influence 0%), а GET дополнительно подтягивает те, что позже добавлены в city.md, но ещё не в political_state.md', async () => {
+      const citySlug = `test_faction_city_${Date.now()}`;
+      const created = await apiJson('/api/cities', {
+        method: 'POST', body: JSON.stringify({
+          name: citySlug, year: '2020', factions: 'Камарилья\nДжованни',
+        }),
+      });
+      assert.equal(created.status, 200);
+      const cityDir = path.join(CITY_ROOT, '..', citySlug);
+
+      try {
+        // 1. Созданные вместе с городом фракции — уже РЕАЛЬНЫЕ строки в файле.
+        const psRaw = await fs.readFile(path.join(cityDir, 'archive', 'political_state.md'), 'utf-8');
+        assert.match(psRaw, /## Баланс сил — обзор/);
+        assert.match(psRaw, /\| Камарилья \| 0% \|/);
+        assert.match(psRaw, /\| Джованни \| 0% \|/);
+
+        const { status, body } = await apiJson(`/api/factions/influence?city=${citySlug}`);
+        assert.equal(status, 200);
+        assert.deepEqual(body.factions.map(f => f.name).sort(), ['Джованни', 'Камарилья']);
+        assert.ok(body.factions.every(f => f.influence === 0));
+
+        // 2. Фракцию добавили в city.md ПОСЛЕ создания города (напрямую в файл,
+        // как если бы пользователь дописал список в форме) — в political_state.md
+        // её ещё нет; GET должен подмешать её виртуально (influence:0, без записи на диск).
+        const cityMdPath = path.join(cityDir, 'city.md');
+        const cityMd = await fs.readFile(cityMdPath, 'utf-8');
+        await fs.writeFile(cityMdPath, cityMd.replace('## Фракции\n- Камарилья\n- Джованни', '## Фракции\n- Камарилья\n- Джованни\n- Сеттиты'), 'utf-8');
+
+        const after = await apiJson(`/api/factions/influence?city=${citySlug}`);
+        assert.deepEqual(after.body.factions.map(f => f.name).sort(), ['Джованни', 'Камарилья', 'Сеттиты']);
+
+        const psRaw2 = await fs.readFile(path.join(cityDir, 'archive', 'political_state.md'), 'utf-8');
+        assert.doesNotMatch(psRaw2, /Сеттиты/, 'GET не должен записывать виртуальную фракцию на диск сам по себе');
+      } finally {
+        await apiJson(`/api/cities/${citySlug}`, { method: 'DELETE' });
+        const deletedRoot = path.join(CITY_ROOT, '..', '_deleted');
+        const entries = await fs.readdir(deletedRoot).catch(() => []);
+        for (const e of entries) {
+          if (e.startsWith(`${citySlug}_`)) await fs.rm(path.join(deletedRoot, e), { recursive: true, force: true });
+        }
+      }
+    });
+  });
+
   // ── Chronicles & modules — write guards ──────────────────────────────────────
   describe('Chronicles & modules — write guards', () => {
     it('GET delete-preview — unknown chronicle → 404', async () => {
@@ -1746,6 +1900,39 @@ describe('API — integration', () => {
       assert.equal(del.status, 200);
       assert.ok(del.body.ok);
       assert.equal(await fs.stat(delModDir).catch(() => null), null, 'папка модуля должна быть удалена');
+    });
+  });
+
+  // ── Character fields — статус теперь редактируемый (дропдаун) ────────────────
+  describe('Character fields — status/statusDetails', () => {
+    it('PUT /api/characters/:slug/fields — status и statusDetails пишутся в карточку и читаются обратно', async () => {
+      const name = `Тест Статус ${Date.now()}`;
+      const slug = slugify(name);
+      const create = await apiJson(`/api/characters${CITY}`, {
+        method: 'POST', body: JSON.stringify({ name, lineage: 'vampire', gender: 'Мужской', clan: 'Тореадор', sect: 'Камарилья' }),
+      });
+      assert.equal(create.status, 200);
+
+      const put = await apiJson(`/api/characters/${encodeURIComponent(slug)}/fields${CITY}`, {
+        method: 'PUT', body: JSON.stringify({ fields: { status: 'Торпор', statusDetails: 'с декабря 2010' } }),
+      });
+      assert.equal(put.status, 200);
+      assert.ok(put.body.ok);
+
+      const cardPath = path.join(CITY_ROOT, 'characters', 'vampires', slug, `${slug}.md`);
+      const raw = await fs.readFile(cardPath, 'utf-8');
+      assert.match(raw, /\*\*Статус:\*\*\s*Торпор/);
+      assert.match(raw, /\*\*Детали статуса:\*\*\s*с декабря 2010/);
+
+      const { body: chars } = await apiJson(`/api/characters${CITY}`);
+      const char = (Array.isArray(chars) ? chars : []).find(c => c.slug === slug);
+      assert.ok(char, 'персонаж должен быть найден после правки');
+      assert.equal(char.status, 'Торпор');
+      assert.equal(char.statusType, 'torpor');
+      assert.equal(char.statusDetails, 'с декабря 2010');
+
+      await apiJson(`/api/characters/${encodeURIComponent(slug)}${CITY}`, { method: 'DELETE' });
+      await fs.rm(path.join(CITY_ROOT, 'characters', '_deleted', slug), { recursive: true, force: true });
     });
   });
 

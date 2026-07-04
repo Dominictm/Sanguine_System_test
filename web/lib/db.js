@@ -447,6 +447,8 @@ function tableCell(content, label) {
 // Разделяется routes/characters.js (PUT /fields) и server.js (charInfoLines —
 // подмешивание карточных фактов в AI-промты генерации).
 const EDITABLE_FIELD_MAP = {
+  status:        'Статус',
+  statusDetails: 'Детали статуса',
   clan:         'Клан',
   sect:         'Секта',
   generation:   'Поколение',

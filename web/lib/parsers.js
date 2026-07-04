@@ -130,6 +130,14 @@ function cityScaffold(fields = {}) {
     : String(fields.districts || '').split(','))
     .map(d => String(d).trim()).filter(Boolean);
 
+  // Seed «Баланс сил — обзор» (влияние — см. parsePoliticalFactions/setPoliticalFactionInfluence)
+  // из тех же фракций, что и city.md → «## Фракции», с влиянием 0%, если они уже указаны при создании.
+  const factionNames = String(fields.factions || '').split('\n')
+    .map(l => l.replace(/^\s*-\s*/, '').trim()).filter(Boolean);
+  const balanceRows = factionNames.length
+    ? factionNames.map(name => `| ${name} | 0% |  |  |`).join('\n')
+    : '|  |  |  |  |';
+
   const files = {
     'city.md': buildCityMd(fields),
     'archive/events.md':
@@ -162,6 +170,14 @@ function cityScaffold(fields = {}) {
 | Должность | Персонаж | Клан | Примечание |
 |---|---|---|---|
 |  |  |  |  |
+
+---
+
+## Баланс сил — обзор
+
+| Фракция | Сила | Территория | Угроза |
+|---|---|---|---|
+${balanceRows}
 `,
     'archive/characters_index.md':
 `# Персонажи — ${display}
@@ -415,6 +431,94 @@ function checkScenarioStructure(raw) {
   const joined   = headings.join(' | ');
   const missing  = SCENARIO_REQUIRED_TOPICS.filter(t => !t.re.test(joined)).map(t => ({ key: t.key, label: t.label }));
   return { missing, present: headings };
+}
+
+// ── Faction influence (archive/political_state.md, «Баланс сил — обзор») ───────
+// Таблица `| Фракция | Сила | Территория | Угроза |`. «Сила» изначально (в
+// реальных файлах, задолго до этой фичи) хранилась как 5-нотчевая шкала блоков
+// (⬛⬛⬛⬜⬜) — читаем её и сейчас для обратной совместимости. Но с шагом 5 (0-100,
+// 20 градаций) блоки нечитаемы (пришлось бы городить 20 глифов в ячейке), поэтому
+// НОВЫЕ записи пишутся простым числом-процентом («80%») — миграция не нужна:
+// старые файлы с блоками продолжают парситься как раньше, при первой правке
+// через setPoliticalFactionInfluence конкретная строка переходит на числовой вид.
+const _POLFAC_HEADER_RE = /^\s*\|.*Фракция.*\|.*Сила.*\|/i;
+const INFLUENCE_STEP = 5;
+
+function _polFacCellText(influence) {
+  const n = Math.max(0, Math.min(100, Math.round((Number(influence) || 0) / INFLUENCE_STEP) * INFLUENCE_STEP));
+  return `${n}%`;
+}
+function _polFacParseCell(cell) {
+  const t = String(cell || '').trim();
+  if (/[⬛⬜]/.test(t)) return (t.match(/⬛/g) || []).length * 20; // legacy 5-блочная нотация
+  const m = t.match(/(\d+)/);
+  return m ? Math.max(0, Math.min(100, parseInt(m[1], 10))) : 0;
+}
+function _polFacRow(cells) {
+  return cells.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map(c => c.trim());
+}
+
+/**
+ * @param {string} raw — содержимое political_state.md
+ * @returns {{name: string, influence: number, territory: string, threat: string}[]}
+ */
+function parsePoliticalFactions(raw) {
+  const text = String(raw == null ? '' : raw).replace(/^﻿/, '').replace(/\r\n/g, '\n');
+  const lines = text.split('\n');
+  const headerIdx = lines.findIndex(l => _POLFAC_HEADER_RE.test(l));
+  if (headerIdx === -1) return [];
+  let i = headerIdx + 2; // header + `|---|---|` separator
+  const out = [];
+  while (i < lines.length && /^\s*\|/.test(lines[i])) {
+    const cells = _polFacRow(lines[i]);
+    if (cells[0] && !/^-+$/.test(cells[0])) {
+      out.push({ name: cells[0], influence: _polFacParseCell(cells[1]), territory: cells[2] || '', threat: cells[3] || '' });
+    }
+    i++;
+  }
+  return out;
+}
+
+/**
+ * Устанавливает влияние одной фракции (создаёт строку/таблицу, если их ещё нет),
+ * не трогая остальное содержимое файла.
+ * @param {string} raw — содержимое political_state.md
+ * @param {string} name — точное название фракции (как в колонке «Фракция»)
+ * @param {number} influence — 0-100, округляется до шага 5
+ * @returns {string} обновлённое содержимое файла
+ */
+function setPoliticalFactionInfluence(raw, name, influence) {
+  const text = String(raw == null ? '' : raw).replace(/^﻿/, '').replace(/\r\n/g, '\n');
+  const lines = text.split('\n');
+  const cellText = _polFacCellText(influence);
+  const headerIdx = lines.findIndex(l => _POLFAC_HEADER_RE.test(l));
+
+  if (headerIdx === -1) {
+    // Таблицы ещё нет в файле — создаём с нуля и добавляем первой строкой.
+    const table = [
+      '## Баланс сил — обзор', '',
+      '| Фракция | Сила | Территория | Угроза |',
+      '|---|---|---|---|',
+      `| ${name} | ${cellText} |  |  |`,
+      '',
+    ].join('\n');
+    return text.replace(/\s*$/, '\n\n') + table;
+  }
+
+  let i = headerIdx + 2;
+  let found = false;
+  while (i < lines.length && /^\s*\|/.test(lines[i])) {
+    const cells = _polFacRow(lines[i]);
+    if (cells[0] === name) {
+      cells[1] = cellText;
+      lines[i] = `| ${cells.join(' | ')} |`;
+      found = true;
+      break;
+    }
+    i++;
+  }
+  if (!found) lines.splice(i, 0, `| ${name} | ${cellText} |  |  |`);
+  return lines.join('\n');
 }
 
 // ── Dates / periods ────────────────────────────────────────────────────────────
@@ -1018,4 +1122,6 @@ module.exports = {
   parseScenarioSections,
   replaceScenarioSection,
   checkScenarioStructure,
+  parsePoliticalFactions,
+  setPoliticalFactionInfluence,
 };

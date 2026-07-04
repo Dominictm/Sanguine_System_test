@@ -119,17 +119,19 @@ if %errorlevel% == 0 (
 
 cd /d "%~dp0web"
 
-if not exist "node_modules\" (
-    echo   Installing dependencies...
-    call npm install
-    if %errorlevel% neq 0 (
-        echo   ERROR: npm install failed.
-        pause
-        exit /b 1
-    )
-    echo   Done.
-    echo.
+rem npm skips reinstall work when package.json/lock haven't changed, so it's
+rem safe (and fast) to always run this - not just when node_modules is missing.
+rem Otherwise, after `update.bat` pulls a package.json with a new dependency,
+rem an existing node_modules\ (from before the update) would silently stay
+rem stale and the server would crash with MODULE_NOT_FOUND on startup.
+echo   Checking dependencies...
+call npm install
+if %errorlevel% neq 0 (
+    echo   ERROR: npm install failed.
+    pause
+    exit /b 1
 )
+echo.
 
 start /B cmd /c "timeout /t 2 /nobreak > nul & start http://localhost:3000"
 

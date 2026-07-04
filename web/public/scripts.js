@@ -4100,13 +4100,78 @@ document.getElementById('modp-gen-btn').addEventListener('click', async () => {
 });
 
 // Close module (Phase C — module-close rules)
-document.getElementById('modp-close-btn').addEventListener('click', async () => {
+document.getElementById('modp-close-btn').addEventListener('click', () => {
+  if (!STATE.currentModule) return;
+  const data = STATE.currentModuleData || {};
+  document.getElementById('modp-close-nosessions').style.display = (data.sessions || []).length ? 'none' : '';
+  document.getElementById('modp-close-diaries-check').checked = false;
+  document.getElementById('modp-close-modal').classList.add('open');
+});
+document.getElementById('modp-close-cancel-btn').addEventListener('click', () => {
+  document.getElementById('modp-close-modal').classList.remove('open');
+});
+document.getElementById('modp-close-modal').addEventListener('click', e => {
+  if (e.target === document.getElementById('modp-close-modal'))
+    document.getElementById('modp-close-modal').classList.remove('open');
+});
+
+// Месяц-название (РУ) → номер месяца — грубый эвристический разбор свободного
+// текста поля «Время» модуля («Декабрь 2001, пятница») в период ГГГГ-ММ для
+// дневников. Возвращает null, если год/месяц уверенно не определяются —
+// тогда дневники остаются полностью ручным шагом, как и раньше.
+const _RU_MONTH_STEMS = ['янв', 'февр', 'март', 'апрел', 'май', 'июн', 'июл', 'август', 'сентябр', 'октябр', 'нояб', 'дек'];
+function _parsePeriodFromModuleTime(text) {
+  const t = String(text || '').toLowerCase();
+  const yearM = t.match(/\b(19|20)\d{2}\b/);
+  if (!yearM) return null;
+  const monthIdx = _RU_MONTH_STEMS.findIndex(stem => t.includes(stem));
+  if (monthIdx === -1) return null;
+  return `${yearM[0]}-${String(monthIdx + 1).padStart(2, '0')}`;
+}
+
+// Дневники по завершении модуля — опционально (чекбокс), по умолчанию выключено:
+// по правилам Фазы C (module_rules.md) это ручной шаг, здесь просто убирает его
+// для тех, кто хочет батч-генерацию по всем участникам-персонажам сразу.
+async function _generateDiariesForModule(data, period) {
+  const qs = window.location.search;
+  const allChars = await fetch(`/api/characters${qs}`).then(r => r.json()).catch(() => []);
+  const wantedNames = new Set();
+  (data.pcs || []).forEach(p => wantedNames.add(typeof p === 'string' ? p : p.name));
+  (data.npcGroups || []).forEach(g => { if (g.kind === 'canon') g.entries.forEach(e => wantedNames.add(e.name)); });
+
+  const targets = [...wantedNames]
+    .map(name => allChars.find(c => c.name === name))
+    .filter(Boolean);
+
+  const prefs = JSON.parse(localStorage.getItem('ai-feature-prefs') || '{}');
+  const prose = _getPref(prefs, 'prose', 'openrouter');
+  const session = data.title || data.name || '';
+
+  let created = 0; const errors = [];
+  for (const ch of targets) {
+    try {
+      const gen = await fetch(`/api/characters/${encodeURIComponent(ch.slug)}/diary/generate`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ period, session, preferSource: prose.provider, orModel: prose.provider === 'openrouter' ? prose.model : null }),
+      }).then(r => r.json());
+      if (gen.error || !gen.text) { errors.push(ch.name); continue; }
+      const save = await fetch(`/api/characters/${encodeURIComponent(ch.slug)}/diary`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ period, session, text: gen.text }),
+      }).then(r => r.json());
+      if (save.error) { errors.push(ch.name); continue; }
+      created++;
+    } catch { errors.push(ch.name); }
+  }
+  return { created, errors, total: targets.length };
+}
+
+document.getElementById('modp-close-confirm-btn').addEventListener('click', async () => {
   if (!STATE.currentModule) return;
   const { chronicle, name } = STATE.currentModule;
   const data = STATE.currentModuleData || {};
-  if (!(data.sessions || []).length &&
-      !await showConfirm('У модуля нет записей сессий. Закрыть всё равно? (финал/событие будут собраны из сценария)', { confirmText: 'Закрыть' })) return;
-  if (!await showConfirm('Закрыть модуль по правилам Фазы C?\nБудут сгенерированы финал и каноничное событие в хронику. Действие пишет канон и необратимо.', { danger: true, confirmText: 'Закрыть модуль' })) return;
+  const wantDiaries = document.getElementById('modp-close-diaries-check').checked;
+  document.getElementById('modp-close-modal').classList.remove('open');
 
   const btn = document.getElementById('modp-close-btn');
   btn.disabled = true; btn.textContent = '⏳ Закрытие...';
@@ -4123,6 +4188,21 @@ document.getElementById('modp-close-btn').addEventListener('click', async () => 
     const lines = ['✓ Модуль закрыт (Фаза C)'];
     if (d.finale)  lines.push('📕 Создан finale.md');
     if (d.event)   lines.push('📖 Событие добавлено в хронику');
+
+    if (wantDiaries) {
+      const period = _parsePeriodFromModuleTime(data.time);
+      if (!period) {
+        lines.push('⚠️ Не удалось определить период (ГГГГ-ММ) по дате модуля — дневники нужно сгенерировать вручную.');
+      } else {
+        const diaryResult = await _generateDiariesForModule(data, period);
+        if (diaryResult.total === 0) lines.push('ℹ️ Участники не найдены среди персонажей — дневники не создавались.');
+        else {
+          lines.push(`📖 Дневники (${period}): ${diaryResult.created}/${diaryResult.total} сгенерировано`);
+          if (diaryResult.errors.length) lines.push(`⚠️ Не удалось: ${diaryResult.errors.join(', ')}`);
+        }
+      }
+    }
+
     if (d.reminders?.length) lines.push('', 'Осталось вручную:', ...d.reminders.map(r => '• ' + r));
     showToast(lines.join('\n'), 'success');
     loadModulePage();
@@ -4595,10 +4675,13 @@ let _factionsTab = 'map';
 function loadFactions() {
   document.querySelectorAll('#factions-tabbar .chron-tab').forEach(b =>
     b.classList.toggle('active', b.dataset.facTab === _factionsTab));
+  const diagramPanel = document.getElementById('factions-influence-panel');
   if (_factionsTab === 'visitors') {
+    diagramPanel.innerHTML = '';
     _loadArchiveEditable('/api/visitors', '/api/visitors', 'factions-content',
       'Визитёров пока нет. Гости из других городов оформляются в archive/visitors.md.');
   } else {
+    loadFactionsInfluence();
     _loadArchiveEditable('/api/factions', '/api/factions', 'factions-content',
       'political_state.md не найден для этого города.');
   }
@@ -4607,6 +4690,71 @@ document.querySelectorAll('#factions-tabbar .chron-tab').forEach(b => b.addEvent
   _factionsTab = b.dataset.facTab;
   loadFactions();
 }));
+
+// ── Диаграмма влияния фракций — bar-list поверх сырого political_state.md.
+// Список фракций подтягивается с сервера из city.md → «Фракции» (см. GET
+// /api/factions/influence); влияние — ручное редактирование 0-100 (шаг 5);
+// без истории/авто-триггеров от событий — решение пользователя для первой версии.
+async function loadFactionsInfluence() {
+  const panel = document.getElementById('factions-influence-panel');
+  panel.innerHTML = '<div class="loading-state" style="height:60px"><div class="spinner"></div></div>';
+  let factions = [];
+  try {
+    factions = (await fetch(`/api/factions/influence${window.location.search}`).then(r => r.json())).factions || [];
+  } catch { panel.innerHTML = ''; return; }
+
+  const rows = factions.map(f => `
+    <div class="faction-inf-row" data-faction="${escAttr(f.name)}">
+      <div class="faction-inf-name">${escHtml(f.name)}</div>
+      <div class="faction-inf-bar-track">
+        <div class="faction-inf-bar-fill" style="width:${f.influence}%"></div>
+      </div>
+      <input type="number" class="faction-inf-input" min="0" max="100" step="5" value="${f.influence}">
+    </div>`).join('');
+
+  panel.innerHTML = `
+    <div class="faction-inf-panel">
+      <div class="faction-inf-header">
+        <span class="faction-inf-title">📊 Влияние фракций</span>
+        <div class="faction-inf-add">
+          <input type="text" id="faction-inf-add-name" placeholder="Новая фракция..." class="chr-form-input">
+          <button class="modp-edit-btn" id="faction-inf-add-btn">+ Добавить</button>
+        </div>
+      </div>
+      ${rows || '<div class="cdet-empty">В city.md нет раздела «Фракции» — впиши список туда (страница города → редактировать) или добавь фракцию вручную ниже</div>'}
+    </div>`;
+
+  panel.querySelectorAll('.faction-inf-input').forEach(input => {
+    input.addEventListener('change', async () => {
+      const row  = input.closest('.faction-inf-row');
+      const name = row.dataset.faction;
+      const val  = Math.max(0, Math.min(100, Math.round((+input.value || 0) / 5) * 5));
+      input.value = val;
+      try {
+        const r = await fetch(`/api/factions/influence${window.location.search}`, {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, influence: val }),
+        }).then(r => r.json());
+        if (!r.ok) throw new Error(r.error || 'Ошибка');
+        row.querySelector('.faction-inf-bar-fill').style.width = val + '%';
+      } catch (e) { showToast('Не удалось сохранить влияние: ' + e.message, 'error'); }
+    });
+  });
+
+  panel.querySelector('#faction-inf-add-btn').addEventListener('click', async () => {
+    const nameInput = document.getElementById('faction-inf-add-name');
+    const name = nameInput.value.trim();
+    if (!name) return;
+    try {
+      const r = await fetch(`/api/factions/influence${window.location.search}`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, influence: 0 }),
+      }).then(r => r.json());
+      if (!r.ok) throw new Error(r.error || 'Ошибка');
+      await loadFactionsInfluence();
+    } catch (e) { showToast('Не удалось добавить фракцию: ' + e.message, 'error'); }
+  });
+}
 
 // ── Rumors: checkboxes, archive ───────────────────────────────────────────────
 
@@ -5488,6 +5636,8 @@ loadDashboard();
 // здесь выбирается, какие из них показывать и в каком порядке.
 const INFO_FIELDS_BY_LINEAGE = {
   vampire: [
+    ['status',       'Статус'],
+    ['statusDetails','Детали статуса'],
     ['clan',         'Клан'],
     ['sect',         'Секта'],
     ['generation',   'Поколение'],
@@ -5507,6 +5657,8 @@ const INFO_FIELDS_BY_LINEAGE = {
     ['belonging',    'Принадлежность'],
   ],
   fairy: [
+    ['status',     'Статус'],
+    ['statusDetails','Детали статуса'],
     ['race',       'Раса'],
     ['kith',       'Род'],
     ['court',      'Двор'],
@@ -5521,6 +5673,8 @@ const INFO_FIELDS_BY_LINEAGE = {
     ['belonging',  'Принадлежность'],
   ],
   mortal: [
+    ['status',     'Статус'],
+    ['statusDetails','Детали статуса'],
     ['profession', 'Профессия'],
     ['birthYear',  'Год рождения'],
     ['location',   'Домен / Локация'],
@@ -5535,6 +5689,8 @@ const INFO_FIELDS_BY_LINEAGE = {
 };
 // Оборотни / маги / охотники: пока нет выделенного набора — общий минимум.
 const INFO_FIELDS_GENERIC = [
+  ['status',    'Статус'],
+  ['statusDetails', 'Детали статуса'],
   ['race',      'Раса / Тип'],
   ['sect',      'Фракция'],
   ['birthYear', 'Год рождения'],
@@ -8318,7 +8474,22 @@ function _enterInfoEdit(charName) {
     _editOrigValues[key] = current;
 
     let input;
-    if (key === 'belonging') {
+    if (key === 'status') {
+      input = document.createElement('select');
+      input.className = 'cdet-field-input';
+      input.dataset.field = key;
+      const options = ['Жив', 'Жива', 'Торпор', 'Мёртв', 'Мертва', 'Пропал', 'Неизвестно'];
+      // Старые/нестандартные значения («Активен», «Уничтожен (декабрь 2010)» и т.п.)
+      // не входят в список — не подменяем их молча, а добавляем как есть первым
+      // пунктом, чтобы сохранение без изменений не потеряло исходный текст.
+      if (current && !options.includes(current)) options.unshift(current);
+      options.forEach(opt => {
+        const o = document.createElement('option');
+        o.value = opt; o.textContent = opt;
+        if (current === opt) o.selected = true;
+        input.appendChild(o);
+      });
+    } else if (key === 'belonging') {
       input = document.createElement('select');
       input.className = 'cdet-field-input';
       input.dataset.field = key;
