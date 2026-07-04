@@ -26,3 +26,6 @@
 > 🔗 Дневник Ви: [Декабрь 2010](../../../../characters/vampires/vi/journal/2010-12.md)
 > 🔗 НПС модуля: [npc.md](npc.md)
 > 🔗 Локация: [Цирк, Заповедник Венсен](../../../../locations/district_12/vensen/tsirk_vensen/tsirk_vensen.md)
+
+## 📍 Связанные локации
+- tsirk_vensen

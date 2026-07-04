@@ -1407,6 +1407,13 @@ describe('API — integration', () => {
       assert.equal(body.ok, true);
       assert.ok(Array.isArray(body.issues));
     });
+    it('POST /api/locations/generate field=sensory + channel → 200 with value (per-channel регенерация сенсорики)', async () => {
+      const { status, body } = await apiJson(`/api/locations/generate${CITY}`,
+        { method: 'POST', body: JSON.stringify({ name: 'Опера Гарнье', field: 'sensory', channel: 'Звук', context: 'элизиум' }) });
+      assert.equal(status, 200);
+      assert.equal(typeof body.value, 'string');
+      assert.ok(body.value.length > 0);
+    });
   });
 
   // ── Character delete — guards (only the 404 path; never deletes real data) ───

@@ -4352,6 +4352,25 @@ a:focus-visible {
   background: rgba(139, 0, 0, .06);
 }
 
+/* Danger level badges — цветной кружок из поля «Зона» (см. zoneDangerLevel) */
+.badge-danger-low {
+  color: var(--c-success);
+  border-color: rgba(125, 206, 130, .35);
+  background: rgba(125, 206, 130, .06);
+}
+
+.badge-danger-medium {
+  color: var(--gold2);
+  border-color: rgba(218, 165, 32, .35);
+  background: rgba(184, 134, 11, .06);
+}
+
+.badge-danger-high {
+  color: var(--accent);
+  border-color: rgba(204, 34, 0, .35);
+  background: rgba(139, 0, 0, .06);
+}
+
 /* ── Location Detail Modal ──────────────────────────────────── */
 .modal-loc-detail {
   width: min(1300px, 96vw);

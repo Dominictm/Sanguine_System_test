@@ -347,7 +347,7 @@ ${_locCardTemplate(locName, district?.trim() || '')}
   router.post('/api/locations/generate', aiRateLimit, express.json(), async (req, res) => {
     try {
       const city = reqCity(req);
-      const { slug, name, field, card, context, source, model: modelOvr } = req.body || {};
+      const { slug, name, field, channel, card, context, source, model: modelOvr } = req.body || {};
 
       const locName = name?.trim() || slug || '';
       if (!locName) return res.status(400).json({ error: 'name или slug обязателен' });
@@ -357,7 +357,11 @@ ${_locCardTemplate(locName, district?.trim() || '')}
 
       let prompt, maxTok;
 
-      if (field) {
+      if (field === 'sensory') {
+        const ch = String(channel || '').trim() || 'Свет';
+        prompt = `Напиши сенсорную деталь для канала «${ch}» локации «${locName}» в Vampire: The Masquerade V20 (готический нуар, атмосферно, 1-2 коротких предложения)${context ? `. Контекст локации: ${context}` : ''}. Верни только текст значения — без названия канала, без кавычек, без markdown-разметки.`;
+        maxTok = 150;
+      } else if (field) {
         const fieldPrompts = {
           atmosphere: `Напиши раздел "Атмосфера" (2–3 предложения, готический нуар VtM) для локации «${locName}»${context ? `. Контекст: ${context}` : ''}. Верни только текст раздела без заголовка.`,
           imagePrompt: `Напиши промт для генерации изображения локации «${locName}» (GPT/DALL-E, английский язык, три блока: Локация → Свет/Атмосфера → Стиль).\nПравила:\n${portretRules.slice(0, 600)}\n\nВерни только текст промта.`,

@@ -19,6 +19,12 @@ const MASQ_BADGE_LABELS = {
   high:    '🔴 Высокий',
 };
 
+const DANGER_BADGE_LABELS = {
+  low:     '🟢 Низкий',
+  medium:  '🟡 Средний',
+  high:    '🔴 Высокий',
+};
+
 function zoneClass(zone) {
   if (!zone) return 'other';
   const z = zone.toLowerCase();
@@ -27,6 +33,17 @@ function zoneClass(zone) {
   if (z.includes('нейтральн'))              return 'neutral';
   if (z.includes('опасн') || (z.includes('шабаш') && !z.includes('нейтральн'))) return 'danger';
   return 'other';
+}
+
+// Уровень опасности — читает цветной кружок (🟢/🟡/🔴) из того же поля «Зона»,
+// независимо от текстовой классификации zoneClass() (та про «чья зона контроля»,
+// этот — про то, насколько там опасно; в карточке оба смысла живут в одном поле).
+function zoneDangerLevel(zone) {
+  if (!zone) return 'unknown';
+  if (zone.includes('🟢')) return 'low';
+  if (zone.includes('🟡')) return 'medium';
+  if (zone.includes('🔴')) return 'high';
+  return 'unknown';
 }
 
 async function loadLocations() {
@@ -95,8 +112,12 @@ function renderLocations() {
 function _locCardHtml(loc, { delay = '', overlayExtra = '' } = {}) {
   const zc    = zoneClass(loc.zone);
   const mLvl  = loc.masqueradeLevel || 'unknown';
+  const dLvl  = zoneDangerLevel(loc.zone);
   const masqBadge = MASQ_BADGE_LABELS[mLvl]
     ? `<span class="badge badge-masq-${mLvl}">${MASQ_BADGE_LABELS[mLvl]}</span>`
+    : '';
+  const dangerBadge = DANGER_BADGE_LABELS[dLvl]
+    ? `<span class="badge badge-danger-${dLvl}">${DANGER_BADGE_LABELS[dLvl]}</span>`
     : '';
   const zoneBadge = `<span class="badge badge-loc-${zc}">${ZONE_CLASS_LABELS[zc]}</span>`;
 
@@ -106,7 +127,7 @@ function _locCardHtml(loc, { delay = '', overlayExtra = '' } = {}) {
     <div class="loc-title">${escHtml(cardTitle)}</div>
     ${distLine    ? `<div class="loc-district">${distLine}</div>` : ''}
     ${loc.address ? `<div class="loc-address">${escHtml(loc.address)}</div>` : ''}
-    <div class="loc-badges">${zoneBadge}${masqBadge}</div>`;
+    <div class="loc-badges">${zoneBadge}${dangerBadge}${masqBadge}</div>`;
 
   if (loc.imageUrl) {
     return `<div class="loc-card has-art" data-slug="${escHtml(loc.slug)}" ${delay}>
@@ -139,6 +160,153 @@ function fitLocTitles() {
 
 let _currentLocSlug = null;
 
+// ── Sensory palette — per-channel edit/generate (см. модульный сценарий по разделам) ──
+// Зеркалит формат таблицы, которую строит/читает parseLocation (lib/parsers.js):
+// `| **Канал** | значение |` без заголовка/разделителя — те парсятся отдельно,
+// но отбрасываются как строки с пустым value, поэтому здесь не нужны вовсе.
+function _sensRebuildTable(list) {
+  return (list || []).map(s => `| **${s.channel}** | ${s.value || ''} |`).join('\n');
+}
+
+function _renderSensPanel(loc) {
+  const DEFAULT_CHANNELS = ['Свет', 'Звук', 'Запах', 'Тактильное'];
+  const list = loc.sensoryPalette?.length
+    ? loc.sensoryPalette
+    : DEFAULT_CHANNELS.map(channel => ({ channel, value: '' }));
+
+  const sectionsHtml = list.map((s, i) => `
+    <div class="modp-scenario-section">
+      <div class="modp-section-header-row">
+        <div class="modp-section-label">${escHtml(s.channel)}</div>
+        <div class="modp-scenario-sec-btns">
+          <button class="cdet-edit-btn" data-editloc="sens-${i}">✏ Редактировать</button>
+          <button class="cdet-edit-btn" data-sens-regen="${i}">🪄 Сгенерировать</button>
+          <button class="hooks-del-btn" data-sens-del="${i}" title="Удалить канал">✕</button>
+        </div>
+      </div>
+      <div id="locdet-sens-${i}-view">${s.value ? escHtml(s.value) : '<div class="cdet-empty">Пусто</div>'}</div>
+      <div id="locdet-sens-${i}-edit" style="display:none">
+        <textarea class="cdet-edit-textarea" id="locdet-sens-${i}-ta" rows="2">${escHtml(s.value || '')}</textarea>
+      </div>
+      <div class="cdet-edit-bar" id="locdet-sens-${i}-bar" style="display:none">
+        <button class="cdet-save-btn" data-saveloc="sens-${i}">Сохранить</button>
+        <button class="cdet-cancel-btn" data-cancelloc="sens-${i}">Отмена</button>
+        <span class="cdet-save-msg" id="locdet-sens-${i}-msg" style="display:none">✓ Сохранено</span>
+      </div>
+    </div>
+    ${i < list.length - 1 ? '<div class="modp-section-divider"></div>' : ''}`).join('');
+
+  return `
+    <div id="locdet-sens-list">${sectionsHtml}</div>
+    <div class="hooks-add-row" id="locdet-sens-add-row" style="display:none;flex-direction:column;gap:6px;margin-top:12px">
+      <input class="hooks-input" id="locdet-sens-new-channel" placeholder="Название канала (напр. Вкус)">
+      <textarea class="cdet-edit-textarea" id="locdet-sens-new-value" rows="2" placeholder="Значение…"></textarea>
+      <div style="display:flex;gap:6px">
+        <button class="cdet-save-btn" id="locdet-sens-add-confirm">Добавить</button>
+        <button class="cdet-cancel-btn" id="locdet-sens-add-cancel">Отмена</button>
+      </div>
+    </div>
+    <button class="hooks-add-btn" id="locdet-sens-add-btn" style="margin-top:10px">+ Добавить канал</button>`;
+}
+
+async function _locReloadSensTab(slug) {
+  const data = await fetch(`/api/locations${window.location.search}`).then(r => r.json()).catch(() => null);
+  if (data) { STATE.locations = data; openLocDetail(slug, 'sens'); }
+}
+
+async function _locRegenSensChannel(idx) {
+  const slug = _currentLocSlug;
+  const loc  = STATE.locations.find(l => l.slug === slug);
+  if (!loc) return;
+  const list = loc.sensoryPalette?.length
+    ? loc.sensoryPalette
+    : ['Свет', 'Звук', 'Запах', 'Тактильное'].map(channel => ({ channel, value: '' }));
+  const channel = list[idx]?.channel;
+  if (!channel) return;
+
+  const ok = await showConfirm(`Перегенерировать канал «${channel}»? Текущее значение будет заменено.`, { confirmText: 'Перегенерировать' });
+  if (!ok) return;
+
+  const btn = document.querySelector(`[data-sens-regen="${idx}"]`);
+  const origLabel = btn?.textContent;
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Генерирую…'; }
+  try {
+    const r = await fetch(`/api/locations/generate${window.location.search}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ slug, name: loc.title || slug, field: 'sensory', channel, context: loc.atmosphere || '' })
+    });
+    const result = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(result.error || 'Ошибка генерации');
+
+    const updated = list.slice();
+    updated[idx] = { ...updated[idx], value: result.value || '' };
+    const resp = await fetch(`/api/locations/${encodeURIComponent(slug)}/fields${window.location.search}`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fields: { sensoryPalette: _sensRebuildTable(updated) } })
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    await _locReloadSensTab(slug);
+  } catch (err) {
+    showToast('Не удалось перегенерировать канал: ' + err.message, 'error');
+    if (btn) { btn.disabled = false; btn.textContent = origLabel; }
+  }
+}
+
+async function _locDeleteSensChannel(idx) {
+  const slug = _currentLocSlug;
+  const loc  = STATE.locations.find(l => l.slug === slug);
+  if (!loc?.sensoryPalette?.length) return;
+  const channel = loc.sensoryPalette[idx]?.channel;
+  if (!channel) return;
+
+  const ok = await showConfirm(`Удалить канал «${channel}»?`, { danger: true, confirmText: 'Удалить' });
+  if (!ok) return;
+
+  const updated = loc.sensoryPalette.slice();
+  updated.splice(idx, 1);
+  try {
+    const resp = await fetch(`/api/locations/${encodeURIComponent(slug)}/fields${window.location.search}`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fields: { sensoryPalette: _sensRebuildTable(updated) } })
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    await _locReloadSensTab(slug);
+  } catch {
+    showToast('Не удалось удалить канал', 'error');
+  }
+}
+
+async function _locAddSensChannel() {
+  const slug = _currentLocSlug;
+  const loc  = STATE.locations.find(l => l.slug === slug);
+  if (!loc) return;
+  const nameEl  = document.getElementById('locdet-sens-new-channel');
+  const valueEl = document.getElementById('locdet-sens-new-value');
+  const channel = (nameEl?.value || '').trim();
+  const value   = (valueEl?.value || '').trim();
+  if (!channel) { nameEl?.focus(); return; }
+  if (!value)   { showToast('Заполни значение — иначе канал не сохранится', 'error'); valueEl?.focus(); return; }
+
+  const list = loc.sensoryPalette?.length
+    ? loc.sensoryPalette
+    : ['Свет', 'Звук', 'Запах', 'Тактильное'].map(c => ({ channel: c, value: '' }));
+  if (list.some(s => s.channel.toLowerCase() === channel.toLowerCase())) {
+    showToast('Такой канал уже есть', 'error');
+    return;
+  }
+  const updated = [...list, { channel, value }];
+  try {
+    const resp = await fetch(`/api/locations/${encodeURIComponent(slug)}/fields${window.location.search}`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fields: { sensoryPalette: _sensRebuildTable(updated) } })
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    await _locReloadSensTab(slug);
+  } catch {
+    showToast('Не удалось добавить канал', 'error');
+  }
+}
+
 function openLocDetail(slug, keepTab) {
   const loc = STATE.locations.find(l => l.slug === slug);
   if (!loc) return;
@@ -146,6 +314,7 @@ function openLocDetail(slug, keepTab) {
 
   const zc   = zoneClass(loc.zone);
   const mLvl = loc.masqueradeLevel || 'unknown';
+  const dLvl = zoneDangerLevel(loc.zone);
 
   const imgCol = loc.imageUrl
     ? `<div class="locdet-carousel" id="locdet-carousel">
@@ -166,11 +335,10 @@ function openLocDetail(slug, keepTab) {
     ['address',      'Адрес',      loc.address],
     ['control',      'Контроль',   loc.control],
   ];
-  const metaViewHtml = `<div class="locdet-table">${[
-    ...metaFields.filter(([, , v]) => v).map(([, k, v]) =>
-      `<div class="locdet-row"><div class="locdet-key">${escHtml(k)}</div><div class="locdet-val">${escHtml(v)}</div></div>`),
-    loc.zone ? `<div class="locdet-row"><div class="locdet-key">Зона</div><div class="locdet-val">${escHtml(loc.zone)}</div></div>` : '',
-  ].filter(Boolean).join('')}</div>`;
+  const metaViewHtml = `<div class="locdet-table">${
+    metaFields.filter(([, , v]) => v).map(([, k, v]) =>
+      `<div class="locdet-row"><div class="locdet-key">${escHtml(k)}</div><div class="locdet-val">${escHtml(v)}</div></div>`).join('')
+  }</div>`;
   const metaEditHtml = `<div class="locdet-edit-fields">${metaFields.map(([key, label, val]) =>
     `<div class="locdet-field-row">
        <label class="locdet-field-lbl">${escHtml(label)}</label>
@@ -211,16 +379,7 @@ function openLocDetail(slug, keepTab) {
     || '| Место | Описание |\n|---|---|\n| | |';
   const keyEditHtml = `<textarea class="cdet-edit-textarea" id="locdet-keys-ta" rows="10">${escHtml(keyRawTable)}</textarea>`;
 
-  const sensViewHtml = loc.sensoryPalette?.length
-    ? `<div class="locdet-table">${loc.sensoryPalette.map(s =>
-        `<div class="locdet-row">
-          <div class="locdet-key">${escHtml(s.channel)}</div>
-          <div class="locdet-val">${escHtml(s.value)}</div>
-        </div>`).join('')}</div>`
-    : '<div class="cdet-empty">Сенсорная палитра не заполнена</div>';
-  const sensRawTable = (loc.sensoryPalette || []).map(s => `| **${s.channel}** | ${s.value} |`).join('\n')
-    || '| Канал | |\n|---|---|\n| **Свет** | |\n| **Звук** | |\n| **Запах** | |\n| **Тактильное** | |';
-  const sensEditHtml = `<textarea class="cdet-edit-textarea" id="locdet-sens-ta" rows="8">${escHtml(sensRawTable)}</textarea>`;
+  const sensPanelHtml = _renderSensPanel(loc);
 
   const hooksViewHtml = loc.hooks?.length
     ? `<div class="locdet-hooks">${loc.hooks.map((h, i) =>
@@ -275,6 +434,10 @@ function openLocDetail(slug, keepTab) {
             <span class="locdet-legend-lbl">Зона контроля</span>
             <span class="badge badge-loc-${zc}">${ZONE_CLASS_LABELS[zc]}</span>
           </div>
+          ${dLvl !== 'unknown' ? `<div class="locdet-legend-item">
+            <span class="locdet-legend-lbl">Уровень опасности</span>
+            <span class="badge badge-danger-${dLvl}">${DANGER_BADGE_LABELS[dLvl]}</span>
+          </div>` : ''}
           ${mLvl !== 'unknown' ? `<div class="locdet-legend-item">
             <span class="locdet-legend-lbl">Маскарад</span>
             <span class="badge badge-masq-${mLvl}">${MASQ_BADGE_LABELS[mLvl]}</span>
@@ -294,7 +457,7 @@ function openLocDetail(slug, keepTab) {
         <div class="cdet-panel active" data-panel="meta">${editPanel('meta', metaViewHtml, metaEditHtml)}</div>
         <div class="cdet-panel" data-panel="atm">${editPanel('atm', atmViewHtml, atmEditHtml)}</div>
         <div class="cdet-panel" data-panel="vtm">${editPanel('vtm', vtmViewHtml, vtmEditHtml)}</div>
-        <div class="cdet-panel" data-panel="sens">${editPanel('sens', sensViewHtml, sensEditHtml)}</div>
+        <div class="cdet-panel" data-panel="sens">${sensPanelHtml}</div>
         <div class="cdet-panel" data-panel="keys">${editPanel('keys', keyPointsHtml, keyEditHtml)}</div>
         <div class="cdet-panel" data-panel="hooks">${editPanel('hooks', hooksViewHtml, hooksEditHtml)}</div>
         <div class="cdet-panel" data-panel="images">
@@ -376,6 +539,25 @@ document.getElementById('loc-detail-content').addEventListener('click', e => {
   if (e.target.closest('#locdet-carousel-prev')) { _locCarouselGoTo(_locCarouselIdx - 1, true); return; }
   if (e.target.closest('#locdet-carousel-next')) { _locCarouselGoTo(_locCarouselIdx + 1, true); return; }
 
+  // Сенсорная палитра — per-channel регенерация/удаление/добавление (проверяем
+  // раньше generic .hooks-del-btn ниже, т.к. кнопка удаления канала делит с ним класс).
+  const sensRegenBtn = e.target.closest('[data-sens-regen]');
+  if (sensRegenBtn) { _locRegenSensChannel(parseInt(sensRegenBtn.dataset.sensRegen, 10)); return; }
+  const sensDelBtn = e.target.closest('[data-sens-del]');
+  if (sensDelBtn) { _locDeleteSensChannel(parseInt(sensDelBtn.dataset.sensDel, 10)); return; }
+  if (e.target.closest('#locdet-sens-add-btn')) {
+    document.getElementById('locdet-sens-add-btn').style.display = 'none';
+    const row = document.getElementById('locdet-sens-add-row');
+    if (row) { row.style.display = 'flex'; document.getElementById('locdet-sens-new-channel')?.focus(); }
+    return;
+  }
+  if (e.target.closest('#locdet-sens-add-cancel')) {
+    document.getElementById('locdet-sens-add-row').style.display = 'none';
+    document.getElementById('locdet-sens-add-btn').style.display = '';
+    return;
+  }
+  if (e.target.closest('#locdet-sens-add-confirm')) { _locAddSensChannel(); return; }
+
   if (e.target.closest('.hooks-del-btn')) {
     const item = e.target.closest('.hooks-item');
     if (item) { item.remove(); _renumberHooks(); }
@@ -444,8 +626,16 @@ async function _locSavePanel(panel) {
     fields.atmosphere = document.getElementById('locdet-atm-ta')?.value || '';
   } else if (panel === 'vtm') {
     fields.vtmText = document.getElementById('locdet-vtm-ta')?.value || '';
-  } else if (panel === 'sens') {
-    fields.sensoryPalette = document.getElementById('locdet-sens-ta')?.value || '';
+  } else if (panel.startsWith('sens-')) {
+    const idx  = parseInt(panel.slice('sens-'.length), 10);
+    const val  = document.getElementById(`locdet-${panel}-ta`)?.value ?? '';
+    const loc  = STATE.locations.find(l => l.slug === slug);
+    const list = loc?.sensoryPalette?.length
+      ? loc.sensoryPalette.slice()
+      : ['Свет', 'Звук', 'Запах', 'Тактильное'].map(channel => ({ channel, value: '' }));
+    if (!list[idx]) return;
+    list[idx] = { ...list[idx], value: val };
+    fields.sensoryPalette = _sensRebuildTable(list);
   } else if (panel === 'keys') {
     fields.keyPoints = document.getElementById('locdet-keys-ta')?.value || '';
   } else if (panel === 'hooks') {
