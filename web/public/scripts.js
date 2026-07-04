@@ -2007,7 +2007,7 @@ function _updateTrackCheckbox(chrSlug) {
 function renderModuleCardInChr(m, chrSlug) {
   const files = [
     m.hasScenario ? '<span class="chd-mod-file">📝 Сценарий</span>' : '',
-    m.hasFinale   ? '<span class="chd-mod-file chd-file-finale">📜 Финал</span>' : '',
+    m.hasFinale   ? `<span class="chd-mod-file chd-file-finale" data-open-finale data-chr="${escHtml(chrSlug)}" data-mod="${escHtml(m.name)}">📜 Финал</span>` : '',
     m.hasNpc      ? '<span class="chd-mod-file">👥 НПС</span>' : '',
   ].filter(Boolean).join('');
   return `
@@ -2186,6 +2186,8 @@ document.addEventListener('click', e => {
 document.getElementById('chr-detail-body').addEventListener('click', e => {
   if (e.target.closest('.chd-mod-del-btn'))  return;
   if (e.target.closest('.chd-mod-fill-btn')) return;
+  const finaleBadge = e.target.closest('[data-open-finale]');
+  if (finaleBadge) { openFinalePreview(finaleBadge.dataset.chr, finaleBadge.dataset.mod); return; }
   // chip links (events tab)
   const chipMod = e.target.closest('.chip-mod');
   if (chipMod) {
@@ -2854,7 +2856,7 @@ async function loadModules() {
     el.innerHTML = mods.map(m => {
       const files = [
         m.hasScenario ? '<span class="module-file">📝 Сценарий</span>' : '',
-        m.hasFinale   ? '<span class="module-file file-finale">📜 Финал</span>' : '',
+        m.hasFinale   ? `<span class="module-file file-finale" data-open-finale data-chr="${escHtml(m.chronicle || '')}" data-mod="${escHtml(m.name)}">📜 Финал</span>` : '',
         m.hasNpc      ? '<span class="module-file">👥 НПС</span>' : '',
       ].filter(Boolean).join('');
       return `
@@ -2880,12 +2882,44 @@ async function loadModules() {
 
 document.getElementById('modules-list').addEventListener('click', e => {
   if (e.target.closest('.module-del-btn')) return;
+  const finaleBadge = e.target.closest('[data-open-finale]');
+  if (finaleBadge) { openFinalePreview(finaleBadge.dataset.chr, finaleBadge.dataset.mod); return; }
   const card = e.target.closest('.module-card');
   if (!card) return;
   const name      = card.dataset.name;
   const chronicle = card.dataset.chronicle;
   if (!name || !chronicle) return;
   openModulePage(chronicle, name);
+});
+
+// «📜 Финал» в связанных файлах модуля → лёгкая модалка с текстом finale.md,
+// без перехода на страницу модуля (тот же /detail, что и вкладка «Финал» там).
+async function openFinalePreview(chr, mod) {
+  if (!chr || !mod) return;
+  const modal = document.getElementById('finale-preview-modal');
+  const body  = document.getElementById('finale-preview-body');
+  const title = document.getElementById('finale-preview-title');
+  title.textContent = '📜 Финал';
+  body.innerHTML = '<div class="loading-state"><div class="spinner"></div>Загрузка...</div>';
+  modal.classList.add('open');
+  try {
+    const data = await fetch(
+      `/api/chronicles/${encodeURIComponent(chr)}/modules/${encodeURIComponent(mod)}/detail${window.location.search}`
+    ).then(r => r.json());
+    title.textContent = `📜 Финал — ${data.title || mod}`;
+    body.innerHTML = data.finale
+      ? mdToHtml(data.finale)
+      : '<div class="cdet-empty">Финал не найден.</div>';
+  } catch {
+    body.innerHTML = '<div class="cdet-empty">Не удалось загрузить финал.</div>';
+  }
+}
+document.getElementById('finale-preview-close').addEventListener('click', () => {
+  document.getElementById('finale-preview-modal').classList.remove('open');
+});
+document.getElementById('finale-preview-modal').addEventListener('click', e => {
+  if (e.target === document.getElementById('finale-preview-modal'))
+    document.getElementById('finale-preview-modal').classList.remove('open');
 });
 
 // ── Module Detail Page ───────────────────────────────────────────────────────
@@ -3697,7 +3731,7 @@ async function _addSessionEntry() {
         body: JSON.stringify({ date, status, scenes, notes }) }
     ).then(r => r.json());
     if (!d.ok) { errEl.textContent = d.error || 'Ошибка'; errEl.style.display = ''; return; }
-    loadModulePage();
+    await _reloadModulePage();
   } catch (e) {
     errEl.textContent = 'Ошибка: ' + e.message; errEl.style.display = '';
   } finally {
@@ -3729,7 +3763,7 @@ function _editSessionEntry(idx) {
       </div>
     </div>`;
   document.getElementById('sess-edit-save').addEventListener('click', () => _saveSessionEdit(idx));
-  document.getElementById('sess-edit-cancel').addEventListener('click', loadModulePage);
+  document.getElementById('sess-edit-cancel').addEventListener('click', _reloadModulePage);
 }
 
 async function _saveSessionEdit(idx) {
@@ -3755,7 +3789,7 @@ async function _saveSessionEdit(idx) {
         body: JSON.stringify({ date, status, scenes, notes }) }
     ).then(r => r.json());
     if (!d.ok) { errEl.textContent = d.error || 'Ошибка'; errEl.style.display = ''; return; }
-    loadModulePage();
+    await _reloadModulePage();
   } catch (e) {
     errEl.textContent = 'Ошибка: ' + e.message; errEl.style.display = '';
   } finally {

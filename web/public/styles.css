@@ -3450,6 +3450,7 @@ a:focus-visible {
 
 .chd-file-finale {
   color: var(--gold);
+  cursor: pointer;
 }
 
 .chd-mod-slug {

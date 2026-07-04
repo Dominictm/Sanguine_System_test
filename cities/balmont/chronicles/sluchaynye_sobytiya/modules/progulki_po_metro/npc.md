@@ -23,4 +23,4 @@
 > Карточки в `npc/`. Условия продвижения — `system/rules/module_rules.md`.
 
 - Шабашит 1 — роль → 🔗 [Карточка](npc/shabashit_1/shabashit_1.md)
-- Шериф Балион — роль → 🔗 [Карточка](npc/sherif_balion/sherif_balion.md)
+- Шериф Балион — роль → 🔗 [Карточка](npc/sherif_balion_verni/sherif_balion_verni.md)

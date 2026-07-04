@@ -1576,6 +1576,34 @@ describe('API — integration', () => {
       assert.equal(dup.status, 409);
     });
 
+    it('GET /detail — резолвит слаг модульного НПС по имени, если ссылка в npc.md устарела (регрессия: 404 на /promote)', async () => {
+      if (!modDir) return;
+      const name    = `Тест Устарелая Ссылка ${Date.now()}`;
+      const realSlug = slugify(name);
+      const post = await apiJson(`/api/chronicles/${encodeURIComponent(chr)}/modules/${encodeURIComponent(mod)}/npc${CITY}`,
+        { method: 'POST', body: JSON.stringify({ name, description: 'тестовый' }) });
+      assert.ok(post.status === 200 || post.status === 201);
+      assert.ok(await fs.stat(path.join(modDir, 'npc', realSlug)).catch(() => null), 'папка НПС должна была создаться по ожидаемому слагу');
+
+      // Портим ссылку в npc.md на несуществующую папку — воспроизводит баг
+      // (папку переименовали при коллизии слагов, ссылку не обновили).
+      const realRaw   = await fs.readFile(path.join(modDir, 'npc.md'), 'utf-8');
+      const staleSlug = `${realSlug}_stale_link`;
+      const brokenRaw = realRaw.replace(`npc/${realSlug}/${realSlug}.md`, `npc/${staleSlug}/${staleSlug}.md`);
+      assert.notEqual(brokenRaw, realRaw, 'замена ссылки должна была сработать');
+      await fs.writeFile(path.join(modDir, 'npc.md'), brokenRaw, 'utf-8');
+
+      const { body: detail } = await apiJson(`/api/chronicles/${encodeURIComponent(chr)}/modules/${encodeURIComponent(mod)}/detail${CITY}`);
+      const modularGroup = (detail.npcGroups || []).find(g => g.kind === 'modular');
+      const entry = modularGroup?.entries.find(e => e.name === name);
+      assert.ok(entry, 'модульный НПС должен присутствовать в /detail несмотря на битую ссылку');
+      assert.equal(entry.slug, realSlug, 'слаг должен резолвиться на реальную папку, а не на битую ссылку');
+
+      // Восстановить исходный npc.md и убрать созданную папку НПС
+      await fs.writeFile(path.join(modDir, 'npc.md'), realRaw, 'utf-8');
+      await fs.rm(path.join(modDir, 'npc', realSlug), { recursive: true, force: true });
+    });
+
     it('POST /api/chronicles/:chr/modules — type пишется в карточку, дефолт «Игровая сессия»', async () => {
       if (!chr) return;
       const namedType = `test_type_mod_${Date.now()}`;

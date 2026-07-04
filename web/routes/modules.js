@@ -1899,7 +1899,20 @@ ${target.body}
           for (const e of g.entries) {
             if (g.kind === 'modular') {
               const m = (e.cardHref || '').match(/npc\/([^/]+)\//);
-              e.slug = m ? m[1] : slugify(e.name);
+              let slug = m ? m[1] : slugify(e.name);
+              if (!await fs.stat(path.join(modDir, 'npc', slug)).catch(() => null)) {
+                // Ссылка в npc.md устарела (папку переименовали, например при
+                // коллизии слагов, а ссылку не обновили) — ищем реальную папку
+                // по имени в карточке, а не молча 404-им на промоушене/листе.
+                const npcEntries = await fs.readdir(path.join(modDir, 'npc'), { withFileTypes: true }).catch(() => []);
+                for (const entry of npcEntries) {
+                  if (!entry.isDirectory()) continue;
+                  const card = await fs.readFile(path.join(modDir, 'npc', entry.name, `${entry.name}.md`), 'utf-8').catch(() => '');
+                  const hm = card.match(/^#\s+(.+)$/m);
+                  if (hm && _nameMatch(hm[1].replace(/[*[\]]/g, '').trim(), e.name)) { slug = entry.name; break; }
+                }
+              }
+              e.slug = slug;
               e.sheetScope = 'module';
               e.hasSheet = !!(await fs.stat(path.join(modDir, 'npc', e.slug, `${e.slug}-sheet.md`)).catch(() => null));
               e.promoteCheck = await _checkNpcPromotion(city, chr, mod, e.slug).catch(() => null);
