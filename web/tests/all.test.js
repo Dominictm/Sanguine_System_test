@@ -1717,6 +1717,65 @@ describe('API — integration', () => {
       assert.equal(status, 404);
     });
 
+    it('PUT /scenario/section — с parent правит нужное одноимённое поле, не первое попавшееся', async () => {
+      if (!modDir) return;
+      const seed = [
+        '# Сценарий — Тест', '', '---', '',
+        '## Сцена 1', '',
+        '### GM-подсказки', '', 'Подсказки сцены 1.', '',
+        '---', '',
+        '## Сцена 2', '',
+        '### GM-подсказки', '', 'Подсказки сцены 2.', '',
+      ].join('\n');
+      await apiJson(`/api/chronicles/${encodeURIComponent(chr)}/modules/${encodeURIComponent(mod)}/scenario${CITY}`,
+        { method: 'PUT', body: JSON.stringify({ content: seed }) });
+
+      const put = await apiJson(`/api/chronicles/${encodeURIComponent(chr)}/modules/${encodeURIComponent(mod)}/scenario/section${CITY}`,
+        { method: 'PUT', body: JSON.stringify({ heading: 'GM-подсказки', parent: 'Сцена 2', content: 'Новые подсказки для сцены 2.' }) });
+      assert.equal(put.status, 200);
+      assert.ok(put.body.ok);
+      assert.match(put.body.scenario, /## Сцена 1\n+### GM-подсказки\n\nПодсказки сцены 1\./);
+      assert.match(put.body.scenario, /## Сцена 2\n+### GM-подсказки\n\nНовые подсказки для сцены 2\./);
+    });
+
+    it('POST /scenario/block/regenerate — перегенерирует блок целиком (AI_MOCK), другие блоки не трогает', async () => {
+      if (!modDir) return;
+      const seed = [
+        '# Сценарий — Тест', '', '---', '',
+        '## Пролог', '', 'Эта сцена должна остаться нетронутой.', '',
+        '---', '',
+        '## Сцена 1 — «Старая версия»', '',
+        '### Описание для игрока', '', 'Исходное описание.', '',
+        '### Колорит', '', 'Исходный колорит.', '',
+      ].join('\n');
+      await apiJson(`/api/chronicles/${encodeURIComponent(chr)}/modules/${encodeURIComponent(mod)}/scenario${CITY}`,
+        { method: 'PUT', body: JSON.stringify({ content: seed }) });
+
+      const regen = await apiJson(
+        `/api/chronicles/${encodeURIComponent(chr)}/modules/${encodeURIComponent(mod)}/scenario/block/regenerate${CITY}`,
+        { method: 'POST', body: JSON.stringify({ heading: 'Сцена 1 — «Старая версия»', pcs: [], npcs: [] }) });
+      assert.equal(regen.status, 200);
+      assert.ok(regen.body.ok);
+      // Заголовок блока не переписывается — на него ссылается вкладка «Сессии».
+      assert.match(regen.body.scenario, /## Сцена 1 — «Старая версия»/);
+      // Старое содержимое полей блока заменено (mock-ответ не содержит этих фраз).
+      assert.doesNotMatch(regen.body.scenario, /Исходное описание\./);
+      assert.doesNotMatch(regen.body.scenario, /Исходный колорит\./);
+      // Остальные блоки — неизменяемый контекст, не трогаются.
+      assert.match(regen.body.scenario, /## Пролог\n\nЭта сцена должна остаться нетронутой\./);
+
+      const raw = await fs.readFile(path.join(modDir, 'scenario.md'), 'utf-8');
+      assert.match(raw, /## Сцена 1 — «Старая версия»/);
+    });
+
+    it('POST /scenario/block/regenerate — неизвестный блок → 404', async () => {
+      if (!modDir) return;
+      const { status } = await apiJson(
+        `/api/chronicles/${encodeURIComponent(chr)}/modules/${encodeURIComponent(mod)}/scenario/block/regenerate${CITY}`,
+        { method: 'POST', body: JSON.stringify({ heading: '__нет такого блока__' }) });
+      assert.equal(status, 404);
+    });
+
     it('GET /detail — эталонный формат сценария (Пролог/Сцена N/Финал прямыми заголовками, meta:npcs/meta:locations) парсится корректно', async () => {
       if (!modDir) return;
       const seed = [

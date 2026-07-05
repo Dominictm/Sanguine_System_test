@@ -331,6 +331,26 @@ function writePrompt(card, which, rawValue, format) {
  * @returns {{preamble: string, sections: {heading: string, body: string}[]}}
  *   preamble — всё до первого `## ` (H1-заголовок, хлебные крошки, `---`), не редактируется по разделам
  */
+// Разбивает тело `## `-раздела на вводный текст (до первого `### `) и список
+// вложенных `### `-подразделов — используется и при первичном парсинге
+// (parseScenarioSections), и при пересборке одного блока целиком после его
+// AI-перегенерации (см. routes/modules.js scenario/block/regenerate).
+function splitH3Body(body) {
+  const h3Idx = body.search(/^###\s+/m);
+  if (h3Idx === -1) return { intro: body, children: [] };
+  const intro = body.slice(0, h3Idx).replace(/\s+$/, '');
+  const children = [];
+  const h3parts = body.slice(h3Idx).split(/\n(?=###\s+)/);
+  for (const h3part of h3parts) {
+    const h3nl = h3part.indexOf('\n');
+    const heading = (h3nl === -1 ? h3part : h3part.slice(0, h3nl)).replace(/^###\s+/, '').trim();
+    let h3body = h3nl === -1 ? '' : h3part.slice(h3nl + 1);
+    h3body = h3body.replace(/^\n+/, '').replace(/\s+$/, '');
+    children.push({ heading, body: h3body });
+  }
+  return { intro, children };
+}
+
 function parseScenarioSections(raw) {
   const text = String(raw == null ? '' : raw).replace(/^﻿/, '').replace(/\r\n/g, '\n');
   const firstIdx = text.search(/^##\s+/m);
@@ -348,22 +368,15 @@ function parseScenarioSections(raw) {
     // not to this section's content — strip only if it's the very last thing.
     body = body.replace(/\n+---+\s*$/, '').replace(/^\n+/, '').replace(/\s+$/, '');
 
-    // Some модуль-шаблоны вкладывают отдельные сцены как `### ` под одним
-    // общим `## Сцены` — каждая такая сцена должна редактироваться/
-    // перегенерироваться независимо, поэтому разворачиваем их в отдельные
-    // разделы верхнего уровня (level 3, с привязкой к родительскому heading).
-    const h3Idx = body.search(/^###\s+/m);
-    if (h3Idx !== -1) {
-      const intro = body.slice(0, h3Idx).replace(/\s+$/, '');
+    // Some модуль-шаблоны вкладывают отдельные сцены (или, в новом формате,
+    // отдельные поля сцены — «Описание для игрока», «Колорит» и т.д.) как
+    // `### ` под общим `## `-заголовком — каждая такая единица должна
+    // редактироваться/перегенерироваться независимо, поэтому разворачиваем их
+    // в отдельные разделы (level 3, с привязкой к родительскому heading).
+    const { intro, children } = splitH3Body(body);
+    if (children.length) {
       sections.push({ heading, body: intro, level: 2, parent: null });
-      const h3parts = body.slice(h3Idx).split(/\n(?=###\s+)/);
-      for (const h3part of h3parts) {
-        const h3nl = h3part.indexOf('\n');
-        const h3heading = (h3nl === -1 ? h3part : h3part.slice(0, h3nl)).replace(/^###\s+/, '').trim();
-        let h3body = h3nl === -1 ? '' : h3part.slice(h3nl + 1);
-        h3body = h3body.replace(/^\n+/, '').replace(/\s+$/, '');
-        sections.push({ heading: h3heading, body: h3body, level: 3, parent: heading });
-      }
+      for (const c of children) sections.push({ heading: c.heading, body: c.body, level: 3, parent: heading });
     } else {
       sections.push({ heading, body, level: 2, parent: null });
     }
@@ -371,22 +384,11 @@ function parseScenarioSections(raw) {
   return { preamble, sections };
 }
 
-/**
- * Заменяет содержимое одного раздела (по заголовку) и пересобирает файл целиком.
- * @param {string} raw — содержимое scenario.md
- * @param {string} heading — точный текст заголовка (как в `## <heading>`)
- * @param {string} newBody — новое содержимое раздела (без строки заголовка)
- * @returns {string} обновлённый полный текст; если заголовок не найден — возвращает raw без изменений
- */
-function replaceScenarioSection(raw, heading, newBody) {
-  const { preamble, sections } = parseScenarioSections(raw);
-  const idx = sections.findIndex(s => s.heading === heading);
-  if (idx === -1) return raw;
-  sections[idx] = { ...sections[idx], body: String(newBody == null ? '' : newBody).trim() };
-
-  // level-3 сцены, развёрнутые из общего `## Сцены`, пишутся обратно как `###`
-  // под своим родителем без `---` между собой; `---` идёт только между
-  // top-level (level 2) блоками.
+// Пересобирает preamble + плоский список sections (level 2/3, с parent у
+// level-3) обратно в полный текст scenario.md. Используется replaceScenarioSection
+// и scenario/block/regenerate — единственное место, знающее формат сборки
+// (`---` только между top-level блоками, `### ` дети — без него).
+function serializeScenarioSections(preamble, sections) {
   const blocks = [];
   for (let i = 0; i < sections.length; i++) {
     const s = sections[i];
@@ -398,6 +400,36 @@ function replaceScenarioSection(raw, heading, newBody) {
     blocks.push(block);
   }
   return preamble.replace(/\n*$/, '\n\n') + blocks.join('\n---\n\n');
+}
+
+/**
+ * Заменяет содержимое одного раздела (по заголовку, опционально уточнённому
+ * родителем — см. дизамбигуацию в scenario/section эндпоинтах) и пересобирает
+ * файл целиком.
+ * @param {string} raw — содержимое scenario.md
+ * @param {string} heading — точный текст заголовка (как в `## <heading>` / `### <heading>`)
+ * @param {string} newBody — новое содержимое раздела (без строки заголовка)
+ * @param {string|null} [parent] — если указан, ищет раздел ТОЛЬКО среди детей этого родителя
+ *   (разные сцены нередко используют одинаковые названия полей — «GM-подсказки»,
+ *   «Описание для игрока» — без parent совпадёт первый попавшийся)
+ * @returns {string} обновлённый полный текст; если заголовок не найден — возвращает raw без изменений
+ */
+function replaceScenarioSection(raw, heading, newBody, parent) {
+  const { preamble, sections } = parseScenarioSections(raw);
+  const idx = findScenarioSectionIndex(sections, heading, parent);
+  if (idx === -1) return raw;
+  sections[idx] = { ...sections[idx], body: String(newBody == null ? '' : newBody).trim() };
+  return serializeScenarioSections(preamble, sections);
+}
+
+// Находит индекс раздела по заголовку; если передан parent — совпадение
+// должно быть именно среди его детей (см. replaceScenarioSection).
+function findScenarioSectionIndex(sections, heading, parent) {
+  if (parent != null) {
+    const i = sections.findIndex(s => s.heading === heading && s.parent === parent);
+    if (i !== -1) return i;
+  }
+  return sections.findIndex(s => s.heading === heading);
 }
 
 // Обязательные смысловые блоки сценария — по эталонному формату (см. пример
@@ -1118,6 +1150,9 @@ module.exports = {
   parseChronicleParticipants,
   parseScenarioSections,
   replaceScenarioSection,
+  splitH3Body,
+  serializeScenarioSections,
+  findScenarioSectionIndex,
   checkScenarioStructure,
   parsePoliticalFactions,
   setPoliticalFactionInfluence,
