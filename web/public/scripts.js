@@ -9026,6 +9026,27 @@ async function _modSavePanel(panel) {
     const content = document.getElementById(`moddet-${panel}-ta`)?.value || '';
     if (!info) return;
     const { heading, parent } = info;
+
+    // Сохранение ОДНОГО поля блока полностью перерисовывает панель (свежие
+    // данные с сервера) — это сбрасывает все поля блока в режим просмотра.
+    // Если рядом в том же блоке ещё открыты другие поля с несохранёнными
+    // правками (кнопка «Редактировать» на блоке открывает их все разом),
+    // черновики нужно снять перед перерисовкой и восстановить после — иначе
+    // сохранение одного поля молча стирает правки в соседних.
+    const block = document.getElementById(`moddet-${panel}-view`)?.closest('.modp-scenario-block');
+    const siblingDrafts = [];
+    if (block) {
+      const idxs = (block.dataset.fieldIdxs || '').split(',').filter(Boolean);
+      for (const siblingIdx of idxs) {
+        if (siblingIdx === String(idx)) continue;
+        const editEl = document.getElementById(`moddet-scensec${siblingIdx}-edit`);
+        if (editEl && editEl.style.display !== 'none') {
+          const ta = document.getElementById(`moddet-scensec${siblingIdx}-ta`);
+          if (ta) siblingDrafts.push({ idx: siblingIdx, value: ta.value });
+        }
+      }
+    }
+
     try {
       const r = await fetch(
         `/api/chronicles/${encodeURIComponent(chr)}/modules/${encodeURIComponent(mod)}/scenario/section${window.location.search}`,
@@ -9035,6 +9056,11 @@ async function _modSavePanel(panel) {
       if (!r.ok) throw new Error(result.error || 'Ошибка сохранения');
       STATE.currentModuleData.scenario = result.scenario;
       _renderScenarioPanel(STATE.currentModuleData);
+      for (const draft of siblingDrafts) {
+        _modToggleEdit(`scensec${draft.idx}`, true);
+        const ta = document.getElementById(`moddet-scensec${draft.idx}-ta`);
+        if (ta) ta.value = draft.value;
+      }
     } catch (e) {
       if (msgEl) { msgEl.textContent = '✗ Ошибка'; msgEl.style.display = ''; }
       showToast('Не удалось сохранить раздел: ' + e.message, 'error');
