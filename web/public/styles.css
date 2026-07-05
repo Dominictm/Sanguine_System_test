@@ -8679,6 +8679,14 @@ a.md-link-loc:hover {
   letter-spacing: .04em;
   color: var(--text);
 }
+.modp-block-warn {
+  color: var(--c-danger-text);
+  font-size: var(--fs-sm, 12px);
+  font-weight: normal;
+  text-transform: none;
+  letter-spacing: normal;
+  margin-left: 8px;
+}
 .modp-scenario-sec-btns { display: flex; gap: 8px; flex-shrink: 0; }
 .modp-block-body { display: flex; flex-direction: column; gap: 12px; }
 

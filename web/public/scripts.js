@@ -3145,6 +3145,7 @@ function _parseScenarioSections(raw) {
 // игроков — это чисто визуальная страховка при демонстрации экрана: пометить
 // такие разделы и дать кнопку временно скрыть их из вида.
 const MODP_GM_SECTION_RE = /🔒|GM[\s-]?справк|только\s+для\s+(мастера|рассказчика)/i;
+const MODP_SCENE_ADDED_RE = /<!--\s*meta:sceneAdded:\s*1\s*-->/i;
 
 // Минимальный редактируемый каркас сценария (GM-справка / Пролог / Сцена 1 /
 // Финал) — для ручного заполнения без ИИ-генерации. Формат/breadcrumb —
@@ -3215,6 +3216,9 @@ function _renderScenarioPanel(data) {
         const isGM = MODP_GM_SECTION_RE.test(b.heading);
         const gmAttr  = isGM ? ' data-gm="1"' : '';
         const gmBadge = isGM ? ' <span class="modp-gm-badge">🔒 Только для Мастера</span>' : '';
+        const needsFinaleRegen = /^Финал(?:\s*[—–:.-].*)?$/i.test(b.heading) && MODP_SCENE_ADDED_RE.test(raw);
+        const finaleWarn = needsFinaleRegen
+          ? ' <span class="modp-block-warn">⚠️ Сценарий был изменён. Сгенерировать новый финал?</span>' : '';
 
         const items = [];
         if (b.introBody || !b.fields.length) items.push({ heading: b.fields.length ? 'Вводный текст' : '', body: b.introBody, idx: b.idx });
@@ -3242,7 +3246,7 @@ function _renderScenarioPanel(data) {
         return `
       <div class="modp-scenario-block"${gmAttr} data-field-idxs="${fieldIdxs}">
         <div class="modp-block-header-row">
-          <div class="modp-block-label">${escHtml(b.heading)}${gmBadge}</div>
+          <div class="modp-block-label">${escHtml(b.heading)}${gmBadge}${finaleWarn}</div>
           <div class="modp-scenario-sec-btns">
             <button class="modp-edit-btn" data-editblock="${b.idx}">✏ Редактировать</button>
             <button class="modp-edit-btn modp-block-saveall-btn" data-blocksaveall="${b.idx}" style="display:none">💾 Сохранить всё</button>
@@ -3265,6 +3269,7 @@ function _renderScenarioPanel(data) {
   <div class="modp-scenario-toolbar">
     <button class="modp-edit-btn" data-editmod="scenario">✏ Редактировать весь текст</button>
     ${raw ? `<button class="modp-edit-btn" id="modp-regen-scenario-btn" style="margin-left:8px">♻ Перегенерировать всё</button>` : ''}
+    ${raw ? `<button class="modp-edit-btn" id="modp-add-scene-btn" style="margin-left:8px">➕ Добавить сцену</button>` : ''}
     ${hasGmSections ? `<button class="modp-edit-btn" id="modp-toggle-gm-btn" style="margin-left:8px">${STATE.hideGmSections ? '👁 Показать разделы Мастера' : '🙈 Скрыть разделы Мастера'}</button>` : ''}
   </div>
   <div id="moddet-scenario-view">${blocksHtml}</div>
@@ -3693,6 +3698,35 @@ document.getElementById('modp-panel-scenario').addEventListener('click', e => {
   if (e.target.id === 'modp-toggle-gm-btn') {
     STATE.hideGmSections = !STATE.hideGmSections;
     _renderScenarioPanel(STATE.currentModuleData);
+    return;
+  }
+
+  if (e.target.id === 'modp-add-scene-btn') {
+    const d   = STATE.currentModuleData;
+    const chr = d?.chronicle || STATE.currentModule?.chronicle;
+    const mod = d?.name      || STATE.currentModule?.name;
+    if (!chr || !mod) return;
+    const addSceneBtn = e.target;
+    (async () => {
+      addSceneBtn.disabled = true;
+      const origLabel = addSceneBtn.textContent;
+      addSceneBtn.textContent = '⏳ Добавляю…';
+      try {
+        const r = await fetch(
+          `/api/chronicles/${encodeURIComponent(chr)}/modules/${encodeURIComponent(mod)}/scenario/scene${window.location.search}`,
+          { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) }
+        );
+        const result = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(result.error || 'Ошибка');
+        STATE.currentModuleData.scenario = result.scenario;
+        _renderScenarioPanel(STATE.currentModuleData);
+        showToast(`Добавлена «${result.heading}» — заполни поля и переименуй сцену через «Редактировать весь текст», если нужно`, 'success');
+      } catch (err) {
+        showToast('Не удалось добавить сцену: ' + err.message, 'error');
+        addSceneBtn.disabled = false;
+        addSceneBtn.textContent = origLabel;
+      }
+    })();
     return;
   }
 
