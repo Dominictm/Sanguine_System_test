@@ -22,7 +22,7 @@ const {
   getAllCharacters, getAllLocations, listModules, tableCell, LINEAGE_MAP,
   _nameMatch, rmdir, getChronicleDisplay,
 } = require('../lib/db');
-const { slugify, parseEvent, parseScenarioSections, replaceScenarioSection, replaceScenarioSections, splitH3Body, serializeScenarioSections, findScenarioSectionIndex, checkScenarioStructure } = require('../lib/parsers');
+const { slugify, parseEvent, parseScenarioSections, replaceScenarioSection, replaceScenarioSections, splitH3Body, serializeScenarioSections, findScenarioSectionIndex, checkScenarioStructure, insertScenarioScene, hasManualSceneMarker, clearManualSceneMarker } = require('../lib/parsers');
 
 // Modules now live under chronicles/<chr>/modules/<mod>/ — flatten them with their chronicle.
 const MOD_AUX = n => ['npc.md', 'scenario.md', 'finale.md'].includes(n) || n.endsWith('-sheet.md');
@@ -1139,6 +1139,30 @@ module.exports = function modulesRouter({
     } catch (e) { serverError(res, e); }
   });
 
+  // ── Scenario: add an empty manual scene before «Финал» (без ИИ) ────────────────
+  router.post('/api/chronicles/:chr/modules/:mod/scenario/scene', express.json(), async (req, res) => {
+    try {
+      const city = reqCity(req);
+      const { chr, mod } = req.params;
+      if (chr.includes('..') || mod.includes('..'))
+        return res.status(400).json({ ok: false, error: 'Недопустимое имя' });
+      const title = String(req.body?.title || '').trim();
+
+      const scenarioPath = path.join(chroniclesDir(city), chr, 'modules', mod, 'scenario.md');
+      const raw = await fs.readFile(scenarioPath, 'utf-8').catch(() => null);
+      if (raw == null) return res.status(404).json({ ok: false, error: 'Сценарий не найден' });
+
+      const { text, heading } = insertScenarioScene(raw, title);
+      await writeFileAtomic(scenarioPath, text, 'utf-8');
+      invalidateChars(city);
+      console.log(`[scenario-scene] ${city}/${chr}/${mod} → добавлена «${heading}»`);
+      res.json({ ok: true, scenario: text, heading });
+    } catch (e) {
+      console.error('[scenario-scene]', e.message);
+      serverError(res, e);
+    }
+  });
+
   // ── Scenario, per-section: AI regeneration (учитывает остальной сценарий) ──────
   router.post('/api/chronicles/:chr/modules/:mod/scenario/section/regenerate', aiRateLimit, express.json(), async (req, res) => {
     try {
@@ -1329,7 +1353,8 @@ ${currentBlockMd}
         ...newChildren.map(c => ({ heading: c.heading, body: c.body, level: 3, parent: heading })),
         ...sections.slice(blockIdx + 1 + children.length),
       ];
-      const updated = serializeScenarioSections(preamble, newSections);
+      let updated = serializeScenarioSections(preamble, newSections);
+      if (/^Финал(?:\s*[—–:.-].*)?$/i.test(heading) && hasManualSceneMarker(updated)) updated = clearManualSceneMarker(updated);
       await writeFileAtomic(scenarioPath, updated, 'utf-8');
       invalidateChars(city);
       console.log(`[scenario-block] ${city}/${chr}/${mod} → блок «${heading}» перегенерирован`);

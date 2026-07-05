@@ -1893,6 +1893,65 @@ describe('API — integration', () => {
       assert.equal(raw, seed, 'файл не должен меняться, если ни одно поле не найдено');
     });
 
+    it('POST /scenario/scene — добавляет новую сцену перед «Финал», ставит метку', async () => {
+      if (!modDir) return;
+      const seed = [
+        '# Сценарий — Тест', '', '---', '',
+        '## Пролог', '', 'Завязка.', '',
+        '---', '',
+        '## Сцена 1', '', 'Первая сцена.', '',
+        '---', '',
+        '## Финал', '', 'Развязка.', '',
+      ].join('\n');
+      await apiJson(`/api/chronicles/${encodeURIComponent(chr)}/modules/${encodeURIComponent(mod)}/scenario${CITY}`,
+        { method: 'PUT', body: JSON.stringify({ content: seed }) });
+
+      const post = await apiJson(`/api/chronicles/${encodeURIComponent(chr)}/modules/${encodeURIComponent(mod)}/scenario/scene${CITY}`,
+        { method: 'POST', body: JSON.stringify({}) });
+      assert.equal(post.status, 200);
+      assert.ok(post.body.ok);
+      assert.equal(post.body.heading, 'Сцена 2');
+      assert.match(post.body.scenario, /## Сцена 2\n/);
+      // Новая сцена — перед «Финал», после «Сцена 1»
+      assert.ok(post.body.scenario.indexOf('## Сцена 2') > post.body.scenario.indexOf('## Сцена 1'));
+      assert.ok(post.body.scenario.indexOf('## Сцена 2') < post.body.scenario.indexOf('## Финал'));
+
+      const raw = await fs.readFile(path.join(modDir, 'scenario.md'), 'utf-8');
+      assert.match(raw, /<!--\s*meta:sceneAdded:\s*1\s*-->/i);
+    });
+
+    it('POST /scenario/scene — сценарий не найден → 404', async () => {
+      const { status } = await apiJson(`/api/chronicles/__nochron__/modules/__nomod__/scenario/scene${CITY}`,
+        { method: 'POST', body: JSON.stringify({}) });
+      assert.equal(status, 404);
+    });
+
+    it('POST /scenario/block/regenerate — перегенерация «Финал» снимает метку sceneAdded (AI_MOCK)', async () => {
+      if (!modDir) return;
+      const seed = [
+        '# Сценарий — Тест', '', '---', '',
+        '## Сцена 1', '', 'Сцена.', '',
+        '---', '',
+        '## Финал', '', 'Развязка.', '',
+      ].join('\n');
+      await apiJson(`/api/chronicles/${encodeURIComponent(chr)}/modules/${encodeURIComponent(mod)}/scenario${CITY}`,
+        { method: 'PUT', body: JSON.stringify({ content: seed }) });
+      // Ставим метку через тот же add-scene эндпоинт
+      await apiJson(`/api/chronicles/${encodeURIComponent(chr)}/modules/${encodeURIComponent(mod)}/scenario/scene${CITY}`,
+        { method: 'POST', body: JSON.stringify({}) });
+      const beforeRaw = await fs.readFile(path.join(modDir, 'scenario.md'), 'utf-8');
+      assert.match(beforeRaw, /meta:sceneAdded/i);
+
+      const regen = await apiJson(
+        `/api/chronicles/${encodeURIComponent(chr)}/modules/${encodeURIComponent(mod)}/scenario/block/regenerate${CITY}`,
+        { method: 'POST', body: JSON.stringify({ heading: 'Финал', pcs: [], npcs: [] }) });
+      assert.equal(regen.status, 200);
+      assert.doesNotMatch(regen.body.scenario, /meta:sceneAdded/i);
+
+      const afterRaw = await fs.readFile(path.join(modDir, 'scenario.md'), 'utf-8');
+      assert.doesNotMatch(afterRaw, /meta:sceneAdded/i);
+    });
+
     it('POST /scenario/block/regenerate — перегенерирует блок целиком (AI_MOCK), другие блоки не трогает', async () => {
       if (!modDir) return;
       const seed = [
