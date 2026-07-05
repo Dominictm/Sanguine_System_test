@@ -3146,6 +3146,51 @@ function _parseScenarioSections(raw) {
 // такие разделы и дать кнопку временно скрыть их из вида.
 const MODP_GM_SECTION_RE = /🔒|GM[\s-]?справк|только\s+для\s+(мастера|рассказчика)/i;
 
+// Минимальный редактируемый каркас сценария (GM-справка / Пролог / Сцена 1 /
+// Финал) — для ручного заполнения без ИИ-генерации. Формат/breadcrumb —
+// как у AI-генерации (routes/modules.js POST .../fill), чтобы каркас потом
+// парсился теми же блоками, что и сгенерированный сценарий.
+function _buildScenarioSkeleton(title, modSlug) {
+  return [
+    `# Сценарий — ${title}`,
+    '',
+    `> 🔗 [Модуль](${modSlug}.md) | [Хроника](../../events.md) | [НПС](npc.md)`,
+    '',
+    '---',
+    '',
+    '## 🔒 GM-справка — закрытая информация',
+    '> Читать перед игрой. Не раскрывать игроку напрямую.',
+    '',
+    '### Что произошло до начала сессии',
+    '⚠️ Заполни.',
+    '',
+    '---',
+    '',
+    '## Пролог — Название',
+    '### Описание для игрока',
+    '⚠️ Заполни.',
+    '',
+    '### GM-подсказки',
+    '⚠️ Заполни.',
+    '',
+    '---',
+    '',
+    '## Сцена 1 — Название',
+    '### Описание для игрока',
+    '⚠️ Заполни.',
+    '',
+    '### Колорит',
+    '⚠️ 2-3 детали места/времени, которые нельзя перепутать с другим городом.',
+    '',
+    '---',
+    '',
+    '## Финал — Название',
+    '### Описание для игрока',
+    '⚠️ Заполни.',
+    '',
+  ].join('\n');
+}
+
 function _renderScenarioPanel(data) {
   const raw = data.scenario || '';
   const { sections } = _parseScenarioSections(raw);
@@ -3207,7 +3252,12 @@ function _renderScenarioPanel(data) {
         <div class="modp-block-body">${itemsHtml}</div>
       </div>`;
       }).join('')
-    : (raw ? mdToHtml(raw) : '<div class="cdet-empty">Сценарий не сгенерирован. Нажми «🪄 Сгенерировать».</div>');
+    : (raw ? mdToHtml(raw) : `
+      <div class="cdet-empty">Сценарий не сгенерирован.</div>
+      <div class="modp-scenario-empty-actions">
+        <span class="cdet-empty">Нажми «🪄 Сгенерировать» вверху страницы для ИИ-генерации, или заполни каркас вручную:</span>
+        <button class="modp-edit-btn" id="modp-scenario-manual-btn" style="margin-top:8px">📝 Создать вручную (пустой каркас)</button>
+      </div>`);
 
   const panel = document.getElementById('modp-panel-scenario');
   panel.classList.toggle('modp-hide-gm', !!STATE.hideGmSections);
@@ -3607,6 +3657,33 @@ document.getElementById('modp-panel-scenario').addEventListener('click', e => {
     return;
   }
   if (saveModBtn)   { _modSavePanel(saveModBtn.dataset.savemod);              return; }
+
+  const manualBtn = e.target.closest('#modp-scenario-manual-btn');
+  if (manualBtn) {
+    const d   = STATE.currentModuleData;
+    const chr = d?.chronicle || STATE.currentModule?.chronicle;
+    const mod = d?.name      || STATE.currentModule?.name;
+    if (!chr || !mod) return;
+    (async () => {
+      const ok = await showConfirm('Создать пустой каркас сценария (GM-справка / Пролог / Сцена 1 / Финал) для ручного заполнения?', { confirmText: 'Создать' });
+      if (!ok) return;
+      const skeleton = _buildScenarioSkeleton(d.title || d.name || mod, mod);
+      try {
+        const r = await fetch(
+          `/api/chronicles/${encodeURIComponent(chr)}/modules/${encodeURIComponent(mod)}/scenario${window.location.search}`,
+          { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: skeleton }) }
+        );
+        if (!r.ok) {
+          const result = await r.json().catch(() => ({}));
+          throw new Error(result.error || 'Ошибка');
+        }
+        await _reloadModulePage();
+      } catch (err) {
+        showToast('Не удалось создать каркас: ' + err.message, 'error');
+      }
+    })();
+    return;
+  }
 
   if (e.target.id === 'modp-toggle-gm-btn') {
     STATE.hideGmSections = !STATE.hideGmSections;
