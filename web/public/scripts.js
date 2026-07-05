@@ -3256,7 +3256,7 @@ function _renderScenarioPanel(data) {
       <div class="cdet-empty">Сценарий не сгенерирован.</div>
       <div class="modp-scenario-empty-actions">
         <span class="cdet-empty">Нажми «🪄 Сгенерировать» вверху страницы для ИИ-генерации, или заполни каркас вручную:</span>
-        <button class="modp-edit-btn" id="modp-scenario-manual-btn" style="margin-top:8px">📝 Создать вручную (пустой каркас)</button>
+        <button class="modp-edit-btn" id="modp-scenario-manual-btn">📝 Создать вручную (пустой каркас)</button>
       </div>`);
 
   const panel = document.getElementById('modp-panel-scenario');
@@ -3667,6 +3667,9 @@ document.getElementById('modp-panel-scenario').addEventListener('click', e => {
     (async () => {
       const ok = await showConfirm('Создать пустой каркас сценария (GM-справка / Пролог / Сцена 1 / Финал) для ручного заполнения?', { confirmText: 'Создать' });
       if (!ok) return;
+      manualBtn.disabled = true;
+      const origLabel = manualBtn.textContent;
+      manualBtn.textContent = '⏳ Создаю…';
       const skeleton = _buildScenarioSkeleton(d.title || d.name || mod, mod);
       try {
         const r = await fetch(
@@ -3680,6 +3683,8 @@ document.getElementById('modp-panel-scenario').addEventListener('click', e => {
         await _reloadModulePage();
       } catch (err) {
         showToast('Не удалось создать каркас: ' + err.message, 'error');
+        manualBtn.disabled = false;
+        manualBtn.textContent = origLabel;
       }
     })();
     return;

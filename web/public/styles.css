@@ -8724,7 +8724,7 @@ a.md-link-loc:hover {
   margin-left: 8px;
   vertical-align: middle;
 }
-.modp-scenario-empty-actions { display: flex; flex-direction: column; align-items: flex-start; }
+.modp-scenario-empty-actions { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
 #modp-panel-scenario.modp-hide-gm [data-gm="1"] { display: none; }
 
 /* ── Faction influence diagram (архив «Фракции») ── */
