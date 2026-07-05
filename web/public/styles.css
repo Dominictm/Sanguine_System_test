@@ -8658,6 +8658,11 @@ a.md-link-loc:hover {
   border-radius: 4px;
   padding: 14px 16px;
   margin-bottom: 14px;
+  transition: border-color .2s var(--ease), box-shadow .2s var(--ease);
+}
+.modp-scenario-block:hover {
+  border-color: var(--border2);
+  box-shadow: 0 0 10px var(--glow);
 }
 .modp-block-header-row {
   display: flex;
