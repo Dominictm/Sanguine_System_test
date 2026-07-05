@@ -3200,6 +3200,7 @@ function _renderScenarioPanel(data) {
           <div class="modp-block-label">${escHtml(b.heading)}${gmBadge}</div>
           <div class="modp-scenario-sec-btns">
             <button class="modp-edit-btn" data-editblock="${b.idx}">✏ Редактировать</button>
+            <button class="modp-edit-btn modp-block-saveall-btn" data-blocksaveall="${b.idx}" style="display:none">💾 Сохранить всё</button>
             <button class="modp-edit-btn" data-blockregen="${b.idx}">🔄 Перегенерировать</button>
           </div>
         </div>
@@ -3600,7 +3601,11 @@ document.getElementById('modp-panel-scenario').addEventListener('click', e => {
   const cancelModBtn = e.target.closest('[data-cancelmod]');
 
   if (editModBtn)   { _modToggleEdit(editModBtn.dataset.editmod, true);      return; }
-  if (cancelModBtn) { _modToggleEdit(cancelModBtn.dataset.cancelmod, false);  return; }
+  if (cancelModBtn) {
+    _modToggleEdit(cancelModBtn.dataset.cancelmod, false);
+    _modSyncBlockSaveAllVisibility(cancelModBtn.dataset.cancelmod);
+    return;
+  }
   if (saveModBtn)   { _modSavePanel(saveModBtn.dataset.savemod);              return; }
 
   if (e.target.id === 'modp-toggle-gm-btn') {
@@ -3690,6 +3695,8 @@ document.getElementById('modp-panel-scenario').addEventListener('click', e => {
     const block = editBlockBtn.closest('.modp-scenario-block');
     const idxs  = (block?.dataset.fieldIdxs || '').split(',').filter(Boolean);
     idxs.forEach(idx => _modToggleEdit(`scensec${idx}`, true));
+    const saveAllBtn = block?.querySelector('[data-blocksaveall]');
+    if (saveAllBtn) saveAllBtn.style.display = '';
     return;
   }
 
@@ -3728,6 +3735,44 @@ document.getElementById('modp-panel-scenario').addEventListener('click', e => {
         showToast('Не удалось перегенерировать блок: ' + err.message, 'error');
         blockRegenBtn.disabled = false;
         blockRegenBtn.textContent = origLabel;
+      }
+    })();
+    return;
+  }
+
+  const saveAllBtn = e.target.closest('[data-blocksaveall]');
+  if (saveAllBtn) {
+    const block = saveAllBtn.closest('.modp-scenario-block');
+    const idxs  = (block?.dataset.fieldIdxs || '').split(',').filter(Boolean);
+    const d     = STATE.currentModuleData;
+    const chr   = d?.chronicle || STATE.currentModule?.chronicle;
+    const mod   = d?.name      || STATE.currentModule?.name;
+    if (!chr || !mod || !idxs.length) return;
+
+    const fields = idxs.map(idx => {
+      const info = (STATE.scenarioSectionHeadings || [])[parseInt(idx, 10)];
+      const ta   = document.getElementById(`moddet-scensec${idx}-ta`);
+      return info ? { heading: info.heading, parent: info.parent, content: ta ? ta.value : '' } : null;
+    }).filter(Boolean);
+    if (!fields.length) return;
+
+    (async () => {
+      saveAllBtn.disabled = true;
+      const origLabel = saveAllBtn.textContent;
+      saveAllBtn.textContent = '⏳ Сохраняю…';
+      try {
+        const r = await fetch(
+          `/api/chronicles/${encodeURIComponent(chr)}/modules/${encodeURIComponent(mod)}/scenario/block/fields${window.location.search}`,
+          { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fields }) }
+        );
+        const result = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(result.error || 'Ошибка сохранения');
+        STATE.currentModuleData.scenario = result.scenario;
+        _renderScenarioPanel(STATE.currentModuleData);
+      } catch (err) {
+        showToast('Не удалось сохранить блок: ' + err.message, 'error');
+        saveAllBtn.disabled = false;
+        saveAllBtn.textContent = origLabel;
       }
     })();
     return;
@@ -8784,6 +8829,21 @@ async function triggerImageUpload(charName) {
 
 // Locations page (list/detail) moved to public/locations.js (E2.3).
 // ── Module page: editPanel helpers ────────────────────────────────────────────
+
+// После отмены редактирования одного поля внутри блока проверяет, остались ли
+// ещё открытые поля — если нет, прячет кнопку «Сохранить всё» этого блока
+// (она включается только при входе в блок целиком, см. data-editblock).
+function _modSyncBlockSaveAllVisibility(panel) {
+  if (!panel || !panel.startsWith('scensec')) return;
+  const viewEl = document.getElementById(`moddet-${panel}-view`);
+  const block  = viewEl?.closest('.modp-scenario-block');
+  if (!block) return;
+  const saveAllBtn = block.querySelector('[data-blocksaveall]');
+  if (!saveAllBtn) return;
+  const anyEditing = Array.from(block.querySelectorAll('.modp-scenario-field [id$="-edit"]'))
+    .some(ed => ed.style.display !== 'none');
+  if (!anyEditing) saveAllBtn.style.display = 'none';
+}
 
 function _modToggleEdit(panel, enter) {
   const viewEl = document.getElementById(`moddet-${panel}-view`);
