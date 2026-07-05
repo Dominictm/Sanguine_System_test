@@ -3275,7 +3275,7 @@ function _renderScenarioPanel(data) {
             ${it.heading ? `<div class="modp-field-label">${escHtml(it.heading)}${_scenarioTooltipHtml(it.heading)}</div>` : '<div></div>'}
             <button class="modp-field-regen-btn" data-scensec-regen="${it.idx}" title="Перегенерировать только это поле">🔄</button>
           </div>
-          <div id="moddet-scensec${it.idx}-view">${mdToHtml(it.body)}</div>
+          <div id="moddet-scensec${it.idx}-view" class="modp-md">${mdToHtml(it.body)}</div>
           <div id="moddet-scensec${it.idx}-edit" style="display:none">
             <textarea class="cdet-edit-textarea" id="moddet-scensec${it.idx}-ta" rows="10"
               style="width:100%;font-family:monospace;font-size:var(--fs-sm,12px)">${escHtml(it.body)}</textarea>
@@ -3300,7 +3300,7 @@ function _renderScenarioPanel(data) {
         <div class="modp-block-body">${itemsHtml}</div>
       </div>`;
       }).join('')
-    : (raw ? mdToHtml(raw) : `
+    : (raw ? `<div class="modp-md">${mdToHtml(raw)}</div>` : `
       <div class="cdet-empty">Сценарий не сгенерирован.</div>
       <div class="modp-scenario-empty-actions">
         <span class="cdet-empty">Нажми «🪄 Сгенерировать» вверху страницы для ИИ-генерации, или заполни каркас вручную:</span>

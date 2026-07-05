@@ -57,7 +57,7 @@ try {
 }
 
 const app  = express();
-const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3000;
+const PORT = process.env.PORT ? parseInt(process.env.PORT) : 4295;
 const ROOT = path.join(__dirname, '..');
 
 
@@ -477,7 +477,7 @@ function _oaEndpoint(provider) {
     headers: {
       'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
       'Content-Type':  'application/json',
-      'HTTP-Referer':  'http://localhost:3000',
+      'HTTP-Referer':  'http://localhost:4295',
       'X-Title':       'Sanguine System',
     },
   };

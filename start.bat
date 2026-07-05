@@ -108,10 +108,10 @@ echo.
 
 :git_ok
 
-netstat -ano 2>nul | find "LISTENING" | find ":3000" > nul
+netstat -ano 2>nul | find "LISTENING" | find ":4295" > nul
 if %errorlevel% == 0 (
-    echo   Server already running at http://localhost:3000
-    start http://localhost:3000
+    echo   Server already running at http://localhost:4295
+    start http://localhost:4295
     echo.
     pause
     exit /b 0
@@ -133,9 +133,9 @@ if %errorlevel% neq 0 (
 )
 echo.
 
-start /B cmd /c "timeout /t 2 /nobreak > nul & start http://localhost:3000"
+start /B cmd /c "timeout /t 2 /nobreak > nul & start http://localhost:4295"
 
-echo   Server started: http://localhost:3000
+echo   Server started: http://localhost:4295
 echo   Close this window to stop the server.
 echo.
 
