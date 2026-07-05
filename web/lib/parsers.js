@@ -451,6 +451,63 @@ function replaceScenarioSections(raw, replacements) {
   return { text: serializeScenarioSections(preamble, sections), skipped };
 }
 
+// Метка «сценарий был изменён вручную (добавлена своя сцена)» — живёт в
+// preamble scenario.md (до первого `## `, значит никогда не рендерится в
+// самой вкладке «Сценарий» — см. _renderScenarioPanel). Снимается точечно
+// при перегенерации блока «Финал» (routes/modules.js scenario/block/regenerate).
+const SCENE_ADDED_MARKER_RE = /\n?<!--\s*meta:sceneAdded:\s*1\s*-->\n?/i;
+
+function hasManualSceneMarker(raw) {
+  return SCENE_ADDED_MARKER_RE.test(raw);
+}
+
+function addManualSceneMarker(raw) {
+  if (hasManualSceneMarker(raw)) return raw;
+  const firstHeadingIdx = raw.search(/^##\s+/m);
+  if (firstHeadingIdx === -1) return raw.replace(/\n*$/, '\n') + '<!-- meta:sceneAdded: 1 -->\n';
+  return raw.slice(0, firstHeadingIdx) + '<!-- meta:sceneAdded: 1 -->\n' + raw.slice(firstHeadingIdx);
+}
+
+function clearManualSceneMarker(raw) {
+  return raw.replace(SCENE_ADDED_MARKER_RE, '\n');
+}
+
+/**
+ * Добавляет пустую сцену «## Сцена N[ — title]» перед блоком «Финал» (или в
+ * конец документа, если «Финал» нет), с двумя заготовленными полями внутри.
+ * Номер сцены — на 1 больше максимального среди уже существующих «Сцена N».
+ * Ставит метку hasManualSceneMarker (см. выше) — используется UI, чтобы
+ * предложить перегенерировать «Финал» под новую сцену.
+ * @param {string} raw
+ * @param {string} [title] — необязательный подзаголовок сцены («Сцена N — <title>»)
+ * @returns {{ text: string, heading: string }} heading — точный заголовок вставленной сцены
+ */
+function insertScenarioScene(raw, title) {
+  const { preamble, sections } = parseScenarioSections(raw);
+  const nums = sections
+    .filter(s => s.level === 2)
+    .map(s => parseInt((s.heading.match(/^Сцена\s*(\d+)/i) || [])[1], 10))
+    .filter(n => !Number.isNaN(n));
+  const nextNum = nums.length ? Math.max(...nums) + 1 : 1;
+  const heading = `Сцена ${nextNum}${title ? ` — ${title}` : ''}`;
+
+  const newScene  = { heading, body: '', level: 2, parent: null };
+  const newFields = [
+    { heading: 'Описание для игрока', body: '⚠️ Заполни описание сцены для игрока.', level: 3, parent: heading },
+    { heading: 'Колорит', body: '⚠️ 2-3 детали места/времени, которые нельзя перепутать с другим городом.', level: 3, parent: heading },
+  ];
+
+  const finaleIdx = sections.findIndex(s => s.level === 2 && /^Финал/i.test(s.heading));
+  const insertAt  = finaleIdx === -1 ? sections.length : finaleIdx;
+  const newSections = [
+    ...sections.slice(0, insertAt),
+    newScene, ...newFields,
+    ...sections.slice(insertAt),
+  ];
+  const text = addManualSceneMarker(serializeScenarioSections(preamble, newSections));
+  return { text, heading };
+}
+
 // Обязательные смысловые блоки сценария — по эталонному формату (см. пример
 // `tsirk_tsirk_tsirk/scenario.md`): GM-справка + Пролог/Сцены прямыми `##`-
 // заголовками (без обёртки), Финал, закрывающая таблица вопросов, колорит
@@ -1173,6 +1230,10 @@ module.exports = {
   serializeScenarioSections,
   findScenarioSectionIndex,
   replaceScenarioSections,
+  insertScenarioScene,
+  hasManualSceneMarker,
+  addManualSceneMarker,
+  clearManualSceneMarker,
   checkScenarioStructure,
   parsePoliticalFactions,
   setPoliticalFactionInfluence,

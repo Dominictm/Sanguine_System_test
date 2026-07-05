@@ -14,7 +14,9 @@ const {
   mdExtractLinks, mdStripLinks, mdStripInline, classifyChronicleLink,
   categorizeRel, parseCharacter, parseLocation, parseEvent, parseChronicle,
   parseChronicleParticipants,
-  parseScenarioSections, replaceScenarioSection, replaceScenarioSections, checkScenarioStructure,
+  parseScenarioSections, replaceScenarioSection, replaceScenarioSections,
+  insertScenarioScene, hasManualSceneMarker, addManualSceneMarker, clearManualSceneMarker,
+  checkScenarioStructure,
   parsePoliticalFactions, setPoliticalFactionInfluence,
   CITY_SECTIONS, buildCityMd, parseCityMd, cityScaffold,
 } = require('../lib/parsers');
@@ -643,6 +645,42 @@ describe('Parsers — unit', () => {
       assert.equal(sections.find(s => s.heading === 'Финал').body, 'Новая развязка.');
       assert.equal(sections.find(s => s.heading === 'Сцена 1 — Бар').body, 'Первая сцена.\nВнутренний разделитель:\n\n---\n\nПродолжение той же сцены.');
       assert.deepEqual(skipped, ['__нет такого__']);
+    });
+
+    it('hasManualSceneMarker/addManualSceneMarker/clearManualSceneMarker — round-trip', () => {
+      assert.equal(hasManualSceneMarker(SCEN), false);
+      const marked = addManualSceneMarker(SCEN);
+      assert.equal(hasManualSceneMarker(marked), true);
+      assert.equal(addManualSceneMarker(marked), marked); // идемпотентно, не дублирует метку
+      const cleared = clearManualSceneMarker(marked);
+      assert.equal(hasManualSceneMarker(cleared), false);
+      // сама структура разделов не пострадала
+      assert.deepEqual(parseScenarioSections(cleared).sections.map(s => s.heading), ['Пролог', 'Сцена 1 — Бар', 'Финал']);
+    });
+
+    it('insertScenarioScene — вставляет новую сцену перед «Финал» с инкрементом номера, ставит метку', () => {
+      const { text, heading } = insertScenarioScene(SCEN);
+      assert.equal(heading, 'Сцена 2');
+      const { sections } = parseScenarioSections(text);
+      assert.deepEqual(sections.map(s => s.heading),
+        ['Пролог', 'Сцена 1 — Бар', 'Сцена 2', 'Описание для игрока', 'Колорит', 'Финал']);
+      const newScene = sections.find(s => s.heading === 'Сцена 2');
+      assert.equal(newScene.level, 2);
+      const descField = sections.find(s => s.heading === 'Описание для игрока');
+      assert.equal(descField.parent, 'Сцена 2');
+      assert.equal(hasManualSceneMarker(text), true);
+    });
+
+    it('insertScenarioScene — без блока «Финал» добавляет сцену в конец', () => {
+      const noFinale = [
+        '# Сценарий — Тест', '', '---', '',
+        '## Пролог', '', 'Завязка.', '',
+      ].join('\n');
+      const { text, heading } = insertScenarioScene(noFinale);
+      assert.equal(heading, 'Сцена 1');
+      const { sections } = parseScenarioSections(text);
+      assert.deepEqual(sections.map(s => s.heading),
+        ['Пролог', 'Сцена 1', 'Описание для игрока', 'Колорит']);
     });
 
     const SCEN_NESTED = [
