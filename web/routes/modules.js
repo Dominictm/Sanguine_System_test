@@ -22,7 +22,7 @@ const {
   getAllCharacters, getAllLocations, listModules, tableCell, LINEAGE_MAP,
   _nameMatch, rmdir, getChronicleDisplay,
 } = require('../lib/db');
-const { slugify, parseEvent, parseScenarioSections, replaceScenarioSection, replaceScenarioSections, splitH3Body, serializeScenarioSections, findScenarioSectionIndex, checkScenarioStructure, insertScenarioScene, hasManualSceneMarker, clearManualSceneMarker } = require('../lib/parsers');
+const { slugify, parseEvent, parseScenarioSections, replaceScenarioSection, replaceScenarioSections, splitH3Body, serializeScenarioSections, findScenarioSectionIndex, checkScenarioStructure, insertScenarioScene, hasManualSceneMarker, clearManualSceneMarker, isFinaleHeading } = require('../lib/parsers');
 
 // Modules now live under chronicles/<chr>/modules/<mod>/ — flatten them with their chronicle.
 const MOD_AUX = n => ['npc.md', 'scenario.md', 'finale.md'].includes(n) || n.endsWith('-sheet.md');
@@ -1354,7 +1354,7 @@ ${currentBlockMd}
         ...sections.slice(blockIdx + 1 + children.length),
       ];
       let updated = serializeScenarioSections(preamble, newSections);
-      if (/^Финал(?:\s*[—–:.-].*)?$/i.test(heading) && hasManualSceneMarker(updated)) updated = clearManualSceneMarker(updated);
+      if (isFinaleHeading(heading) && hasManualSceneMarker(updated)) updated = clearManualSceneMarker(updated);
       await writeFileAtomic(scenarioPath, updated, 'utf-8');
       invalidateChars(city);
       console.log(`[scenario-block] ${city}/${chr}/${mod} → блок «${heading}» перегенерирован`);

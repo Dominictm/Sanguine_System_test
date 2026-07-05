@@ -457,6 +457,13 @@ function replaceScenarioSections(raw, replacements) {
 // при перегенерации блока «Финал» (routes/modules.js scenario/block/regenerate).
 const SCENE_ADDED_MARKER_RE = /\n?<!--\s*meta:sceneAdded:\s*1\s*-->\n?/i;
 
+// Проверяет, является ли заголовок блока «Финал» (в т.ч. с подзаголовком —
+// «Финал — Название»), а не просто словом, начинающимся на «Финал»
+// («Финальная сцена», «Финал пролога» и т.п. — не совпадают).
+function isFinaleHeading(heading) {
+  return /^Финал(?:\s*[—–:.-].*)?$/i.test(heading);
+}
+
 function hasManualSceneMarker(raw) {
   return SCENE_ADDED_MARKER_RE.test(raw);
 }
@@ -489,7 +496,8 @@ function insertScenarioScene(raw, title) {
     .map(s => parseInt((s.heading.match(/^Сцена\s*(\d+)/i) || [])[1], 10))
     .filter(n => !Number.isNaN(n));
   const nextNum = nums.length ? Math.max(...nums) + 1 : 1;
-  const heading = `Сцена ${nextNum}${title ? ` — ${title}` : ''}`;
+  const safeTitle = String(title || '').replace(/[\r\n]+/g, ' ').trim();
+  const heading = `Сцена ${nextNum}${safeTitle ? ` — ${safeTitle}` : ''}`;
 
   const newScene  = { heading, body: '', level: 2, parent: null };
   const newFields = [
@@ -497,7 +505,7 @@ function insertScenarioScene(raw, title) {
     { heading: 'Колорит', body: '⚠️ 2-3 детали места/времени, которые нельзя перепутать с другим городом.', level: 3, parent: heading },
   ];
 
-  const finaleIdx = sections.findIndex(s => s.level === 2 && /^Финал(?:\s*[—–:.-].*)?$/i.test(s.heading));
+  const finaleIdx = sections.findIndex(s => s.level === 2 && isFinaleHeading(s.heading));
   const insertAt  = finaleIdx === -1 ? sections.length : finaleIdx;
   const newSections = [
     ...sections.slice(0, insertAt),
@@ -1234,6 +1242,7 @@ module.exports = {
   hasManualSceneMarker,
   addManualSceneMarker,
   clearManualSceneMarker,
+  isFinaleHeading,
   checkScenarioStructure,
   parsePoliticalFactions,
   setPoliticalFactionInfluence,
