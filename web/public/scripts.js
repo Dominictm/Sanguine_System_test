@@ -9061,6 +9061,14 @@ async function _modSavePanel(panel) {
         const ta = document.getElementById(`moddet-scensec${draft.idx}-ta`);
         if (ta) ta.value = draft.value;
       }
+      if (siblingDrafts.length) {
+        // Соседние поля снова в режиме редактирования — блок опять содержит
+        // несколько открытых полей, поэтому кнопка «Сохранить всё» должна
+        // быть видна, как и при обычном входе в блок целиком (data-editblock).
+        const restoredBlock = document.getElementById(`moddet-scensec${siblingDrafts[0].idx}-view`)?.closest('.modp-scenario-block');
+        const saveAllBtn = restoredBlock?.querySelector('[data-blocksaveall]');
+        if (saveAllBtn) saveAllBtn.style.display = '';
+      }
     } catch (e) {
       if (msgEl) { msgEl.textContent = '✗ Ошибка'; msgEl.style.display = ''; }
       showToast('Не удалось сохранить раздел: ' + e.message, 'error');
