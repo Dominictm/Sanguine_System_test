@@ -1872,6 +1872,27 @@ describe('API — integration', () => {
       assert.equal(status, 400);
     });
 
+    it('PUT /scenario/block/fields — все поля не найдены → 404, файл не изменяется', async () => {
+      if (!modDir) return;
+      const seed = [
+        '# Сценарий — Тест', '', '---', '',
+        '## Сцена 1', '',
+        '### Описание для игрока', '', 'Исходное описание.', '',
+      ].join('\n');
+      await apiJson(`/api/chronicles/${encodeURIComponent(chr)}/modules/${encodeURIComponent(mod)}/scenario${CITY}`,
+        { method: 'PUT', body: JSON.stringify({ content: seed }) });
+
+      const put = await apiJson(`/api/chronicles/${encodeURIComponent(chr)}/modules/${encodeURIComponent(mod)}/scenario/block/fields${CITY}`,
+        { method: 'PUT', body: JSON.stringify({ fields: [
+          { heading: '__нет такого 1__', parent: 'Сцена 1', content: 'x' },
+          { heading: '__нет такого 2__', parent: 'Сцена 1', content: 'y' },
+        ] }) });
+      assert.equal(put.status, 404);
+
+      const raw = await fs.readFile(path.join(modDir, 'scenario.md'), 'utf-8');
+      assert.equal(raw, seed, 'файл не должен меняться, если ни одно поле не найдено');
+    });
+
     it('POST /scenario/block/regenerate — перегенерирует блок целиком (AI_MOCK), другие блоки не трогает', async () => {
       if (!modDir) return;
       const seed = [

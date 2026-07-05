@@ -1129,6 +1129,9 @@ module.exports = function modulesRouter({
 
       const replacements = fields.map(f => ({ heading: f.heading, parent: f.parent, body: f.content }));
       const { text, skipped } = replaceScenarioSections(raw, replacements);
+      if (skipped.length === fields.length)
+        return res.status(404).json({ ok: false, error: 'Ни одно из переданных полей не найдено', skipped });
+
       await writeFileAtomic(scenarioPath, text, 'utf-8');
       invalidateChars(city);
       console.log(`[scenario-block-fields] ${city}/${chr}/${mod} → сохранено ${fields.length - skipped.length}/${fields.length}`);
