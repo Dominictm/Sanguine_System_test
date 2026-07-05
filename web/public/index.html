@@ -739,7 +739,7 @@
           <textarea class="form-control" id="city-sources" rows="2" placeholder="На что опираться при сверке канона"></textarea>
         </div>
         <div class="form-group">
-          <label class="form-label" for="city-districts">Районы (через запятую)</label>
+          <label class="form-label" for="city-districts">Районы (через запятую)<span class="field-tip" tabindex="0" data-tip="Список округов/районов города — для каждого будет создана пустая папка district_NN/&lt;район&gt;/ в locations/. Можно добавить районы позже вручную.">ⓘ</span></label>
           <input class="form-control" id="city-districts" placeholder="Митте, Кройцберг, Прензлауэр Берг">
           <p class="form-hint">Создаст пустые папки district_NN/&lt;район&gt;/ в locations/</p>
         </div>
@@ -1118,29 +1118,29 @@
       </div>
 
       <div class="chr-form-group">
-        <label class="chr-form-label" for="loc-edit-name">Название <span class="loc-edit-req">*</span></label>
+        <label class="chr-form-label" for="loc-edit-name">Название <span class="loc-edit-req">*</span><span class="field-tip" tabindex="0" data-tip="Название локации на русском — станет заголовком карточки и используется в ссылках из других карточек.">ⓘ</span></label>
         <input class="chr-form-input" id="loc-edit-name" type="text" placeholder="Название локации" autocomplete="off">
       </div>
 
       <div class="loc-edit-row2">
         <div class="chr-form-group">
-          <label class="chr-form-label" for="loc-edit-district">Район (папка)</label>
+          <label class="chr-form-label" for="loc-edit-district">Район (папка)<span class="field-tip" tabindex="0" data-tip="Округ/район, определяющий папку хранения (locations/district_NN/&lt;район&gt;/) — влияет на путь файла, не только на отображение.">ⓘ</span></label>
           <input class="chr-form-input" id="loc-edit-district" type="text" placeholder="Другие" autocomplete="off">
         </div>
         <div class="chr-form-group">
-          <label class="chr-form-label" for="loc-edit-neighborhood">Квартал</label>
+          <label class="chr-form-label" for="loc-edit-neighborhood">Квартал<span class="field-tip" tabindex="0" data-tip="Более узкое уточнение места внутри района — конкретный квартал или подрайон.">ⓘ</span></label>
           <input class="chr-form-input" id="loc-edit-neighborhood" type="text" placeholder="Район" autocomplete="off">
         </div>
       </div>
 
       <div class="chr-form-group">
-        <label class="chr-form-label" for="loc-edit-address">Адрес</label>
+        <label class="chr-form-label" for="loc-edit-address">Адрес<span class="field-tip" tabindex="0" data-tip="Условный адрес или ориентир — для описаний и навигации персонажей по городу.">ⓘ</span></label>
         <input class="chr-form-input" id="loc-edit-address" type="text" placeholder="Адрес" autocomplete="off">
       </div>
 
       <div class="loc-edit-row2">
         <div class="chr-form-group">
-          <label class="chr-form-label" for="loc-edit-zone">Зона</label>
+          <label class="chr-form-label" for="loc-edit-zone">Зона<span class="field-tip" tabindex="0" data-tip="Уровень опасности локации — безопасная/нейтральная/опасная. Влияет на то, какие сцены здесь уместны.">ⓘ</span></label>
           <select class="chr-form-input" id="loc-edit-zone">
             <option value="">—</option>
             <option value="🟢">🟢 Безопасная</option>
@@ -1149,7 +1149,7 @@
           </select>
         </div>
         <div class="chr-form-group">
-          <label class="chr-form-label" for="loc-edit-control">Контроль</label>
+          <label class="chr-form-label" for="loc-edit-control">Контроль<span class="field-tip" tabindex="0" data-tip="Фракция или группа, контролирующая эту территорию, — определяет, кто здесь хозяин.">ⓘ</span></label>
           <input class="chr-form-input" id="loc-edit-control" type="text" placeholder="Фракция" list="loc-control-list" autocomplete="off">
           <datalist id="loc-control-list"></datalist>
         </div>
@@ -1157,7 +1157,7 @@
 
       <div class="chr-form-group loc-edit-field-with-gen">
         <div class="loc-edit-field-header">
-          <label class="chr-form-label" for="loc-edit-atmosphere">Атмосфера</label>
+          <label class="chr-form-label" for="loc-edit-atmosphere">Атмосфера<span class="field-tip" tabindex="0" data-tip="2-3 предложения о настроении и ощущении места — то, что Рассказчик читает вслух при описании сцены.">ⓘ</span></label>
           <button class="loc-edit-regen-btn" data-field="atmosphere" title="Перегенерировать">🔄</button>
         </div>
         <textarea class="chr-form-textarea" id="loc-edit-atmosphere" rows="3" placeholder="2–3 предложения об атмосфере..."></textarea>
@@ -1165,14 +1165,14 @@
 
       <div class="chr-form-group loc-edit-field-with-gen">
         <div class="loc-edit-field-header">
-          <label class="chr-form-label" for="loc-edit-sensory">Сенсорная палитра</label>
+          <label class="chr-form-label" for="loc-edit-sensory">Сенсорная палитра<span class="field-tip" tabindex="0" data-tip="Что видят, слышат и чувствуют персонажи здесь — по каналам: свет, звук, запах, тактильные ощущения.">ⓘ</span></label>
         </div>
         <textarea class="chr-form-textarea" id="loc-edit-sensory" rows="5" placeholder="| **Свет** | ... |&#10;| **Звук** | ... |"></textarea>
       </div>
 
       <div class="chr-form-group loc-edit-field-with-gen">
         <div class="loc-edit-field-header">
-          <label class="chr-form-label" for="loc-edit-vtm-context">Контекст Камарильи / Масок</label>
+          <label class="chr-form-label" for="loc-edit-vtm-context">Контекст Камарильи / Масок<span class="field-tip" tabindex="0" data-tip="Как здесь соблюдается или нарушается Маскарад, роль локации в политике Камарильи и фракций.">ⓘ</span></label>
           <button class="loc-edit-regen-btn" data-field="vtmText" title="Перегенерировать">🔄</button>
         </div>
         <textarea class="chr-form-textarea" id="loc-edit-vtm-context" rows="3" placeholder="Описание контекста Камарильи…"></textarea>
@@ -1180,7 +1180,7 @@
 
       <div class="chr-form-group loc-edit-field-with-gen">
         <div class="loc-edit-field-header">
-          <label class="chr-form-label" for="loc-edit-hooks">Сценарные крючки</label>
+          <label class="chr-form-label" for="loc-edit-hooks">Сценарные крючки<span class="field-tip" tabindex="0" data-tip="Готовые зацепки для сюжета — события или тайны, которые Рассказчик может развернуть в этой локации.">ⓘ</span></label>
           <button class="loc-edit-regen-btn" data-field="hooks" title="Перегенерировать">🔄</button>
         </div>
         <textarea class="chr-form-textarea" id="loc-edit-hooks" rows="3" placeholder="1. Крючок&#10;2. Крючок&#10;3. Крючок"></textarea>
@@ -1188,14 +1188,14 @@
 
       <div class="chr-form-group loc-edit-field-with-gen">
         <div class="loc-edit-field-header">
-          <label class="chr-form-label" for="loc-edit-image-prompt">Промт изображения (EN)</label>
+          <label class="chr-form-label" for="loc-edit-image-prompt">Промт изображения (EN)<span class="field-tip" tabindex="0" data-tip="Промт для генерации изображения локации на английском языке — используется text-to-image моделями.">ⓘ</span></label>
           <button class="loc-edit-regen-btn" data-field="imagePrompt" title="Перегенерировать">🔄</button>
         </div>
         <textarea class="chr-form-textarea" id="loc-edit-image-prompt" rows="3" placeholder="A dark Parisian street..."></textarea>
       </div>
 
       <div class="chr-form-group">
-        <label class="chr-form-label" for="loc-edit-context">Контекст для генерации</label>
+        <label class="chr-form-label" for="loc-edit-context">Контекст для генерации<span class="field-tip" tabindex="0" data-tip="Краткое описание того, что здесь происходит по сюжету, — подсказка ИИ при автогенерации остальных полей.">ⓘ</span></label>
         <input class="chr-form-input" id="loc-edit-context" type="text" placeholder="Что здесь происходит по сценарию" autocomplete="off">
       </div>
 

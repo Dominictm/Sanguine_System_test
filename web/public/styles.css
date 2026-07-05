@@ -92,6 +92,7 @@
   --z-sheet:    2000;
   --z-tour:     2500;
   --z-lightbox: 9000;
+  --z-tooltip:  9600;
   /* ── Misc ── */
   --sidebar-w: 210px;
   --ease: cubic-bezier(.4, 0, .2, 1);
@@ -1428,16 +1429,17 @@ body {
 .field-tip::after {
   content: attr(data-tip);
   position: absolute;
-  left: 0;
-  bottom: calc(100% + 9px);
+  left: calc(100% + 9px);
+  top: 50%;
+  transform: translateY(-50%) translateX(-4px);
   width: 300px;
-  max-width: 70vw;
+  max-width: min(320px, 60vw);
   padding: 10px 13px;
   background: var(--bg2);
   border: 1px solid var(--border);
   border-radius: 6px;
   color: var(--text2);
-  font-size: 19px;
+  font-size: var(--fs-sm, 12px);
   font-family: var(--f-body);
   font-weight: 400;
   line-height: 1.45;
@@ -1449,16 +1451,15 @@ body {
   opacity: 0;
   visibility: hidden;
   pointer-events: none;
-  transform: translateY(4px);
   transition: opacity .15s, transform .15s;
-  z-index: 50;
+  z-index: var(--z-tooltip, 9600);
 }
 
 .field-tip:hover::after,
 .field-tip:focus::after {
   opacity: 1;
   visibility: visible;
-  transform: translateY(0);
+  transform: translateY(-50%) translateX(0);
 }
 
 .form-control {
@@ -1749,7 +1750,7 @@ select.form-control {
     min-height: 44px;
   }
 
-  .modp-field-regen-btn {
+  .modp-field-regen-btn, .field-tip {
     min-width: 44px;
     min-height: 44px;
   }
@@ -8705,6 +8706,7 @@ a.md-link-loc:hover {
   text-transform: uppercase;
   letter-spacing: .05em;
 }
+
 .modp-field-regen-btn {
   background: none;
   border: 1px solid var(--border);
@@ -9838,4 +9840,4 @@ tr.rumor-told:hover .rumor-cb-cell {
    pushed the cancel button past the box's left edge (flex row overflowing an
    unwrapped justify-content:flex-end never clips itself). Tighter box here +
    flex-wrap above as a safety net for any still-longer custom text. */
-.confirm-acts .chr-modal-btn { padding: 10px 18px; font-size: var(--fs-sm); }
+.confirm-acts .chr-modal-btn { padding: 8px 14px; font-size: var(--fs-xs); letter-spacing: .04em; white-space: nowrap; }
