@@ -3769,6 +3769,9 @@ document.getElementById('modp-panel-scenario').addEventListener('click', e => {
         if (!r.ok) throw new Error(result.error || 'Ошибка сохранения');
         STATE.currentModuleData.scenario = result.scenario;
         _renderScenarioPanel(STATE.currentModuleData);
+        if (Array.isArray(result.skipped) && result.skipped.length) {
+          showToast(`Не удалось сохранить: ${result.skipped.join(', ')} (раздел мог измениться)`, 'error');
+        }
       } catch (err) {
         showToast('Не удалось сохранить блок: ' + err.message, 'error');
         saveAllBtn.disabled = false;
