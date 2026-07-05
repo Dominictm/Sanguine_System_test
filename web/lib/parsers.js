@@ -432,6 +432,25 @@ function findScenarioSectionIndex(sections, heading, parent) {
   return sections.findIndex(s => s.heading === heading);
 }
 
+/**
+ * Батч-версия replaceScenarioSection — применяет несколько замен за один
+ * parse/serialize проход (одна файловая запись вместо N) для кнопки
+ * «Сохранить всё» на блоке сценария.
+ * @param {string} raw
+ * @param {{heading:string, parent?:string, body:string}[]} replacements
+ * @returns {{ text: string, skipped: string[] }} skipped — заголовки, для которых раздел не найден
+ */
+function replaceScenarioSections(raw, replacements) {
+  const { preamble, sections } = parseScenarioSections(raw);
+  const skipped = [];
+  for (const r of replacements) {
+    const idx = findScenarioSectionIndex(sections, r.heading, r.parent);
+    if (idx === -1) { skipped.push(r.heading); continue; }
+    sections[idx] = { ...sections[idx], body: String(r.body == null ? '' : r.body).trim() };
+  }
+  return { text: serializeScenarioSections(preamble, sections), skipped };
+}
+
 // Обязательные смысловые блоки сценария — по эталонному формату (см. пример
 // `tsirk_tsirk_tsirk/scenario.md`): GM-справка + Пролог/Сцены прямыми `##`-
 // заголовками (без обёртки), Финал, закрывающая таблица вопросов, колорит
@@ -1153,6 +1172,7 @@ module.exports = {
   splitH3Body,
   serializeScenarioSections,
   findScenarioSectionIndex,
+  replaceScenarioSections,
   checkScenarioStructure,
   parsePoliticalFactions,
   setPoliticalFactionInfluence,

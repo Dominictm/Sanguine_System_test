@@ -14,7 +14,7 @@ const {
   mdExtractLinks, mdStripLinks, mdStripInline, classifyChronicleLink,
   categorizeRel, parseCharacter, parseLocation, parseEvent, parseChronicle,
   parseChronicleParticipants,
-  parseScenarioSections, replaceScenarioSection, checkScenarioStructure,
+  parseScenarioSections, replaceScenarioSection, replaceScenarioSections, checkScenarioStructure,
   parsePoliticalFactions, setPoliticalFactionInfluence,
   CITY_SECTIONS, buildCityMd, parseCityMd, cityScaffold,
 } = require('../lib/parsers');
@@ -630,6 +630,19 @@ describe('Parsers — unit', () => {
 
     it('replaceScenarioSection — неизвестный заголовок возвращает текст без изменений', () => {
       assert.equal(replaceScenarioSection(SCEN, '__нет такого__', 'x'), SCEN);
+    });
+
+    it('replaceScenarioSections — применяет несколько замен за один проход, неизвестные заголовки — в skipped', () => {
+      const { text, skipped } = replaceScenarioSections(SCEN, [
+        { heading: 'Пролог', body: 'Новая завязка.' },
+        { heading: 'Финал', body: 'Новая развязка.' },
+        { heading: '__нет такого__', body: 'x' },
+      ]);
+      const { sections } = parseScenarioSections(text);
+      assert.equal(sections.find(s => s.heading === 'Пролог').body, 'Новая завязка.');
+      assert.equal(sections.find(s => s.heading === 'Финал').body, 'Новая развязка.');
+      assert.equal(sections.find(s => s.heading === 'Сцена 1 — Бар').body, 'Первая сцена.\nВнутренний разделитель:\n\n---\n\nПродолжение той же сцены.');
+      assert.deepEqual(skipped, ['__нет такого__']);
     });
 
     const SCEN_NESTED = [
