@@ -497,7 +497,7 @@ function insertScenarioScene(raw, title) {
     { heading: 'Колорит', body: '⚠️ 2-3 детали места/времени, которые нельзя перепутать с другим городом.', level: 3, parent: heading },
   ];
 
-  const finaleIdx = sections.findIndex(s => s.level === 2 && /^Финал/i.test(s.heading));
+  const finaleIdx = sections.findIndex(s => s.level === 2 && /^Финал(?:\s*[—–:.-].*)?$/i.test(s.heading));
   const insertAt  = finaleIdx === -1 ? sections.length : finaleIdx;
   const newSections = [
     ...sections.slice(0, insertAt),
