@@ -22,7 +22,7 @@ const {
   getAllCharacters, getAllLocations, listModules, tableCell, LINEAGE_MAP,
   _nameMatch, rmdir, getChronicleDisplay,
 } = require('../lib/db');
-const { slugify, parseEvent, parseScenarioSections, replaceScenarioSection, splitH3Body, serializeScenarioSections, findScenarioSectionIndex, checkScenarioStructure } = require('../lib/parsers');
+const { slugify, parseEvent, parseScenarioSections, replaceScenarioSection, replaceScenarioSections, splitH3Body, serializeScenarioSections, findScenarioSectionIndex, checkScenarioStructure } = require('../lib/parsers');
 
 // Modules now live under chronicles/<chr>/modules/<mod>/ — flatten them with their chronicle.
 const MOD_AUX = n => ['npc.md', 'scenario.md', 'finale.md'].includes(n) || n.endsWith('-sheet.md');
@@ -1108,6 +1108,31 @@ module.exports = function modulesRouter({
       invalidateChars(city);
       console.log(`[scenario-section] ${city}/${chr}/${mod} → «${heading}» отредактирован вручную`);
       res.json({ ok: true, scenario: updated });
+    } catch (e) { serverError(res, e); }
+  });
+
+  // ── Scenario, block: batch-save all fields at once («Сохранить всё» в режиме
+  // редактирования блока) — один parse/serialize проход вместо N отдельных
+  // PUT /scenario/section запросов. ──────────────────────────────────────────
+  router.put('/api/chronicles/:chr/modules/:mod/scenario/block/fields', express.json(), async (req, res) => {
+    try {
+      const city = reqCity(req);
+      const { chr, mod } = req.params;
+      if (chr.includes('..') || mod.includes('..'))
+        return res.status(400).json({ ok: false, error: 'Недопустимое имя' });
+      const fields = Array.isArray(req.body?.fields) ? req.body.fields : [];
+      if (!fields.length) return res.status(400).json({ ok: false, error: 'Не переданы поля' });
+
+      const scenarioPath = path.join(chroniclesDir(city), chr, 'modules', mod, 'scenario.md');
+      const raw = await fs.readFile(scenarioPath, 'utf-8').catch(() => null);
+      if (raw == null) return res.status(404).json({ ok: false, error: 'Сценарий не найден' });
+
+      const replacements = fields.map(f => ({ heading: f.heading, parent: f.parent, body: f.content }));
+      const { text, skipped } = replaceScenarioSections(raw, replacements);
+      await writeFileAtomic(scenarioPath, text, 'utf-8');
+      invalidateChars(city);
+      console.log(`[scenario-block-fields] ${city}/${chr}/${mod} → сохранено ${fields.length - skipped.length}/${fields.length}`);
+      res.json({ ok: true, scenario: text, skipped });
     } catch (e) { serverError(res, e); }
   });
 

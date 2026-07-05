@@ -1818,6 +1818,60 @@ describe('API — integration', () => {
       assert.match(put.body.scenario, /## Сцена 2\n+### GM-подсказки\n\nНовые подсказки для сцены 2\./);
     });
 
+    it('PUT /scenario/block/fields — сохраняет несколько полей одним запросом', async () => {
+      if (!modDir) return;
+      const seed = [
+        '# Сценарий — Тест', '', '---', '',
+        '## Сцена 1', '',
+        '### Описание для игрока', '', 'Старое описание.', '',
+        '### Колорит', '', 'Старый колорит.', '',
+      ].join('\n');
+      await apiJson(`/api/chronicles/${encodeURIComponent(chr)}/modules/${encodeURIComponent(mod)}/scenario${CITY}`,
+        { method: 'PUT', body: JSON.stringify({ content: seed }) });
+
+      const put = await apiJson(`/api/chronicles/${encodeURIComponent(chr)}/modules/${encodeURIComponent(mod)}/scenario/block/fields${CITY}`,
+        { method: 'PUT', body: JSON.stringify({ fields: [
+          { heading: 'Описание для игрока', parent: 'Сцена 1', content: 'Новое описание.' },
+          { heading: 'Колорит', parent: 'Сцена 1', content: 'Новый колорит.' },
+        ] }) });
+      assert.equal(put.status, 200);
+      assert.ok(put.body.ok);
+      assert.deepEqual(put.body.skipped, []);
+      assert.match(put.body.scenario, /### Описание для игрока\n\nНовое описание\./);
+      assert.match(put.body.scenario, /### Колорит\n\nНовый колорит\./);
+
+      const raw = await fs.readFile(path.join(modDir, 'scenario.md'), 'utf-8');
+      assert.match(raw, /Новое описание\./);
+      assert.match(raw, /Новый колорит\./);
+    });
+
+    it('PUT /scenario/block/fields — неизвестное поле идёт в skipped, остальные сохраняются', async () => {
+      if (!modDir) return;
+      const seed = [
+        '# Сценарий — Тест', '', '---', '',
+        '## Сцена 1', '',
+        '### Описание для игрока', '', 'Старое описание.', '',
+      ].join('\n');
+      await apiJson(`/api/chronicles/${encodeURIComponent(chr)}/modules/${encodeURIComponent(mod)}/scenario${CITY}`,
+        { method: 'PUT', body: JSON.stringify({ content: seed }) });
+
+      const put = await apiJson(`/api/chronicles/${encodeURIComponent(chr)}/modules/${encodeURIComponent(mod)}/scenario/block/fields${CITY}`,
+        { method: 'PUT', body: JSON.stringify({ fields: [
+          { heading: 'Описание для игрока', parent: 'Сцена 1', content: 'Новое описание.' },
+          { heading: '__нет такого__', parent: 'Сцена 1', content: 'x' },
+        ] }) });
+      assert.equal(put.status, 200);
+      assert.deepEqual(put.body.skipped, ['__нет такого__']);
+      assert.match(put.body.scenario, /Новое описание\./);
+    });
+
+    it('PUT /scenario/block/fields — пустой массив fields → 400', async () => {
+      if (!modDir) return;
+      const { status } = await apiJson(`/api/chronicles/${encodeURIComponent(chr)}/modules/${encodeURIComponent(mod)}/scenario/block/fields${CITY}`,
+        { method: 'PUT', body: JSON.stringify({ fields: [] }) });
+      assert.equal(status, 400);
+    });
+
     it('POST /scenario/block/regenerate — перегенерирует блок целиком (AI_MOCK), другие блоки не трогает', async () => {
       if (!modDir) return;
       const seed = [
