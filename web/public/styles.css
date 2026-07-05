@@ -27,6 +27,11 @@
   --text3: #8c8279;
   --text-dim: var(--text2);
   --text-muted: var(--text3);
+  /* Не тематические — истинный чёрный/белый для дим-оверлеев поверх артов и
+     максимально-контрастного текста/иконок на насыщенном (hover) фоне, где
+     сама идея цвета — «чёрный»/«белый», а не оттенок бренд-палитры. */
+  --pure-black: #000;
+  --pure-white: #fff;
   /* ── Semantic state colors ── */
   --c-success: #7dce82;
   --c-success-dim: #8fd49a;
@@ -34,6 +39,9 @@
   --c-danger: #cc2200;
   --c-danger-text: #ff7070;
   --c-info: #8ab4f8;
+  --c-info-light: #cfe2f5;
+  --gold-muted: #c9a64a;
+  --c-success-dot: #5a9e40;
   --c-violet: #a78bca;
   --c-violet-light: #c4a8e0;
   --c-lore: #8888cc;
@@ -46,6 +54,14 @@
   --c-link-char: #e8c84a;
   --c-link-loc:  #7ec8a0;
   --c-link-loc-hover: #9ee0ba;
+  /* ── Decorative button gradients (d20/generate — one-off, not core palette) ── */
+  --grad-d20-a: #1e1400;
+  --grad-d20-b: #2e1e00;
+  --grad-d20-hover-a: #2e2000;
+  --grad-d20-hover-b: #3e2c00;
+  --grad-gen-a: #0e1a12;
+  --grad-gen-b: #172513;
+  --grad-gen-hover-b: #1f3019;
   /* ── Fonts ── */
   --f-display: 'Cinzel Decorative', 'Cinzel', serif;
   --f-heading: 'Cinzel', serif;
@@ -217,7 +233,7 @@ body {
   color: var(--text2);
   text-decoration: none;
   border-left: 2px solid transparent;
-  transition: all .2s var(--ease);
+  transition: color .2s var(--ease), background .2s var(--ease), border-left-color .2s var(--ease);
   cursor: pointer;
   user-select: none;
 }
@@ -438,6 +454,7 @@ body {
 
 .ais-input:focus {
   border-color: var(--gold);
+  box-shadow: 0 0 6px var(--glow);
 }
 
 .ais-mono {
@@ -460,6 +477,7 @@ body {
 
 .ais-select:focus {
   border-color: var(--gold);
+  box-shadow: 0 0 6px var(--glow);
 }
 
 .ais-combo-row {
@@ -839,6 +857,7 @@ body {
 
 .filter-input:focus {
   border-color: var(--accent2);
+  box-shadow: 0 0 6px var(--glow);
 }
 
 .filter-input::placeholder {
@@ -864,6 +883,7 @@ body {
 
 .filter-select:focus {
   border-color: var(--accent2);
+  box-shadow: 0 0 6px var(--glow);
 }
 
 #search-input {
@@ -892,7 +912,7 @@ body {
   border-radius: 2px;
   padding: 18px;
   cursor: pointer;
-  transition: all .2s var(--ease);
+  transition: border-color .2s var(--ease), background .2s var(--ease), transform .2s var(--ease);
   position: relative;
   overflow: hidden;
   display: flex;
@@ -953,7 +973,7 @@ body {
 .char-card-dim {
   position: absolute;
   inset: 0;
-  background: #000;
+  background: var(--pure-black);
   opacity: 0;
   transition: opacity 2s ease;
   pointer-events: none;
@@ -1314,7 +1334,7 @@ body {
   cursor: pointer;
   border-bottom: 2px solid transparent;
   margin-bottom: -1px;
-  transition: all .18s;
+  transition: color .18s, border-bottom-color .18s;
 }
 
 .tab-btn:hover {
@@ -1447,6 +1467,7 @@ body {
 
 .form-control:focus {
   border-color: var(--accent2);
+  box-shadow: 0 0 6px var(--glow);
 }
 
 .form-control::placeholder {
@@ -1577,7 +1598,7 @@ select.form-control {
 
 .output-area {
   margin-top: 20px;
-  background: #000;
+  background: var(--pure-black);
   border: 1px solid var(--border);
   border-radius: 2px;
   padding: 16px;
@@ -1849,7 +1870,7 @@ a:focus-visible {
   letter-spacing: .1em;
   color: var(--text2);
   text-transform: uppercase;
-  transition: all .2s var(--ease);
+  transition: border-color .2s var(--ease), background .2s var(--ease), color .2s var(--ease), transform .2s var(--ease), box-shadow .2s var(--ease);
 }
 
 .lineage-pick-btn:hover {
@@ -1936,7 +1957,7 @@ a:focus-visible {
 
 .modal-img-clear:hover {
   background: rgba(139, 0, 0, .7);
-  color: #fff;
+  color: var(--pure-white);
 }
 
 .btn-img-upload {
@@ -2057,7 +2078,7 @@ a:focus-visible {
   height: 100%;
   position: relative;
   overflow: hidden;
-  background: #000;
+  background: var(--pure-black);
 }
 
 .cdet-carousel-img {
@@ -2071,7 +2092,7 @@ a:focus-visible {
 .cdet-carousel-overlay {
   position: absolute;
   inset: 0;
-  background: #000;
+  background: var(--pure-black);
   opacity: 0;
   transition: opacity 2s ease;
   pointer-events: none;
@@ -2127,7 +2148,7 @@ a:focus-visible {
 
 .cdet-carousel-btn:hover {
   background: rgba(139, 0, 0, 0.452);
-  color: #fff;
+  color: var(--pure-white);
 }
 
 .cdet-carousel-btn.prev {
@@ -2486,6 +2507,7 @@ a:focus-visible {
 
 .cdet-edit-textarea:focus {
   border-color: var(--gold);
+  box-shadow: 0 0 6px var(--glow);
 }
 
 .cdet-edit-textarea::placeholder {
@@ -2558,14 +2580,14 @@ a:focus-visible {
   font-family: var(--f-body);
   font-size: var(--fs-md);
 }
-.cdet-pol-role-sel:focus { outline: none; border-color: var(--accent); box-shadow: var(--glow); }
+.cdet-pol-role-sel:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 6px var(--glow); }
 .cdet-pol-role-custom, .cdet-loc-type-custom { flex: 0 0 150px; }
 .cdet-pol-name-inp, .cdet-loc-name-inp { flex: 1 1 200px; }
 
 .cdet-rel-name-inp:focus, .cdet-rel-type-inp:focus {
   outline: none;
   border-color: var(--accent);
-  box-shadow: var(--glow);
+  box-shadow: 0 0 6px var(--glow);
 }
 
 .cdet-rel-del-btn {
@@ -2692,6 +2714,7 @@ a:focus-visible {
 
 .cdet-field-input:focus {
   border-color: var(--gold);
+  box-shadow: 0 0 6px var(--glow);
 }
 
 .cdet-field-input::placeholder {
@@ -3086,6 +3109,7 @@ a:focus-visible {
 
 .chr-form-input:focus {
   border-color: var(--gold);
+  box-shadow: 0 0 6px var(--glow);
 }
 
 .chr-form-mono {
@@ -3395,8 +3419,7 @@ a:focus-visible {
   justify-content: space-between;
   align-items: flex-start;
   background: var(--bg3);
-  border: 1px solid var(--border);
-  border-left: 3px solid var(--gold);
+  border: 1px solid var(--gold);
   border-radius: 2px;
   padding: 12px 14px;
   gap: 10px;
@@ -3528,6 +3551,7 @@ a:focus-visible {
 
 .chd-period-input:focus {
   border-color: var(--gold);
+  box-shadow: 0 0 6px var(--glow);
 }
 
 .chd-period-input::placeholder {
@@ -3564,7 +3588,6 @@ a:focus-visible {
 .chd-recap-panel {
   margin: 4px 0 14px;
   border: 1px solid rgba(184, 134, 11, .35);
-  border-left: 3px solid var(--gold);
   border-radius: 3px;
   background: linear-gradient(180deg, rgba(184, 134, 11, .06), rgba(0, 0, 0, .15));
   padding: 14px 16px;
@@ -3661,7 +3684,6 @@ a:focus-visible {
 .chd-director-panel {
   margin: 4px 0 14px;
   border: 1px solid rgba(139, 0, 0, .3);
-  border-left: 3px solid var(--accent2);
   border-radius: 3px;
   background: linear-gradient(180deg, rgba(139, 0, 0, .06), rgba(0, 0, 0, .18));
   padding: 14px 16px;
@@ -3858,7 +3880,7 @@ a:focus-visible {
 .chr-modal {
   background: var(--bg2);
   border: 1px solid var(--border);
-  border-top: 2px solid #8B0000;
+  border-top: 2px solid var(--accent);
   border-radius: 2px;
   padding: 28px 32px;
   /* never exceed the viewport — confirm/create modals were forced to 1000px
@@ -3893,7 +3915,8 @@ a:focus-visible {
   margin-bottom: 12px;
   padding: 8px 10px;
   background: rgba(184, 134, 11, .07);
-  border-left: 3px solid var(--gold);
+  border: 1px solid rgba(184, 134, 11, .3);
+  border-radius: 2px;
 }
 
 .chr-modal-section {
@@ -3960,17 +3983,15 @@ a:focus-visible {
 
 .module-card {
   background: var(--bg3);
-  border: 1px solid var(--border);
-  border-left: 3px solid var(--gold);
+  border: 1px solid var(--gold);
   border-radius: 2px;
   padding: 22px 26px 44px;
   position: relative;
-  transition: all .2s var(--ease);
+  transition: border-color .2s var(--ease), background .2s var(--ease), transform .2s var(--ease);
 }
 
 .module-card:hover {
-  border-color: var(--border2);
-  border-left-color: var(--gold2);
+  border-color: var(--gold2);
   background: var(--bg4);
   transform: translateY(-1px);
 }
@@ -4041,20 +4062,21 @@ a:focus-visible {
   gap: 16px;
   padding: 16px 20px;
   border-bottom: 1px solid rgba(139, 0, 0, .08);
-  border-left: 3px solid transparent;
-  transition: background .15s, border-left-color .15s;
+  transition: background .15s;
 }
 
 .thread-card:hover {
   background: var(--bg3);
 }
 
+/* Приоритет уже читается по цвету/рамке .thread-priority — не нужен ещё и
+   левый акцент-стрип (side-stripe borders запрещены везде, кроме навигации,
+   см. DESIGN.md); «активная» нить сигналит лёгкой кровяной подложкой вместо. */
 .thread-active {
-  border-left-color: var(--accent);
+  background: rgba(139, 0, 0, .05);
 }
 
 .thread-background {
-  border-left-color: var(--text3);
   opacity: .7;
 }
 
@@ -4125,12 +4147,10 @@ a:focus-visible {
 }
 
 .thread-closed {
-  border-left-color: #2e7d32;
   opacity: .55;
 }
 
 .thread-abandoned {
-  border-left-color: var(--text3);
   opacity: .45;
 }
 
@@ -4186,7 +4206,7 @@ a:focus-visible {
   border-radius: 2px;
   padding: 16px;
   cursor: pointer;
-  transition: all .2s var(--ease);
+  transition: border-color .2s var(--ease), background .2s var(--ease), transform .2s var(--ease), box-shadow .2s var(--ease);
   position: relative;
   overflow: hidden;
   display: flex;
@@ -4587,7 +4607,7 @@ a:focus-visible {
 }
 
 .lightbox-close:hover {
-  color: #fff;
+  color: var(--pure-white);
 }
 
 .lightbox-nav {
@@ -4610,7 +4630,7 @@ a:focus-visible {
 
 .lightbox-nav:hover {
   background: rgba(0, 0, 0, .8);
-  color: #fff;
+  color: var(--pure-white);
 }
 
 .lightbox-nav.prev {
@@ -4844,6 +4864,7 @@ a:focus-visible {
 
 .hooks-input:focus {
   border-color: var(--gold);
+  box-shadow: 0 0 6px var(--glow);
 }
 
 .hooks-input::placeholder {
@@ -4958,7 +4979,7 @@ a:focus-visible {
 .cdet-img-del-btn:hover {
   background: rgba(139, 0, 0, .75);
   border-color: rgba(180, 60, 60, .8);
-  color: #fff;
+  color: var(--pure-white);
 }
 
 /* ── Diary tab ──────────────────────────────────────────────── */
@@ -4997,8 +5018,7 @@ a:focus-visible {
 
 .cdet-presence {
   background: var(--bg2);
-  border: 1px solid var(--border);
-  border-left: 3px solid var(--gold);
+  border: 1px solid var(--gold);
   border-radius: 2px;
   padding: 9px 12px;
   margin-bottom: 10px;
@@ -5007,7 +5027,7 @@ a:focus-visible {
 }
 
 .cdet-aliases {
-  border-left-color: var(--accent);
+  border-color: var(--accent);
 }
 
 .diary-item {
@@ -5019,14 +5039,12 @@ a:focus-visible {
   border: 1px solid var(--border);
   border-radius: 2px;
   cursor: pointer;
-  transition: all .18s var(--ease);
+  transition: background .18s var(--ease), border-color .18s var(--ease);
 }
 
 .diary-item:hover {
   background: var(--bg4);
-  border-color: var(--border2);
-  border-left: 3px solid var(--accent);
-  padding-left: 14px;
+  border-color: var(--accent);
 }
 
 .diary-item-icon {
@@ -5075,7 +5093,7 @@ a:focus-visible {
 .diary-item-del-btn:hover {
   background: rgba(139, 0, 0, .75);
   border-color: rgba(180, 60, 60, .8);
-  color: #fff;
+  color: var(--pure-white);
 }
 
 .diary-back {
@@ -5134,7 +5152,7 @@ a:focus-visible {
 .diary-entry-del-btn:hover {
   background: rgba(139, 0, 0, .75);
   border-color: rgba(180, 60, 60, .8);
-  color: #fff;
+  color: var(--pure-white);
 }
 
 .diary-session {
@@ -5243,7 +5261,7 @@ a:focus-visible {
 
 .stat-clickable {
   cursor: pointer;
-  transition: all .2s var(--ease);
+  transition: border-color .2s var(--ease), background .2s var(--ease), transform .2s var(--ease), box-shadow .2s var(--ease);
 }
 
 .stat-clickable:hover {
@@ -5403,8 +5421,7 @@ a:focus-visible {
 .chron-event {
   position: relative;
   background: var(--bg3);
-  border: 1px solid var(--border);
-  border-left: 3px solid var(--accent);
+  border: 1px solid var(--accent);
   border-radius: 2px;
   padding: 18px 22px 20px;
   margin-bottom: 18px;
@@ -5425,7 +5442,7 @@ a:focus-visible {
 }
 
 .chron-event:hover {
-  border-left-color: var(--crimson);
+  border-color: var(--crimson);
 }
 
 .chron-event-head {
@@ -5449,7 +5466,7 @@ a:focus-visible {
   font-size: var(--fs-3xs);
   letter-spacing: .12em;
   text-transform: uppercase;
-  color: #c9a64a;
+  color: var(--gold-muted);
   border: 1px solid rgba(184, 134, 11, .4);
   border-radius: 2px;
   padding: 2px 7px;
@@ -5499,7 +5516,7 @@ a:focus-visible {
 
 button.chron-chip {
   cursor: pointer;
-  transition: all .15s var(--ease);
+  transition: border-color .15s var(--ease), color .15s var(--ease), background .15s var(--ease);
 }
 
 .chip-char:hover {
@@ -5510,12 +5527,12 @@ button.chron-chip {
 
 .chip-loc:hover {
   border-color: var(--c-info);
-  color: #cfe2f5;
+  color: var(--c-info-light);
 }
 
 .chip-mod {
   border-color: rgba(184, 134, 11, .35);
-  color: #c9a64a;
+  color: var(--gold-muted);
 }
 
 .chip-mod:hover {
@@ -5536,7 +5553,7 @@ button.chron-chip {
   border-radius: 2px;
   cursor: pointer;
   margin-top: 4px;
-  transition: all .15s var(--ease);
+  transition: border-color .15s var(--ease), color .15s var(--ease);
 }
 
 .chron-toggle:hover {
@@ -5713,7 +5730,7 @@ button.chron-chip {
 }
 
 .cdet-tab.tab-finale {
-  color: #9c8430;
+  color: var(--gold);
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -5939,7 +5956,7 @@ a.md-link-loc:hover {
 }
 
 .ip-ok {
-  background: #5a9e40;
+  background: var(--c-success-dot);
   box-shadow: 0 0 6px rgba(90, 158, 64, .5);
 }
 
@@ -6249,7 +6266,7 @@ a.md-link-loc:hover {
 }
 
 .ls-err li {
-  color: #e8a0a0;
+  color: var(--c-error);
 }
 
 .ls-stubs {
@@ -6270,7 +6287,8 @@ a.md-link-loc:hover {
   margin-top: 10px;
   padding: 10px 14px;
   background: var(--bg4);
-  border-left: 2px solid var(--gold);
+  border: 1px solid var(--gold);
+  border-radius: 2px;
   font-style: italic;
   font-size: var(--fs-lg);
   color: var(--text);
@@ -6414,7 +6432,7 @@ a.md-link-loc:hover {
 .city-switch select:focus {
   outline: none;
   border-color: var(--accent);
-  box-shadow: var(--glow);
+  box-shadow: 0 0 6px var(--glow);
 }
 
 /* ── Module Detail Page ─────────────────────────────────────────────────────── */
@@ -6599,7 +6617,7 @@ a.md-link-loc:hover {
   letter-spacing: .1em;
   text-transform: uppercase;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: opacity .2s, color .2s, background .2s, border-color .2s;
   white-space: nowrap;
   border-radius: 3px 3px 0 0;
   position: relative;
@@ -6695,7 +6713,7 @@ a.md-link-loc:hover {
 .modp-sf-input:focus {
   outline: none;
   border-color: var(--accent);
-  box-shadow: var(--glow);
+  box-shadow: 0 0 6px var(--glow);
 }
 
 .modp-sf-area {
@@ -6772,22 +6790,19 @@ a.md-link-loc:hover {
   gap: 10px;
   align-items: flex-start;
   background: rgba(139, 0, 0, 0.10);
-  border: 1px solid rgba(139, 0, 0, 0.35);
-  border-left: 3px solid #cc2200;
+  border: 1px solid var(--c-danger);
   border-radius: 4px;
   padding: 8px 12px;
 }
 
 .canon-issue.canon-medium {
   background: rgba(184, 134, 11, 0.10);
-  border-color: rgba(184, 134, 11, 0.35);
-  border-left-color: var(--gold);
+  border-color: var(--gold);
 }
 
 .canon-issue.canon-low {
   background: rgba(120, 120, 120, 0.10);
-  border-color: var(--border);
-  border-left-color: #888;
+  border-color: var(--text3);
 }
 
 .canon-issue-char {
@@ -6848,7 +6863,7 @@ a.md-link-loc:hover {
 .ip-canon-text:focus {
   outline: none;
   border-color: var(--accent);
-  box-shadow: var(--glow);
+  box-shadow: 0 0 6px var(--glow);
 }
 
 .ip-canon-btn {
@@ -6901,8 +6916,7 @@ a.md-link-loc:hover {
 
 .cdet-dlg-line {
   background: var(--bg-panel);
-  border: 1px solid var(--border);
-  border-left: 3px solid var(--accent);
+  border: 1px solid var(--accent);
   border-radius: 4px;
   padding: 9px 13px;
   font-size: var(--fs-base);
@@ -6928,8 +6942,7 @@ a.md-link-loc:hover {
 
 .modp-npc-entry {
   background: var(--bg-panel);
-  border: 1px solid var(--border);
-  border-left: 3px solid var(--crimson);
+  border: 1px solid var(--crimson);
   border-radius: 4px;
   padding: 12px 16px;
   margin-bottom: 12px;
@@ -7026,7 +7039,7 @@ a.md-link-loc:hover {
 .modp-npc-sit:focus {
   outline: none;
   border-color: var(--accent);
-  box-shadow: var(--glow);
+  box-shadow: 0 0 6px var(--glow);
 }
 
 .modp-npc-dlg-btn {
@@ -7389,6 +7402,7 @@ a.md-link-loc:hover {
 .v20-mini-input:focus {
   outline: none;
   border-bottom-color: var(--accent);
+  box-shadow: 0 0 6px var(--glow);
 }
 
 .v20-grid3 {
@@ -8208,8 +8222,7 @@ a.md-link-loc:hover {
 
 .modp-session {
   background: var(--bg-panel);
-  border: 1px solid var(--border);
-  border-left: 3px solid var(--crimson);
+  border: 1px solid var(--crimson);
   border-radius: 4px;
   padding: 14px 18px;
 }
@@ -8276,8 +8289,7 @@ a.md-link-loc:hover {
 
 .modp-info-card {
   background: rgba(139, 0, 0, 0.07);
-  border: 1px solid var(--border);
-  border-left: 2px solid var(--crimson);
+  border: 1px solid var(--crimson);
   padding: 14px 16px;
   border-radius: 2px;
 }
@@ -8326,7 +8338,7 @@ a.md-link-loc:hover {
 
 .modp-char-item {
   background: rgba(139, 0, 0, 0.05);
-  border-left: 2px solid var(--gold);
+  border: 1px solid var(--gold);
   padding: 10px 14px;
   border-radius: 1px;
   display: flex;
@@ -8483,8 +8495,7 @@ a.md-link-loc:hover {
 
 /* Locations */
 .modp-location {
-  border: 1px solid var(--border);
-  border-left: 3px solid var(--gold);
+  border: 1px solid var(--gold);
   background: rgba(184, 134, 11, 0.04);
   padding: 14px 18px;
   margin-bottom: 12px;
@@ -8549,7 +8560,7 @@ a.md-link-loc:hover {
 }
 .modp-save-btn {
   background: var(--accent);
-  color: #fff;
+  color: var(--pure-white);
   border: none;
   padding: 4px 14px;
   border-radius: 3px;
@@ -8748,7 +8759,7 @@ a.md-link-loc:hover {
 }
 
 .archive-d20-btn {
-  background: linear-gradient(135deg, #1e1400, #2e1e00);
+  background: linear-gradient(135deg, var(--grad-d20-a), var(--grad-d20-b));
   border: 1px solid rgba(184, 134, 11, .4);
   color: var(--gold);
   padding: 5px 16px;
@@ -8762,7 +8773,7 @@ a.md-link-loc:hover {
 }
 
 .archive-d20-btn:hover {
-  background: linear-gradient(135deg, #2e2000, #3e2c00);
+  background: linear-gradient(135deg, var(--grad-d20-hover-a), var(--grad-d20-hover-b));
   border-color: var(--gold);
 }
 
@@ -8825,7 +8836,7 @@ a.md-link-loc:hover {
   top: 1px;
   width: 5px;
   height: 8px;
-  border: 2px solid #fff;
+  border: 2px solid var(--pure-white);
   border-left: none;
   border-top: none;
   transform: rotate(45deg);
@@ -8877,13 +8888,13 @@ tr.rumor-told:hover .rumor-cb-cell {
 
 /* "Generate" button variant */
 .rumors-gen-btn {
-  background: linear-gradient(135deg, #0e1a12, #172513) !important;
+  background: linear-gradient(135deg, var(--grad-gen-a), var(--grad-gen-b)) !important;
   border-color: rgba(60, 140, 80, .4) !important;
   color: rgba(130, 200, 140, .9) !important;
 }
 
 .rumors-gen-btn:hover {
-  background: linear-gradient(135deg, #172513, #1f3019) !important;
+  background: linear-gradient(135deg, var(--grad-gen-b), var(--grad-gen-hover-b)) !important;
   border-color: rgba(80, 170, 100, .7) !important;
   color: var(--c-success-dim) !important;
 }
@@ -9031,6 +9042,7 @@ tr.rumor-told:hover .rumor-cb-cell {
 
 .archive-textarea:focus {
   border-color: rgba(184, 134, 11, .5);
+  box-shadow: 0 0 6px var(--glow);
 }
 
 .archive-edit-bar {
@@ -9090,6 +9102,7 @@ tr.rumor-told:hover .rumor-cb-cell {
 
 .srch-input:focus {
   border-color: var(--accent2);
+  box-shadow: 0 0 6px var(--glow);
 }
 
 .srch-btn {
@@ -9097,7 +9110,7 @@ tr.rumor-told:hover .rumor-cb-cell {
   border: none;
   border-radius: 6px;
   padding: 0 20px;
-  color: #fff;
+  color: var(--pure-white);
   font-size: var(--fs-base);
   cursor: pointer;
   transition: background .2s;
@@ -9665,7 +9678,7 @@ tr.rumor-told:hover .rumor-cb-cell {
 
 .btn-danger {
   background: var(--c-danger);
-  color: #fff; border: none;
+  color: var(--pure-white); border: none;
   padding: 8px 20px;
   border-radius: 4px;
   cursor: pointer; font-size: var(--fs-sm);
@@ -9716,7 +9729,7 @@ tr.rumor-told:hover .rumor-cb-cell {
   font-size: var(--fs-sm); line-height: 1.4;
   pointer-events: auto;
   animation: toast-in 0.2s ease;
-  border-left: 3px solid transparent;
+  border: 1px solid transparent;
   background: var(--bg3);
   color: var(--text);
   white-space: pre-line;
@@ -9741,4 +9754,10 @@ tr.rumor-told:hover .rumor-cb-cell {
   max-width: 400px; width: 90%;
 }
 .confirm-msg  { font-size: var(--fs-base); margin-bottom: 16px; color: var(--text); line-height: 1.5; white-space: pre-line; }
-.confirm-acts { display: flex; gap: 10px; justify-content: flex-end; }
+.confirm-acts { display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap; }
+/* .chr-modal-btn's default padding/letter-spacing is sized for wider modal
+   footers; in the ~350px confirm box a long confirmText (e.g. «Перегенерировать»)
+   pushed the cancel button past the box's left edge (flex row overflowing an
+   unwrapped justify-content:flex-end never clips itself). Tighter box here +
+   flex-wrap above as a safety net for any still-longer custom text. */
+.confirm-acts .chr-modal-btn { padding: 10px 18px; font-size: var(--fs-sm); }

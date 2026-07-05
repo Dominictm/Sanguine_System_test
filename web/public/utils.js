@@ -33,9 +33,12 @@ function showConfirm(message, { danger = false, confirmText = 'Подтверд�
   return new Promise(resolve => {
     const ov = document.createElement('div');
     ov.id = 'confirm-overlay';
+    ov.setAttribute('role', 'dialog');
+    ov.setAttribute('aria-modal', 'true');
+    ov.setAttribute('aria-labelledby', '_conf-msg');
     ov.innerHTML = `
       <div class="confirm-box">
-        <div class="confirm-msg">${escHtml(message)}</div>
+        <div class="confirm-msg" id="_conf-msg">${escHtml(message)}</div>
         <div class="confirm-acts">
           <button class="chr-modal-btn cancel" id="_conf-cancel">${escHtml(cancelText)}</button>
           <button class="chr-modal-btn ${danger ? 'danger' : 'create'}" id="_conf-ok">${escHtml(confirmText)}</button>
@@ -94,3 +97,69 @@ function getOrigLabel(id) {
     'btn-validate-fix':'Исправить автоматически',
   }[id] || 'Выполнить';
 }
+
+// ── Generic modal focus-trap ─────────────────────────────────────────────────
+// Every modal in this app toggles visibility the same way: a `.chr-modal-backdrop`
+// or `.modal-overlay` element gains/loses an `.open` class (see scripts.js/locations.js
+// open/close functions), or — for the dynamically-created `#confirm-overlay`
+// (showConfirm above) — is appended/removed from <body> outright. Rather than
+// hooking every individual open/close call site (dozens, spread across two files),
+// a single MutationObserver watches for either signal and traps Tab/Shift+Tab
+// inside whichever modal is currently open, restoring focus to the element that
+// triggered it on close.
+(function () {
+  let active = null; // { el, prevFocus, handler }
+
+  function focusableEls(container) {
+    return Array.from(container.querySelectorAll(
+      'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
+    )).filter(el => el.offsetParent !== null);
+  }
+
+  function trap(container) {
+    if (active) release();
+    const prevFocus = document.activeElement;
+    const handler = e => {
+      if (e.key !== 'Tab') return;
+      const els = focusableEls(container);
+      if (!els.length) return;
+      const first = els[0], last = els[els.length - 1];
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    };
+    container.addEventListener('keydown', handler);
+    active = { el: container, prevFocus, handler };
+    (focusableEls(container)[0] || container).focus();
+  }
+
+  function release() {
+    if (!active) return;
+    active.el.removeEventListener('keydown', active.handler);
+    if (active.prevFocus && document.body.contains(active.prevFocus)) active.prevFocus.focus();
+    active = null;
+  }
+
+  function watch(el) {
+    new MutationObserver(muts => {
+      for (const m of muts) {
+        if (m.attributeName !== 'class') continue;
+        if (el.classList.contains('open')) { if (!active || active.el !== el) trap(el); }
+        else if (active && active.el === el) release();
+      }
+    }).observe(el, { attributes: true, attributeFilter: ['class'] });
+  }
+  document.querySelectorAll('.chr-modal-backdrop, .modal-overlay').forEach(watch);
+
+  // #confirm-overlay (and any future modal appended straight onto <body>, already
+  // visible/open at insertion — no separate `.open` toggle to observe).
+  new MutationObserver(muts => {
+    for (const m of muts) {
+      for (const node of m.addedNodes) {
+        if (node instanceof HTMLElement && node.id === 'confirm-overlay') trap(node);
+      }
+      for (const node of m.removedNodes) {
+        if (node instanceof HTMLElement && active && active.el === node) release();
+      }
+    }
+  }).observe(document.body, { childList: true });
+})();

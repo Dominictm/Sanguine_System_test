@@ -187,20 +187,20 @@
     </section>
 
     <!-- Chronicle create modal -->
-    <div id="chr-create-modal" class="chr-modal-backdrop">
+    <div id="chr-create-modal" class="chr-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="chr-create-title">
       <div class="chr-modal">
-        <div class="chr-modal-title">📕 Новая хроника</div>
+        <div class="chr-modal-title" id="chr-create-title">📕 Новая хроника</div>
         <div class="chr-modal-body">
           <div class="chr-form-group">
-            <label class="chr-form-label">Название *</label>
+            <label class="chr-form-label" for="chr-create-name">Название *</label>
             <input class="chr-form-input" id="chr-create-name" placeholder="Зимний Париж 2010" autocomplete="off">
           </div>
           <div class="chr-form-group">
-            <label class="chr-form-label">Slug <span class="chr-modal-dim">(авто)</span></label>
+            <label class="chr-form-label" for="chr-create-slug">Slug <span class="chr-modal-dim">(авто)</span></label>
             <input class="chr-form-input chr-form-mono" id="chr-create-slug" placeholder="zimny_parizh_2010" autocomplete="off">
           </div>
           <div class="chr-form-group">
-            <label class="chr-form-label">Настроение <span class="chr-modal-dim">(опц.)</span></label>
+            <label class="chr-form-label" for="chr-create-mood">Настроение <span class="chr-modal-dim">(опц.)</span></label>
             <textarea class="chr-form-input chr-form-textarea" id="chr-create-mood"
               placeholder="Краткое описание атмосферы и тона хроники — готический нуар, политические интриги, horror..." rows="3"></textarea>
           </div>
@@ -241,31 +241,31 @@
 
           <div class="modp-header-edit" id="modp-header-edit" style="display:none">
             <div class="chr-form-group">
-              <label class="chr-form-label">Название</label>
+              <label class="chr-form-label" for="modp-hedit-title">Название</label>
               <input class="chr-form-input" id="modp-hedit-title">
             </div>
             <div class="mod-create-row">
               <div class="chr-form-group" style="flex:1">
-                <label class="chr-form-label">Тип</label>
+                <label class="chr-form-label" for="modp-hedit-type">Тип</label>
                 <input class="chr-form-input" id="modp-hedit-type" list="mod-create-type-list" autocomplete="off">
               </div>
               <div class="chr-form-group" style="flex:1">
-                <label class="chr-form-label">Дата / время</label>
+                <label class="chr-form-label" for="modp-hedit-time">Дата / время</label>
                 <input class="chr-form-input" id="modp-hedit-time" autocomplete="off">
               </div>
             </div>
             <div class="mod-create-row">
               <div class="chr-form-group" style="flex:1">
-                <label class="chr-form-label">Тон</label>
+                <label class="chr-form-label" for="modp-hedit-tone">Тон</label>
                 <input class="chr-form-input" id="modp-hedit-tone" autocomplete="off">
               </div>
               <div class="chr-form-group" style="flex:1">
-                <label class="chr-form-label">Формат</label>
+                <label class="chr-form-label" for="modp-hedit-format">Формат</label>
                 <input class="chr-form-input" id="modp-hedit-format" autocomplete="off">
               </div>
             </div>
             <div class="chr-form-group">
-              <label class="chr-form-label">Хроника</label>
+              <label class="chr-form-label" for="modp-hedit-chronicle">Хроника</label>
               <select class="chr-form-input" id="modp-hedit-chronicle"></select>
             </div>
             <div class="mod-create-track-row">
@@ -309,7 +309,7 @@
     </section>
 
     <!-- Chronicle detail modal -->
-    <div id="chr-detail-modal" class="chr-modal-backdrop">
+    <div id="chr-detail-modal" class="chr-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="chr-detail-title">
       <div class="chr-modal chr-detail-modal">
         <div class="chr-detail-header">
           <div>
@@ -341,9 +341,9 @@
     </div>
 
     <!-- Module create modal -->
-    <div id="mod-create-modal" class="chr-modal-backdrop">
+    <div id="mod-create-modal" class="chr-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="mod-create-title">
       <div class="chr-modal mod-fill-modal">
-        <div class="chr-modal-title">📖 Новый модуль</div>
+        <div class="chr-modal-title" id="mod-create-title">📖 Новый модуль</div>
         <div class="chr-modal-body mod-fill-body">
 
           <!-- Показывается только при автономном открытии (не из хроники) -->
@@ -355,24 +355,24 @@
           </div>
 
           <div class="chr-form-group">
-            <label class="chr-form-label">Название *</label>
+            <label class="chr-form-label" for="mod-create-name">Название *</label>
             <input class="chr-form-input" id="mod-create-name" placeholder="Встреча в Элизиуме" autocomplete="off">
           </div>
 
           <div class="mod-create-row">
             <div class="chr-form-group" style="flex:1">
-              <label class="chr-form-label">Время / дата <span style="color:#e87070">*</span> <span class="chr-modal-dim">(с годом)</span></label>
+              <label class="chr-form-label" for="mod-create-time">Время / дата <span style="color:#e87070">*</span> <span class="chr-modal-dim">(с годом)</span></label>
               <input class="chr-form-input" id="mod-create-time" placeholder="Декабрь 2009, пятница" autocomplete="off" required>
             </div>
             <div class="chr-form-group" style="flex:1">
-              <label class="chr-form-label">Slug <span class="chr-modal-dim">(авто)</span></label>
+              <label class="chr-form-label" for="mod-create-slug">Slug <span class="chr-modal-dim">(авто)</span></label>
               <input class="chr-form-input chr-form-mono" id="mod-create-slug" placeholder="vstrecha_v_eliziume" autocomplete="off">
             </div>
           </div>
 
           <div class="mod-create-row">
             <div class="chr-form-group" style="flex:1">
-              <label class="chr-form-label">Тип</label>
+              <label class="chr-form-label" for="mod-create-type">Тип</label>
               <input class="chr-form-input" id="mod-create-type" list="mod-create-type-list" placeholder="Игровая сессия" autocomplete="off">
               <datalist id="mod-create-type-list">
                 <option value="Игровая сессия">
@@ -381,18 +381,18 @@
               </datalist>
             </div>
             <div class="chr-form-group" style="flex:1">
-              <label class="chr-form-label">Тон <span class="chr-modal-dim">(необязательно)</span></label>
+              <label class="chr-form-label" for="mod-create-tone">Тон <span class="chr-modal-dim">(необязательно)</span></label>
               <input class="chr-form-input" id="mod-create-tone" placeholder="Городской нуар, мистика перекрёстков" autocomplete="off">
             </div>
           </div>
 
           <div class="chr-form-group">
-            <label class="chr-form-label">Формат <span class="chr-modal-dim">(необязательно)</span></label>
+            <label class="chr-form-label" for="mod-create-format">Формат <span class="chr-modal-dim">(необязательно)</span></label>
             <input class="chr-form-input" id="mod-create-format" placeholder="Котерия 2–3 игрока, Соло-модуль…" autocomplete="off">
           </div>
 
           <div class="chr-form-group">
-            <label class="chr-form-label">Персонажи игроков (ПК)</label>
+            <label class="chr-form-label" for="mod-create-pc-input">Персонажи игроков (ПК)</label>
             <div class="mod-fill-chips" id="mod-create-pcs"></div>
             <div class="mod-fill-add-row">
               <input class="chr-form-input" id="mod-create-pc-input" list="mod-create-pc-list" placeholder="Введи имя или выбери из списка...">
@@ -402,7 +402,7 @@
           </div>
 
           <div class="chr-form-group">
-            <label class="chr-form-label">Персонажи НПС</label>
+            <label class="chr-form-label" for="mod-create-npc-input">Персонажи НПС</label>
             <div class="mod-fill-chips" id="mod-create-npcs"></div>
             <div class="mod-fill-add-row">
               <input class="chr-form-input" id="mod-create-npc-input" list="mod-create-npc-list" placeholder="Введи имя или выбери из списка...">
@@ -412,7 +412,7 @@
           </div>
 
           <div class="chr-form-group">
-            <label class="chr-form-label">Концепция <span class="chr-modal-dim">(идея, завязка, ключевые сцены)</span></label>
+            <label class="chr-form-label" for="mod-create-content">Концепция <span class="chr-modal-dim">(идея, завязка, ключевые сцены)</span></label>
             <textarea class="chr-form-input chr-form-textarea" id="mod-create-content" rows="5"
               placeholder="Опиши идею модуля — завязку, ключевые сцены, конфликт, НПС, локации..."></textarea>
           </div>
@@ -434,13 +434,13 @@
     </div>
 
     <!-- Module fill modal (для генерации из существующего модуля) -->
-    <div id="mod-fill-modal" class="chr-modal-backdrop">
+    <div id="mod-fill-modal" class="chr-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="mod-fill-title">
       <div class="chr-modal mod-fill-modal">
         <div class="chr-modal-title" id="mod-fill-title">🪄 Сгенерировать сценарий</div>
         <div class="chr-modal-body mod-fill-body">
 
           <div class="chr-form-group">
-            <label class="chr-form-label">Персонажи игроков (ПК)</label>
+            <label class="chr-form-label" for="mod-fill-pc-input">Персонажи игроков (ПК)</label>
             <div class="mod-fill-chips" id="mod-fill-pcs"></div>
             <div class="mod-fill-add-row">
               <input class="chr-form-input" id="mod-fill-pc-input" list="mod-fill-pc-list" placeholder="Введи имя или выбери из списка...">
@@ -450,7 +450,7 @@
           </div>
 
           <div class="chr-form-group">
-            <label class="chr-form-label">Персонажи НПС</label>
+            <label class="chr-form-label" for="mod-fill-npc-input">Персонажи НПС</label>
             <div class="mod-fill-chips" id="mod-fill-npcs"></div>
             <div class="mod-fill-add-row">
               <input class="chr-form-input" id="mod-fill-npc-input" list="mod-fill-npc-list" placeholder="Введи имя или выбери из списка...">
@@ -460,7 +460,7 @@
           </div>
 
           <div class="chr-form-group">
-            <label class="chr-form-label">Содержание модуля <span class="chr-modal-dim">(идея, завязка, ключевые сцены)</span></label>
+            <label class="chr-form-label" for="mod-fill-content">Содержание модуля <span class="chr-modal-dim">(идея, завязка, ключевые сцены)</span></label>
             <textarea class="chr-form-input chr-form-textarea" id="mod-fill-content" rows="6"
               placeholder="Опиши идею модуля — завязку, ключевые сцены, конфликт, НПС, локации, желаемый исход..."></textarea>
           </div>
@@ -475,9 +475,9 @@
     </div>
 
     <!-- Module delete confirm modal -->
-    <div id="mod-delete-modal" class="chr-modal-backdrop">
+    <div id="mod-delete-modal" class="chr-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="mod-delete-title">
       <div class="chr-modal">
-        <div class="chr-modal-title">🗑 Удалить модуль</div>
+        <div class="chr-modal-title" id="mod-delete-title">🗑 Удалить модуль</div>
         <div id="mod-delete-body" class="chr-modal-body"></div>
         <div class="chr-modal-actions">
           <button id="mod-delete-cancel" class="chr-modal-btn cancel">Отмена</button>
@@ -487,9 +487,9 @@
     </div>
 
     <!-- Chronicle delete confirm modal -->
-    <div id="chr-delete-modal" class="chr-modal-backdrop">
+    <div id="chr-delete-modal" class="chr-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="chr-delete-title">
       <div class="chr-modal">
-        <div class="chr-modal-title">🗑 Удалить хронику</div>
+        <div class="chr-modal-title" id="chr-delete-title">🗑 Удалить хронику</div>
         <div id="chr-delete-body" class="chr-modal-body"></div>
         <div class="chr-modal-actions">
           <button id="chr-delete-cancel" class="chr-modal-btn cancel">Отмена</button>
@@ -499,9 +499,9 @@
     </div>
 
     <!-- Module delete confirmation (module detail page) -->
-    <div id="modp-delete-modal" class="chr-modal-backdrop">
+    <div id="modp-delete-modal" class="chr-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="modp-delete-title">
       <div class="chr-modal" style="max-width:440px">
-        <div class="chr-modal-title">🗑 Удалить модуль?</div>
+        <div class="chr-modal-title" id="modp-delete-title">🗑 Удалить модуль?</div>
         <div id="modp-del-preview" class="chr-modal-body"></div>
         <div style="margin:8px 16px;font-size:var(--fs-sm);color:var(--text2)">
           <label>
@@ -516,9 +516,9 @@
     </div>
 
     <!-- Module close confirmation (Фаза C) -->
-    <div id="modp-close-modal" class="chr-modal-backdrop">
+    <div id="modp-close-modal" class="chr-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="modp-close-title">
       <div class="chr-modal" style="max-width:460px">
-        <div class="chr-modal-title">🔒 Закрыть модуль?</div>
+        <div class="chr-modal-title" id="modp-close-title">🔒 Закрыть модуль?</div>
         <div class="chr-modal-body">
           <div class="chr-modal-warn">Будут сгенерированы финал и каноничное событие в хронику. Действие пишет канон и необратимо.</div>
           <div id="modp-close-nosessions" class="chr-modal-section" style="display:none">⚠️ У модуля нет записей сессий — финал/событие будут собраны из сценария.</div>
@@ -535,7 +535,7 @@
     </div>
 
     <!-- Finale preview (клик по «📜 Финал» в связанных файлах модуля) -->
-    <div id="finale-preview-modal" class="chr-modal-backdrop">
+    <div id="finale-preview-modal" class="chr-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="finale-preview-title">
       <div class="chr-modal" style="max-width:640px">
         <div class="chr-modal-title" id="finale-preview-title">📜 Финал</div>
         <div id="finale-preview-body" class="chr-modal-body modp-md"></div>
@@ -554,11 +554,11 @@
       </div>
       <div id="thread-form" class="thread-form" style="display:none">
         <div class="form-row">
-          <div class="form-group" style="flex:2"><label class="form-label">Заголовок *</label><input class="form-control" id="th-title" placeholder="Короткое имя нити"></div>
-          <div class="form-group"><label class="form-label">Приоритет</label>
+          <div class="form-group" style="flex:2"><label class="form-label" for="th-title">Заголовок *</label><input class="form-control" id="th-title" placeholder="Короткое имя нити"></div>
+          <div class="form-group"><label class="form-label" for="th-prio">Приоритет</label>
             <select class="form-control" id="th-prio"><option>Высокий</option><option selected>Средний</option><option>Низкий</option></select>
           </div>
-          <div class="form-group"><label class="form-label">Статус</label>
+          <div class="form-group"><label class="form-label" for="th-status">Статус</label>
             <select class="form-control" id="th-status">
               <option value="active">🔴 Активна</option>
               <option value="background">🟡 Фоновая</option>
@@ -567,10 +567,10 @@
             </select>
           </div>
         </div>
-        <div class="form-group"><label class="form-label">Описание</label><textarea class="form-control" id="th-desc" rows="2" placeholder="Суть нити, вопрос без ответа…"></textarea></div>
+        <div class="form-group"><label class="form-label" for="th-desc">Описание</label><textarea class="form-control" id="th-desc" rows="2" placeholder="Суть нити, вопрос без ответа…"></textarea></div>
         <div class="form-row">
-          <div class="form-group" style="flex:2"><label class="form-label">Источник</label><input class="form-control" id="th-source" placeholder="«Модуль», месяц год"></div>
-          <div class="form-group"><label class="form-label">Файл</label><select class="form-control" id="th-file"></select></div>
+          <div class="form-group" style="flex:2"><label class="form-label" for="th-source">Источник</label><input class="form-control" id="th-source" placeholder="«Модуль», месяц год"></div>
+          <div class="form-group"><label class="form-label" for="th-file">Файл</label><select class="form-control" id="th-file"></select></div>
         </div>
         <div class="btn-row">
           <button class="btn-submit" id="btn-save-thread">Создать</button>
@@ -700,46 +700,46 @@
         <h2 class="tools-section-title">Создать новый домен</h2>
         <div class="form-row">
           <div class="form-group">
-            <label class="form-label">Город *<span class="field-tip" tabindex="0" data-tip="Название города на русском — станет заголовком city.md. Папка cities/&lt;slug&gt;/ создаётся автоматически транслитерацией названия.">ⓘ</span></label>
+            <label class="form-label" for="city-name">Город *<span class="field-tip" tabindex="0" data-tip="Название города на русском — станет заголовком city.md. Папка cities/&lt;slug&gt;/ создаётся автоматически транслитерацией названия.">ⓘ</span></label>
             <input class="form-control" id="city-name" placeholder="Берлин" type="text">
             <p class="form-hint">Слаг папки: <code id="city-slug-preview">—</code></p>
           </div>
           <div class="form-group">
-            <label class="form-label">Год *<span class="field-tip" tabindex="0" data-tip="Год, в котором разворачивается хроника (например 2010). Используется в заголовках city.md и карточек персонажей/локаций — на механику не влияет.">ⓘ</span></label>
+            <label class="form-label" for="city-year">Год *<span class="field-tip" tabindex="0" data-tip="Год, в котором разворачивается хроника (например 2010). Используется в заголовках city.md и карточек персонажей/локаций — на механику не влияет.">ⓘ</span></label>
             <input class="form-control" id="city-year" placeholder="2010" type="text" maxlength="4">
           </div>
         </div>
         <div class="form-group">
-          <label class="form-label">Сеттинг<span class="field-tip" tabindex="0" data-tip="Общее описание города — эпоха, тон, в рамках какого канона разворачиваются сцены. Абзац под заголовком city.md, с которым Рассказчик сверяется первым.">ⓘ</span></label>
+          <label class="form-label" for="city-description">Сеттинг<span class="field-tip" tabindex="0" data-tip="Общее описание города — эпоха, тон, в рамках какого канона разворачиваются сцены. Абзац под заголовком city.md, с которым Рассказчик сверяется первым.">ⓘ</span></label>
           <textarea class="form-control" id="city-description" rows="3" placeholder="Общее описание города — эпоха, тон, в рамках какого канона разворачиваются сцены…"></textarea>
         </div>
         <div class="form-group">
-          <label class="form-label">Политический ландшафт<span class="field-tip" tabindex="0" data-tip="Кто реально держит власть: Князь/Принц, Примогены, Шериф, оппозиция. Баланс сил и тлеющие конфликты между фракциями — то, с чем Рассказчик сверяется перед каждой сценой. Один пункт на строку.">ⓘ</span></label>
+          <label class="form-label" for="city-political">Политический ландшафт<span class="field-tip" tabindex="0" data-tip="Кто реально держит власть: Князь/Принц, Примогены, Шериф, оппозиция. Баланс сил и тлеющие конфликты между фракциями — то, с чем Рассказчик сверяется перед каждой сценой. Один пункт на строку.">ⓘ</span></label>
           <textarea class="form-control" id="city-political" rows="3" placeholder="Кто правит, баланс фракций, ключевые конфликты (по строке на пункт)"></textarea>
         </div>
         <div id="city-factions-editor"></div>
         <div class="form-group">
-          <label class="form-label">Ключевые локации<span class="field-tip" tabindex="0" data-tip="Элизиум и другие места силы, опасные и нейтральные территории — площадки, которые стоит держать в уме при выборе мест для сцен. Один пункт на строку.">ⓘ</span></label>
+          <label class="form-label" for="city-locations">Ключевые локации<span class="field-tip" tabindex="0" data-tip="Элизиум и другие места силы, опасные и нейтральные территории — площадки, которые стоит держать в уме при выборе мест для сцен. Один пункт на строку.">ⓘ</span></label>
           <textarea class="form-control" id="city-locations" rows="3" placeholder="Элизиум, опасные/нейтральные территории"></textarea>
         </div>
         <div class="form-group">
-          <label class="form-label">Лейтмотивы и атмосфера<span class="field-tip" tabindex="0" data-tip="2–3 детали, которые делают сцену именно этим городом, а не «городом в Европе»: архитектура, погода, общее настроение хроники. Один пункт на строку.">ⓘ</span></label>
+          <label class="form-label" for="city-leitmotif">Лейтмотивы и атмосфера<span class="field-tip" tabindex="0" data-tip="2–3 детали, которые делают сцену именно этим городом, а не «городом в Европе»: архитектура, погода, общее настроение хроники. Один пункт на строку.">ⓘ</span></label>
           <textarea class="form-control" id="city-leitmotif" rows="3" placeholder="Что делает этот город именно этим городом"></textarea>
         </div>
         <div class="form-group">
-          <label class="form-label">Специфика ответа<span class="field-tip" tabindex="0" data-tip="Язык общения НПС, имена Князей и других ключевых фигур, местные обычаи и сленг — то, что должно проявляться в любой сцене этого города. Один пункт на строку.">ⓘ</span></label>
+          <label class="form-label" for="city-specifics">Специфика ответа<span class="field-tip" tabindex="0" data-tip="Язык общения НПС, имена Князей и других ключевых фигур, местные обычаи и сленг — то, что должно проявляться в любой сцене этого города. Один пункт на строку.">ⓘ</span></label>
           <textarea class="form-control" id="city-specifics" rows="3" placeholder="Язык, имена Князей, локальные обычаи"></textarea>
         </div>
         <div class="form-group">
-          <label class="form-label">Чего избегать<span class="field-tip" tabindex="0" data-tip="Табу и нежелательные клише именно для этого домена: где канон неоднозначен, какие сюжеты не подходят сеттингу. Один пункт на строку.">ⓘ</span></label>
+          <label class="form-label" for="city-avoid">Чего избегать<span class="field-tip" tabindex="0" data-tip="Табу и нежелательные клише именно для этого домена: где канон неоднозначен, какие сюжеты не подходят сеттингу. Один пункт на строку.">ⓘ</span></label>
           <textarea class="form-control" id="city-avoid" rows="3" placeholder="Табу, нежелательные клише"></textarea>
         </div>
         <div class="form-group">
-          <label class="form-label">Источники<span class="field-tip" tabindex="0" data-tip="На какие книги или материалы опираться при сверке канона для этого домена (например V20, конкретные сплэтбуки). Один пункт на строку.">ⓘ</span></label>
+          <label class="form-label" for="city-sources">Источники<span class="field-tip" tabindex="0" data-tip="На какие книги или материалы опираться при сверке канона для этого домена (например V20, конкретные сплэтбуки). Один пункт на строку.">ⓘ</span></label>
           <textarea class="form-control" id="city-sources" rows="2" placeholder="На что опираться при сверке канона"></textarea>
         </div>
         <div class="form-group">
-          <label class="form-label">Районы (через запятую)</label>
+          <label class="form-label" for="city-districts">Районы (через запятую)</label>
           <input class="form-control" id="city-districts" placeholder="Митте, Кройцберг, Прензлауэр Берг">
           <p class="form-hint">Создаст пустые папки district_NN/&lt;район&gt;/ в locations/</p>
         </div>
@@ -751,11 +751,11 @@
       <div class="tab-panel" id="tab-new-npc">
         <div class="form-row">
           <div class="form-group">
-            <label class="form-label">Имя *</label>
+            <label class="form-label" for="npc-name">Имя *</label>
             <input class="form-control" id="npc-name" placeholder="Эмилия Вольф">
           </div>
           <div class="form-group">
-            <label class="form-label">Линейка *</label>
+            <label class="form-label" for="npc-type">Линейка *</label>
             <select class="form-control" id="npc-type">
               <option value="vampire">Вампир</option>
               <option value="mortal">Смертный</option>
@@ -768,7 +768,7 @@
         </div>
         <div class="form-row">
           <div class="form-group">
-            <label class="form-label">Пол *</label>
+            <label class="form-label" for="npc-gender">Пол *</label>
             <select class="form-control" id="npc-gender">
               <option value="">— выбрать —</option>
               <option value="Мужской">Мужской</option>
@@ -778,18 +778,18 @@
         </div>
         <div class="form-row">
           <div class="form-group">
-            <label class="form-label">Клан <span id="npc-clan-req" class="form-req">*</span></label>
+            <label class="form-label" for="npc-clan">Клан <span id="npc-clan-req" class="form-req">*</span></label>
             <input class="form-control" id="npc-clan" placeholder="Бруха">
           </div>
           <div class="form-group">
-            <label class="form-label">Секта <span id="npc-sect-req" class="form-req">*</span></label>
+            <label class="form-label" for="npc-sect">Секта <span id="npc-sect-req" class="form-req">*</span></label>
             <input class="form-control" id="npc-sect" placeholder="Камарилья">
           </div>
         </div>
         <div id="npc-vamp-fields">
           <div class="form-row">
             <div class="form-group">
-              <label class="form-label">Поколение</label>
+              <label class="form-label" for="npc-generation">Поколение</label>
               <select class="form-control" id="npc-generation">
                 <option value="">— выбрать —</option>
                 <option value="14-е">14-е</option>
@@ -807,29 +807,29 @@
               </select>
             </div>
             <div class="form-group">
-              <label class="form-label">Год рождения</label>
+              <label class="form-label" for="npc-birth">Год рождения</label>
               <input class="form-control" id="npc-birth" placeholder="1955">
             </div>
             <div class="form-group">
-              <label class="form-label">Год обращения</label>
+              <label class="form-label" for="npc-embrace">Год обращения</label>
               <input class="form-control" id="npc-embrace" placeholder="1978">
             </div>
           </div>
           <div class="form-group">
-            <label class="form-label">Сир</label>
+            <label class="form-label" for="npc-sire">Сир</label>
             <input class="form-control" id="npc-sire" placeholder="Имя сира">
           </div>
         </div>
         <div class="form-group">
-          <label class="form-label">Биография</label>
+          <label class="form-label" for="npc-bio">Биография</label>
           <textarea class="form-control" id="npc-bio" rows="4" placeholder="Краткая биография..."></textarea>
         </div>
         <div class="form-group">
-          <label class="form-label">Внешность</label>
+          <label class="form-label" for="npc-appearance">Внешность</label>
           <textarea class="form-control" id="npc-appearance" rows="3" placeholder="3–5 визуальных маркеров..."></textarea>
         </div>
         <div class="form-group">
-          <label class="form-label">Арт <span class="chr-modal-dim">(необязательно)</span></label>
+          <label class="form-label" for="npc-art">Арт <span class="chr-modal-dim">(необязательно)</span></label>
           <input type="file" class="form-control" id="npc-art" accept="image/jpeg,image/png,image/webp,image/gif">
         </div>
         <button class="btn-submit" id="btn-new-npc">Создать карточку</button>
@@ -870,34 +870,34 @@
         <div class="ls-section">
           <div class="ls-sec-title">📍 Новая локация</div>
           <div class="form-row">
-            <div class="form-group"><label class="form-label">Округ/код *</label><input class="form-control" id="loc-district" placeholder="1 или district_01"></div>
-            <div class="form-group"><label class="form-label">Название *</label><input class="form-control" id="loc-name" placeholder="Театр Лицей"></div>
-            <div class="form-group"><label class="form-label">Зона</label>
+            <div class="form-group"><label class="form-label" for="loc-district">Округ/код *</label><input class="form-control" id="loc-district" placeholder="1 или district_01"></div>
+            <div class="form-group"><label class="form-label" for="loc-name">Название *</label><input class="form-control" id="loc-name" placeholder="Театр Лицей"></div>
+            <div class="form-group"><label class="form-label" for="loc-zone">Зона</label>
               <select class="form-control" id="loc-zone"><option value="neutral">🟡 Нейтральная</option><option value="safe">🟢 Безопасная</option><option value="dangerous">🔴 Опасная</option></select>
             </div>
           </div>
-          <div class="form-group"><label class="form-label">Район (опц.)</label><input class="form-control" id="loc-rayon" placeholder="Вест-Энд"></div>
+          <div class="form-group"><label class="form-label" for="loc-rayon">Район (опц.)</label><input class="form-control" id="loc-rayon" placeholder="Вест-Энд"></div>
           <button class="btn-submit" id="btn-new-loc">Создать локацию</button>
         </div>
 
         <div class="ls-section">
           <div class="ls-sec-title">🌍 Кросс-город — присутствие персонажа</div>
           <div class="form-row">
-            <div class="form-group"><label class="form-label">Линейка</label>
+            <div class="form-group"><label class="form-label" for="mig-lineage">Линейка</label>
               <select class="form-control" id="mig-lineage"><option value="vampires">Вампир</option><option value="fairies">Фея</option><option value="mortals">Смертный</option><option value="werewolves">Оборотень</option><option value="mages">Маг</option><option value="hunters">Охотник</option></select>
             </div>
-            <div class="form-group"><label class="form-label">Слаг персонажа *</label><input class="form-control" id="mig-slug" placeholder="edvard_grey"></div>
-            <div class="form-group"><label class="form-label">Город назначения *</label><input class="form-control" id="mig-to" placeholder="london"></div>
+            <div class="form-group"><label class="form-label" for="mig-slug">Слаг персонажа *</label><input class="form-control" id="mig-slug" placeholder="edvard_grey"></div>
+            <div class="form-group"><label class="form-label" for="mig-to">Город назначения *</label><input class="form-control" id="mig-to" placeholder="london"></div>
           </div>
-          <div class="form-group"><label class="form-label">Когда / контекст</label><input class="form-control" id="mig-when" placeholder="зима 2011, сессия"></div>
+          <div class="form-group"><label class="form-label" for="mig-when">Когда / контекст</label><input class="form-control" id="mig-when" placeholder="зима 2011, сессия"></div>
           <button class="btn-submit" id="btn-migrate">Зафиксировать присутствие</button>
         </div>
 
         <div class="ls-section">
           <div class="ls-sec-title">📕 Закрыть хронику</div>
           <div class="form-row">
-            <div class="form-group"><label class="form-label">Слаг хроники *</label><input class="form-control" id="close-chr" placeholder="winter_2011"></div>
-            <div class="form-group"><label class="form-label">Финальная заметка</label><input class="form-control" id="close-note" placeholder="итог арки"></div>
+            <div class="form-group"><label class="form-label" for="close-chr">Слаг хроники *</label><input class="form-control" id="close-chr" placeholder="winter_2011"></div>
+            <div class="form-group"><label class="form-label" for="close-note">Финальная заметка</label><input class="form-control" id="close-note" placeholder="итог арки"></div>
           </div>
           <button class="btn-submit" id="btn-close-chr">Закрыть хронику</button>
         </div>
@@ -928,19 +928,19 @@
           <div class="ls-sec-title">Модуль</div>
           <div class="form-row">
             <div class="form-group">
-              <label class="form-label">Режим</label>
+              <label class="form-label" for="ls-mod-mode">Режим</label>
               <select class="form-control" id="ls-mod-mode">
                 <option value="new">Новый модуль</option>
                 <option value="existing">Существующий</option>
               </select>
             </div>
             <div class="form-group">
-              <label class="form-label">Название модуля *</label>
+              <label class="form-label" for="ls-mod-name">Название модуля *</label>
               <input class="form-control" id="ls-mod-name" placeholder="Кровь на снегу" list="ls-modules">
               <datalist id="ls-modules"></datalist>
             </div>
             <div class="form-group">
-              <label class="form-label">Тип</label>
+              <label class="form-label" for="ls-mod-type">Тип</label>
               <select class="form-control" id="ls-mod-type">
                 <option>Игровая сессия</option>
                 <option>Внесессионное событие</option>
@@ -949,18 +949,18 @@
           </div>
           <div class="form-row" id="ls-chron-row">
             <div class="form-group">
-              <label class="form-label">Хроника (для нового модуля)</label>
+              <label class="form-label" for="ls-chron-mode">Хроника (для нового модуля)</label>
               <select class="form-control" id="ls-chron-mode">
                 <option value="existing">Существующая</option>
                 <option value="new">Новая</option>
               </select>
             </div>
             <div class="form-group">
-              <label class="form-label">Выбор хроники</label>
+              <label class="form-label" for="ls-chron-slug">Выбор хроники</label>
               <select class="form-control" id="ls-chron-slug"></select>
             </div>
             <div class="form-group">
-              <label class="form-label">Название новой хроники</label>
+              <label class="form-label" for="ls-chron-new">Название новой хроники</label>
               <input class="form-control" id="ls-chron-new" placeholder="Зимний твой домен">
             </div>
           </div>
@@ -969,13 +969,13 @@
         <div class="ls-section">
           <div class="ls-sec-title">Событие</div>
           <div class="form-row">
-            <div class="form-group"><label class="form-label">Месяц YYYY-MM *</label><input class="form-control" id="ls-month" placeholder="2011-01" maxlength="7"></div>
-            <div class="form-group"><label class="form-label">Дата (текст) *</label><input class="form-control" id="ls-date" placeholder="Январь 2011, ночь"></div>
+            <div class="form-group"><label class="form-label" for="ls-month">Месяц YYYY-MM *</label><input class="form-control" id="ls-month" placeholder="2011-01" maxlength="7"></div>
+            <div class="form-group"><label class="form-label" for="ls-date">Дата (текст) *</label><input class="form-control" id="ls-date" placeholder="Январь 2011, ночь"></div>
           </div>
-          <div class="form-group"><label class="form-label">Заголовок события *</label><input class="form-control" id="ls-title" placeholder="Кровь на премьере"></div>
-          <div class="form-group"><label class="form-label">Локация (строка)</label><input class="form-control" id="ls-location" placeholder="Опера Гарнье (9-й) → катакомбы"></div>
-          <div class="form-group"><label class="form-label">Параллельная хроника (опц.)</label><input class="form-control" id="ls-parallel" placeholder="Разворачивается одновременно с …"></div>
-          <div class="form-group"><label class="form-label">Вступление / краткое содержание</label><textarea class="form-control" id="ls-summary" rows="2"></textarea></div>
+          <div class="form-group"><label class="form-label" for="ls-title">Заголовок события *</label><input class="form-control" id="ls-title" placeholder="Кровь на премьере"></div>
+          <div class="form-group"><label class="form-label" for="ls-location">Локация (строка)</label><input class="form-control" id="ls-location" placeholder="Опера Гарнье (9-й) → катакомбы"></div>
+          <div class="form-group"><label class="form-label" for="ls-parallel">Параллельная хроника (опц.)</label><input class="form-control" id="ls-parallel" placeholder="Разворачивается одновременно с …"></div>
+          <div class="form-group"><label class="form-label" for="ls-summary">Вступление / краткое содержание</label><textarea class="form-control" id="ls-summary" rows="2"></textarea></div>
         </div>
 
         <div class="ls-section">
@@ -985,8 +985,8 @@
 
         <div class="ls-section">
           <div class="ls-sec-title">Последствия и мир</div>
-          <div class="form-group"><label class="form-label">Последствия (по строке)</label><textarea class="form-control" id="ls-consequences" rows="3"></textarea></div>
-          <div class="form-group"><label class="form-label">Изменения состояния мира (по строке)</label><textarea class="form-control" id="ls-world" rows="2"></textarea></div>
+          <div class="form-group"><label class="form-label" for="ls-consequences">Последствия (по строке)</label><textarea class="form-control" id="ls-consequences" rows="3"></textarea></div>
+          <div class="form-group"><label class="form-label" for="ls-world">Изменения состояния мира (по строке)</label><textarea class="form-control" id="ls-world" rows="2"></textarea></div>
         </div>
 
         <div class="ls-section">
@@ -998,13 +998,13 @@
         <div class="ls-section">
           <div class="ls-sec-title">Нити <button class="ls-add" id="ls-add-thread" type="button">+ нить</button></div>
           <div id="ls-threads"></div>
-          <div class="form-group" style="margin-top:10px"><label class="form-label">Закрыть нити (№ через запятую)</label><input class="form-control" id="ls-close" placeholder="10, 12"></div>
+          <div class="form-group" style="margin-top:10px"><label class="form-label" for="ls-close">Закрыть нити (№ через запятую)</label><input class="form-control" id="ls-close" placeholder="10, 12"></div>
         </div>
 
         <div class="ls-section">
           <label class="ls-check"><input type="checkbox" id="ls-finale"> Создать stub финала</label>
           <div class="form-group" id="ls-finale-comment-wrap" style="display:none;margin-top:10px">
-            <label class="form-label">Комментарий Мастера к финалу (для генерации)</label>
+            <label class="form-label" for="ls-finale-comment">Комментарий Мастера к финалу (для генерации)</label>
             <textarea class="form-control" id="ls-finale-comment" rows="2"></textarea>
           </div>
         </div>
@@ -1036,7 +1036,7 @@
 </div><!-- #app -->
 
 <!-- ── Create Character Modal ── -->
-<div id="char-modal" class="modal-overlay">
+<div id="char-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-label="Создание персонажа">
   <div class="modal-box">
     <button class="modal-close" id="modal-close" aria-label="Закрыть">✕</button>
 
@@ -1090,7 +1090,7 @@
 </div>
 
 <!-- ── Char Detail Modal ── -->
-<div id="char-detail-modal" class="modal-overlay">
+<div id="char-detail-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-label="Карточка персонажа">
   <div class="modal-box modal-detail">
     <button class="modal-close" id="char-detail-close" aria-label="Закрыть">✕</button>
     <div id="char-detail-content"></div>
@@ -1098,7 +1098,7 @@
 </div>
 
 <!-- ── Location Detail Modal ── -->
-<div id="loc-detail-modal" class="modal-overlay">
+<div id="loc-detail-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-label="Карточка локации">
   <div class="modal-box modal-loc-detail">
     <button class="modal-close" id="loc-detail-close" aria-label="Закрыть">✕</button>
     <div id="loc-detail-content"></div>
@@ -1210,7 +1210,7 @@
 </div>
 
 <!-- ── Module Detail Modal ── -->
-<div id="module-detail-modal" class="modal-overlay">
+<div id="module-detail-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-label="Карточка модуля">
   <div class="modal-box modal-module-detail">
     <button class="modal-close" id="module-detail-close" aria-label="Закрыть">✕</button>
     <div id="module-detail-content"></div>
@@ -1218,7 +1218,7 @@
 </div>
 
 <!-- ── City Detail Modal ── -->
-<div id="city-detail-modal" class="modal-overlay">
+<div id="city-detail-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-label="Карточка города">
   <div class="modal-box modal-module-detail">
     <button class="modal-close" id="city-detail-close" aria-label="Закрыть">✕</button>
     <div id="city-detail-content"></div>

@@ -683,34 +683,33 @@ describe('Parsers — unit', () => {
   });
 
   describe('checkScenarioStructure', () => {
-    it('полный сценарий (все 9 тем module_rules.md) → missing пуст', () => {
+    it('эталонная плоская структура (GM-справка/Пролог/Сцена N/Финал/Открытые вопросы/Колорит) → missing пуст', () => {
       const full = [
-        '## Предпосылки', 'x', '---',
-        '## Локации', 'x', '---',
-        '## НПС', 'x', '---',
-        '## Завязка', 'x', '---',
-        '## Сцены', 'x', '---',
-        '## Кульминация', 'x', '---',
-        '## Варианты финала', 'x', '---',
-        '## Открытые нити', 'x', '---',
-        '## Колорит города', 'x',
+        '## 🔒 GM-справка — закрытая информация', 'x', '---',
+        '## Пролог — Начало', 'x', '---',
+        '## Сцена 1 — Бар', 'x', '---',
+        '## Финал — Развязка', 'x', '---',
+        '## Открытые вопросы после модуля', 'x', '---',
+        '## Колорит — три обязательные детали', 'x',
       ].join('\n');
       const { missing } = checkScenarioStructure(full);
       assert.deepEqual(missing, []);
     });
 
-    it('реальная плоская структура (Пролог/Сцена N/Финал) тоже покрывает Кульминацию и Сцены', () => {
+    it('минимальная структура (Пролог/Сцена N/Финал) без вопросов/колорита → 2 недостающие темы', () => {
       const flat = ['## Пролог', 'x', '---', '## Сцена 1 — Бар', 'x', '---', '## Финал', 'x'].join('\n');
       const { missing } = checkScenarioStructure(flat);
+      assert.ok(!missing.some(m => m.key === 'setup'));
       assert.ok(!missing.some(m => m.key === 'scenes'));
-      assert.ok(!missing.some(m => m.key === 'climax'));
-      // «Предпосылки»/«Локации»/«НПС»/«Завязка»/«Колорит» реально отсутствуют в этом примере
+      assert.ok(!missing.some(m => m.key === 'finale'));
+      assert.ok(missing.some(m => m.key === 'threads'));
       assert.ok(missing.some(m => m.key === 'flavor'));
+      assert.equal(missing.length, 2);
     });
 
-    it('пустой сценарий → все 8 тем отсутствуют', () => {
+    it('пустой сценарий → все 5 тем отсутствуют', () => {
       const { missing } = checkScenarioStructure('Просто текст без заголовков.');
-      assert.equal(missing.length, 8);
+      assert.equal(missing.length, 5);
     });
   });
 
@@ -1716,6 +1715,50 @@ describe('API — integration', () => {
         `/api/chronicles/${encodeURIComponent(chr)}/modules/${encodeURIComponent(mod)}/scenario/section/regenerate${CITY}`,
         { method: 'POST', body: JSON.stringify({ heading: '__нет такого раздела__' }) });
       assert.equal(status, 404);
+    });
+
+    it('GET /detail — эталонный формат сценария (Пролог/Сцена N/Финал прямыми заголовками, meta:npcs/meta:locations) парсится корректно', async () => {
+      if (!modDir) return;
+      const seed = [
+        '# Сценарий — Тест', '',
+        '> 🔗 [Модуль](x.md) | [Хроника](../../events.md) | [НПС](npc.md)', '',
+        '<!-- meta:npcs: Гиль; Рено -->',
+        '<!-- meta:locations: Опера Гарнье; Порт-де-ла-Шапель -->', '',
+        '---', '',
+        '## 🔒 GM-справка — закрытая информация', '',
+        '> Читать перед игрой.', '',
+        '### Что произошло до начала сессии', '', 'Секретный контекст.', '',
+        '---', '',
+        '## Пролог — Начало', '', '### Описание для игрока', '', 'Завязка.', '',
+        '---', '',
+        '## Сцена 1 — Опера Гарнье (9-й арр.)', '', '### Описание для игрока', '', 'Текст сцены 1.', '',
+        '---', '',
+        '## Сцена 2 — Порт-де-ла-Шапель', '', '### Описание для игрока', '', 'Текст сцены 2.', '',
+        '---', '',
+        '## Финал — Развязка', '', '### Описание для игрока', '', 'Финальный текст.', '',
+        '---', '',
+        '## Открытые вопросы после модуля', '', '| Вопрос | Нить |', '|---|---|', '| Кто? | №1 |', '',
+        '---', '',
+        '## Колорит — три обязательные детали', '', '1. Язык', '2. География', '',
+      ].join('\n');
+      await apiJson(`/api/chronicles/${encodeURIComponent(chr)}/modules/${encodeURIComponent(mod)}/scenario${CITY}`,
+        { method: 'PUT', body: JSON.stringify({ content: seed }) });
+
+      const { status, body } = await apiJson(
+        `/api/chronicles/${encodeURIComponent(chr)}/modules/${encodeURIComponent(mod)}/detail${CITY}`);
+      assert.equal(status, 200);
+
+      // Сцены для пикера «🎲 Сессии» — только Пролог/Сцена N/Финал, БЕЗ GM-справки/Открытых вопросов/Колорита
+      const sceneTitles = body.scenes.map(s => s.title);
+      assert.ok(sceneTitles.some(t => /Начало/.test(t)));
+      assert.ok(sceneTitles.some(t => /Опера Гарнье/.test(t)));
+      assert.ok(sceneTitles.some(t => /Порт-де-ла-Шапель/.test(t)));
+      assert.ok(sceneTitles.some(t => /Развязка/.test(t)));
+      assert.ok(!sceneTitles.some(t => /GM-справка|Открытые вопросы|колорит/i.test(t)));
+      assert.equal(body.scenes.length, 4);
+
+      // Локации — из meta:locations, не из «Локации»-заголовка (которого тут нет)
+      assert.deepEqual(body.locations.map(l => l.name), ['Опера Гарнье', 'Порт-де-ла-Шапель']);
     });
 
     it('POST /npc — без имени → 400', async () => {

@@ -3160,7 +3160,11 @@ function _renderScenarioPanel(data) {
         const isEmptyWrapper = s.level === 2 && !s.body
           && sections.some(c => c.level === 3 && c.parent === s.heading);
         const subClass = s.level === 3 ? ' modp-scenario-section--sub' : '';
-        const isGM = MODP_GM_SECTION_RE.test(s.heading);
+        // Вложенные `### ` под GM-справкой (например «Что произошло до начала
+        // сессии») сами по себе не содержат «GM»/🔒 в заголовке — флаг родителя
+        // должен наследоваться, иначе секреты останутся видимы при «Скрыть
+        // разделы Мастера».
+        const isGM = MODP_GM_SECTION_RE.test(s.heading) || (s.parent && MODP_GM_SECTION_RE.test(s.parent));
         const gmAttr  = isGM ? ' data-gm="1"' : '';
         const gmBadge = isGM ? ' <span class="modp-gm-badge">🔒 Только для Мастера</span>' : '';
 
