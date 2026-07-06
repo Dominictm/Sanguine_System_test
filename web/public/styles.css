@@ -1417,6 +1417,12 @@ body {
   cursor: help;
   position: relative;
   vertical-align: middle;
+  /* Всплывающий ::after всегда занимает место в layout (даже с opacity:0/
+     visibility:hidden), а его ширина (300px) обычно шире, чем остаток строки
+     до края модалки/панели — без containment это раздувает scrollWidth
+     ближайшего overflow-y:auto предка (см. CSS overflow-x auto-компьютинг)
+     и рисует фантомный горизонтальный скролл, даже когда тултип не наведён. */
+  contain: layout;
 }
 
 .field-tip:hover,
@@ -7004,6 +7010,21 @@ a.md-link-loc:hover {
 .modp-promote-btn.ready:hover { background: rgba(184,134,11,.08); }
 @media (pointer: coarse) { .modp-promote-btn { min-height: 44px; } }
 
+/* Удалить НПС/ПК из модуля — детальный список (см. .modp-npc-card-del для карточек) */
+.modp-npc-del-btn {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  border-radius: 3px;
+  padding: 3px 8px;
+  font-size: var(--fs-xs);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: border-color .15s, color .15s;
+}
+.modp-npc-del-btn:hover { border-color: var(--c-danger-text); color: var(--c-danger-text); }
+@media (pointer: coarse) { .modp-npc-del-btn { min-height: 44px; min-width: 44px; } }
+
 .modp-npc-name {
   font-family: var(--f-head);
   font-size: var(--fs-xl);
@@ -9626,7 +9647,44 @@ tr.rumor-told:hover .rumor-cb-cell {
   gap: 10px;
 }
 
-.modp-loc-card-unlink {
+/* НПС модуля — переиспользуют .char-card с главной сетки персонажей
+   (см. _renderModuleNpcCards в scripts.js), компактный вариант той же карточки. */
+.modp-char-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.modp-char-cards .char-card {
+  min-height: 190px;
+  padding: 14px;
+}
+
+.modp-char-cards .char-card.has-art { padding: 0; }
+
+.modp-char-cards .char-lineage-icon {
+  font-size: 32px;
+  top: 10px;
+  left: 10px;
+}
+
+.modp-char-cards .char-card-overlay { padding: 40px 12px 12px; }
+
+.modp-char-cards .char-card.modp-npc-card-static {
+  cursor: default;
+}
+
+.modp-char-cards .char-card.modp-npc-card-static:hover {
+  border-color: var(--border);
+  background: var(--bg3);
+  transform: none;
+}
+
+.modp-char-cards .char-card.modp-npc-card-static::before { display: none; }
+
+.modp-loc-card-unlink,
+.modp-npc-card-del {
   position: absolute;
   top: 8px;
   right: 8px;
@@ -9647,10 +9705,11 @@ tr.rumor-told:hover .rumor-cb-cell {
   transition: color .15s, background .15s;
 }
 @media (pointer: coarse) {
-  .modp-loc-card-unlink { min-width: 44px; min-height: 44px; }
+  .modp-loc-card-unlink, .modp-npc-card-del { min-width: 44px; min-height: 44px; }
 }
 
-.modp-loc-card-unlink:hover {
+.modp-loc-card-unlink:hover,
+.modp-npc-card-del:hover {
   color: var(--c-danger-text);
   background: rgba(0, 0, 0, .75);
 }

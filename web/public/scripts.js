@@ -2422,10 +2422,16 @@ function _addChip(name, arr, containerId) {
   wrap.appendChild(chip);
 }
 
+// «Принадлежность: Персонаж игрока» (см. system/schema/card_schema.md) — либо
+// устар. поле «Роль» с тем же смыслом.
+function _isPcCharacter(c) {
+  return /персонаж игрока/i.test(c.belonging || '') || /персонаж игрока|пк/i.test(c.role || '');
+}
+
 async function _populateCharDatalist(pcListId, npcListId) {
   await ensureCharsLoaded();
   const chars = STATE.characters || [];
-  const pcs   = chars.filter(c => /персонаж игрока/i.test(c.belonging || '') || /персонаж игрока|пк/i.test(c.role || ''));
+  const pcs   = chars.filter(_isPcCharacter);
   document.getElementById(pcListId).innerHTML  = pcs.map(c   => `<option value="${escHtml(c.name)}">`).join('');
   document.getElementById(npcListId).innerHTML = chars.map(c => `<option value="${escHtml(c.name)}">`).join('');
 }
@@ -2991,6 +2997,51 @@ const NPC_DESC_NOISE = /^(персонаж игрока|пк|роль(\s+в\s+м
 
 // Render the «НПС» tab from structured groups: clickable name (→ card), trimmed desc,
 // and a per-NPC «Реплика НПС» box (situation textarea + generate button).
+// Карточки НПС модуля (`.char-card`, переиспользуется с главной сетки персонажей —
+// см. renderChars) — по аналогии с «Связанными локациями» (_locCardHtml/.modp-loc-cards
+// в locations.js). Канон-НПС кликабельны (открывают карточку через уже существующий
+// делегированный обработчик [data-open-char] ниже), модульные (неканоничные) — превью
+// без клика: у них нет отдельной карточки в общем реестре персонажей.
+function _renderModuleNpcCards(groups) {
+  const entries = groups.filter(g => g.kind !== 'pc').flatMap(g => g.entries);
+  if (!entries.length) return '';
+  const cards = entries.map(e => {
+    // e.name — сырой текст из npc.md (может отличаться от канонич. имени карточки,
+    // напр. «Кален Урес / Госпожа Бубенчик» вместо «Госпожа Бубенчик») — как и
+    // в _renderModuleNpcGroups, резолвим через ростер и кликаем по known.name.
+    const known = e.sheetScope === 'character' ? _findCharByName(e.name) : null;
+    const clickable = !!known;
+    const icon = LINEAGE_ICONS[e.lineage] || '👤';
+    const subtitle = e.clan || (e.sheetScope === 'module' ? 'Модульный НПС' : 'НПС');
+    const textBlock = `
+      <div class="char-name">${escHtml(e.name)}</div>
+      <div class="char-clan">${escHtml(subtitle)}</div>`;
+    const attrs = clickable ? `data-open-char="${escAttr(known.name)}"` : '';
+    const staticCls = clickable ? '' : ' modp-npc-card-static';
+    const delGroup = e.sheetScope === 'module' ? 'modular' : 'canon';
+    // Без event.stopPropagation() — обработчик клика на #modp-panel-npcs уже
+    // проверяет [data-npc-del-name] раньше [data-open-char] и делает return,
+    // так что открытие карточки персонажа не срабатывает при клике по ✕
+    // (см. делегированный обработчик ниже); stopPropagation тут не нужен и
+    // раньше приводил к тому, что событие вообще не доходило до панели.
+    const delBtn = `<button class="modp-npc-card-del" data-npc-del-name="${escAttr(e.name)}"
+      data-npc-del-group="${delGroup}" title="Удалить из модуля">✕</button>`;
+    if (e.imageUrl) {
+      return `<div class="char-card has-art modp-npc-card${staticCls}" ${attrs}>
+        <img class="char-card-art" src="${escHtml(e.imageUrl)}" alt="${escHtml(e.name)}" loading="lazy" decoding="async">
+        <div class="char-card-overlay">${textBlock}</div>
+        ${delBtn}
+      </div>`;
+    }
+    return `<div class="char-card modp-npc-card${staticCls}" ${attrs}>
+      <span class="char-lineage-icon">${icon}</span>
+      ${textBlock}
+      ${delBtn}
+    </div>`;
+  }).join('');
+  return `<div class="modp-char-cards">${cards}</div>`;
+}
+
 function _renderModuleNpcGroups(groups) {
   return groups.map(g => {
     const entries = g.entries.map(e => {
@@ -3022,6 +3073,11 @@ function _renderModuleNpcGroups(groups) {
           data-promote-slug="${escAttr(e.slug)}" data-promote-name="${escAttr(e.name)}"
           title="${escAttr(tip)}">⬆ В канон</button>`;
       }
+      // Удалить из модуля — и НПС, и ПК (только запись в npc.md; для модульных
+      // НПС дополнительно удаляется их собственная карточка npc/<slug>/, т.к.
+      // она существует только в рамках этого модуля — см. showConfirm ниже).
+      const delCtl = `<button class="modp-npc-del-btn" data-npc-del-name="${escAttr(e.name)}"
+        data-npc-del-group="${g.kind}" title="Удалить из модуля">🗑</button>`;
       // Реплики — только для НПС (ПК озвучивают игроки, не Мастер)
       const dlg = g.kind !== 'pc' ? `
         <div class="modp-npc-dlg">
@@ -3032,7 +3088,7 @@ function _renderModuleNpcGroups(groups) {
       return `<div class="modp-npc-entry">
         <div class="modp-npc-head">
           <div class="modp-npc-head-main">${nameHtml}${descHtml}</div>
-          <div class="modp-npc-actions">${sheetCtl}${promoteCtl}</div>
+          <div class="modp-npc-actions">${sheetCtl}${promoteCtl}${delCtl}</div>
         </div>
         ${dlg}
       </div>`;
@@ -3096,6 +3152,7 @@ function _renderParticipantChips(group, items) {
       <button class="moddet-chip-rm" data-rmname="${escHtml(nm)}" data-rmgroup="${group}" title="Удалить">×</button>
     </div>`;
   }).join('');
+  const datalistChars = group === 'pcs' ? (STATE.characters || []).filter(_isPcCharacter) : (STATE.characters || []);
   return `
     <div class="moddet-chips-wrap" id="moddet-${group}-chips">${chips}</div>
     <div class="moddet-add-row">
@@ -3103,7 +3160,7 @@ function _renderParticipantChips(group, items) {
         placeholder="${group === 'pcs' ? 'Имя персонажа игрока…' : 'Имя НПС…'}"
         list="moddet-${group}-datalist" autocomplete="off">
       <datalist id="moddet-${group}-datalist">
-        ${(STATE.characters || []).map(c => `<option value="${escHtml(c.name)}">`).join('')}
+        ${datalistChars.map(c => `<option value="${escHtml(c.name)}">`).join('')}
       </datalist>
       <button class="modp-save-btn" data-addchip="${group}" style="white-space:nowrap">+ Добавить</button>
     </div>`;
@@ -3523,7 +3580,7 @@ function renderModulePage(data) {
   // ── НПС ──
   const npcPanel = document.getElementById('modp-panel-npcs');
   if (data.npcGroups?.length) {
-    npcPanel.innerHTML = _renderModuleNpcGroups(data.npcGroups);
+    npcPanel.innerHTML = _renderModuleNpcCards(data.npcGroups) + _renderModuleNpcGroups(data.npcGroups);
   } else if (data.npcContent) {
     npcPanel.innerHTML = `<div class="modp-md">${mdToHtml(data.npcContent)}</div>`;
   } else if (data.npcs?.length) {
@@ -4085,6 +4142,8 @@ document.getElementById('modp-panel-npcs').addEventListener('click', e => {
   if (sheetBtn) { _onModuleSheetBtn(sheetBtn); return; }
   const promoteBtn = e.target.closest('.modp-promote-btn');
   if (promoteBtn) { _onPromoteNpc(promoteBtn); return; }
+  const delBtn = e.target.closest('[data-npc-del-name]');
+  if (delBtn) { _onDeleteModuleNpc(delBtn.dataset.npcDelName, delBtn.dataset.npcDelGroup); return; }
   const link = e.target.closest('[data-open-char]');
   if (link) { e.preventDefault(); openCharDetail(link.dataset.openChar); }
 
@@ -4213,6 +4272,32 @@ async function _onPromoteNpc(btn) {
     showToast(`Ошибка: ${err.message}`, 'error');
     btn.disabled = false;
     btn.textContent = '⬆ В канон';
+  }
+}
+
+// Delete an entry (НПС or ПК) from the module's npc.md — from either the card
+// grid (✕) or the detailed list (🗑). Modular НПС also lose their own card
+// folder (npc/<slug>/ — it only ever existed for this module), so warn louder
+// for that case; canon/ПК entries just drop the reference line, the roster
+// character itself is never touched.
+async function _onDeleteModuleNpc(name, group) {
+  if (!STATE.currentModule) return;
+  const { chronicle, name: mod } = STATE.currentModule;
+  const msg = group === 'modular'
+    ? `Удалить «${name}» из модуля? Карточка этого модульного НПС (npc/…) будет удалена безвозвратно.`
+    : `Убрать «${name}» из списка на вкладке «НПС»? Карточка персонажа в общем реестре не пострадает.`;
+  if (!await showConfirm(msg, { danger: true, confirmText: 'Удалить' })) return;
+  try {
+    const r = await fetch(
+      `/api/chronicles/${encodeURIComponent(chronicle)}/modules/${encodeURIComponent(mod)}/npc${window.location.search}`,
+      { method: 'DELETE', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, group }) }
+    );
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok || !d.ok) throw new Error(d.error || r.statusText);
+    await _reloadModulePage();
+  } catch (e) {
+    showToast(`Ошибка: ${e.message}`, 'error');
   }
 }
 

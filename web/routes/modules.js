@@ -447,6 +447,62 @@ function _parseNpcEntries(body) {
   }
   return entries;
 }
+// Locate the first `## ` heading in npc.md classified as `kind` (pc/canon/modular) —
+// same classification _parseNpcMdGroups uses, so deletion always targets the exact
+// section the «НПС» tab rendered the entry from, regardless of the heading's actual
+// wording (hand-authored files vary: «## 🎭 Игровые персонажи (ПК)» vs «## Персонажи игроков»).
+function _findNpcMdSection(text, kind) {
+  const heads = [];
+  const re = /^##\s+(.+)$/gm;
+  let m;
+  while ((m = re.exec(text))) heads.push({ title: m[1].trim(), at: m.index, bodyStart: m.index + m[0].length });
+  for (let i = 0; i < heads.length; i++) {
+    const title = heads[i].title;
+    const k = /игров|\bпк\b|персонаж\w*\s+игрок/i.test(title) ? 'pc'
+            : /модульн|неканон/i.test(title) ? 'modular'
+            : 'canon';
+    if (k === kind) return { bodyStart: heads[i].bodyStart, end: i + 1 < heads.length ? heads[i + 1].at : text.length };
+  }
+  return null;
+}
+// Remove one entry (by display name) from a npc.md section body — mirrors the three
+// formats _parseNpcEntries tolerates (bullet/bold line, «#### » subsection). Returns
+// the raw text of the removed entry (so callers can pull its cardHref/slug), or null
+// if no matching entry was found.
+function _removeNpcEntry(body, targetName) {
+  const targetClean = _cleanNpcName(targetName).toLowerCase();
+  if (/^####\s+/m.test(body)) {
+    const chunks = body.split(/\n(?=####\s+)/);
+    let removedChunk = null;
+    const kept = chunks.filter(part => {
+      if (removedChunk) return true; // only remove the first match
+      const h = part.match(/^####\s+(.+)$/m);
+      if (!h) return true;
+      const [namePart] = h[1].split(/\s*[—–]\s*/);
+      if (_cleanNpcName(namePart).toLowerCase() === targetClean) { removedChunk = part; return false; }
+      return true;
+    });
+    return { body: kept.join(''), removedChunk };
+  }
+  const lines = body.split('\n');
+  let removedChunk = null;
+  const kept = lines.filter(ln => {
+    if (removedChunk) return true;
+    const t = ln.trim();
+    if (!t || /^>/.test(t)) return true;
+    if (!/\[Карточка\]/.test(t) && !/^\s*[-*]/.test(t) && !/^\*\*/.test(t)) return true;
+    const prefix = t
+      .replace(/[→➔➜]?\s*🔗?\s*\[Карточка\]\([^)]*\).*$/, '')
+      .replace(/^\s*-\s+/, '')
+      .replace(/\*\*/g, '')
+      .trim();
+    const [namePart] = prefix.split(/\s*[—–]\s*/);
+    const name = _cleanNpcName(namePart);
+    if (name && name.toLowerCase() === targetClean) { removedChunk = ln; return false; }
+    return true;
+  });
+  return { body: kept.join('\n'), removedChunk };
+}
 function _parseNpcMdGroups(raw) {
   if (!raw) return [];
   const text = raw.replace(/^﻿/, '').replace(/\r\n/g, '\n');
@@ -1701,6 +1757,63 @@ ${currentBlockMd}
     }
   });
 
+  // ── Remove one НПС/ПК entry from npc.md («НПС» tab) ───────────────────────────
+  // Only drops the reference line for canon/pc entries (the roster character is
+  // never touched). Modular (неканоничные) entries also lose their own card
+  // folder — npc/<slug>/ only ever existed for this module's npc.md.
+  router.delete('/api/chronicles/:chr/modules/:mod/npc', express.json(), async (req, res) => {
+    try {
+      const city = reqCity(req);
+      const { chr, mod } = req.params;
+      if (chr.includes('..') || mod.includes('..'))
+        return res.status(400).json({ error: 'Недопустимое имя' });
+
+      const { name, group } = req.body || {};
+      if (!name?.trim()) return res.status(400).json({ error: 'Укажи имя' });
+      if (!['pc', 'canon', 'modular'].includes(group))
+        return res.status(400).json({ error: 'Недопустимая группа' });
+      const nm = name.trim();
+
+      const modDir = path.join(chroniclesDir(city), chr, 'modules', mod);
+      if (!await fs.stat(modDir).catch(() => null))
+        return res.status(404).json({ error: 'Модуль не найден' });
+
+      const npcMdPath = path.join(modDir, 'npc.md');
+      const rawFile = await fs.readFile(npcMdPath, 'utf-8').catch(() => null);
+      if (rawFile == null) return res.status(404).json({ error: 'npc.md отсутствует' });
+      const bom = rawFile.charCodeAt(0) === 0xFEFF;
+      const text = (bom ? rawFile.slice(1) : rawFile).replace(/\r\n/g, '\n');
+
+      const section = _findNpcMdSection(text, group);
+      if (!section) return res.status(404).json({ ok: false, error: 'Раздел не найден в npc.md' });
+
+      const body = text.slice(section.bodyStart, section.end);
+      const { body: newBody, removedChunk } = _removeNpcEntry(body, nm);
+      if (!removedChunk) return res.status(404).json({ ok: false, error: 'НПС не найден в списке' });
+
+      const newText = text.slice(0, section.bodyStart) + newBody + text.slice(section.end);
+      await writeFileAtomic(npcMdPath, (bom ? '﻿' : '') + newText, 'utf-8');
+
+      let cardDeleted = false;
+      if (group === 'modular') {
+        const hrefM = removedChunk.match(/npc\/([^/]+)\//);
+        const slug  = hrefM ? hrefM[1] : slugify(nm);
+        const npcDir = path.join(modDir, 'npc', slug);
+        if (await fs.stat(npcDir).catch(() => null)) {
+          await rmdir(npcDir);
+          cardDeleted = true;
+        }
+      }
+
+      invalidateChars(city);
+      console.log(`[mod-npc-rm] ${city}/${chr}/${mod} → ${nm} (${group})${cardDeleted ? ' + карточка npc/' : ''}`);
+      res.json({ ok: true, name: nm, group, cardDeleted });
+    } catch (e) {
+      console.error('[mod-npc-rm]', e.message);
+      serverError(res, e);
+    }
+  });
+
   // ── Delete-preview for module ─────────────────────────────────────────────────
 
   router.get('/api/chronicles/:chr/modules/:mod/delete-preview', async (req, res) => {
@@ -2170,6 +2283,14 @@ ${currentBlockMd}
               e.sheetScope = 'module';
               e.hasSheet = !!(await fs.stat(path.join(modDir, 'npc', e.slug, `${e.slug}-sheet.md`)).catch(() => null));
               e.promoteCheck = await _checkNpcPromotion(city, chr, mod, e.slug).catch(() => null);
+              // Модульные (неканоничные) НПС редко имеют art/ — но если завели
+              // (см. tools/new_npc.js-подобный workflow вручную), карточка на
+              // вкладке НПС должна показать её, как это уже делают локации.
+              const artFiles = await fs.readdir(path.join(modDir, 'npc', e.slug, 'art')).catch(() => []);
+              const imgFile = artFiles.find(f => /\.(jpg|jpeg|png|webp|gif)$/i.test(f));
+              if (imgFile) {
+                e.imageUrl = `/city-img/${city}/chronicles/${chr}/modules/${mod}/npc/${encodeURIComponent(e.slug)}/art/${encodeURIComponent(imgFile)}`;
+              }
             } else {
               const ch = allChars.find(c => c.name === e.name) || allChars.find(c => _nameMatch(c.name, e.name));
               e.slug = ch?.slug || null;
@@ -2177,6 +2298,9 @@ ${currentBlockMd}
               e.hasSheet = ch
                 ? !!(await fs.stat(path.join(charsDir(city), ch.lineageFolder, ch.slug, `${ch.slug}-sheet.md`)).catch(() => null))
                 : false;
+              e.imageUrl = ch?.imageUrl || null;
+              e.lineage  = ch?.lineage || null;
+              e.clan     = ch?.clan || ch?.lineageLabel || null;
             }
           }
         }

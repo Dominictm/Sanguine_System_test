@@ -13,12 +13,14 @@
 ---
 
 ## 📚 Каноничные НПС
+- джуди — НПС → 🔗 [Карточка](../../../../characters/mortals/dzhudi/dzhudi.md)
 
 - Граф Жубака — роль в модуле → 🔗 [Карточка](../../../../characters/vampires/graf_zhubaka/graf_zhubaka.md)
 
 ---
 
-## 🆕 Модульные НПС (неканоничные)
+## 🆕 Модульные НПС
+- Игер пипон — НПС → 🔗 [Карточка](npc/iger_pipon/iger_pipon.md) (неканоничные)
 
 > Карточки в `npc/`. Условия продвижения — `system/rules/module_rules.md`.
 
