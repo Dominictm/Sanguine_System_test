@@ -7404,7 +7404,7 @@ function _sheetApi(ctx) {
   return { get: base + qs, gen: base + '/generate' + qs, put: base + qs };
 }
 
-const _SHEET_EDIT_SECTIONS = /атрибут|способност|преимуществ|дисциплин|предыстор|добродетел|(?<!производные )характеристик/i;
+const _SHEET_EDIT_SECTIONS = /атрибут|способност|преимуществ|дисциплин|предыстор|добродетел|нумина|(?<!производные )характеристик/i;
 function _sheetDots(v) { v = Math.max(0, Math.min(5, v | 0)); return '●'.repeat(v) + '○'.repeat(5 - v); }
 
 // Find which cells of a table row carry a 0–5 rating (dots / number / combined).
@@ -7425,7 +7425,14 @@ function _parseSheetForEdit(md) {
   const lines = (md || '').replace(/\r\n/g, '\n').split('\n');
   const groups = [], editable = [];
   let curSection = '', curSub = '', curGroup = null, m;
-  const flush = () => { if (curGroup && curGroup.rows.length) groups.push(curGroup); curGroup = null; };
+  const flush = () => {
+    if (curGroup && curGroup.rows.length) {
+      curGroup.firstLineIdx = curGroup.rows[0].lineIdx;
+      curGroup.lastLineIdx = curGroup.rows[curGroup.rows.length - 1].lineIdx;
+      groups.push(curGroup);
+    }
+    curGroup = null;
+  };
   for (let i = 0; i < lines.length; i++) {
     const ln = lines[i];
     if ((m = ln.match(/^##\s+(.+)$/)))  { flush(); curSection = m[1].replace(/[#*]/g, '').trim(); curSub = ''; continue; }
