@@ -7409,6 +7409,112 @@ a.md-link-loc:hover {
   margin-left: 4px;
 }
 
+.sheet-row-remove {
+  background: none;
+  border: none;
+  color: var(--text2);
+  cursor: pointer;
+  font-size: var(--fs-sm);
+  line-height: 1;
+  padding: 4px 6px;
+  flex-shrink: 0;
+}
+
+.sheet-row-remove:hover {
+  color: var(--c-error);
+}
+
+.sheet-add-btn {
+  display: block;
+  width: 100%;
+  margin-top: 8px;
+  background: rgba(184, 134, 11, 0.08);
+  border: 1px dashed rgba(184, 134, 11, 0.4);
+  color: var(--gold);
+  padding: 7px 10px;
+  border-radius: 3px;
+  cursor: pointer;
+  font-family: var(--f-heading);
+  font-size: var(--fs-2xs);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  text-align: center;
+}
+
+.sheet-add-btn:hover {
+  border-color: var(--gold);
+  background: rgba(184, 134, 11, 0.16);
+}
+
+.sheet-lib-picker {
+  margin-top: 8px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.25);
+}
+
+.sheet-lib-search {
+  width: 100%;
+  box-sizing: border-box;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--text);
+  font-size: var(--fs-sm);
+  padding: 6px 8px;
+  margin-bottom: 8px;
+}
+
+.sheet-lib-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.sheet-lib-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  padding: 6px 8px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.sheet-lib-item:hover {
+  background: rgba(184, 134, 11, 0.1);
+  border-color: rgba(184, 134, 11, 0.3);
+}
+
+.sheet-lib-item-name {
+  font-size: var(--fs-sm);
+  color: var(--text);
+}
+
+.sheet-lib-item-desc {
+  font-size: var(--fs-2xs);
+  color: var(--text2);
+}
+
+.sheet-lib-empty {
+  font-size: var(--fs-sm);
+  color: var(--text2);
+  padding: 6px 0;
+}
+
+@media (pointer: coarse) {
+  .sheet-add-btn { min-height: 44px; }
+  .sheet-row-remove { min-height: 44px; min-width: 44px; }
+  .sheet-lib-item { min-height: 44px; }
+}
+
 /* ── Structured V20 sheet (STV2099 blank) ─────────────────────────────────── */
 .v20-sheet {
   display: flex;
