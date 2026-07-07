@@ -186,3 +186,15 @@ web/public/img/backgrounds/<имя>.png
 > Technical: 16:10 landscape (~1600x1000px), no text, no watermark, no logo,
 > no UI elements, consistent muted crimson/near-black palette matching the
 > rest of the series.
+
+## 14. `module.png` — Просмотр модуля (детальная страница)
+
+> Atmospheric dark gothic illustration symbolizing a single story module in
+> progress — an open leather journal or dossier with loose pages and a red
+> wax seal, a lit candle beside it on a dark writing desk, muted crimson and
+> near-black palette, no text, no UI elements, painterly digital art, wide
+> landscape composition, darker toward the edges, calmer in the center-left.
+>
+> Technical: 16:10 landscape (~1600x1000px), no text, no watermark, no logo,
+> no UI elements, consistent muted crimson/near-black palette matching the
+> rest of the series.
