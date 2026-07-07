@@ -7482,6 +7482,41 @@ function _buildEditedSheet(parsed) {
   return lines.join('\n');
 }
 
+// Which library (if any) backs this group's "+ Добавить" picker.
+function _sheetLibraryKind(g) {
+  const t = `${g.section} ${g.subsection}`;
+  if (/дисциплин/i.test(t)) return 'discipline';
+  if (/нумина/i.test(t)) return 'numina';
+  return null;
+}
+function _libraryEntryDesc(kind, entry) {
+  return kind === 'discipline' ? (entry.note || entry.clans || '') : (entry.category || '');
+}
+// Loads (once per modal open) only the library kinds actually present among
+// the sheet's editable groups — a mortal sheet never fetches disciplines,
+// a vampire sheet never fetches psychics.
+async function _prefetchSheetLibraries(state) {
+  const kinds = new Set();
+  for (const g of state.parsed.groups) { const k = _sheetLibraryKind(g); if (k) kinds.add(k); }
+  await Promise.all([...kinds].map(async k => {
+    const url = k === 'discipline' ? '/api/library/disciplines' : '/api/library/psychics';
+    try { state.library[k] = await fetch(url).then(r => r.json()); }
+    catch { state.library[k] = []; }
+  }));
+}
+function _renderLibList(state, groupIdx, filter) {
+  const g = state.parsed.groups[groupIdx];
+  const kind = _sheetLibraryKind(g);
+  const list = state.library[kind] || [];
+  const q = (filter || '').trim().toLowerCase();
+  const filtered = q ? list.filter(e => e.name.toLowerCase().includes(q)) : list;
+  if (!filtered.length) return '<div class="sheet-lib-empty">Ничего не найдено</div>';
+  return filtered.map(e => `<button type="button" class="sheet-lib-item" data-group-idx="${groupIdx}" data-name="${escHtml(e.name)}">
+    <span class="sheet-lib-item-name">${escHtml(e.name)}</span>
+    <span class="sheet-lib-item-desc">${escHtml(_libraryEntryDesc(kind, e))}</span>
+  </button>`).join('');
+}
+
 function _dotControl(idx, v) {
   let s = `<span class="sheet-dots" data-row="${idx}">`;
   for (let d = 1; d <= 5; d++) s += `<span class="sheet-dot${d <= v ? ' on' : ''}" data-row="${idx}" data-val="${d}"></span>`;
