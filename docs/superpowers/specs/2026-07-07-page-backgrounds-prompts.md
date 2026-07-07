@@ -33,10 +33,12 @@ web/public/img/backgrounds/<имя>.png
 ## 1. `dashboard.png` — Панель
 
 > Atmospheric dark gothic illustration for a vampire chronicle dashboard.
-> A moody noir Paris skyline at night seen from a rooftop, muted crimson and
-> near-black palette, faint candlelight glow on the horizon, no text, no UI
-> elements, painterly digital art, wide landscape composition, darker toward
-> the edges, calmer in the center-left.
+> A moody noir Paris rooftop view at night — dense huddled mansard roofs and
+> narrow chimneys stretching to the horizon, no famous landmarks or
+> recognizable monuments, muted crimson and near-black palette, faint
+> candlelight glow on the horizon, no text, no UI elements, painterly digital
+> art, wide landscape composition, darker toward the edges, calmer in the
+> center-left.
 >
 > Technical: 16:10 landscape (~1600x1000px), no text, no watermark, no logo,
 > no UI elements, consistent muted crimson/near-black palette matching the
