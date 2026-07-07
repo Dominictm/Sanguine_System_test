@@ -7522,16 +7522,32 @@ function _dotControl(idx, v) {
   for (let d = 1; d <= 5; d++) s += `<span class="sheet-dot${d <= v ? ' on' : ''}" data-row="${idx}" data-val="${d}"></span>`;
   return s + `<span class="sheet-dot-val">${v}</span></span>`;
 }
-function _renderSheetEditor(parsed) {
+function _renderSheetEditor(state) {
+  const parsed = state.parsed;
   if (!parsed.editable.length) return '<div class="cdet-empty">В листе не найдено редактируемых характеристик.</div>';
-  return parsed.groups.map(g => {
+  return parsed.groups.map((g, gi) => {
     const title = [g.section, g.subsection].filter(Boolean).join(' · ');
     const rows = g.rows.map(r => {
       const idx = parsed.editable.indexOf(r);
-      return `<div class="sheet-edit-row"><span class="sheet-edit-name">${escHtml(r.name)}</span>${_dotControl(idx, r.value)}</div>`;
+      return `<div class="sheet-edit-row">
+        <span class="sheet-edit-name">${escHtml(r.name)}</span>
+        ${_dotControl(idx, r.value)}
+        <button type="button" class="sheet-row-remove" data-row="${idx}" title="Удалить строку">✕</button>
+      </div>`;
     }).join('');
-    return `<div class="sheet-edit-group"><div class="sheet-edit-gtitle">${escHtml(title)}</div>${rows}</div>`;
+    const kind = _sheetLibraryKind(g);
+    const addUi = (kind && state.library[kind]) ? `
+      <button type="button" class="sheet-add-btn" data-group-idx="${gi}">+ Добавить из справочника</button>
+      <div class="sheet-lib-picker" data-group-idx="${gi}" hidden>
+        <input type="text" class="sheet-lib-search" data-group-idx="${gi}" placeholder="Поиск…">
+        <div class="sheet-lib-list" data-group-idx="${gi}"></div>
+      </div>` : '';
+    return `<div class="sheet-edit-group"><div class="sheet-edit-gtitle">${escHtml(title)}</div>${rows}${addUi}</div>`;
   }).join('');
+}
+function _rerenderSheetEditor() {
+  const body = document.getElementById('sheet-modal-body');
+  if (body && _sheetEditState) body.innerHTML = `<div class="sheet-edit">${_renderSheetEditor(_sheetEditState)}</div>`;
 }
 
 let _sheetEditState = null;
