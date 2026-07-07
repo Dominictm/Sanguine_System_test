@@ -782,7 +782,7 @@ body {
 }
 
 .stat-card {
-  background: var(--bg3);
+  background: rgb(139 0 0 / 7%);
   border: 5px solid var(--border);
   border-radius: 10px;
   padding: 44px 25px;
@@ -805,7 +805,10 @@ body {
 }
 
 .stat-card:hover {
+  background: rgb(139 0 0 / 15%);
   border-color: var(--border2);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(139, 0, 0, .18);
 }
 
 .stat-card:hover::after {
@@ -958,10 +961,13 @@ body {
 }
 
 .char-card:hover {
-  border-color: var(--border2);
-  background: var(--bg4);
-  transform: translateY(-1px);
+    border: 2px solid rgb(139 0 0 / 40%);
+    transform: translateY(-1px);
+    box-shadow: 0px 5px 22px rgb(139 0 0 / 60%);
+    background: var(--bg4);
 }
+
+  
 
 .char-card::before {
   content: '';
@@ -5312,7 +5318,7 @@ a:focus-visible {
 
 .stat-clickable:hover {
   border-color: var(--border2);
-  background: var(--bg4);
+    background: rgb(139 0 0 / 15%);
   transform: translateY(-2px);
   box-shadow: 0 6px 20px rgba(139, 0, 0, .18);
 }
