@@ -7461,9 +7461,24 @@ function _rebuildSheetRow(cells, rating, v) {
   if (rating.numIdx >= 0)      out[rating.numIdx]      = String(v);
   return '| ' + out.join(' | ') + ' |';
 }
+// New row added from a library picker — same 3-column shape (name / dots / value)
+// as every existing Дисциплины/Нумина table row, so _rebuildSheetRow renders it
+// identically to a parsed one. lineIdx stays null: it doesn't exist in the
+// original file yet, _buildEditedSheet below splices it in by group range.
+function _makeNewSheetRow(name) {
+  return { name, value: 1, lineIdx: null, cells: [name, '', ''], rating: { value: 1, dotsIdx: 1, numIdx: 2, combinedIdx: -1 } };
+}
 function _buildEditedSheet(parsed) {
   const lines = parsed.lines.slice();
-  for (const r of parsed.editable) lines[r.lineIdx] = _rebuildSheetRow(r.cells, r.rating, r.value);
+  // Rebuild each group's row range from its current (possibly add/removed-from)
+  // rows list. Processing bottom-of-file-first keeps not-yet-processed groups'
+  // firstLineIdx/lastLineIdx (captured at parse time, before any edits) valid —
+  // a splice only ever shifts line numbers *below* itself.
+  const ordered = parsed.groups.slice().sort((a, b) => b.firstLineIdx - a.firstLineIdx);
+  for (const g of ordered) {
+    const rowLines = g.rows.map(r => _rebuildSheetRow(r.cells, r.rating, r.value));
+    lines.splice(g.firstLineIdx, g.lastLineIdx - g.firstLineIdx + 1, ...rowLines);
+  }
   return lines.join('\n');
 }
 
