@@ -37,6 +37,10 @@ web/public/img/backgrounds/<имя>.png
 > near-black palette, faint candlelight glow on the horizon, no text, no UI
 > elements, painterly digital art, wide landscape composition, darker toward
 > the edges, calmer in the center-left.
+>
+> Technical: 16:10 landscape (~1600x1000px), no text, no watermark, no logo,
+> no UI elements, consistent muted crimson/near-black palette matching the
+> rest of the series.
 
 ## 2. `chronicle.png` — Хронология
 
@@ -45,6 +49,10 @@ web/public/img/backgrounds/<имя>.png
 > into drifting fog, muted crimson and near-black palette, no text, no UI
 > elements, painterly digital art, wide landscape composition, darker toward
 > the edges, calmer in the center-left.
+>
+> Technical: 16:10 landscape (~1600x1000px), no text, no watermark, no logo,
+> no UI elements, consistent muted crimson/near-black palette matching the
+> rest of the series.
 
 ## 3. `characters.png` — Персонажи
 
@@ -53,6 +61,10 @@ web/public/img/backgrounds/<имя>.png
 > muted crimson and near-black palette, no visible detailed faces, no text,
 > no UI elements, painterly digital art, wide landscape composition, darker
 > toward the edges, calmer in the center-left.
+>
+> Technical: 16:10 landscape (~1600x1000px), no text, no watermark, no logo,
+> no UI elements, consistent muted crimson/near-black palette matching the
+> rest of the series.
 
 ## 4. `graph.png` — Связи
 
@@ -61,6 +73,10 @@ web/public/img/backgrounds/<имя>.png
 > network of relationships, muted crimson and near-black palette, no text, no
 > UI elements, painterly digital art, wide landscape composition, darker
 > toward the edges, calmer in the center-left.
+>
+> Technical: 16:10 landscape (~1600x1000px), no text, no watermark, no logo,
+> no UI elements, consistent muted crimson/near-black palette matching the
+> rest of the series.
 
 ## 5. `factions.png` — Фракции
 
@@ -69,6 +85,10 @@ web/public/img/backgrounds/<имя>.png
 > muted crimson and near-black palette, no text, no UI elements, painterly
 > digital art, wide landscape composition, darker toward the edges, calmer
 > in the center-left.
+>
+> Technical: 16:10 landscape (~1600x1000px), no text, no watermark, no logo,
+> no UI elements, consistent muted crimson/near-black palette matching the
+> rest of the series.
 
 ## 6. `chronicles-page.png` — Хроники
 
@@ -77,6 +97,10 @@ web/public/img/backgrounds/<имя>.png
 > candlelight, muted crimson and near-black palette, no text, no UI elements,
 > painterly digital art, wide landscape composition, darker toward the edges,
 > calmer in the center-left.
+>
+> Technical: 16:10 landscape (~1600x1000px), no text, no watermark, no logo,
+> no UI elements, consistent muted crimson/near-black palette matching the
+> rest of the series.
 
 ## 7. `modules.png` — Модули
 
@@ -85,6 +109,10 @@ web/public/img/backgrounds/<имя>.png
 > muted crimson and near-black palette, no text, no UI elements, painterly
 > digital art, wide landscape composition, darker toward the edges, calmer
 > in the center-left.
+>
+> Technical: 16:10 landscape (~1600x1000px), no text, no watermark, no logo,
+> no UI elements, consistent muted crimson/near-black palette matching the
+> rest of the series.
 
 ## 8. `threads.png` — Нити
 
@@ -93,6 +121,10 @@ web/public/img/backgrounds/<имя>.png
 > and near-black palette, no text, no UI elements, painterly digital art,
 > wide landscape composition, darker toward the edges, calmer in the
 > center-left.
+>
+> Technical: 16:10 landscape (~1600x1000px), no text, no watermark, no logo,
+> no UI elements, consistent muted crimson/near-black palette matching the
+> rest of the series.
 
 ## 9. `rumors.png` — Слухи
 
@@ -101,6 +133,10 @@ web/public/img/backgrounds/<имя>.png
 > crimson and near-black palette, no text, no UI elements, painterly digital
 > art, wide landscape composition, darker toward the edges, calmer in the
 > center-left.
+>
+> Technical: 16:10 landscape (~1600x1000px), no text, no watermark, no logo,
+> no UI elements, consistent muted crimson/near-black palette matching the
+> rest of the series.
 
 ## 10. `locations.png` — Локации
 
@@ -108,6 +144,10 @@ web/public/img/backgrounds/<имя>.png
 > at night, wrought-iron lamppost, wet cobblestones, muted crimson and
 > near-black palette, no text, no UI elements, painterly digital art, wide
 > landscape composition, darker toward the edges, calmer in the center-left.
+>
+> Technical: 16:10 landscape (~1600x1000px), no text, no watermark, no logo,
+> no UI elements, consistent muted crimson/near-black palette matching the
+> rest of the series.
 
 ## 11. `library.png` — Библиотека
 
@@ -116,6 +156,10 @@ web/public/img/backgrounds/<имя>.png
 > candlelight, muted crimson and near-black palette, no text, no UI elements,
 > painterly digital art, wide landscape composition, darker toward the edges,
 > calmer in the center-left.
+>
+> Technical: 16:10 landscape (~1600x1000px), no text, no watermark, no logo,
+> no UI elements, consistent muted crimson/near-black palette matching the
+> rest of the series.
 
 ## 12. `tools.png` — Инструменты
 
@@ -124,6 +168,10 @@ web/public/img/backgrounds/<имя>.png
 > muted crimson and near-black palette, no text, no UI elements, painterly
 > digital art, wide landscape composition, darker toward the edges, calmer
 > in the center-left.
+>
+> Technical: 16:10 landscape (~1600x1000px), no text, no watermark, no logo,
+> no UI elements, consistent muted crimson/near-black palette matching the
+> rest of the series.
 
 ## 13. `search.png` — Поиск
 
@@ -132,3 +180,7 @@ web/public/img/backgrounds/<имя>.png
 > fog, muted crimson and near-black palette, no text, no UI elements,
 > painterly digital art, wide landscape composition, darker toward the edges,
 > calmer in the center-left.
+>
+> Technical: 16:10 landscape (~1600x1000px), no text, no watermark, no logo,
+> no UI elements, consistent muted crimson/near-black palette matching the
+> rest of the series.
