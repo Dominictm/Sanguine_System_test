@@ -7658,7 +7658,7 @@ async function openSheetOverlay(ctx, mode) {
     _sheetEditState = null;
     body.innerHTML = `<div class="sheet-view md-body">${mdToHtml(_stripSheetHeader(d.content))}</div>`;
     actions.innerHTML = `<button class="sheet-btn" id="sheet-to-edit">✏ Редактировать</button>`;
-    ov.querySelector('#sheet-to-edit').addEventListener('click', () => openSheetOverlay(ctx, 'edit'));
+    ov.querySelector('#sheet-to-edit').addEventListener('click', async () => await openSheetOverlay(ctx, 'edit'));
   }
 }
 
