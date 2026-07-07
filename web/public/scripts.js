@@ -7570,7 +7570,17 @@ function _ensureSheetOverlay() {
   ov.querySelector('#sheet-modal-close').addEventListener('click', _closeSheetOverlay);
   ov.querySelector('#sheet-modal-body').addEventListener('click', e => {
     const dot = e.target.closest('.sheet-dot');
-    if (dot) _onSheetDotClick(dot);
+    if (dot) { _onSheetDotClick(dot); return; }
+    const addBtn = e.target.closest('.sheet-add-btn');
+    if (addBtn) { _onSheetAddBtnClick(addBtn); return; }
+    const item = e.target.closest('.sheet-lib-item');
+    if (item) { _onSheetLibItemClick(item); return; }
+    const rm = e.target.closest('.sheet-row-remove');
+    if (rm) { _onSheetRowRemoveClick(rm); return; }
+  });
+  ov.querySelector('#sheet-modal-body').addEventListener('input', e => {
+    const search = e.target.closest('.sheet-lib-search');
+    if (search) _onSheetLibSearchInput(search);
   });
   return ov;
 }
@@ -7583,6 +7593,43 @@ function _onSheetDotClick(dotEl) {
   const cont = dotEl.closest('.sheet-dots');
   cont.querySelectorAll('.sheet-dot').forEach(el => el.classList.toggle('on', +el.dataset.val <= r.value));
   cont.querySelector('.sheet-dot-val').textContent = r.value;
+}
+function _onSheetAddBtnClick(btn) {
+  const picker = btn.parentElement.querySelector('.sheet-lib-picker');
+  if (!picker) return;
+  const opening = picker.hidden;
+  picker.hidden = !opening;
+  if (opening) {
+    const gi = +btn.dataset.groupIdx;
+    picker.querySelector('.sheet-lib-list').innerHTML = _renderLibList(_sheetEditState, gi, '');
+    const search = picker.querySelector('.sheet-lib-search');
+    search.value = '';
+    search.focus();
+  }
+}
+function _onSheetLibSearchInput(input) {
+  const gi = +input.dataset.groupIdx;
+  const list = input.closest('.sheet-lib-picker').querySelector('.sheet-lib-list');
+  list.innerHTML = _renderLibList(_sheetEditState, gi, input.value);
+}
+function _onSheetLibItemClick(item) {
+  const gi = +item.dataset.groupIdx;
+  const g = _sheetEditState.parsed.groups[gi];
+  const row = _makeNewSheetRow(item.dataset.name);
+  g.rows.push(row);
+  _sheetEditState.parsed.editable.push(row);
+  _rerenderSheetEditor();
+}
+function _onSheetRowRemoveClick(btn) {
+  const idx = +btn.dataset.row;
+  const row = _sheetEditState.parsed.editable[idx];
+  if (!row) return;
+  for (const g of _sheetEditState.parsed.groups) {
+    const ri = g.rows.indexOf(row);
+    if (ri >= 0) { g.rows.splice(ri, 1); break; }
+  }
+  _sheetEditState.parsed.editable.splice(idx, 1);
+  _rerenderSheetEditor();
 }
 
 async function openSheetOverlay(ctx, mode) {
@@ -7602,8 +7649,9 @@ async function openSheetOverlay(ctx, mode) {
   if (!d.exists || !d.content) { body.innerHTML = '<div class="cdet-empty">Лист ещё не сгенерирован.</div>'; return; }
 
   if (mode === 'edit') {
-    _sheetEditState = { ctx, parsed: _parseSheetForEdit(d.content) };
-    body.innerHTML = `<div class="sheet-edit">${_renderSheetEditor(_sheetEditState.parsed)}</div>`;
+    _sheetEditState = { ctx, parsed: _parseSheetForEdit(d.content), library: {} };
+    await _prefetchSheetLibraries(_sheetEditState);
+    body.innerHTML = `<div class="sheet-edit">${_renderSheetEditor(_sheetEditState)}</div>`;
     actions.innerHTML = `<button class="sheet-btn sheet-btn-save" id="sheet-save">💾 Сохранить</button>`;
     ov.querySelector('#sheet-save').addEventListener('click', _saveSheetEdit);
   } else {
