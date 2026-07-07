@@ -291,14 +291,39 @@ body {
      у градиента навигации и overlay-затемнения на карточке персонажа.
      Радиальная форма и более высокая непрозрачность (в отличие от прежней
      плоской диагонали на 7%) нужны, чтобы читаться и сквозь плотную сетку
-     карточек/таблиц, а не только на страницах с открытым пустым фоном. */
+     карточек/таблиц, а не только на страницах с открытым пустым фоном.
+     --page-bg-layers — тематическая иллюстрация раздела вместе со своим
+     затемняющим градиентом (задаётся целиком на каждой #page-* секции, см.
+     ниже); по умолчанию "none" — ни иллюстрации, ни лишнего затемнения, пока
+     картинка для раздела не добавлена. */
+  --page-bg-layers: none;
   background: radial-gradient(ellipse 900px 560px at -4% -8%, rgba(139, 0, 0, .22), transparent 62%),
+              var(--page-bg-layers),
               linear-gradient(180deg, var(--bg) 0%, var(--bg2) 100%);
 }
 
 .page.active {
   display: block;
 }
+
+/* Тематические фоновые иллюстрации разделов — по одному изображению на
+   верхнеуровневый пункт nav-menu (промты и имена файлов —
+   docs/superpowers/specs/2026-07-07-page-backgrounds-prompts.md). Затемняющий
+   градиент — часть той же переменной, чтобы не включаться раньше картинки. */
+#page-dashboard       { --page-bg-layers: linear-gradient(180deg, rgba(7, 5, 10, .82), rgba(7, 5, 10, .30)), url('img/backgrounds/dashboard.png') center / cover no-repeat; }
+#page-chronicle       { --page-bg-layers: linear-gradient(180deg, rgba(7, 5, 10, .82), rgba(7, 5, 10, .30)), url('img/backgrounds/chronicle.png') center / cover no-repeat; }
+#page-characters      { --page-bg-layers: linear-gradient(180deg, rgba(7, 5, 10, .82), rgba(7, 5, 10, .30)), url('img/backgrounds/characters.png') center / cover no-repeat; }
+#page-graph           { --page-bg-layers: linear-gradient(180deg, rgba(7, 5, 10, .82), rgba(7, 5, 10, .30)), url('img/backgrounds/graph.png') center / cover no-repeat; }
+#page-factions        { --page-bg-layers: linear-gradient(180deg, rgba(7, 5, 10, .82), rgba(7, 5, 10, .30)), url('img/backgrounds/factions.png') center / cover no-repeat; }
+#page-chronicles-page { --page-bg-layers: linear-gradient(180deg, rgba(7, 5, 10, .82), rgba(7, 5, 10, .30)), url('img/backgrounds/chronicles-page.png') center / cover no-repeat; }
+#page-modules          { --page-bg-layers: linear-gradient(180deg, rgba(7, 5, 10, .82), rgba(7, 5, 10, .30)), url('img/backgrounds/modules.png') center / cover no-repeat; }
+#page-threads          { --page-bg-layers: linear-gradient(180deg, rgba(7, 5, 10, .82), rgba(7, 5, 10, .30)), url('img/backgrounds/threads.png') center / cover no-repeat; }
+#page-rumors           { --page-bg-layers: linear-gradient(180deg, rgba(7, 5, 10, .82), rgba(7, 5, 10, .30)), url('img/backgrounds/rumors.png') center / cover no-repeat; }
+#page-locations        { --page-bg-layers: linear-gradient(180deg, rgba(7, 5, 10, .82), rgba(7, 5, 10, .30)), url('img/backgrounds/locations.png') center / cover no-repeat; }
+#page-library          { --page-bg-layers: linear-gradient(180deg, rgba(7, 5, 10, .82), rgba(7, 5, 10, .30)), url('img/backgrounds/library.png') center / cover no-repeat; }
+#page-tools            { --page-bg-layers: linear-gradient(180deg, rgba(7, 5, 10, .82), rgba(7, 5, 10, .30)), url('img/backgrounds/tools.png') center / cover no-repeat; }
+#page-search           { --page-bg-layers: linear-gradient(180deg, rgba(7, 5, 10, .82), rgba(7, 5, 10, .30)), url('img/backgrounds/search.png') center / cover no-repeat; }
+#page-module           { --page-bg-layers: linear-gradient(180deg, rgba(7, 5, 10, .82), rgba(7, 5, 10, .30)), url('img/backgrounds/module.png') center / cover no-repeat; }
 
 #page-graph {
   padding: 0;

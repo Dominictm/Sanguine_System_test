@@ -10,6 +10,9 @@ web/nul
 *.png
 *.gif
 *.webp
+# Фоновые иллюстрации разделов веб-интерфейса — часть UI (как styles.css),
+# а не личный арт города/персонажей, поэтому исключение из общего *.png.
+!web/public/img/backgrounds/*.png
 .claude/settings.local.json
 Thumbs.db
 desktop.ini
