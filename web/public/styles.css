@@ -6720,7 +6720,7 @@ a.md-link-loc:hover {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  background: var(--bg-panel);
+  background: rgb(139 0 0 / 7%);
   border: 1px solid var(--border);
   border-radius: 6px;
   padding: 16px 18px;
@@ -6987,8 +6987,8 @@ a.md-link-loc:hover {
 }
 
 .modp-npc-entry {
-  background: var(--bg-panel);
-  border: 1px solid var(--crimson);
+      background: rgb(139 0 0 / 7%);
+ border: 1px solid var(--border);
   border-radius: 4px;
   padding: 12px 16px;
   margin-bottom: 12px;
@@ -7070,7 +7070,8 @@ a.md-link-loc:hover {
 }
 
 .modp-npc-desc {
-  font-size: var(--fs-lg);
+  text-shadow: 0 0 #ffffff;
+  font-size: 22px;
   line-height: 1.45;
   color: var(--text2);
   opacity: 0.85;
@@ -8518,7 +8519,7 @@ a.md-link-loc:hover {
 /* Events */
 .modp-event {
   border: 1px solid var(--border);
-  background: rgba(139, 0, 0, 0.05);
+    background: rgb(139 0 0 / 7%);
   padding: 14px 18px;
   margin-bottom: 12px;
   border-radius: 3px;
@@ -8700,7 +8701,7 @@ a.md-link-loc:hover {
    кнопками «Редактировать»/«Перегенерировать», поля внутри (`### `) — со
    своей иконкой перегенерации. */
 .modp-scenario-block {
-  background: var(--bg3);
+  background: rgb(139 0 0 / 7%);
   border: 1px solid var(--border);
   border-radius: 4px;
   padding: 14px 16px;
