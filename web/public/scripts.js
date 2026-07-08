@@ -6936,10 +6936,10 @@ async function _v20RunAction(action) {
     if (m.flaw.trim() && !await showConfirm('Поле «Изъян» не пустое. Заменить текущий текст слабостью клана?', { confirmText: 'Заменить' })) return;
     m.flaw = info.weakness;
   } else if (action === 'open-disc-library') {
-    _v20OpenDisciplineModal();
+    _v20ToggleLibPicker('discipline');
     return;
   } else if (action === 'open-psy-library') {
-    _v20OpenPsychicModal();
+    _v20ToggleLibPicker('numina');
     return;
   } else if (action === 'spend-blood') {
     const genInfo = (m.lineage || '') === 'vampires' ? v20GenerationInfo(m.header.generation) : null;
@@ -6950,6 +6950,57 @@ async function _v20RunAction(action) {
   } else if (action === 'spend-willpower') {
     if (!_v20SpendPool('willpower.temp')) return;
   } else return;
+  _v20MarkDirty();
+  _v20RenderSheet(document.getElementById('cdet-sheet-panel'), _v20Ctx.name);
+}
+
+// V20 inline library picker (disciplines/numina in character sheet)
+async function _v20LoadLibrary(kind) {
+  if (_v20LibraryCache[kind]) return _v20LibraryCache[kind];
+  try {
+    const endpoint = kind === 'discipline' ? '/api/library/disciplines' : '/api/library/psychics';
+    const data = await fetch(endpoint).then(r => r.json());
+    _v20LibraryCache[kind] = Array.isArray(data) ? data : [];
+  } catch { _v20LibraryCache[kind] = []; }
+  return _v20LibraryCache[kind];
+}
+
+function _v20LibPickerKindToSection(kind) {
+  return kind === 'discipline' ? 'disciplines' : 'psychicPowers';
+}
+
+async function _v20ToggleLibPicker(kind) {
+  const panel = document.getElementById('cdet-sheet-panel');
+  if (!panel) return;
+  const picker = panel.querySelector(`.v20-lib-picker[data-v20-lib-kind="${kind}"]`);
+  if (!picker) return;
+
+  if (picker.hidden) {
+    picker.hidden = false;
+    const lib = await _v20LoadLibrary(kind);
+    _v20RenderV20LibList(kind, lib, picker);
+  } else {
+    picker.hidden = true;
+  }
+}
+
+function _v20RenderV20LibList(kind, lib, pickerEl) {
+  const listEl = pickerEl.querySelector('.v20-lib-list');
+  if (!listEl) return;
+  listEl.innerHTML = (lib || []).map(item => {
+    const name = item.name || item.ru || '';
+    const hint = (item.levels || []).length ? `${(item.levels || []).length} уровней` : '';
+    return `<button type="button" class="v20-lib-item" data-v20-lib-item="${escAttr(name)}" data-v20-lib-kind="${kind}"><span>${escHtml(name)}</span><span class="v20-lib-hint">${escHtml(hint)}</span></button>`;
+  }).join('');
+}
+
+function _v20AddLibraryItem(kind, name) {
+  const section = _v20LibPickerKindToSection(kind);
+  const m = _v20Model;
+  if (!m[section]) return;
+
+  const newEntry = { name, val: 1 };
+  m[section].push(newEntry);
   _v20MarkDirty();
   _v20RenderSheet(document.getElementById('cdet-sheet-panel'), _v20Ctx.name);
 }
@@ -7069,14 +7120,21 @@ function _v20RenderSheet(panel, charName) {
 
   const discFillBtn = clanInfo && m.disciplines.slice(0, 3).every(d => !d.name)
     ? `<button type="button" class="v20-mini-action" data-v20-action="fill-clan-disc">+ клановые</button>` : '';
-  const discLibBtn = `<button type="button" class="v20-mini-action" data-v20-action="open-disc-library" title="Открыть справочник дисциплин">📚</button>`;
+  const discLibBtn = `<button type="button" class="v20-mini-action v20-lib-add-btn" data-v20-lib-kind="discipline" title="Добавить из справочника дисциплин">+ Из справочника</button>`;
   const discRow = (d, i) => {
     const known = !!v20DisciplineKey(d.name);
     const infoBtn = known ? `<button type="button" class="v20-disc-info-btn" data-disc-view="${escAttr(d.name)}" title="Силы по уровням: ${escAttr(d.name)}">ℹ</button>` : '';
     const rm = i >= _V20_BASELINE_LEN.disciplines ? `<button type="button" class="v20-row-remove-btn" data-v20-remove="disciplines" data-v20-remove-idx="${i}" title="Удалить строку">×</button>` : '';
     return `<div class="v20-row v20-named v20-disc-row">${rm}${infoBtn}<input class="v20-line-input" data-tpath="disciplines.${i}.name" value="${escAttr(d.name)}" placeholder="…">${_v20DotsHtml(`disciplines.${i}.val`, d.val, genMaxDots)}</div>`;
   };
-  const discCol = `<div class="v20-col"><div class="v20-col-title">Дисциплины${discFillBtn}${discLibBtn}${_v20AddRowBtn('disciplines')}</div>${m.disciplines.map(discRow).join('')}</div>`;
+  const discCol = `<div class="v20-col">
+    <div class="v20-col-title">Дисциплины${discFillBtn}${discLibBtn}${_v20AddRowBtn('disciplines')}</div>
+    <div class="v20-lib-picker" data-v20-lib-kind="discipline" hidden>
+      <input type="text" class="v20-lib-search" placeholder="Поиск…" data-v20-lib-kind="discipline">
+      <div class="v20-lib-list" data-v20-lib-kind="discipline"></div>
+    </div>
+    ${m.disciplines.map(discRow).join('')}
+  </div>`;
   const bgCol = `<div class="v20-col"><div class="v20-col-title">Факты биографии${_v20AddRowBtn('backgrounds')}</div>${m.backgrounds.map((b, i) => _v20NamedDotRow(`backgrounds.${i}.name`, b.name, `backgrounds.${i}.val`, b.val, genMaxDots, i >= _V20_BASELINE_LEN.backgrounds ? 'backgrounds' : '')).join('')}</div>`;
   const virtCol = `<div class="v20-col"><div class="v20-col-title">Добродетели</div>
       ${_v20DotRow('Совесть/Решимость', 'virtues.conscience', m.virtues.conscience)}
@@ -7091,7 +7149,7 @@ function _v20RenderSheet(panel, charName) {
   // у обычного смертного секция рендерится с пустыми/нулевыми строками, как и Дисциплины:0
   // у вампира без выбранного клана. Только для мортал-линейки — вампиры/ченджлинги её не видят.
   const isMortal = (m.lineage || '') === 'mortals';
-  const psyLibBtn = `<button type="button" class="v20-mini-action" data-v20-action="open-psy-library" title="Открыть справочник психических способностей">📚</button>`;
+  const psyLibBtn = `<button type="button" class="v20-mini-action v20-lib-add-btn" data-v20-lib-kind="numina" title="Добавить из справочника психических способностей">+ Из справочника</button>`;
   const psyRow = (p, i) => {
     const known = !!v20PsychicKey(p.name);
     const infoBtn = known ? `<button type="button" class="v20-disc-info-btn" data-psy-view="${escAttr(p.name)}" title="Силы по уровням: ${escAttr(p.name)}">ℹ</button>` : '';
@@ -7101,7 +7159,14 @@ function _v20RenderSheet(panel, charName) {
   const psychics = isMortal ? `
     <div class="v20-band">Психические способности</div>
     <div class="v20-grid3">
-      <div class="v20-col"><div class="v20-col-title">Нумина / Грани${psyLibBtn}${_v20AddRowBtn('psychicPowers')}</div>${m.psychicPowers.map(psyRow).join('')}</div>
+      <div class="v20-col">
+        <div class="v20-col-title">Нумина / Грани${psyLibBtn}${_v20AddRowBtn('psychicPowers')}</div>
+        <div class="v20-lib-picker" data-v20-lib-kind="numina" hidden>
+          <input type="text" class="v20-lib-search" placeholder="Поиск…" data-v20-lib-kind="numina">
+          <div class="v20-lib-list" data-v20-lib-kind="numina"></div>
+        </div>
+        ${m.psychicPowers.map(psyRow).join('')}
+      </div>
       <div class="v20-col"></div>
       <div class="v20-col"></div>
     </div>` : '';
@@ -7288,6 +7353,41 @@ function _v20BindPanel(panel) {
       _v20RemoveRow(section, group || null, +rmBtn.dataset.v20RemoveIdx);
       return;
     }
+    const libAddBtn = e.target.closest('.v20-lib-add-btn'); if (libAddBtn) {
+      const kind = libAddBtn.dataset.v20LibKind;
+      if (kind) _v20ToggleLibPicker(kind);
+      return;
+    }
+    const libItem = e.target.closest('.v20-lib-item'); if (libItem) {
+      const kind = libItem.dataset.v20LibKind;
+      const name = libItem.dataset.v20LibItem;
+      if (kind && name) {
+        _v20AddLibraryItem(kind, name);
+        // Close the picker after selection
+        const panel = e.target.closest('#cdet-sheet-panel') || document.getElementById('cdet-sheet-panel');
+        if (panel) {
+          const picker = panel.querySelector(`.v20-lib-picker[data-v20-lib-kind="${kind}"]`);
+          if (picker) picker.hidden = true;
+        }
+      }
+      return;
+    }
+  });
+  panel.addEventListener('input', e => {
+    const search = e.target.closest('.v20-lib-search');
+    if (search) {
+      const kind = search.dataset.v20LibKind;
+      const query = search.value.toLowerCase();
+      const picker = search.closest('.v20-lib-picker');
+      if (picker && kind) {
+        (async () => {
+          const lib = await _v20LoadLibrary(kind);
+          const filtered = query ? lib.filter(item => (item.name || item.ru || '').toLowerCase().includes(query)) : lib;
+          _v20RenderV20LibList(kind, filtered, picker);
+        })();
+      }
+      return;
+    }
   });
   panel.addEventListener('keydown', e => {
     const dot = e.target.closest('.v20-dot');
@@ -7368,6 +7468,7 @@ async function _v20Regen(btn) {
 }
 
 let _v20Model = null, _v20Ctx = null, _v20DirtyFlag = false;
+let _v20LibraryCache = { discipline: null, numina: null };
 async function _loadCharSheet(charName) {
   const panel = document.getElementById('cdet-sheet-panel');
   if (!panel) return;
