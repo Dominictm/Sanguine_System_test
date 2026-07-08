@@ -6304,7 +6304,9 @@ function _v20Empty(lineage = 'vampires') {
     psychicPowers: [],
     backgrounds: [],
     virtues: { conscience: 1, selfcontrol: 1, courage: 1 },
-    meritsFlaws: '',
+    // meritsFlaws — массив [{name,points,kind:'merit'|'flaw'}], без строк по умолчанию (тот же
+    // паттерн, что у disciplines/backgrounds/otherTraits/rituals — см. комментарий выше).
+    meritsFlaws: [],
     humanity: 7, path: 'Человечность',
     willpower: { permanent: 1, temp: Array(10).fill(false) },
     // bloodPool — boolean grid (sized per generation's bloodMax at render time); bloodPoolCount —
@@ -6347,6 +6349,56 @@ function _v20PadSlots(arr, n, max = 5) {
   return out;
 }
 
+// Та же логика, что у _v20PadSlots, но с полями {name,points,kind} вместо {name,val} — Очки
+// достоинств/недостатков не ограничены 0–5 (в библиотеке встречаются costs до 7), kind по
+// умолчанию 'merit'.
+function _v20PadMeritsFlaws(arr, n) {
+  const len = Math.max(n, Array.isArray(arr) ? arr.length : 0);
+  const out = Array.from({ length: len }, () => ({ name: '', points: 0, kind: 'merit' }));
+  if (Array.isArray(arr)) arr.forEach((x, i) => {
+    out[i] = { name: String(x?.name || ''), points: Math.max(0, _num(x?.points, 0)), kind: x?.kind === 'flaw' ? 'flaw' : 'merit' };
+  });
+  return out;
+}
+
+// «Внушительный тип (1 очко)» / «- Внушительный тип» / «Внушительный тип — 1» → имя для поиска
+// в библиотеке (портировано из web/lib/foundry-merits.js: _extractName — та же логика на клиенте,
+// т.к. сервер и браузер не делят JS-модули в этом проекте).
+function _v20ExtractMeritFlawName(line) {
+  return String(line || '')
+    .replace(/^[-•*]\s*/, '')
+    .replace(/\(.*?\)/g, '')
+    .replace(/[—-]\s*\d+\s*(очк\w*)?\s*$/i, '')
+    .trim();
+}
+
+// Старый формат meritsFlaws — строка (по строке на пункт). Разбирает её в массив
+// [{name,points,kind}]: имя ищет в объединённом справочнике (см. _v20LoadLibrary('meritflaw')) —
+// если нашли, points/kind берутся оттуда; если нет (кастомная строка) — points из «(N)» в конце
+// строки (0, если нет числа), kind по умолчанию 'merit' (старый формат тип вообще не хранил —
+// это не регресс, а более полная информация, чем было; GM видит переключатель на каждой строке
+// и может поправить руками).
+async function _v20MigrateMeritsFlawsString(text) {
+  const lib = await _v20LoadLibrary('meritflaw');
+  const index = new Map();
+  for (const item of lib) index.set(String(item.name || '').toLowerCase().trim(), item);
+
+  const out = [];
+  for (const raw of String(text || '').split('\n')) {
+    const line = raw.trim();
+    if (!line) continue;
+    const name = _v20ExtractMeritFlawName(line);
+    const hit = index.get(name.toLowerCase().trim());
+    if (hit) {
+      out.push({ name: hit.name, points: Number(hit.points) || 0, kind: hit._kind === 'flaw' ? 'flaw' : 'merit' });
+    } else {
+      const pm = line.match(/\((\d+)/);
+      out.push({ name, points: pm ? parseInt(pm[1], 10) : 0, kind: 'merit' });
+    }
+  }
+  return out;
+}
+
 // Убирает хвостовые пустые строки (без name) из секций без фиксированной базовой длины
 // (disciplines/psychicPowers/backgrounds/otherTraits/rituals — см. _V20_BASELINE_LEN). Пустая
 // строка не хранит информации, так что обрезка безопасна — старые сохранённые листы (записанные
@@ -6364,7 +6416,7 @@ function _v20TrimTrailingEmpty(arr) {
 // baseline row» guard read from one place instead of repeating magic numbers.
 // Нет защищённой базовой длины — все строки этих секций удаляемы (нет «канонических» дисциплин/
 // фона/etc., в отличие от способностей, у которых есть фиксированный список).
-const _V20_BASELINE_LEN = { disciplines: 0, psychicPowers: 0, backgrounds: 0, otherTraits: 0, rituals: 0 };
+const _V20_BASELINE_LEN = { disciplines: 0, psychicPowers: 0, backgrounds: 0, otherTraits: 0, rituals: 0, meritsFlaws: 0 };
 function _v20AbilityBaselineLen(g) { return V20_ABILITIES[g].length + 2; }
 
 // Append one blank row to a fixed-length array section and re-render. `group` is set only for
@@ -6377,6 +6429,8 @@ function _v20AddRow(section, group) {
     m.abilities[group].push({ name: '', val: 0 });
   } else if (section === 'rituals') {
     m.rituals.push({ name: '', level: '' });
+  } else if (section === 'meritsFlaws') {
+    m.meritsFlaws.push({ name: '', points: 0, kind: 'merit' });
   } else {
     m[section].push({ name: '', val: 0 });
   }
@@ -6469,7 +6523,20 @@ function _v20Normalize(m) {
   e.psychicPowers = _v20TrimTrailingEmpty(_v20PadSlots(m.psychicPowers, 0, 5));
   e.backgrounds = _v20TrimTrailingEmpty(_v20PadSlots(m.backgrounds, 0, maxDots));
   Object.assign(e.virtues, _v20PickClamped(m.virtues, 5));
-  if (typeof m.meritsFlaws === 'string') e.meritsFlaws = m.meritsFlaws;
+  // meritsFlaws: string → array (старый формат листа, ещё не открытый в браузере после этого
+  // обновления). _v20Normalize не может быть async (вызывается синхронно из рендера), поэтому
+  // миграция запускается в фоне: временно оставляем массив пустым, а как только промис
+  // разрешится — заново нормализуем и перерисовываем лист (тот же приём, что уже применяется
+  // для библиотек дисциплин/нумина — см. _v20LoadLibrary).
+  if (typeof m.meritsFlaws === 'string') {
+    const rawString = m.meritsFlaws;
+    e.meritsFlaws = [];
+    _v20MigrateMeritsFlawsString(rawString).then(arr => {
+      if (_v20Model === e) { _v20Model.meritsFlaws = _v20TrimTrailingEmpty(_v20PadMeritsFlaws(arr, 0)); _v20RenderSheet(document.getElementById('cdet-sheet-panel'), _v20Ctx?.name); }
+    });
+  } else {
+    e.meritsFlaws = _v20TrimTrailingEmpty(_v20PadMeritsFlaws(m.meritsFlaws, 0));
+  }
   if (m.humanity != null) e.humanity = _clamp(m.humanity, 0, 10);
   if (m.path) e.path = m.path;
   if (m.willpower) { e.willpower.permanent = _clamp(m.willpower.permanent, 0, 10); e.willpower.temp = _boolArr(m.willpower.temp, 10); }
@@ -6563,6 +6630,16 @@ function _v20ParseMd(md, lineage) {
     else if (/самоконтрол|инстинкт/.test(r.nameNorm)) m.virtues.selfcontrol = r.val;
     else if (/смелост|courage/.test(r.nameNorm)) m.virtues.courage = r.val;
   }
+  // Достоинства и недостатки (Название | Тип | Очки, 3 колонки) — единственная markdown-таблица
+  // в секции «⚠️ Слабости, изъяны, деранжементы» (остальное там — проза: «Клановая слабость:»,
+  // «Изъян (Flaw):», список деранжементов — не таблицы, в rows не попадают). kind — по слову
+  // «недостат» в колонке «Тип» (регистронезависимо), иначе 'merit'.
+  const mf = rows.filter(r => /слабост/.test(r.sec) && r.cells.length === 3 && r.cells[0].trim() && r.cells[2].trim());
+  mf.forEach(r => {
+    const kind = /недостат/i.test(r.cells[1] || '') ? 'flaw' : 'merit';
+    const points = parseInt((r.cells[2] || '').replace(/\D/g, ''), 10);
+    m.meritsFlaws.push({ name: r.name.replace(/\*\*/g, '').trim(), points: Number.isFinite(points) ? points : 0, kind });
+  });
   // Derived (numbers may exceed 5 → read the numeric cell directly)
   const genInfoForParse = (m.lineage === 'vampires') ? v20GenerationInfo(m.header.generation) : null;
   const bloodMaxForParse = genInfoForParse?.bloodMax || 20;
