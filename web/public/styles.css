@@ -10099,8 +10099,9 @@ tr.rumor-told:hover .rumor-cb-cell {
    flex-wrap above as a safety net for any still-longer custom text. */
 .confirm-acts .chr-modal-btn { padding: 8px 14px; font-size: var(--fs-xs); letter-spacing: .04em; white-space: nowrap; }
 
-/* ── Merits library (справочник достоинств) ──────────────────────────── */
-.merits-subtab-bar {
+/* ── Merits/Flaws library (справочник достоинств и недостатков) ──────── */
+.merits-subtab-bar,
+.flaws-subtab-bar {
   display: flex;
   gap: 4px;
   margin-bottom: 12px;
@@ -10108,7 +10109,8 @@ tr.rumor-told:hover .rumor-cb-cell {
   padding-bottom: 8px;
 }
 
-.merits-subtab-btn {
+.merits-subtab-btn,
+.flaws-subtab-btn {
   padding: 6px 12px;
   background: none;
   border: 1px solid transparent;
@@ -10119,12 +10121,14 @@ tr.rumor-told:hover .rumor-cb-cell {
   transition: color 0.15s, background 0.15s, border-color 0.15s;
 }
 
-.merits-subtab-btn:hover {
+.merits-subtab-btn:hover,
+.flaws-subtab-btn:hover {
   color: var(--text);
   background: rgba(184, 134, 11, 0.05);
 }
 
-.merits-subtab-btn.active {
+.merits-subtab-btn.active,
+.flaws-subtab-btn.active {
   color: var(--gold);
   border-color: var(--gold);
   background: rgba(184, 134, 11, 0.1);

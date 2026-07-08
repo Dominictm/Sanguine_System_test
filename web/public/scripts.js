@@ -514,6 +514,7 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     if (tab === 'lib-disciplines') loadLibrary();
     if (tab === 'lib-psychics')    loadPsychicsLibrary();
     if (tab === 'lib-merits')      loadMeritsLibrary('physical');
+    if (tab === 'lib-flaws')       loadFlawsLibrary('физические');
   });
 
   // Merits subtabs (physical/mental/social/supernatural)
@@ -527,6 +528,19 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     bar.querySelectorAll('.merits-subtab-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
     loadMeritsLibrary(cat);
+  });
+
+  // Flaws subtabs (физические/умственные/социальные/сверхъестественные)
+  document.addEventListener('click', e => {
+    const btn = e.target.closest('.flaws-subtab-btn');
+    if (!btn) return;
+    const cat = btn.dataset.flawCat;
+    if (!cat) return;
+
+    const bar = btn.closest('.flaws-subtab-bar');
+    bar.querySelectorAll('.flaws-subtab-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    loadFlawsLibrary(cat);
   });
 });
 
@@ -6891,6 +6905,54 @@ async function loadMeritsLibrary(category) {
 document.getElementById('lib-merits-body')?.addEventListener('click', e => {
   const back = e.target.closest('[data-merit-back]'); if (back) { _libRenderMeritList(_currentMeritCategory); return; }
   const item = e.target.closest('[data-merit-slug]'); if (item) { _libRenderMeritDetail(item.dataset.meritSlug, item.dataset.meritCategory); return; }
+});
+
+// ── Библиотека: справочник недостатков (физические/умственные/социальные/сверхъестественные) ──
+let _flawsCache = { 'физические': null, 'умственные': null, 'социальные': null, 'сверхъестественные': null };
+let _currentFlawCategory = 'физические';
+
+function _libFlawsListHtml(category) {
+  const flaws = _flawsCache[category] || [];
+  return `<div class="merits-lib-list">${flaws.map(m =>
+    `<button type="button" class="merit-lib-item" data-flaw-slug="${escAttr(m.slug)}" data-flaw-category="${category}"><span>${escHtml(m.name)}</span><span class="merit-lib-points">${'●'.repeat(m.points)}</span></button>`).join('')}</div>`;
+}
+
+function _libFlawDetailHtml(m) {
+  if (!m) return '<div class="cdet-empty">Недостаток не найден в справочнике.</div>';
+  return `<div class="merit-lib-detail"><div class="merit-lib-name">${escHtml(m.name)}</div><div class="merit-lib-cost">${'●'.repeat(m.points)} очков</div><div class="merit-lib-desc">${escHtml(m.description)}</div></div>`;
+}
+
+function _libRenderFlawList(category) {
+  const body = document.getElementById('lib-flaws-body');
+  if (body) body.innerHTML = _libFlawsListHtml(category);
+}
+
+function _libRenderFlawDetail(slug, category) {
+  const body = document.getElementById('lib-flaws-body');
+  if (!body) return;
+  const flaw = (_flawsCache[category] || []).find(m => m.slug === slug);
+  body.innerHTML = `<button type="button" class="merit-lib-back" data-flaw-back>← к списку</button>${_libFlawDetailHtml(flaw)}`;
+}
+
+async function loadFlawsLibrary(category) {
+  const body = document.getElementById('lib-flaws-body');
+  if (!body) return;
+
+  _currentFlawCategory = category;
+  body.innerHTML = '<div class="loading-state"><div class="spinner"></div>Загрузка...</div>';
+
+  try {
+    const flaws = await fetch(`/api/library/flaws/${encodeURIComponent(category)}`).then(r => r.json());
+    _flawsCache[category] = Array.isArray(flaws) ? flaws : [];
+    _libRenderFlawList(category);
+  } catch (e) {
+    body.innerHTML = `<div class="cdet-empty">Ошибка загрузки: ${escHtml(e.message)}</div>`;
+  }
+}
+
+document.getElementById('lib-flaws-body')?.addEventListener('click', e => {
+  const back = e.target.closest('[data-flaw-back]'); if (back) { _libRenderFlawList(_currentFlawCategory); return; }
+  const item = e.target.closest('[data-flaw-slug]'); if (item) { _libRenderFlawDetail(item.dataset.flawSlug, item.dataset.flawCategory); return; }
 });
 
 // ── Mortal sheet: «Психические способности» row reference (зеркало v20DisciplineKey/

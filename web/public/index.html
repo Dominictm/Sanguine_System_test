@@ -661,6 +661,7 @@
         <button class="tab-btn active" data-tab="lib-disciplines">Дисциплины</button>
         <button class="tab-btn" data-tab="lib-psychics">Психические способности</button>
         <button class="tab-btn" data-tab="lib-merits">✦ Достоинства</button>
+        <button class="tab-btn" data-tab="lib-flaws">✦ Недостатки</button>
       </div>
 
       <div class="tab-panel active" id="tab-lib-disciplines">
@@ -683,6 +684,18 @@
           <button class="merits-subtab-btn" data-merit-cat="supernatural">Сверхъестественные</button>
         </div>
         <div class="lib-panel" id="lib-merits-body">
+          <div class="loading-state"><div class="spinner"></div>Загрузка...</div>
+        </div>
+      </div>
+
+      <div class="tab-panel" id="tab-lib-flaws">
+        <div class="flaws-subtab-bar">
+          <button class="flaws-subtab-btn active" data-flaw-cat="физические">Физические</button>
+          <button class="flaws-subtab-btn" data-flaw-cat="умственные">Умственные</button>
+          <button class="flaws-subtab-btn" data-flaw-cat="социальные">Социальные</button>
+          <button class="flaws-subtab-btn" data-flaw-cat="сверхъестественные">Сверхъестественные</button>
+        </div>
+        <div class="lib-panel" id="lib-flaws-body">
           <div class="loading-state"><div class="spinner"></div>Загрузка...</div>
         </div>
       </div>

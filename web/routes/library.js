@@ -12,6 +12,7 @@ const { ROOT } = require('../lib/db');
 const { parseDisciplineMd } = require('../lib/disciplines');
 const { parsePsychicMd } = require('../lib/psychics');
 const { getMerits } = require('../lib/merits-loader');
+const { getFlaws } = require('../lib/flaws-loader');
 
 const router = express.Router();
 
@@ -82,6 +83,16 @@ router.get('/api/library/merits/:category', (_req, res) => {
     const category = _req.params.category;
     const merits = getMerits(category);
     res.json(merits);
+  } catch (e) { serverError(res, e); }
+});
+
+// ── Библиотека: справочник недостатков (system/library/flaws/*.json) ──────────
+// JSON-based flaws library (физические, умственные, социальные, сверхъестественные)
+router.get('/api/library/flaws/:category', (_req, res) => {
+  try {
+    const category = _req.params.category;
+    const flaws = getFlaws(category);
+    res.json(flaws);
   } catch (e) { serverError(res, e); }
 });
 
