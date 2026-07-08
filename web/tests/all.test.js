@@ -1205,6 +1205,56 @@ describe('API — integration', () => {
       const res = await fetch(BASE + `/api/export/characters${CITY}`);
       assert.match(res.headers.get('content-disposition') || '', /attachment;.*characters_.*\.json/);
     });
+    it('GET /:slug/export-foundry → Foundry Actor JSON + заголовок скачивания', async () => {
+      const vampire = chars.find(c => c.lineage === 'vampire' && c.hasSheet);
+      assert.ok(vampire, 'нужен хотя бы один вампир с листом в фикстуре paris');
+      const { status, body } = await apiJson(`/api/characters/${vampire.slug}/export-foundry${CITY}`);
+      assert.equal(status, 200);
+      assert.equal(body.type, 'Vampire');
+      assert.equal(body.name, vampire.name);
+      const res = await fetch(BASE + `/api/characters/${vampire.slug}/export-foundry${CITY}`);
+      assert.match(res.headers.get('content-disposition') || '', /attachment;.*foundry.*\.json/);
+    });
+    it('GET unknown/export-foundry → 404', async () => {
+      const { status } = await apiJson(`/api/characters/${CHAR_UNKNOWN}/export-foundry${CITY}`);
+      assert.equal(status, 404);
+    });
+    it('POST /:slug/import-foundry → пишет sheet-data, возвращает cardFields', async () => {
+      const vampire = chars.find(c => c.lineage === 'vampire' && c.hasSheet);
+      const sheetPath = path.join(CITY_ROOT, 'characters', vampire.lineageFolder, vampire.slug, `${vampire.slug}-sheet.json`);
+      const originalSheet = await fs.readFile(sheetPath, 'utf-8');
+      const actorJson = {
+        name: vampire.name, type: 'Vampire',
+        system: {
+          attributes: { strength: { value: 5 }, dexterity: { value: 5 }, stamina: { value: 5 },
+            charisma: { value: 1 }, manipulation: { value: 1 }, appearance: { value: 1 },
+            perception: { value: 1 }, intelligence: { value: 1 }, wits: { value: 1 } },
+          abilities: {}, advantages: { virtues: {}, willpower: {}, bloodpool: {}, path: {} },
+          health: { damage: {} }, clan: '', sect: '', custom: {}, generation: 9, sire: '',
+        },
+        items: [],
+      };
+      try {
+        const { status, body } = await apiJson(`/api/characters/${vampire.slug}/import-foundry${CITY}`, {
+          method: 'POST', body: JSON.stringify({ actor: actorJson }),
+        });
+        assert.equal(status, 200);
+        assert.equal(body.ok, true);
+        assert.ok(body.cardFields);
+        const sheetRes = await apiJson(`/api/characters/${vampire.slug}/sheet-data${CITY}`);
+        assert.equal(sheetRes.body.data.attributes.physical.strength, 5);
+      } finally {
+        // Тест мутирует реальную фикстуру city=paris — обязательно вернуть как было.
+        await fs.writeFile(sheetPath, originalSheet, 'utf-8');
+      }
+    });
+    it('POST /:slug/import-foundry без actor → 400', async () => {
+      const vampire = chars.find(c => c.lineage === 'vampire' && c.hasSheet);
+      const { status } = await apiJson(`/api/characters/${vampire.slug}/import-foundry${CITY}`, {
+        method: 'POST', body: JSON.stringify({}),
+      });
+      assert.equal(status, 400);
+    });
   });
 
   // ── Locations ──────────────────────────────────────────────────────────────

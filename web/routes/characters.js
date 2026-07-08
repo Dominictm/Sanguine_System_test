@@ -19,6 +19,8 @@ const {
 } = require('../lib/db');
 const { slugify, writePrompt, parseDiary, periodLabel, parseCharacter } = require('../lib/parsers');
 const { loadLiteraryStyle } = require('../lib/context_builder');
+const { mapCharacterToFoundryActor } = require('../lib/foundry-export');
+const { mapFoundryActorToSheetData } = require('../lib/foundry-import');
 
 // Переопределение ярлыка карточки по линейке (там, где он отличается от базового).
 // Феи хранят локацию как «Фригольд / Локация» — пишем обратно тем же ярлыком, чтобы
@@ -960,6 +962,44 @@ ${styles.slice(0, 2000)}`;
       await writeFileAtomic(path.join(dir, `${char.slug}-sheet.json`), JSON.stringify(data, null, 2), 'utf-8');
       res.json({ ok: true });
     } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+  });
+
+  // ── Foundry sync (Фаза 1, вариант c — см. docs/superpowers/specs/
+  // 2026-07-08-foundry-integration-design.md): экспорт/импорт JSON через штатный
+  // Foundry Export/Import Data, без прямого доступа к LevelDB. Только вампиры.
+  router.get('/api/characters/:slug/export-foundry', async (req, res) => {
+    try {
+      const city  = reqCity(req);
+      const slug  = decodeURIComponent(req.params.slug);
+      const chars = await getAllCharacters(city);
+      const char  = chars.find(c => c.slug === slug);
+      if (!char) return res.status(404).json({ error: 'Персонаж не найден' });
+      if (char.lineage !== 'vampire') return res.status(400).json({ error: 'Экспорт в Foundry пока поддержан только для вампиров' });
+      const dir = path.join(charsDir(city), char.lineageFolder, char.slug);
+      const raw = await fs.readFile(path.join(dir, `${char.slug}-sheet.json`), 'utf-8').catch(() => null);
+      const sheetData = raw ? JSON.parse(raw) : {};
+      const actor = mapCharacterToFoundryActor(char, sheetData);
+      res.setHeader('Content-Disposition', `attachment; filename="foundry_${char.slug}.json"`);
+      res.json(actor);
+    } catch (e) { serverError(res, e); }
+  });
+
+  router.post('/api/characters/:slug/import-foundry', express.json({ limit: '2mb' }), async (req, res) => {
+    try {
+      const city  = reqCity(req);
+      const slug  = decodeURIComponent(req.params.slug);
+      const actor = req.body?.actor;
+      if (!actor || typeof actor !== 'object') return res.status(400).json({ error: 'Нет данных Foundry Actor (ожидалось поле actor)' });
+      const chars = await getAllCharacters(city);
+      const char  = chars.find(c => c.slug === slug);
+      if (!char) return res.status(404).json({ error: 'Персонаж не найден' });
+      const dir = path.join(charsDir(city), char.lineageFolder, char.slug);
+      const raw = await fs.readFile(path.join(dir, `${char.slug}-sheet.json`), 'utf-8').catch(() => null);
+      const existing = raw ? JSON.parse(raw) : {};
+      const { sheetData, cardFields } = mapFoundryActorToSheetData(actor, existing);
+      await writeFileAtomic(path.join(dir, `${char.slug}-sheet.json`), JSON.stringify(sheetData, null, 2), 'utf-8');
+      res.json({ ok: true, cardFields });
+    } catch (e) { serverError(res, e); }
   });
 
   return router;
