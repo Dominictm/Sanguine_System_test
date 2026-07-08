@@ -6197,13 +6197,19 @@ function _v20Empty(lineage = 'vampires') {
       mental:   { perception: 1, intelligence: 1, wits: 1, resolve: 1 },
     },
     abilities: { talents: ab('talents'), skills: ab('skills'), knowledges: ab('knowledges') },
-    disciplines: Array.from({ length: 6 }, () => ({ name: '', val: 0 })),
+    // disciplines/psychicPowers/backgrounds/otherTraits/rituals — без строк по умолчанию (не
+    // фиксированные 6 заготовок): у дисциплин/фона нет «канонического» списка, в отличие от
+    // способностей (30 фиксированных талантов/навыков/знаний одни и те же у всех) — строки
+    // появляются только вручную («+ Добавить»/«+ Из справочника») или из данных ИИ-листа
+    // (см. _v20ParseMd). См. также _v20AddLibraryItem (заполняет первую пустую строку вместо
+    // добавления новой) и обрезку хвостовых пустых строк в _v20Normalize.
+    disciplines: [],
     // psychicPowers — мортал-аналог disciplines (см. _v20RenderSheet/discCol): «Нумина / Грани»
     // листа смертного (character_sheet_mortal.md, Шаг 8) — только для экстрасенсов/практиков,
     // у обычного смертного остаётся пустым/нулевым. Источник справочника — system/library/psychics/
     // (web/lib/psychics.js → GET /api/library/psychics, кэш ensurePsychics()/_psychicsCache).
-    psychicPowers: Array.from({ length: 6 }, () => ({ name: '', val: 0 })),
-    backgrounds: Array.from({ length: 6 }, () => ({ name: '', val: 0 })),
+    psychicPowers: [],
+    backgrounds: [],
     virtues: { conscience: 1, selfcontrol: 1, courage: 1 },
     meritsFlaws: '',
     humanity: 7, path: 'Человечность',
@@ -6216,8 +6222,8 @@ function _v20Empty(lineage = 'vampires') {
     flaw: '', experience: { total: 0, spent: 0, log: [] },
     // ── Page 2 ──
     specializations: Array.from({ length: 6 }, () => ({ ability: '', spec: '' })),
-    otherTraits: Array.from({ length: 6 }, () => ({ name: '', val: 0 })),
-    rituals: Array.from({ length: 6 }, () => ({ name: '', level: '' })),
+    otherTraits: [],
+    rituals: [],
     history: '', goals: '',
     description: { birthDate: '', apparentAge: '', deathDate: '', gender: '', race: '', hair: '', eyes: '', heightWeight: '', build: '', nationality: '' },
     allies: '', possessions: '',
@@ -6248,11 +6254,24 @@ function _v20PadSlots(arr, n, max = 5) {
   return out;
 }
 
+// Убирает хвостовые пустые строки (без name) из секций без фиксированной базовой длины
+// (disciplines/psychicPowers/backgrounds/otherTraits/rituals — см. _V20_BASELINE_LEN). Пустая
+// строка не хранит информации, так что обрезка безопасна — старые сохранённые листы (записанные
+// ещё при жёстком минимуме в 6 строк) «самоисправляются» до актуального формата при следующем
+// открытии, без миграции.
+function _v20TrimTrailingEmpty(arr) {
+  const out = arr.slice();
+  while (out.length && !String(out[out.length - 1]?.name || '').trim()) out.pop();
+  return out;
+}
+
 // Baseline row counts for the fixed-length sections that now support «+ Добавить» (see
 // _v20AddRow/_v20RemoveRow below). Mirrors the literal counts already baked into _v20Empty()/
 // _v20Normalize() — kept here as named constants so add/remove logic and the «cannot delete a
 // baseline row» guard read from one place instead of repeating magic numbers.
-const _V20_BASELINE_LEN = { disciplines: 6, psychicPowers: 6, backgrounds: 6, otherTraits: 6, rituals: 6 };
+// Нет защищённой базовой длины — все строки этих секций удаляемы (нет «канонических» дисциплин/
+// фона/etc., в отличие от способностей, у которых есть фиксированный список).
+const _V20_BASELINE_LEN = { disciplines: 0, psychicPowers: 0, backgrounds: 0, otherTraits: 0, rituals: 0 };
 function _v20AbilityBaselineLen(g) { return V20_ABILITIES[g].length + 2; }
 
 // Append one blank row to a fixed-length array section and re-render. `group` is set only for
@@ -6351,11 +6370,11 @@ function _v20Normalize(m) {
       return { name: slot.fixed ? slot.name : String(s?.name || ''), val: _clamp(s?.val ?? slot.val, 0, maxDots), fixed: !!slot.fixed };
     });
   }
-  e.disciplines = _v20PadSlots(m.disciplines, 6, maxDots);
+  e.disciplines = _v20TrimTrailingEmpty(_v20PadSlots(m.disciplines, 0, maxDots));
   // Психические способности не зависят от поколения (мортал его не имеет) — фиксированный max 5,
   // как и остальные мортал-черты; maxDots здесь уже =5 для немортал-веток не используется.
-  e.psychicPowers = _v20PadSlots(m.psychicPowers, 6, 5);
-  e.backgrounds = _v20PadSlots(m.backgrounds, 6, maxDots);
+  e.psychicPowers = _v20TrimTrailingEmpty(_v20PadSlots(m.psychicPowers, 0, 5));
+  e.backgrounds = _v20TrimTrailingEmpty(_v20PadSlots(m.backgrounds, 0, maxDots));
   Object.assign(e.virtues, _v20PickClamped(m.virtues, 5));
   if (typeof m.meritsFlaws === 'string') e.meritsFlaws = m.meritsFlaws;
   if (m.humanity != null) e.humanity = _clamp(m.humanity, 0, 10);
@@ -6376,8 +6395,8 @@ function _v20Normalize(m) {
   }
   // ── Page 2 ──
   e.specializations = _v20PadPairs(m.specializations, 6, ['ability', 'spec']);
-  e.otherTraits = _v20PadSlots(m.otherTraits, 6, maxDots);
-  e.rituals = _v20PadPairs(m.rituals, 6, ['name', 'level']);
+  e.otherTraits = _v20TrimTrailingEmpty(_v20PadSlots(m.otherTraits, 0, maxDots));
+  e.rituals = _v20TrimTrailingEmpty(_v20PadPairs(m.rituals, 0, ['name', 'level']));
   if (typeof m.history === 'string') e.history = m.history;
   if (typeof m.goals === 'string') e.goals = m.goals;
   Object.assign(e.description, m.description || {});
@@ -6434,15 +6453,16 @@ function _v20ParseMd(md, lineage) {
     let ei = 10;
     for (const r of extras) { if (ei > 11) break; m.abilities[g][ei] = { name: r.name.replace(/\*\*/g, '').trim(), val: r.val }; ei++; }
   }
-  // Disciplines / Backgrounds (ordered, name + dots)
+  // Disciplines / Backgrounds (ordered, name + dots) — только строки, реально найденные в
+  // ИИ-листе (push в изначально пустой массив, см. _v20Empty), без заготовок под пустые слоты.
   const disc = rows.filter(r => /дисциплин/.test(r.sub) && r.val != null).slice(0, 6);
-  disc.forEach((r, i) => { m.disciplines[i] = { name: r.name.replace(/\*\*/g, '').trim(), val: r.val }; });
+  disc.forEach(r => { m.disciplines.push({ name: r.name.replace(/\*\*/g, '').trim(), val: r.val }); });
   const bg = rows.filter(r => /(факт биографии|backgrounds|предыстор)/.test(r.sub) && r.val != null).slice(0, 6);
-  bg.forEach((r, i) => { m.backgrounds[i] = { name: r.name.replace(/\*\*/g, '').trim(), val: r.val }; });
+  bg.forEach(r => { m.backgrounds.push({ name: r.name.replace(/\*\*/g, '').trim(), val: r.val }); });
   // Психические способности — мортал-секция «## 🔆 Нумина / Грани» (своя «##», не подсекция
   // «Преимуществ», в отличие от дисциплин/фактов биографии выше — см. character_sheet_mortal.md).
   const psy = rows.filter(r => /нумина|грани/.test(r.sec) && r.val != null).slice(0, 6);
-  psy.forEach((r, i) => { m.psychicPowers[i] = { name: r.name.replace(/\*\*/g, '').trim(), val: r.val }; });
+  psy.forEach(r => { m.psychicPowers.push({ name: r.name.replace(/\*\*/g, '').trim(), val: r.val }); });
   // Virtues
   for (const r of rows) {
     if (!/добродетел/.test(r.sub) || r.val == null) continue;
@@ -6481,9 +6501,9 @@ function _v20ParseMd(md, lineage) {
   // Other traits (Параметр | ● | Значение, 3 cols) and Rituals (Ритуал | Уровень, 2 cols)
   // share one «Другие параметры и ритуалы» section → tell them apart by column count.
   const ot = rows.filter(r => /(другие параметры|ритуал)/.test(r.sec) && r.cells.length >= 3 && r.val != null && notDash(r.name));
-  ot.slice(0, 6).forEach((r, i) => { m.otherTraits[i] = { name: clean(r.name), val: r.val }; });
+  ot.slice(0, 6).forEach(r => { m.otherTraits.push({ name: clean(r.name), val: r.val }); });
   const rit = rows.filter(r => /(другие параметры|ритуал)/.test(r.sec) && r.cells.length === 2 && notDash(r.name) && notDash(r.cells[1]));
-  rit.slice(0, 6).forEach((r, i) => { m.rituals[i] = { name: clean(r.name), level: clean(r.cells[1]) }; });
+  rit.slice(0, 6).forEach(r => { m.rituals.push({ name: clean(r.name), level: clean(r.cells[1]) }); });
 
   // Description (Поле | Значение)
   const dmap = { 'дата рождения': 'birthDate', 'видимый возраст': 'apparentAge', 'дата смерти': 'deathDate', 'пол': 'gender', 'раса': 'race', 'волосы': 'hair', 'глаза': 'eyes', 'рост/вес': 'heightWeight', 'телосложение': 'build', 'национальность': 'nationality' };
@@ -7053,7 +7073,12 @@ async function _v20RunAction(action) {
   if (action === 'fill-clan-disc') {
     const info = v20ClanInfo(m.header.clan);
     if (!info) return;
-    info.disciplines.slice(0, 3).forEach((name, i) => { m.disciplines[i].name = name; });
+    // disciplines больше не гарантированно предзаполнен 6 слотами (см. _v20Empty) — создать
+    // строку, если её ещё нет, вместо записи в несуществующий объект по индексу.
+    info.disciplines.slice(0, 3).forEach((name, i) => {
+      if (!m.disciplines[i]) m.disciplines[i] = { name: '', val: 0 };
+      m.disciplines[i].name = name;
+    });
   } else if (action === 'insert-clan-weakness') {
     const info = v20ClanInfo(m.header.clan);
     if (!info || !info.weakness) return;
@@ -7123,8 +7148,13 @@ function _v20AddLibraryItem(kind, name) {
   const m = _v20Model;
   if (!m[section]) return;
 
-  const newEntry = { name, val: 1 };
-  m[section].push(newEntry);
+  // Заполнить первую уже существующую пустую строку (оставшуюся от ИИ-листа или от «+
+  // Добавить»), а не всегда плодить новую — иначе клик по «+ Из справочника» добавлял 7-ю
+  // строку, даже если впереди были пустые.
+  const emptySlot = m[section].find(x => !String(x?.name || '').trim());
+  if (emptySlot) { emptySlot.name = name; emptySlot.val = 1; }
+  else m[section].push({ name, val: 1 });
+
   _v20MarkDirty();
   _v20RenderSheet(document.getElementById('cdet-sheet-panel'), _v20Ctx.name);
 }
