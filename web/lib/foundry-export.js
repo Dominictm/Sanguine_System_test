@@ -105,6 +105,20 @@ function _meritFlawItems(matched) {
   }));
 }
 
+// «Прочие черты» — текстовые особенности без канонической категории (Item.type: "Trait",
+// system.type: "wod.types.othertraits" — подтверждено на реальном Mortal Export Data,
+// см. docs/superpowers/specs/2026-07-08-foundry-mortal-support-design.md, раздел 1).
+// Лайнэдж-агностично: то же поле otherTraits существует в модели листа для вампиров тоже
+// (страница 2 листа), просто раньше в мапперах этого типа Item не было вовсе.
+function _otherTraitItems(otherTraits) {
+  return (otherTraits || [])
+    .filter(t => String(t?.name || '').trim())
+    .map(t => ({
+      name: t.name, type: 'Trait',
+      system: { type: 'wod.types.othertraits', level: '0', value: Number(t.val) || 0, max: 0, isrollable: false },
+    }));
+}
+
 // Sanguine отмечает 7 уровней здоровья булевыми флагами (порядок = тяжесть),
 // Foundry хранит суммарные очки урона по типу. Sanguine не различает тип урона —
 // весь отмеченный урон уходит в damage.lethal (разумный дефолт для вампира).
@@ -116,11 +130,13 @@ function _healthDamage(health) {
 
 function mapCharacterToFoundryActor(char, sheetData) {
   const s = sheetData || {};
-  const genNumber = parseGenerationNumber(char.generation || s.header?.generation) || 13;
-  const bloodMax = bloodMaxForGeneration(genNumber);
+  const isVamp = char.lineage === 'vampire';
 
-  const clanKey = clanRuToFoundryKey(char.clan || s.header?.clan);
-  const sectKey = sectRuToFoundryKey(char.sect);
+  const genNumber = isVamp ? (parseGenerationNumber(char.generation || s.header?.generation) || 13) : null;
+  const bloodMax = isVamp ? bloodMaxForGeneration(genNumber) : null;
+
+  const clanKey = isVamp ? clanRuToFoundryKey(char.clan || s.header?.clan) : null;
+  const sectKey = isVamp ? sectRuToFoundryKey(char.sect) : null;
 
   const { abilities, customTraits } = _mapAbilities(s.abilities);
   const attrs = {
@@ -146,22 +162,39 @@ function mapCharacterToFoundryActor(char, sheetData) {
     ..._disciplineItems(s.disciplines),
     ..._backgroundItems(s.backgrounds),
     ..._meritFlawItems(matchedMeritsFlaws),
+    ..._otherTraitItems(s.otherTraits),
   ];
+
+  const settingsBase = {
+    haswillpower: true,
+    hasrage: false, hasgnosis: false, hasglamour: false, hasbanality: false,
+    hasnightmare: false, hasconviction: false, hasfaith: false, hastorment: false,
+    hasessence: false, hascorpus: false, haspathos: false, hasangst: false,
+    hasvitality: false, hasspite: false, hasbalance: false, hassekhem: false,
+    hasquintessence: false,
+  };
+  const settings = isVamp
+    ? { ...settingsBase, haspath: true, hasbloodpool: true, hasvirtue: true }
+    : { ...settingsBase, haspath: true, hasbloodpool: false, hasvirtue: true };
+
+  // Клан/секта/поколение/сир/кровная линия/слабость/custom — только у вампира; для Mortal этих
+  // ключей в system не должно быть вовсе (подтверждено на реальном Export Data, см. спеку).
+  const vampireOnlySystem = isVamp ? {
+    custom: { clan: clanKey ? '' : (char.clan || ''), sect: sectKey ? '' : (char.sect || '') },
+    clan: clanKey ? `wod.bio.vampire.${clanKey}` : '',
+    sect: sectKey ? `wod.bio.vampire.${sectKey}` : '',
+    bloodline: '', weakness: s.flaw || '',
+    generation: genNumber, generationmod: 0,
+    sire: char.sire || s.header?.sire || '',
+  } : {};
 
   return {
     name: char.name || s.header?.name || '',
-    type: 'Vampire',
+    type: isVamp ? 'Vampire' : 'Mortal',
     system: {
       nature: s.header?.nature || '', demeanor: s.header?.demeanor || '',
       concept: s.header?.concept || '', background: '', notes: unmatchedMeritsFlaws.join('\n'),
-      settings: {
-        haswillpower: true, haspath: true, hasbloodpool: true, hasvirtue: true,
-        hasrage: false, hasgnosis: false, hasglamour: false, hasbanality: false,
-        hasnightmare: false, hasconviction: false, hasfaith: false, hastorment: false,
-        hasessence: false, hascorpus: false, haspathos: false, hasangst: false,
-        hasvitality: false, hasspite: false, hasbalance: false, hassekhem: false,
-        hasquintessence: false,
-      },
+      settings,
       attributes: attributesOut,
       abilities,
       advantages: {
@@ -178,12 +211,7 @@ function mapCharacterToFoundryActor(char, sheetData) {
         },
       },
       health: { damage: _healthDamage(s.health) },
-      custom: { clan: clanKey ? '' : (char.clan || ''), sect: sectKey ? '' : (char.sect || '') },
-      clan: clanKey ? `wod.bio.vampire.${clanKey}` : '',
-      sect: sectKey ? `wod.bio.vampire.${sectKey}` : '',
-      bloodline: '', weakness: s.flaw || '',
-      generation: genNumber, generationmod: 0,
-      sire: char.sire || s.header?.sire || '',
+      ...vampireOnlySystem,
     },
     items,
   };

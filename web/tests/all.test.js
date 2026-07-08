@@ -537,7 +537,7 @@ describe('Parsers — unit', () => {
     // Тот же персонаж, что реально лежит в cities/paris/characters/vampires/alen_dyubua —
     // используем как fixture напрямую, без похода на диск (юнит-тест мапера, не интеграция).
     const CHAR = {
-      name: 'Ален Дюбуа', clan: 'Вентру', sect: 'Камарилья',
+      name: 'Ален Дюбуа', lineage: 'vampire', clan: 'Вентру', sect: 'Камарилья',
       generation: '7-е', sire: 'Жаном Де Вален',
     };
     const SHEET = {
@@ -673,6 +673,84 @@ describe('Parsers — unit', () => {
       assert.ok(!('soak' in a.system), 'soak должен пересчитывать Foundry, не маппер');
       assert.ok(!('initiative' in a.system));
       assert.ok(!('movement' in a.system));
+    });
+  });
+
+  describe('foundry-export — Mortal', () => {
+    const { mapCharacterToFoundryActor } = require('../lib/foundry-export');
+
+    const CHAR_MORTAL = { name: 'Тестовый Смертный', lineage: 'mortal' };
+    const SHEET_MORTAL = {
+      lineage: 'mortals',
+      header: {
+        name: 'Тестовый Смертный', player: '', chronicle: '', nature: 'Бунтарь (Rebel)',
+        demeanor: 'Конформист (Conformist)', concept: 'Охранник', clan: '', generation: '', sire: '',
+      },
+      attributes: {
+        physical: { strength: 3, dexterity: 4, stamina: 3, composure: 1, resolve: 1 },
+        social:   { charisma: 2, manipulation: 3, appearance: 3 },
+        mental:   { perception: 4, intelligence: 2, wits: 3 },
+      },
+      abilities: {
+        talents: [
+          { name: 'Бдительность', val: 3, fixed: true }, { name: 'Интрига', val: 2, fixed: false },
+        ],
+        skills: [{ name: 'Стрельба', val: 3, fixed: true }],
+        knowledges: [{ name: 'Гуманитарные науки', val: 2, fixed: true }],
+      },
+      disciplines: [],
+      backgrounds: [{ name: 'Контакты', val: 2 }],
+      virtues: { conscience: 1, selfcontrol: 1, courage: 1 },
+      meritsFlaws: '',
+      humanity: 4, path: 'Человечность',
+      willpower: { permanent: 4, temp: Array(10).fill(false).map((_, i) => i < 2) },
+      otherTraits: [{ name: 'Dead-Eyes', val: 0 }],
+      health: { bruised: false, hurt: false, injured: false, wounded: false, mauled: false, crippled: false, incapacitated: false },
+      flaw: '',
+    };
+
+    it('type Mortal, без clan/sect/generation/generationmod/sire/bloodline/weakness/custom в system', () => {
+      const a = mapCharacterToFoundryActor(CHAR_MORTAL, SHEET_MORTAL);
+      assert.equal(a.type, 'Mortal');
+      assert.equal(a.name, 'Тестовый Смертный');
+      for (const key of ['clan', 'sect', 'generation', 'generationmod', 'sire', 'bloodline', 'weakness', 'custom']) {
+        assert.ok(!(key in a.system), `system.${key} не должен существовать для Mortal`);
+      }
+    });
+    it('advantages.bloodpool всё равно пишется (общий блок для всех линеек)', () => {
+      const a = mapCharacterToFoundryActor(CHAR_MORTAL, SHEET_MORTAL);
+      assert.ok('bloodpool' in a.system.advantages);
+      assert.equal(a.system.advantages.bloodpool.temporary, 0);
+    });
+    it('settings.has* — mortal-пресет: haswillpower/haspath/hasvirtue true, hasbloodpool false', () => {
+      const a = mapCharacterToFoundryActor(CHAR_MORTAL, SHEET_MORTAL);
+      assert.equal(a.system.settings.haswillpower, true);
+      assert.equal(a.system.settings.haspath, true);
+      assert.equal(a.system.settings.hasvirtue, true);
+      assert.equal(a.system.settings.hasbloodpool, false);
+      assert.equal(a.system.settings.hasrage, false);
+    });
+    it('Человечность/Путь/Воля/Добродетели читаются как у вампира', () => {
+      const a = mapCharacterToFoundryActor(CHAR_MORTAL, SHEET_MORTAL);
+      assert.equal(a.system.advantages.path.permanent, 4);
+      assert.equal(a.system.advantages.path.label, 'wod.advantages.path.humanity');
+      assert.equal(a.system.advantages.willpower.permanent, 4);
+      assert.equal(a.system.advantages.willpower.temporary, 2);
+      assert.equal(a.system.advantages.virtues.conscience.permanent, 1);
+    });
+    it('Фон и кастомная способность экспортируются как у вампира', () => {
+      const a = mapCharacterToFoundryActor(CHAR_MORTAL, SHEET_MORTAL);
+      const bg = a.items.find(i => i.type === 'Feature' && i.system.type === 'wod.types.background');
+      assert.ok(bg); assert.equal(bg.name, 'Контакты'); assert.equal(bg.system.level, 2);
+      const trait = a.items.find(i => i.type === 'Trait' && i.system.type === 'wod.types.talentsecondability');
+      assert.ok(trait); assert.equal(trait.name, 'Интрига');
+    });
+    it('otherTraits → embedded Item типа Trait/othertraits', () => {
+      const a = mapCharacterToFoundryActor(CHAR_MORTAL, SHEET_MORTAL);
+      const ot = a.items.find(i => i.type === 'Trait' && i.system.type === 'wod.types.othertraits');
+      assert.ok(ot, 'ожидался Item «Dead-Eyes»');
+      assert.equal(ot.name, 'Dead-Eyes');
+      assert.equal(ot.system.value, 0);
     });
   });
 
