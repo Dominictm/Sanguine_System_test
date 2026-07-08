@@ -1626,6 +1626,28 @@ describe('API — integration', () => {
     });
   });
 
+  describe('Library', () => {
+    it('GET /api/library/merits → массив всех категорий, каждая запись {name,points,category}', async () => {
+      const { status, body } = await apiJson('/api/library/merits');
+      assert.equal(status, 200);
+      assert.ok(Array.isArray(body));
+      assert.ok(body.length > 0);
+      const sample = body.find(m => m.name === 'Внушительный тип');
+      assert.ok(sample, 'ожидалось известное достоинство «Внушительный тип»');
+      assert.equal(typeof sample.points, 'number');
+      assert.ok(sample.category, 'ожидалась категория (physical/social/mental/supernatural)');
+    });
+    it('GET /api/library/flaws → массив всех категорий', async () => {
+      const { status, body } = await apiJson('/api/library/flaws');
+      assert.equal(status, 200);
+      assert.ok(Array.isArray(body));
+      assert.ok(body.length > 0);
+      const sample = body.find(f => f.name === 'Запах могилы');
+      assert.ok(sample, 'ожидался известный недостаток «Запах могилы»');
+      assert.equal(typeof sample.points, 'number');
+    });
+  });
+
   // ── Locations ──────────────────────────────────────────────────────────────
   describe('Locations', () => {
     it('GET /api/locations → array', async () => {

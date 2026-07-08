@@ -11,8 +11,8 @@ const { serverError } = require('../lib/http');
 const { ROOT } = require('../lib/db');
 const { parseDisciplineMd } = require('../lib/disciplines');
 const { parsePsychicMd } = require('../lib/psychics');
-const { getMerits } = require('../lib/merits-loader');
-const { getFlaws } = require('../lib/flaws-loader');
+const { getMerits, getAllMerits } = require('../lib/merits-loader');
+const { getFlaws, getAllFlaws } = require('../lib/flaws-loader');
 
 const router = express.Router();
 
@@ -94,6 +94,19 @@ router.get('/api/library/flaws/:category', (_req, res) => {
     const flaws = getFlaws(category);
     res.json(flaws);
   } catch (e) { serverError(res, e); }
+});
+
+// ── Библиотека: объединённые списки достоинств/недостатков (все категории слиты) ──
+// Для пикера в листе персонажа (см. web/public/scripts.js: _v20LoadLibrary) — не нужно
+// отдельно грузить 4+4 эндпоинта по категориям на клиенте.
+router.get('/api/library/merits', (_req, res) => {
+  try { res.json(Object.values(getAllMerits()).flat()); }
+  catch (e) { serverError(res, e); }
+});
+
+router.get('/api/library/flaws', (_req, res) => {
+  try { res.json(Object.values(getAllFlaws()).flat()); }
+  catch (e) { serverError(res, e); }
 });
 
 module.exports = { router, loadDisciplines, loadPsychics };
