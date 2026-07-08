@@ -7493,6 +7493,37 @@ async function _loadCharSheet(charName) {
   _v20RenderSheet(panel, charName);
 }
 
+// ── Merits tab: load physical merits preview ───────────────────────────────────
+function _renderMeritsPreview(merits) {
+  if (!merits || !Array.isArray(merits)) {
+    return '<div class="cdet-empty">Нет данных о достоинствах</div>';
+  }
+  if (merits.length === 0) {
+    return '<div class="cdet-empty">Достоинства не найдены</div>';
+  }
+  return `<div class="merits-preview">
+    ${merits.map(m => `
+      <div class="merit-item">
+        <div class="merit-name">${escHtml(m.name)}</div>
+        <div class="merit-points">${'●'.repeat(m.points)}</div>
+        <div class="merit-description">${escHtml(m.description)}</div>
+      </div>
+    `).join('')}
+  </div>`;
+}
+
+async function _loadCharMerits() {
+  const body = document.getElementById('merits-body');
+  if (!body) return;
+  body.innerHTML = '<div class="loading-state"><div class="spinner"></div>Загрузка достоинств…</div>';
+  try {
+    const merits = await fetch('/api/library/merits/physical').then(r => r.json());
+    body.innerHTML = _renderMeritsPreview(merits);
+  } catch (e) {
+    body.innerHTML = `<div class="cdet-empty">Ошибка загрузки: ${escHtml(e.message)}</div>`;
+  }
+}
+
 // ═══════════════════ V20 sheet: generate · view · edit (dot-radio) ═══════════════════
 
 function _sheetApi(ctx) {
@@ -8144,6 +8175,7 @@ function openCharDetail(name) {
         <button class="cdet-tab" data-tab="rels">Отношения</button>
         <button class="cdet-tab" data-tab="diaries">Дневники${c.diaries?.length ? ` (${c.diaries.length})` : ''}</button>
         <button class="cdet-tab" data-tab="sheet" data-char="${escHtml(c.name)}">Лист V20</button>
+        <button class="cdet-tab" data-tab="merits">✦ Достоинства</button>
         <button class="cdet-tab" data-tab="desc">Описание</button>
       </div>
       <div class="cdet-panels">
@@ -8206,6 +8238,9 @@ function openCharDetail(name) {
         </div>
         <div class="cdet-panel" data-panel="sheet" id="cdet-sheet-panel">
           <div class="loading-state"><div class="spinner"></div>Загрузка листа…</div>
+        </div>
+        <div class="cdet-panel" data-panel="merits" id="cdet-merits-panel">
+          <div id="merits-body"></div>
         </div>
         <div class="cdet-panel" data-panel="desc">
           <div class="cdet-info-header" style="gap:8px">
@@ -8276,6 +8311,7 @@ document.getElementById('char-detail-content').addEventListener('click', e => {
     const panels = col.querySelector('.cdet-panels');
     if (panels) panels.scrollTop = 0;
     if (tab.dataset.tab === 'sheet') _loadCharSheet(tab.dataset.char);
+    if (tab.dataset.tab === 'merits') _loadCharMerits();
     return;
   }
   if (e.target.closest('#cdet-carousel-prev')) { _carouselGoTo(_carouselIdx - 1, true); return; }
