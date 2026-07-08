@@ -11,6 +11,7 @@ const { serverError } = require('../lib/http');
 const { ROOT } = require('../lib/db');
 const { parseDisciplineMd } = require('../lib/disciplines');
 const { parsePsychicMd } = require('../lib/psychics');
+const { getMerits } = require('../lib/merits-loader');
 
 const router = express.Router();
 
@@ -72,6 +73,16 @@ async function loadPsychics() {
 router.get('/api/library/psychics', async (_req, res) => {
   try { res.json(await loadPsychics()); }
   catch (e) { serverError(res, e); }
+});
+
+// ── Библиотека: справочник достоинств (system/library/merits/*.json) ──────────
+// JSON-based merits library (physical, social, mental, supernatural)
+router.get('/api/library/merits/:category', (_req, res) => {
+  try {
+    const category = _req.params.category;
+    const merits = getMerits(category);
+    res.json(merits);
+  } catch (e) { serverError(res, e); }
 });
 
 module.exports = { router, loadDisciplines, loadPsychics };
