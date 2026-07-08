@@ -21,6 +21,7 @@ const { slugify, writePrompt, parseDiary, periodLabel, parseCharacter } = requir
 const { loadLiteraryStyle } = require('../lib/context_builder');
 const { mapCharacterToFoundryActor } = require('../lib/foundry-export');
 const { mapFoundryActorToSheetData } = require('../lib/foundry-import');
+const { createZip } = require('../lib/zip');
 
 // Переопределение ярлыка карточки по линейке (там, где он отличается от базового).
 // Феи хранят локацию как «Фригольд / Локация» — пишем обратно тем же ярлыком, чтобы
@@ -981,6 +982,37 @@ ${styles.slice(0, 2000)}`;
       const actor = mapCharacterToFoundryActor(char, sheetData);
       res.setHeader('Content-Disposition', `attachment; filename="foundry_${char.slug}.json"`);
       res.json(actor);
+    } catch (e) { serverError(res, e); }
+  });
+
+  // Массовый экспорт — по выбору карточек на странице персонажей (см. спеку раздел 5).
+  // Один Actor JSON на персонажа внутри ZIP (Foundry Import Data принимает по одному
+  // Actor'у за раз на листе конкретного персонажа, так что бандл остаётся набором
+  // отдельных файлов, не единым массивом).
+  router.post('/api/characters/export-foundry-bulk', express.json({ limit: '1mb' }), async (req, res) => {
+    try {
+      const city = reqCity(req);
+      const slugs = Array.isArray(req.body?.slugs) ? req.body.slugs : [];
+      if (!slugs.length) return res.status(400).json({ error: 'Не выбрано ни одного персонажа' });
+
+      const chars = await getAllCharacters(city);
+      const files = [];
+      for (const slug of slugs) {
+        const char = chars.find(c => c.slug === slug);
+        if (!char || !['vampire', 'mortal'].includes(char.lineage)) continue;
+        const dir = path.join(charsDir(city), char.lineageFolder, char.slug);
+        const raw = await fs.readFile(path.join(dir, `${char.slug}-sheet.json`), 'utf-8').catch(() => null);
+        const sheetData = raw ? JSON.parse(raw) : {};
+        const actor = mapCharacterToFoundryActor(char, sheetData);
+        files.push({ name: `foundry_${char.slug}.json`, data: JSON.stringify(actor, null, 2) });
+      }
+      if (!files.length) return res.status(400).json({ error: 'Ни один из выбранных персонажей не поддержан (только вампиры и смертные)' });
+
+      const zipBuf = createZip(files);
+      const dateStamp = new Date().toISOString().slice(0, 10);
+      res.setHeader('Content-Type', 'application/zip');
+      res.setHeader('Content-Disposition', `attachment; filename="foundry_export_${city}_${dateStamp}.zip"`);
+      res.send(zipBuf);
     } catch (e) { serverError(res, e); }
   });
 

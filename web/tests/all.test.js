@@ -1497,6 +1497,74 @@ describe('API — integration', () => {
       });
       assert.equal(status, 400);
     });
+
+    describe('POST /api/characters/export-foundry-bulk', () => {
+      const { readZip } = require('../lib/zip');
+
+      it('happy path: вампир + смертный → ZIP с двумя foundry_<slug>.json', async () => {
+        const vampire = chars.find(c => c.lineage === 'vampire' && c.hasSheet);
+        const mortal = chars.find(c => c.lineage === 'mortal');
+        assert.ok(vampire && mortal, 'нужны вампир (с листом) и смертный в фикстуре paris');
+
+        const mortalSheetPath = path.join(CITY_ROOT, 'characters', mortal.lineageFolder, mortal.slug, `${mortal.slug}-sheet.json`);
+        const hadMortalSheet = await fs.access(mortalSheetPath).then(() => true).catch(() => false);
+        const originalMortalSheet = hadMortalSheet ? await fs.readFile(mortalSheetPath, 'utf-8') : null;
+        if (!hadMortalSheet) {
+          await fs.writeFile(mortalSheetPath, JSON.stringify({ lineage: 'mortals', header: { name: mortal.name } }, null, 2), 'utf-8');
+        }
+
+        try {
+          const res = await fetch(BASE + `/api/characters/export-foundry-bulk${CITY}`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ slugs: [vampire.slug, mortal.slug] }),
+          });
+          assert.equal(res.status, 200);
+          assert.equal(res.headers.get('content-type'), 'application/zip');
+          assert.match(res.headers.get('content-disposition') || '', /attachment;.*foundry_export_.*\.zip/);
+          const buf = Buffer.from(await res.arrayBuffer());
+          const files = readZip(buf);
+          assert.equal(files.length, 2);
+          const vampireEntry = files.find(f => f.name === `foundry_${vampire.slug}.json`);
+          const mortalEntry = files.find(f => f.name === `foundry_${mortal.slug}.json`);
+          assert.ok(vampireEntry); assert.ok(mortalEntry);
+          assert.equal(JSON.parse(vampireEntry.data.toString('utf-8')).type, 'Vampire');
+          assert.equal(JSON.parse(mortalEntry.data.toString('utf-8')).type, 'Mortal');
+        } finally {
+          if (hadMortalSheet) await fs.writeFile(mortalSheetPath, originalMortalSheet, 'utf-8');
+          else await fs.unlink(mortalSheetPath).catch(() => {});
+        }
+      });
+
+      it('пустой список slugs → 400', async () => {
+        const { status } = await apiJson(`/api/characters/export-foundry-bulk${CITY}`, {
+          method: 'POST', body: JSON.stringify({ slugs: [] }),
+        });
+        assert.equal(status, 400);
+      });
+
+      it('только неподдерживаемые линейки → 400', async () => {
+        const fairy = chars.find(c => c.lineage === 'fairy');
+        assert.ok(fairy, 'нужна хотя бы одна фея в фикстуре paris');
+        const { status } = await apiJson(`/api/characters/export-foundry-bulk${CITY}`, {
+          method: 'POST', body: JSON.stringify({ slugs: [fairy.slug] }),
+        });
+        assert.equal(status, 400);
+      });
+
+      it('смешанный список: неподдерживаемые тихо пропускаются, ZIP содержит только поддержанные', async () => {
+        const vampire = chars.find(c => c.lineage === 'vampire' && c.hasSheet);
+        const fairy = chars.find(c => c.lineage === 'fairy');
+        const res = await fetch(BASE + `/api/characters/export-foundry-bulk${CITY}`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ slugs: [vampire.slug, fairy.slug] }),
+        });
+        assert.equal(res.status, 200);
+        const buf = Buffer.from(await res.arrayBuffer());
+        const files = readZip(buf);
+        assert.equal(files.length, 1);
+        assert.equal(files[0].name, `foundry_${vampire.slug}.json`);
+      });
+    });
   });
 
   // ── Locations ──────────────────────────────────────────────────────────────
