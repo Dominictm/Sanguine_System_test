@@ -19,7 +19,7 @@ const {
 } = require('../lib/db');
 const { slugify, writePrompt, parseDiary, periodLabel, parseCharacter } = require('../lib/parsers');
 const { loadLiteraryStyle } = require('../lib/context_builder');
-const { mapCharacterToFoundryActor } = require('../lib/foundry-export');
+const { mapCharacterToFoundryActor, FOUNDRY_SUPPORTED_LINEAGES } = require('../lib/foundry-export');
 const { mapFoundryActorToSheetData } = require('../lib/foundry-import');
 const { createZip } = require('../lib/zip');
 
@@ -975,7 +975,7 @@ ${styles.slice(0, 2000)}`;
       const chars = await getAllCharacters(city);
       const char  = chars.find(c => c.slug === slug);
       if (!char) return res.status(404).json({ error: 'Персонаж не найден' });
-      if (!['vampire', 'mortal'].includes(char.lineage)) return res.status(400).json({ error: 'Экспорт в Foundry пока поддержан только для вампиров и смертных' });
+      if (!FOUNDRY_SUPPORTED_LINEAGES.includes(char.lineage)) return res.status(400).json({ error: 'Экспорт в Foundry пока поддержан только для вампиров и смертных' });
       const dir = path.join(charsDir(city), char.lineageFolder, char.slug);
       const raw = await fs.readFile(path.join(dir, `${char.slug}-sheet.json`), 'utf-8').catch(() => null);
       const sheetData = raw ? JSON.parse(raw) : {};
@@ -999,12 +999,18 @@ ${styles.slice(0, 2000)}`;
       const files = [];
       for (const slug of slugs) {
         const char = chars.find(c => c.slug === slug);
-        if (!char || !['vampire', 'mortal'].includes(char.lineage)) continue;
-        const dir = path.join(charsDir(city), char.lineageFolder, char.slug);
-        const raw = await fs.readFile(path.join(dir, `${char.slug}-sheet.json`), 'utf-8').catch(() => null);
-        const sheetData = raw ? JSON.parse(raw) : {};
-        const actor = mapCharacterToFoundryActor(char, sheetData);
-        files.push({ name: `foundry_${char.slug}.json`, data: JSON.stringify(actor, null, 2) });
+        if (!char || !FOUNDRY_SUPPORTED_LINEAGES.includes(char.lineage)) continue;
+        try {
+          const dir = path.join(charsDir(city), char.lineageFolder, char.slug);
+          const raw = await fs.readFile(path.join(dir, `${char.slug}-sheet.json`), 'utf-8').catch(() => null);
+          const sheetData = raw ? JSON.parse(raw) : {};
+          const actor = mapCharacterToFoundryActor(char, sheetData);
+          files.push({ name: `foundry_${char.slug}.json`, data: JSON.stringify(actor, null, 2) });
+        } catch {
+          // Один повреждённый -sheet.json не должен ронять весь массовый экспорт —
+          // пропускаем этого персонажа, остальные всё равно попадут в ZIP.
+          continue;
+        }
       }
       if (!files.length) return res.status(400).json({ error: 'Ни один из выбранных персонажей не поддержан (только вампиры и смертные)' });
 
@@ -1025,6 +1031,14 @@ ${styles.slice(0, 2000)}`;
       const chars = await getAllCharacters(city);
       const char  = chars.find(c => c.slug === slug);
       if (!char) return res.status(404).json({ error: 'Персонаж не найден' });
+      // Vampire/Mortal — единственные типы, которые вообще может создать наш собственный
+      // экспортёр; при несовпадении с линейкой персонажа отказываем, а не тихо затираем
+      // лист чужими полями (напр. Mortal-экспорт поверх вампира обнулил бы запас крови).
+      const EXPECTED_ACTOR_TYPE = { vampire: 'Vampire', mortal: 'Mortal' };
+      const expectedType = EXPECTED_ACTOR_TYPE[char.lineage];
+      if (expectedType && actor.type && actor.type !== expectedType) {
+        return res.status(400).json({ error: `Тип Foundry Actor «${actor.type}» не соответствует линейке персонажа (ожидался «${expectedType}»)` });
+      }
       const dir = path.join(charsDir(city), char.lineageFolder, char.slug);
       const raw = await fs.readFile(path.join(dir, `${char.slug}-sheet.json`), 'utf-8').catch(() => null);
       const existing = raw ? JSON.parse(raw) : {};

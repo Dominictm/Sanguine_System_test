@@ -25,6 +25,12 @@ const {
 } = require('./foundry-clans');
 const { matchMeritsFlaws } = require('./foundry-merits');
 
+// Линейки, для которых у нас есть собственный маппер (Changeling — отдельный будущий цикл,
+// нужны новые поля модели листа: Glamour/Banality/Realms/Arts). Единый источник истины для
+// обоих Foundry-роутов (export-foundry, export-foundry-bulk) в web/routes/characters.js —
+// не дублировать этот список литералом на роутах.
+const FOUNDRY_SUPPORTED_LINEAGES = ['vampire', 'mortal'];
+
 // Sanguine ability display name (RU, как в V20_ABILITIES web/public/scripts.js:6170-6174)
 // → Foundry fixed abilities.<key> (EN, template.json partial `ability`).
 const ABILITY_KEY_BY_RU = {
@@ -204,7 +210,7 @@ function mapCharacterToFoundryActor(char, sheetData) {
           courage: { permanent: Number(s.virtues?.courage) || 0, temporary: Number(s.virtues?.courage) || 0, max: 5 },
         },
         willpower: { permanent: Number(s.willpower?.permanent) || 0, temporary: willpowerTemp, max: 10 },
-        bloodpool: { temporary: bloodTemp, max: bloodMax ?? 30, perturn: Number(s.bloodPerTurn) || 1 },
+        bloodpool: { temporary: bloodTemp, max: isVamp ? (bloodMax ?? 30) : 0, perturn: Number(s.bloodPerTurn) || 1 },
         path: {
           permanent: Number(s.humanity) || 0, value: 0, max: 10, custom: '',
           label: s.path && _norm(s.path) !== 'человечность' ? '' : 'wod.advantages.path.humanity',
@@ -217,4 +223,4 @@ function mapCharacterToFoundryActor(char, sheetData) {
   };
 }
 
-module.exports = { mapCharacterToFoundryActor };
+module.exports = { mapCharacterToFoundryActor, FOUNDRY_SUPPORTED_LINEAGES };

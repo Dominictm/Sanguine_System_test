@@ -717,10 +717,11 @@ describe('Parsers — unit', () => {
         assert.ok(!(key in a.system), `system.${key} не должен существовать для Mortal`);
       }
     });
-    it('advantages.bloodpool всё равно пишется (общий блок для всех линеек)', () => {
+    it('advantages.bloodpool всё равно пишется (общий блок для всех линеек), max=0 — не фантомные 30', () => {
       const a = mapCharacterToFoundryActor(CHAR_MORTAL, SHEET_MORTAL);
       assert.ok('bloodpool' in a.system.advantages);
       assert.equal(a.system.advantages.bloodpool.temporary, 0);
+      assert.equal(a.system.advantages.bloodpool.max, 0);
     });
     it('settings.has* — mortal-пресет: haswillpower/haspath/hasvirtue true, hasbloodpool false', () => {
       const a = mapCharacterToFoundryActor(CHAR_MORTAL, SHEET_MORTAL);
@@ -1497,6 +1498,13 @@ describe('API — integration', () => {
       });
       assert.equal(status, 400);
     });
+    it('POST /:slug/import-foundry с actor.type Mortal на вампира → 400 (не даём затереть чужой линейкой)', async () => {
+      const vampire = chars.find(c => c.lineage === 'vampire' && c.hasSheet);
+      const { status } = await apiJson(`/api/characters/${vampire.slug}/import-foundry${CITY}`, {
+        method: 'POST', body: JSON.stringify({ actor: { name: 'X', type: 'Mortal', system: {}, items: [] } }),
+      });
+      assert.equal(status, 400);
+    });
 
     describe('POST /api/characters/export-foundry-bulk', () => {
       const { readZip } = require('../lib/zip');
@@ -1563,6 +1571,30 @@ describe('API — integration', () => {
         const files = readZip(buf);
         assert.equal(files.length, 1);
         assert.equal(files[0].name, `foundry_${vampire.slug}.json`);
+      });
+
+      it('повреждённый -sheet.json одного персонажа не роняет весь массовый экспорт', async () => {
+        const vampireA = chars.find(c => c.lineage === 'vampire' && c.hasSheet);
+        const vampireB = chars.find(c => c.lineage === 'vampire' && c.slug !== vampireA.slug);
+        assert.ok(vampireA && vampireB, 'нужны два разных вампира в фикстуре paris');
+        const brokenSheetPath = path.join(CITY_ROOT, 'characters', vampireB.lineageFolder, vampireB.slug, `${vampireB.slug}-sheet.json`);
+        const hadSheet = await fs.access(brokenSheetPath).then(() => true).catch(() => false);
+        const originalSheet = hadSheet ? await fs.readFile(brokenSheetPath, 'utf-8') : null;
+        await fs.writeFile(brokenSheetPath, '{ не валидный JSON', 'utf-8');
+        try {
+          const res = await fetch(BASE + `/api/characters/export-foundry-bulk${CITY}`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ slugs: [vampireA.slug, vampireB.slug] }),
+          });
+          assert.equal(res.status, 200);
+          const buf = Buffer.from(await res.arrayBuffer());
+          const files = readZip(buf);
+          assert.equal(files.length, 1, 'сломанный персонаж пропущен, здоровый — в архиве');
+          assert.equal(files[0].name, `foundry_${vampireA.slug}.json`);
+        } finally {
+          if (hadSheet) await fs.writeFile(brokenSheetPath, originalSheet, 'utf-8');
+          else await fs.unlink(brokenSheetPath).catch(() => {});
+        }
       });
     });
   });
