@@ -7434,7 +7434,7 @@ function _v20RenderSheet(panel, charName) {
       <button class="cdet-sheet-btn" id="v20-validate">📋 Проверить лист</button>
       <button class="cdet-sheet-btn${_v20XpMode ? ' active' : ''}" id="v20-xpmode" title="В этом режиме поднятие точки списывает опыт по таблице обучения">🎓 Режим опыта${_v20XpMode ? ': вкл' : ''}</button>
       <button class="cdet-sheet-btn" id="v20-roll-btn" title="Открыть конструктор броска d10">🎲 Бросок</button>
-      ${isVamp ? `
+      ${(isVamp || isMortal) ? `
       <button class="cdet-sheet-btn" id="v20-foundry-export" title="Скачать JSON для импорта в Foundry VTT (Import Data)">🜏 Экспорт в Foundry</button>
       <button class="cdet-sheet-btn" id="v20-foundry-import" title="Загрузить JSON, полученный через Export Data в Foundry VTT">📥 Импорт из Foundry</button>` : ''}
       <span class="v20-status" id="v20-status"></span>

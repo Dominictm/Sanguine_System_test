@@ -19,8 +19,15 @@
 
 **Подтверждённые находки по `Actor.type: "Mortal"`:**
 
-- `system` **не содержит** ключей `clan`/`sect`/`generation`/`sire`/`bloodline`/`weakness`/`custom`
-  вообще — это не пустые поля вампирской схемы, этих ключей нет в шаблоне Mortal в принципе.
+- `system` **не содержит** ключей `clan`/`sect`/`generation`/`generationmod`/`sire`/`bloodline`/
+  `weakness`/`custom` вообще — это не пустые поля вампирской схемы, этих ключей нет в шаблоне
+  Mortal в принципе. **Уточнение:** это про верхнеуровневые строковые/числовые поля `system.*`, а
+  не про `system.advantages.bloodpool` — тот числовой блок присутствует и у Mortal (в образце
+  `{temporary:0, max:10, perturn:1}`, просто неиспользуемый), потому что `advantages` — общий для
+  всех типов Actor блок (там же `rage`/`gnosis`/`glamour`/… — тоже всегда есть, просто нулевые).
+  Маппер продолжает писать `advantages.bloodpool` одинаково для обеих линеек (как и сейчас), только
+  `genNumber`/`bloodMax` для Mortal остаются `null` (не парсим/не дефолтим к 13) — существующая
+  ветка `bloodMax == null` уже даёт разумный фолбэк без правок логики.
 - `system.settings` (флаги `has*`) в образце: `haswillpower: true`, всё остальное
   (`haspath`, `hasvirtue`, `hasbloodpool`, `hasrage`, `hasglamour`, …) — `false`. Это конкретная
   NPC-заглушка («Охранник»), не обязательный эталон: Sanguine **ведёт** для смертного Человечность
@@ -61,9 +68,12 @@
 ### 3.1 `mapCharacterToFoundryActor` (экспорт Sanguine → Foundry)
 
 - `type`: `'Vampire'` или `'Mortal'` по `char.lineage`, вместо жёсткого `'Vampire'`.
-- Клан/секта/поколение/кровь/`custom` — вычисляются и пишутся в `system` **только при
-  `char.lineage === 'vampire'`**; для Mortal эти ключи в объекте `system` не создаются вообще
-  (не пишутся как пустые строки — их не должно быть, по образцу раздела 1).
+- Клан/секта/поколение/`generationmod`/сир/`bloodline`/`weakness`/`custom` — вычисляются и
+  пишутся в `system` **только при `char.lineage === 'vampire'`**; для Mortal эти 8 ключей в
+  объекте `system` не создаются вообще (не пишутся как пустые строки — их не должно быть, по
+  образцу раздела 1). `advantages.bloodpool` — пишется как и раньше для обеих линеек (не входит
+  в этот список, см. уточнение в разделе 1); при `!isVamp` просто `genNumber`/`bloodMax` остаются
+  `null`, существующий фолбэк `bloodMax ?? 30` / `bloodMax == null` отрабатывает без изменений.
 - `settings.has*`: два пресета по линейке.
   - Vampire — без изменений (текущий блок).
   - Mortal (новый): `haswillpower: true, haspath: true, hasvirtue: true, hasbloodpool: false`,

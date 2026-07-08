@@ -974,7 +974,7 @@ ${styles.slice(0, 2000)}`;
       const chars = await getAllCharacters(city);
       const char  = chars.find(c => c.slug === slug);
       if (!char) return res.status(404).json({ error: 'Персонаж не найден' });
-      if (char.lineage !== 'vampire') return res.status(400).json({ error: 'Экспорт в Foundry пока поддержан только для вампиров' });
+      if (!['vampire', 'mortal'].includes(char.lineage)) return res.status(400).json({ error: 'Экспорт в Foundry пока поддержан только для вампиров и смертных' });
       const dir = path.join(charsDir(city), char.lineageFolder, char.slug);
       const raw = await fs.readFile(path.join(dir, `${char.slug}-sheet.json`), 'utf-8').catch(() => null);
       const sheetData = raw ? JSON.parse(raw) : {};

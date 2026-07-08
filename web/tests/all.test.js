@@ -1415,6 +1415,19 @@ describe('API — integration', () => {
       const { status } = await apiJson(`/api/characters/${CHAR_UNKNOWN}/export-foundry${CITY}`);
       assert.equal(status, 404);
     });
+    it('GET /:slug/export-foundry для смертного → 200, type Mortal', async () => {
+      const mortal = chars.find(c => c.lineage === 'mortal');
+      assert.ok(mortal, 'нужен хотя бы один смертный в фикстуре paris');
+      const { status, body } = await apiJson(`/api/characters/${mortal.slug}/export-foundry${CITY}`);
+      assert.equal(status, 200);
+      assert.equal(body.type, 'Mortal');
+    });
+    it('GET /:slug/export-foundry для феи → 400 (пока не поддержано)', async () => {
+      const fairy = chars.find(c => c.lineage === 'fairy');
+      assert.ok(fairy, 'нужна хотя бы одна фея в фикстуре paris');
+      const { status } = await apiJson(`/api/characters/${fairy.slug}/export-foundry${CITY}`);
+      assert.equal(status, 400);
+    });
     it('POST /:slug/import-foundry → пишет sheet-data, возвращает cardFields', async () => {
       const vampire = chars.find(c => c.lineage === 'vampire' && c.hasSheet);
       const sheetPath = path.join(CITY_ROOT, 'characters', vampire.lineageFolder, vampire.slug, `${vampire.slug}-sheet.json`);
