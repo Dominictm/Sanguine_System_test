@@ -18,6 +18,15 @@
 //   сама система Foundry при открытии листа; маппер пишет только has*-флаги.
 // - Уровни здоровья (health.<level>.value/total/penalty) — тоже производные от
 //   health.damage.*, не пишутся напрямую.
+// - system.background (свободный текст в базовом партиале template.json) — НЕ путать с Фоном
+//   (Backgrounds, дотовая черта, экспортируется отдельно как Item). Сюда пишется «История»
+//   листа Sanguine (sheetData.history) — биография персонажа. Обратного маппинга (Foundry →
+//   Sanguine) для этого поля нет: и history, и background — свободный текст, читаются 1:1,
+//   см. foundry-import.js.
+// - system.appearance (тоже свободный текст) — собирается из структурированных полей
+//   «Описание» листа Sanguine (sheetData.description: дата рождения, раса, волосы, глаза и
+//   т.п.) в читаемые строки «Подпись: значение». Обратный маппинг НЕ делается — разбирать
+//   свободный текст Foundry обратно в структурированные поля ненадёжно.
 
 const {
   clanRuToFoundryKey, sectRuToFoundryKey,
@@ -30,6 +39,22 @@ const { matchMeritsFlaws } = require('./foundry-merits');
 // обоих Foundry-роутов (export-foundry, export-foundry-bulk) в web/routes/characters.js —
 // не дублировать этот список литералом на роутах.
 const FOUNDRY_SUPPORTED_LINEAGES = ['vampire', 'mortal'];
+
+// Описание (Внешность) листа Sanguine — структурированные поля (см. web/public/scripts.js:6321,
+// _v20Empty().description) → Foundry system.appearance (единое свободное текстовое поле в базовом
+// партиале template.json). Порядок и подписи — как в V20_DESC (web/public/scripts.js:7475).
+const DESCRIPTION_LABELS = [
+  ['birthDate', 'Дата рождения'], ['apparentAge', 'Видимый возраст'], ['deathDate', 'Дата смерти'],
+  ['gender', 'Пол'], ['race', 'Раса'], ['hair', 'Волосы'], ['eyes', 'Глаза'],
+  ['heightWeight', 'Рост/Вес'], ['build', 'Телосложение'], ['nationality', 'Национальность'],
+];
+function _appearanceText(description) {
+  return DESCRIPTION_LABELS
+    .map(([key, label]) => [label, String(description?.[key] || '').trim()])
+    .filter(([, value]) => value)
+    .map(([label, value]) => `${label}: ${value}`)
+    .join('\n');
+}
 
 // Sanguine ability display name (RU, как в V20_ABILITIES web/public/scripts.js:6170-6174)
 // → Foundry fixed abilities.<key> (EN, template.json partial `ability`).
@@ -206,7 +231,10 @@ function mapCharacterToFoundryActor(char, sheetData) {
     type: isVamp ? 'Vampire' : 'Mortal',
     system: {
       nature: s.header?.nature || '', demeanor: s.header?.demeanor || '',
-      concept: s.header?.concept || '', background: '', notes: unmatchedMeritsFlaws.join('\n'),
+      concept: s.header?.concept || '',
+      appearance: _appearanceText(s.description),
+      background: s.history || '',
+      notes: unmatchedMeritsFlaws.join('\n'),
       settings,
       attributes: attributesOut,
       abilities,

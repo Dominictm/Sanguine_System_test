@@ -123,6 +123,10 @@ function mapFoundryActorToSheetData(actor, existingSheetData) {
     bloodPerTurn: Number(sys.advantages?.bloodpool?.perturn) || 1,
     health,
     flaw: sys.weakness || base.flaw || '',
+    // system.background — свободный текст (биография), симметричный sheetData.history на экспорте
+    // (см. foundry-export.js). system.appearance туда же не возвращаем — это единый текстовый блок,
+    // собранный из структурированных полей sheetData.description, разбирать его обратно ненадёжно.
+    history: sys.background || base.history || '',
   };
 
   const clanRu = sys.clan ? clanFoundryKeyToRu(sys.clan.replace('wod.bio.vampire.', '')) : null;

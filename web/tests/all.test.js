@@ -572,6 +572,8 @@ describe('Parsers — unit', () => {
       bloodPool: Array(20).fill(false).map((_, i) => i < 12), bloodPoolCount: 0, bloodPerTurn: 1,
       health: { bruised: true, hurt: true, injured: false, wounded: false, mauled: false, crippled: false, incapacitated: false },
       flaw: 'Избирательность — пьёт только у знати',
+      history: 'Родился в Тулузе, обращён в 1920-х.',
+      description: { birthDate: '1890', gender: 'Мужской', race: '', hair: 'Тёмные', eyes: 'Серые', apparentAge: '', deathDate: '', heightWeight: '', build: '', nationality: '' },
     };
 
     it('shape: type Vampire, header/generation/clan/sect', () => {
@@ -647,6 +649,18 @@ describe('Parsers — unit', () => {
     it('flaw (слабость клана) → system.weakness', () => {
       const a = mapCharacterToFoundryActor(CHAR, SHEET);
       assert.equal(a.system.weakness, 'Избирательность — пьёт только у знати');
+    });
+    it('history → system.background (биография, не путать с Item-Фоном)', () => {
+      const a = mapCharacterToFoundryActor(CHAR, SHEET);
+      assert.equal(a.system.background, 'Родился в Тулузе, обращён в 1920-х.');
+    });
+    it('description → system.appearance (собранный читаемый текст, пустые поля пропущены)', () => {
+      const a = mapCharacterToFoundryActor(CHAR, SHEET);
+      assert.match(a.system.appearance, /Дата рождения: 1890/);
+      assert.match(a.system.appearance, /Пол: Мужской/);
+      assert.match(a.system.appearance, /Волосы: Тёмные/);
+      assert.match(a.system.appearance, /Глаза: Серые/);
+      assert.ok(!a.system.appearance.includes('Раса:'), 'пустые поля описания не должны попадать в текст');
     });
     it('meritsFlaws, совпавший с библиотекой → embedded Item merit, а не notes', () => {
       const a = mapCharacterToFoundryActor(CHAR, SHEET);
@@ -792,6 +806,7 @@ describe('Parsers — unit', () => {
         clan: 'wod.bio.vampire.ventrue', sect: 'wod.bio.vampire.camarilla',
         custom: { clan: '', sect: '' },
         generation: 7, sire: 'Жаном Де Вален', weakness: 'Избирательность',
+        background: 'Родился в Тулузе, обращён в 1920-х.',
       },
       items: [
         { name: 'Доминирование', type: 'Power', system: { type: 'wod.types.discipline', value: 3, parentid: '' } },
@@ -920,6 +935,10 @@ describe('Parsers — unit', () => {
       const { sheetData } = mapFoundryActorToSheetData(actor2, EXISTING_SHEET);
       assert.match(sheetData.meritsFlaws, /Внушительный тип \(1\)/);
       assert.match(sheetData.meritsFlaws, /Придуманная особенность \(2\)/);
+    });
+    it('system.background → sheetData.history (биография, симметрично экспорту)', () => {
+      const { sheetData } = mapFoundryActorToSheetData(ACTOR, EXISTING_SHEET);
+      assert.equal(sheetData.history, 'Родился в Тулузе, обращён в 1920-х.');
     });
   });
 
