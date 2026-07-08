@@ -191,13 +191,31 @@ function mapCharacterToFoundryActor(char, sheetData) {
     ? Number(s.bloodPoolCount) || 0
     : (s.bloodPool || []).filter(Boolean).length;
 
-  const { matched: matchedMeritsFlaws, unmatched: unmatchedMeritsFlaws } = matchMeritsFlaws(s.meritsFlaws);
+  // Достоинства/недостатки: новый формат — массив [{name,points,kind}], каждая запись
+  // экспортируется как Item напрямую (kind/points уже известны из модели листа, сверка с
+  // библиотекой не нужна). Старый формат — свободный текст (листы, ещё не открытые в браузере
+  // после этого обновления) — матчится через matchMeritsFlaws(), несовпавшее остаётся в
+  // system.notes, как и раньше.
+  let meritFlawItemsOut, meritsFlawsNotes;
+  if (Array.isArray(s.meritsFlaws)) {
+    meritFlawItemsOut = s.meritsFlaws
+      .filter(mf => String(mf?.name || '').trim())
+      .map(mf => ({
+        name: mf.name, type: 'Feature',
+        system: { type: `wod.types.${mf.kind === 'flaw' ? 'flaw' : 'merit'}`, level: Number(mf.points) || 0, value: 0, max: 5, isrollable: false, isvisible: true },
+      }));
+    meritsFlawsNotes = '';
+  } else {
+    const { matched, unmatched } = matchMeritsFlaws(s.meritsFlaws);
+    meritFlawItemsOut = _meritFlawItems(matched);
+    meritsFlawsNotes = unmatched.join('\n');
+  }
 
   const items = [
     ...customTraits.map(t => _traitItem(t.name, t.value, t.group)),
     ..._disciplineItems(s.disciplines),
     ..._backgroundItems(s.backgrounds),
-    ..._meritFlawItems(matchedMeritsFlaws),
+    ...meritFlawItemsOut,
     ..._otherTraitItems(s.otherTraits),
   ];
 
@@ -232,7 +250,7 @@ function mapCharacterToFoundryActor(char, sheetData) {
       concept: s.header?.concept || '',
       appearance: _appearanceText(s.description),
       background: s.history || '',
-      notes: unmatchedMeritsFlaws.join('\n'),
+      notes: meritsFlawsNotes,
       settings,
       attributes: attributesOut,
       abilities,

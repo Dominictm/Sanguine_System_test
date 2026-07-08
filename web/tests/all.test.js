@@ -677,6 +677,26 @@ describe('Parsers — unit', () => {
       assert.match(a.system.notes, /Придуманная особенность/);
       assert.equal(a.items.filter(i => i.system.type === 'wod.types.merit' || i.system.type === 'wod.types.flaw').length, 0);
     });
+    it('meritsFlaws как массив (новый формат) — экспорт напрямую, без сверки с библиотекой', () => {
+      const sheet = {
+        ...SHEET,
+        meritsFlaws: [
+          { name: 'Кастомное достоинство', points: 3, kind: 'merit' },
+          { name: 'Кастомный недостаток', points: 2, kind: 'flaw' },
+        ],
+      };
+      const a = mapCharacterToFoundryActor(CHAR, sheet);
+      const merit = a.items.find(i => i.type === 'Feature' && i.system.type === 'wod.types.merit');
+      assert.ok(merit, 'ожидалось «Кастомное достоинство»');
+      assert.equal(merit.name, 'Кастомное достоинство');
+      assert.equal(merit.system.level, 3);
+      assert.equal(merit.system.isvisible, true);
+      const flaw = a.items.find(i => i.type === 'Feature' && i.system.type === 'wod.types.flaw');
+      assert.ok(flaw, 'ожидался «Кастомный недостаток»');
+      assert.equal(flaw.name, 'Кастомный недостаток');
+      assert.equal(flaw.system.level, 2);
+      assert.equal(a.system.notes, '', 'массив не проходит через system.notes вообще');
+    });
     it('фон (backgrounds) → embedded Item типа Feature/background', () => {
       const a = mapCharacterToFoundryActor(CHAR, SHEET);
       const bg = a.items.find(i => i.type === 'Feature' && i.system.type === 'wod.types.background');
