@@ -55,6 +55,10 @@ function mapFoundryActorToSheetData(actor, existingSheetData) {
     .filter(i => i.type === 'Feature' && i.system?.type === 'wod.types.background')
     .map(i => ({ name: i.name, val: Number(i.system?.level) || 0 }));
 
+  const otherTraits = items
+    .filter(i => i.type === 'Trait' && i.system?.type === 'wod.types.othertraits')
+    .map(i => ({ name: i.name, val: Number(i.system?.value) || 0 }));
+
   // Достоинства/недостатки (Feature-Item с system.type merit/flaw, экспортированные
   // через foundry-merits.js) возвращаются строками «Имя (очки)»; остаток свободного
   // текста из system.notes (несовпавшие с библиотекой строки) добавляется следом —
@@ -105,6 +109,7 @@ function mapFoundryActorToSheetData(actor, existingSheetData) {
     abilities,
     disciplines,
     backgrounds,
+    otherTraits,
     virtues: {
       conscience: Number(sys.advantages?.virtues?.conscience?.permanent) || 0,
       selfcontrol: Number(sys.advantages?.virtues?.selfcontrol?.permanent) || 0,

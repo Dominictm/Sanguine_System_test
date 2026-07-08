@@ -793,6 +793,56 @@ describe('Parsers — unit', () => {
     };
     const EXISTING_SHEET = { lineage: 'vampires', disciplines: [], abilities: { talents: [], skills: [], knowledges: [] } };
 
+    const ACTOR_MORTAL = {
+      name: 'Тестовый Смертный', type: 'Mortal',
+      system: {
+        nature: 'Бунтарь', demeanor: 'Конформист', concept: 'Охранник', notes: '',
+        attributes: {
+          strength: { value: 3 }, dexterity: { value: 4 }, stamina: { value: 3 },
+          charisma: { value: 2 }, manipulation: { value: 3 }, appearance: { value: 3 },
+          composure: { value: 1 }, perception: { value: 4 }, intelligence: { value: 2 },
+          wits: { value: 3 }, resolve: { value: 1 },
+        },
+        abilities: { alertness: { value: 3, type: 'talent' } },
+        advantages: {
+          virtues: { conscience: { permanent: 1 }, selfcontrol: { permanent: 1 }, courage: { permanent: 1 } },
+          willpower: { permanent: 4, temporary: 2, max: 10 },
+          bloodpool: { temporary: 0, max: 10, perturn: 1 },
+          path: { permanent: 4, label: 'wod.advantages.path.humanity' },
+        },
+        health: { damage: { bashing: 0, lethal: 0, aggravated: 0 } },
+      },
+      items: [
+        { name: 'Интрига', type: 'Trait', system: { type: 'wod.types.talentsecondability', value: 2 } },
+        { name: 'Контакты', type: 'Feature', system: { type: 'wod.types.background', level: 2, value: 0 } },
+        { name: 'Dead-Eyes', type: 'Trait', system: { type: 'wod.types.othertraits', value: 0 } },
+      ],
+    };
+    const EXISTING_SHEET_MORTAL = { lineage: 'mortals', disciplines: [], otherTraits: [], abilities: { talents: [], skills: [], knowledges: [] } };
+
+    it('Mortal: othertraits Item → sheetData.otherTraits', () => {
+      const { sheetData } = mapFoundryActorToSheetData(ACTOR_MORTAL, EXISTING_SHEET_MORTAL);
+      const ot = sheetData.otherTraits.find(t => t.name === 'Dead-Eyes');
+      assert.ok(ot, 'ожидался otherTraits «Dead-Eyes»');
+      assert.equal(ot.val, 0);
+    });
+    it('Mortal: clan/sect/generation остаются пустыми в cardFields (ключей нет в system)', () => {
+      const { cardFields } = mapFoundryActorToSheetData(ACTOR_MORTAL, EXISTING_SHEET_MORTAL);
+      assert.equal(cardFields.clan, '');
+      assert.equal(cardFields.sect, '');
+      assert.equal(cardFields.generation, '');
+    });
+    it('Mortal: Человечность/Путь/Воля/Фон/кастомная способность читаются как у вампира', () => {
+      const { sheetData } = mapFoundryActorToSheetData(ACTOR_MORTAL, EXISTING_SHEET_MORTAL);
+      assert.equal(sheetData.humanity, 4);
+      assert.equal(sheetData.path, 'Человечность');
+      assert.equal(sheetData.willpower.permanent, 4);
+      const bg = sheetData.backgrounds.find(b => b.name === 'Контакты');
+      assert.ok(bg); assert.equal(bg.val, 2);
+      const trait = sheetData.abilities.talents.find(a => a.name === 'Интрига');
+      assert.ok(trait); assert.equal(trait.val, 2);
+    });
+
     it('атрибуты (9 канонических + composure/resolve)', () => {
       const { sheetData } = mapFoundryActorToSheetData(ACTOR, EXISTING_SHEET);
       assert.equal(sheetData.attributes.physical.strength, 2);
