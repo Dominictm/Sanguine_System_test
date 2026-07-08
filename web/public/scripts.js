@@ -7404,6 +7404,9 @@ function _v20RenderSheet(panel, charName) {
       <button class="cdet-sheet-btn" id="v20-validate">📋 Проверить лист</button>
       <button class="cdet-sheet-btn${_v20XpMode ? ' active' : ''}" id="v20-xpmode" title="В этом режиме поднятие точки списывает опыт по таблице обучения">🎓 Режим опыта${_v20XpMode ? ': вкл' : ''}</button>
       <button class="cdet-sheet-btn" id="v20-roll-btn" title="Открыть конструктор броска d10">🎲 Бросок</button>
+      ${isVamp ? `
+      <button class="cdet-sheet-btn" id="v20-foundry-export" title="Скачать JSON для импорта в Foundry VTT (Import Data)">🜏 Экспорт в Foundry</button>
+      <button class="cdet-sheet-btn" id="v20-foundry-import" title="Загрузить JSON, полученный через Export Data в Foundry VTT">📥 Импорт из Foundry</button>` : ''}
       <span class="v20-status" id="v20-status"></span>
     </div>
     <div class="v20-val-report" id="v20-validate-report"></div>
@@ -7415,6 +7418,8 @@ function _v20RenderSheet(panel, charName) {
   document.getElementById('v20-regen').addEventListener('click', e => _v20Regen(e.currentTarget));
   document.getElementById('v20-validate').addEventListener('click', _v20ToggleValidation);
   document.getElementById('v20-xpmode').addEventListener('click', () => { _v20XpMode = !_v20XpMode; _v20RenderSheet(panel, charName); });
+  document.getElementById('v20-foundry-export')?.addEventListener('click', _v20ExportFoundry);
+  document.getElementById('v20-foundry-import')?.addEventListener('click', () => document.getElementById('import-foundry-file')?.click());
   _v20BindPanel(panel);
 }
 
@@ -7572,6 +7577,45 @@ async function _v20Save() {
     if (st) { st.textContent = '✗ ' + e.message; st.className = 'v20-status err'; }
   }
 }
+
+function _v20ExportFoundry() {
+  const slug = _charSlug(_v20Ctx.name);
+  window.location.href = `/api/characters/${encodeURIComponent(slug)}/export-foundry${location.search}`;
+}
+
+async function _v20ImportFoundryFile(file) {
+  if (!file) return;
+  let actor;
+  try {
+    actor = JSON.parse(await file.text());
+  } catch (e) {
+    showToast('Не удалось прочитать JSON-файл: ' + e.message, 'error');
+    return;
+  }
+  const slug = _charSlug(_v20Ctx.name);
+  try {
+    const r = await fetch(`/api/characters/${encodeURIComponent(slug)}/import-foundry${location.search}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ actor }),
+    }).then(r => r.json());
+    if (!r.ok) throw new Error(r.error || 'не удалось');
+    showToast('Импортировано из Foundry. Обновляю лист…', 'success');
+    const d = await fetch(`/api/characters/${slug}/sheet-data${location.search}`).then(r => r.json());
+    _v20Model = _v20ModelFrom(d);
+    _v20DirtyFlag = false;
+    _v20RenderSheet(document.getElementById('cdet-sheet-panel'), _v20Ctx.name);
+    if (r.cardFields && (r.cardFields.clan || r.cardFields.sect || r.cardFields.generation || r.cardFields.sire)) {
+      showToast(`Предложены поля карточки — клан «${r.cardFields.clan || '—'}», секта «${r.cardFields.sect || '—'}», поколение «${r.cardFields.generation || '—'}». Примените их вручную во вкладке «Инфо», если нужно.`, 'info', 8000);
+    }
+  } catch (e) {
+    showToast('Ошибка импорта: ' + e.message, 'error');
+  }
+}
+
+document.getElementById('import-foundry-file')?.addEventListener('change', async e => {
+  await _v20ImportFoundryFile(e.target.files[0]);
+  e.target.value = '';
+});
 
 async function _v20Regen(btn) {
   if (_v20DirtyFlag && !await showConfirm('Есть несохранённые правки. Перегенерировать числа из ИИ-листа и потерять их?', { danger: true, confirmText: 'Перегенерировать' })) return;
