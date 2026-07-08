@@ -531,6 +531,134 @@ describe('Parsers — unit', () => {
     });
   });
 
+  describe('foundry-export', () => {
+    const { mapCharacterToFoundryActor } = require('../lib/foundry-export');
+
+    // Тот же персонаж, что реально лежит в cities/paris/characters/vampires/alen_dyubua —
+    // используем как fixture напрямую, без похода на диск (юнит-тест мапера, не интеграция).
+    const CHAR = {
+      name: 'Ален Дюбуа', clan: 'Вентру', sect: 'Камарилья',
+      generation: '7-е', sire: 'Жаном Де Вален',
+    };
+    const SHEET = {
+      lineage: 'vampires',
+      header: {
+        name: 'Ален Дюбуа', player: '', chronicle: '', nature: 'Лидер (Leader)',
+        demeanor: 'Аристократ (Aristocrat)', concept: 'Примоген Вентру',
+        clan: 'Вентру', generation: '7-е', sire: 'Жаном Де Вален',
+      },
+      attributes: {
+        physical: { strength: 2, dexterity: 2, stamina: 3, composure: 0, resolve: 0 },
+        social:   { charisma: 3, manipulation: 4, appearance: 2 },
+        mental:   { perception: 2, intelligence: 3, wits: 3 },
+      },
+      abilities: {
+        talents: [
+          { name: 'Атлетика', val: 0, fixed: true }, { name: 'Лидерство', val: 4, fixed: true },
+          { name: 'Знания музыки', val: 1, fixed: false }, { name: '', val: 0, fixed: false },
+        ],
+        skills: [{ name: 'Вождение', val: 0, fixed: true }],
+        knowledges: [{ name: 'Оккультизм', val: 2, fixed: true }],
+      },
+      disciplines: [
+        { name: 'Доминирование', val: 3 }, { name: 'Стойкость', val: 1 },
+        { name: '', val: 0 }, { name: '', val: 0 }, { name: '', val: 0 }, { name: '', val: 0 },
+      ],
+      backgrounds: [{ name: 'Ресурсы', val: 3 }, { name: '', val: 0 }],
+      virtues: { conscience: 3, selfcontrol: 4, courage: 2 },
+      meritsFlaws: 'Внушительный тип (1 очко)',
+      humanity: 7, path: 'Человечность',
+      willpower: { permanent: 6, temp: [true, true, true, false, false, false, false, false, false, false] },
+      bloodPool: Array(20).fill(false).map((_, i) => i < 12), bloodPoolCount: 0, bloodPerTurn: 1,
+      health: { bruised: true, hurt: true, injured: false, wounded: false, mauled: false, crippled: false, incapacitated: false },
+      flaw: 'Избирательность — пьёт только у знати',
+    };
+
+    it('shape: type Vampire, header/generation/clan/sect', () => {
+      const a = mapCharacterToFoundryActor(CHAR, SHEET);
+      assert.equal(a.type, 'Vampire');
+      assert.equal(a.name, 'Ален Дюбуа');
+      assert.equal(a.system.generation, 7);
+      assert.equal(a.system.clan, 'wod.bio.vampire.ventrue');
+      assert.equal(a.system.sect, 'wod.bio.vampire.camarilla');
+      assert.equal(a.system.sire, 'Жаном Де Вален');
+    });
+    it('неизвестный клан/секта → custom.{clan,sect}, а не сломанный ключ', () => {
+      const a = mapCharacterToFoundryActor({ ...CHAR, clan: 'Каппадокийцы', sect: 'Неизвестная секта' }, SHEET);
+      assert.equal(a.system.clan, '');
+      assert.equal(a.system.custom.clan, 'Каппадокийцы');
+      assert.equal(a.system.sect, '');
+      assert.equal(a.system.custom.sect, 'Неизвестная секта');
+    });
+    it('атрибуты — все 11 ключей, включая composure/resolve', () => {
+      const a = mapCharacterToFoundryActor(CHAR, SHEET);
+      assert.equal(a.system.attributes.strength.value, 2);
+      assert.equal(a.system.attributes.manipulation.value, 4);
+      assert.equal(a.system.attributes.wits.value, 3);
+      assert.equal(a.system.attributes.composure.value, 0);
+      assert.equal(a.system.attributes.resolve.value, 0);
+    });
+    it('канонические способности → abilities.<key>.value', () => {
+      const a = mapCharacterToFoundryActor(CHAR, SHEET);
+      assert.equal(a.system.abilities.leadership.value, 4);
+      assert.equal(a.system.abilities.drive.value, 0);
+      assert.equal(a.system.abilities.occult.value, 2);
+    });
+    it('кастомная способность → embedded Item типа Trait', () => {
+      const a = mapCharacterToFoundryActor(CHAR, SHEET);
+      const trait = a.items.find(i => i.type === 'Trait' && i.name === 'Знания музыки');
+      assert.ok(trait, 'ожидался Trait-Item «Знания музыки»');
+      assert.equal(trait.system.type, 'wod.types.talentsecondability');
+      assert.equal(trait.system.value, 1);
+    });
+    it('дисциплины (непустые) → embedded Item типа Power/discipline', () => {
+      const a = mapCharacterToFoundryActor(CHAR, SHEET);
+      const disc = a.items.filter(i => i.type === 'Power' && i.system.type === 'wod.types.discipline');
+      assert.equal(disc.length, 2);
+      const dom = disc.find(d => d.name === 'Доминирование');
+      assert.equal(dom.system.value, 3);
+    });
+    it('добродетели/воля/запас крови', () => {
+      const a = mapCharacterToFoundryActor(CHAR, SHEET);
+      assert.equal(a.system.advantages.virtues.conscience.permanent, 3);
+      assert.equal(a.system.advantages.willpower.permanent, 6);
+      assert.equal(a.system.advantages.willpower.temporary, 3); // 3 из 10 отмечены true
+      assert.equal(a.system.advantages.bloodpool.temporary, 12); // 12 из 20 отмечены
+      assert.equal(a.system.advantages.bloodpool.max, 20); // bloodMaxForGeneration(7)
+    });
+    it('Путь/Человечность → advantages.path', () => {
+      const a = mapCharacterToFoundryActor(CHAR, SHEET);
+      assert.equal(a.system.advantages.path.permanent, 7);
+      assert.equal(a.system.advantages.path.label, 'wod.advantages.path.humanity');
+    });
+    it('здоровье → damage.lethal, не отдельные value/total', () => {
+      const a = mapCharacterToFoundryActor(CHAR, SHEET);
+      assert.equal(a.system.health.damage.lethal, 2); // bruised + hurt = 2 отмечено
+      assert.equal(a.system.health.damage.bashing, 0);
+      assert.ok(!('bruised' in a.system.health) || a.system.health.bruised === undefined,
+        'уровни здоровья не должны переопределяться маппером — их считает Foundry');
+    });
+    it('flaw (слабость клана) → system.weakness', () => {
+      const a = mapCharacterToFoundryActor(CHAR, SHEET);
+      assert.equal(a.system.weakness, 'Избирательность — пьёт только у знати');
+    });
+    it('meritsFlaws → system.notes (без попытки структурировать)', () => {
+      const a = mapCharacterToFoundryActor(CHAR, SHEET);
+      assert.match(a.system.notes, /Внушительный тип/);
+    });
+    it('settings — минимальный набор has*-флагов для вампира, без soak/initiative/movement', () => {
+      const a = mapCharacterToFoundryActor(CHAR, SHEET);
+      assert.equal(a.system.settings.haswillpower, true);
+      assert.equal(a.system.settings.haspath, true);
+      assert.equal(a.system.settings.hasbloodpool, true);
+      assert.equal(a.system.settings.hasvirtue, true);
+      assert.equal(a.system.settings.hasrage, false);
+      assert.ok(!('soak' in a.system), 'soak должен пересчитывать Foundry, не маппер');
+      assert.ok(!('initiative' in a.system));
+      assert.ok(!('movement' in a.system));
+    });
+  });
+
   describe('parseLocation', () => {
     const CARD = [
       '# Клуб Носферату',
