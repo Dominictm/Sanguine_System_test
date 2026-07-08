@@ -659,6 +659,99 @@ describe('Parsers — unit', () => {
     });
   });
 
+  describe('foundry-import', () => {
+    const { mapFoundryActorToSheetData } = require('../lib/foundry-import');
+
+    const ACTOR = {
+      name: 'Ален Дюбуа', type: 'Vampire',
+      system: {
+        nature: 'Лидер', demeanor: 'Аристократ', concept: 'Примоген', notes: 'Внушительный тип (1)',
+        attributes: {
+          strength: { value: 2 }, dexterity: { value: 3 }, stamina: { value: 3 },
+          charisma: { value: 3 }, manipulation: { value: 4 }, appearance: { value: 2 },
+          composure: { value: 1 }, perception: { value: 2 }, intelligence: { value: 3 },
+          wits: { value: 3 }, resolve: { value: 1 },
+        },
+        abilities: {
+          leadership: { value: 4, type: 'talent' }, drive: { value: 1, type: 'skill' },
+          occult: { value: 2, type: 'knowledge' },
+        },
+        advantages: {
+          virtues: {
+            conscience: { permanent: 3 }, selfcontrol: { permanent: 4 }, courage: { permanent: 2 },
+          },
+          willpower: { permanent: 6, temporary: 4, max: 10 },
+          bloodpool: { temporary: 15, max: 20, perturn: 1 },
+          path: { permanent: 7, label: 'wod.advantages.path.humanity' },
+        },
+        health: { damage: { bashing: 0, lethal: 3, aggravated: 0 } },
+        clan: 'wod.bio.vampire.ventrue', sect: 'wod.bio.vampire.camarilla',
+        custom: { clan: '', sect: '' },
+        generation: 7, sire: 'Жаном Де Вален', weakness: 'Избирательность',
+      },
+      items: [
+        { name: 'Доминирование', type: 'Power', system: { type: 'wod.types.discipline', value: 3, parentid: '' } },
+        { name: 'Знания музыки', type: 'Trait', system: { type: 'wod.types.talentsecondability', value: 1 } },
+      ],
+    };
+    const EXISTING_SHEET = { lineage: 'vampires', disciplines: [], abilities: { talents: [], skills: [], knowledges: [] } };
+
+    it('атрибуты (9 канонических + composure/resolve)', () => {
+      const { sheetData } = mapFoundryActorToSheetData(ACTOR, EXISTING_SHEET);
+      assert.equal(sheetData.attributes.physical.strength, 2);
+      assert.equal(sheetData.attributes.social.composure, 1);
+      assert.equal(sheetData.attributes.mental.resolve, 1);
+    });
+    it('канонические способности возвращаются как fixed:true строки с RU-именем', () => {
+      const { sheetData } = mapFoundryActorToSheetData(ACTOR, EXISTING_SHEET);
+      const lead = sheetData.abilities.talents.find(a => a.name === 'Лидерство');
+      assert.ok(lead, 'ожидалось «Лидерство» среди talents');
+      assert.equal(lead.val, 4);
+    });
+    it('Trait-Item → кастомная способность в нужной группе', () => {
+      const { sheetData } = mapFoundryActorToSheetData(ACTOR, EXISTING_SHEET);
+      const custom = sheetData.abilities.talents.find(a => a.name === 'Знания музыки');
+      assert.ok(custom, 'кастомная способность должна вернуться в talents');
+      assert.equal(custom.val, 1);
+    });
+    it('дисциплины из Power/discipline Item', () => {
+      const { sheetData } = mapFoundryActorToSheetData(ACTOR, EXISTING_SHEET);
+      const dom = sheetData.disciplines.find(d => d.name === 'Доминирование');
+      assert.ok(dom); assert.equal(dom.val, 3);
+    });
+    it('добродетели/воля/запас крови', () => {
+      const { sheetData } = mapFoundryActorToSheetData(ACTOR, EXISTING_SHEET);
+      assert.equal(sheetData.virtues.conscience, 3);
+      assert.equal(sheetData.willpower.permanent, 6);
+      assert.equal(sheetData.willpower.temp.filter(Boolean).length, 4);
+      assert.equal(sheetData.bloodPool.filter(Boolean).length, 15);
+    });
+    it('Путь/Человечность', () => {
+      const { sheetData } = mapFoundryActorToSheetData(ACTOR, EXISTING_SHEET);
+      assert.equal(sheetData.humanity, 7);
+      assert.equal(sheetData.path, 'Человечность');
+    });
+    it('здоровье: damage.lethal=3 → 3 первых уровня отмечены', () => {
+      const { sheetData } = mapFoundryActorToSheetData(ACTOR, EXISTING_SHEET);
+      assert.equal(sheetData.health.bruised, true);
+      assert.equal(sheetData.health.hurt, true);
+      assert.equal(sheetData.health.injured, true);
+      assert.equal(sheetData.health.wounded, false);
+    });
+    it('cardFields — клан/секта/поколение/сир для PUT /fields', () => {
+      const { cardFields } = mapFoundryActorToSheetData(ACTOR, EXISTING_SHEET);
+      assert.equal(cardFields.clan, 'Вентру');
+      assert.equal(cardFields.sect, 'Камарилья');
+      assert.equal(cardFields.generation, '7-е');
+      assert.equal(cardFields.sire, 'Жаном Де Вален');
+    });
+    it('неизвестный i18n-ключ клана → берём custom.clan как есть', () => {
+      const actor2 = { ...ACTOR, system: { ...ACTOR.system, clan: '', custom: { clan: 'Каппадокийцы', sect: '' } } };
+      const { cardFields } = mapFoundryActorToSheetData(actor2, EXISTING_SHEET);
+      assert.equal(cardFields.clan, 'Каппадокийцы');
+    });
+  });
+
   describe('parseLocation', () => {
     const CARD = [
       '# Клуб Носферату',
