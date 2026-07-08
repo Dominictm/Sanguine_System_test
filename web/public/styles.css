@@ -1025,6 +1025,23 @@ body {
   opacity: 1;
 }
 
+/* ── Bulk Foundry export: selection mode ── */
+.char-card.fdry-selectable {
+  cursor: pointer;
+  outline: 2px dashed var(--border);
+  outline-offset: -2px;
+}
+.char-card.fdry-selected {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+  background: var(--bg4);
+}
+.char-card.fdry-disabled {
+  opacity: .35;
+  pointer-events: none;
+  filter: grayscale(60%);
+}
+
 .char-card-overlay {
   z-index: 2;
   position: absolute;

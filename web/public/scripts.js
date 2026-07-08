@@ -407,7 +407,100 @@ function renderChars() {
       ${textBlock}
     </div>`;
   }).join('');
+  _foundryBulkApplyCardClasses();
 }
+
+// ── Bulk Foundry export: selection mode ─────────────────────────────────────
+let _foundryBulkMode = false;
+const _foundryBulkSelected = new Set();  // slugs
+
+function _foundryBulkSupportedLineages() { return ['vampire', 'mortal']; }
+
+function _foundryBulkApplyCardClasses() {
+  for (const card of document.querySelectorAll('.char-card[data-name]')) {
+    const name = card.dataset.name;
+    const c = STATE.characters.find(x => x.name === name);
+    card.classList.remove('fdry-selectable', 'fdry-selected', 'fdry-disabled');
+    if (!_foundryBulkMode || !c) continue;
+    if (_foundryBulkSupportedLineages().includes(c.lineage)) {
+      card.classList.add('fdry-selectable');
+      if (_foundryBulkSelected.has(c.slug)) card.classList.add('fdry-selected');
+    } else {
+      card.classList.add('fdry-disabled');
+    }
+  }
+}
+
+function _foundryBulkUpdateButton() {
+  const btn = document.getElementById('btn-export-foundry-bulk');
+  const cancelBtn = document.getElementById('btn-export-foundry-cancel');
+  if (!btn) return;
+  if (!_foundryBulkMode) {
+    btn.textContent = '🜏 Экспорт в Foundry';
+    if (cancelBtn) cancelBtn.style.display = 'none';
+    return;
+  }
+  const n = _foundryBulkSelected.size;
+  btn.textContent = n ? `🜏 Экспортировать (${n})` : '🜏 Выберите персонажей…';
+  if (cancelBtn) cancelBtn.style.display = '';
+}
+
+function _foundryBulkToggleCard(name) {
+  const c = STATE.characters.find(x => x.name === name);
+  if (!c || !_foundryBulkSupportedLineages().includes(c.lineage)) return;
+  if (_foundryBulkSelected.has(c.slug)) _foundryBulkSelected.delete(c.slug);
+  else _foundryBulkSelected.add(c.slug);
+  _foundryBulkApplyCardClasses();
+  _foundryBulkUpdateButton();
+}
+
+async function _foundryBulkDownload() {
+  const slugs = Array.from(_foundryBulkSelected);
+  try {
+    const res = await fetch(`/api/characters/export-foundry-bulk${location.search}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ slugs }),
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.error || `HTTP ${res.status}`);
+    }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    const cd = res.headers.get('content-disposition') || '';
+    a.download = /filename="([^"]+)"/.exec(cd)?.[1] || 'foundry_export.zip';
+    document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(url);
+  } catch (e) {
+    showToast('Ошибка массового экспорта: ' + e.message, 'error');
+  }
+}
+
+function _foundryBulkExit() {
+  _foundryBulkMode = false;
+  _foundryBulkSelected.clear();
+  _foundryBulkApplyCardClasses();
+  _foundryBulkUpdateButton();
+}
+
+document.getElementById('btn-export-foundry-bulk')?.addEventListener('click', async e => {
+  e.preventDefault();
+  if (!_foundryBulkMode) {
+    _foundryBulkMode = true;
+    _foundryBulkApplyCardClasses();
+    _foundryBulkUpdateButton();
+    return;
+  }
+  if (!_foundryBulkSelected.size) return;
+  await _foundryBulkDownload();
+  _foundryBulkExit();
+});
+document.getElementById('btn-export-foundry-cancel')?.addEventListener('click', e => {
+  e.preventDefault();
+  _foundryBulkExit();
+});
 
 document.getElementById('search-input').addEventListener('input', e => {
   STATE.filter.search = e.target.value;
@@ -8454,7 +8547,9 @@ function openCharDetail(name) {
 
 document.getElementById('chars-grid').addEventListener('click', e => {
   const card = e.target.closest('.char-card[data-name]');
-  if (card) openCharDetail(card.dataset.name);
+  if (!card) return;
+  if (_foundryBulkMode) { _foundryBulkToggleCard(card.dataset.name); return; }
+  openCharDetail(card.dataset.name);
 });
 
 const charDetailModal = document.getElementById('char-detail-modal');
