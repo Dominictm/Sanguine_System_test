@@ -59,15 +59,19 @@ function mapFoundryActorToSheetData(actor, existingSheetData) {
     .filter(i => i.type === 'Trait' && i.system?.type === 'wod.types.othertraits')
     .map(i => ({ name: i.name, val: Number(i.system?.value) || 0 }));
 
-  // Достоинства/недостатки (Feature-Item с system.type merit/flaw, экспортированные
-  // через foundry-merits.js) возвращаются строками «Имя (очки)»; остаток свободного
-  // текста из system.notes (несовпавшие с библиотекой строки) добавляется следом —
-  // см. web/lib/foundry-export.js.
-  const meritFlawLines = items
+  // Достоинства/недостатки (Feature-Item с system.type merit/flaw) → массив [{name,points,kind}].
+  // Несовпавший свободный текст из system.notes добавляется отдельными записями: очки — из
+  // суффикса «(N)», если есть, иначе 0; kind — 'merit' по умолчанию (notes не хранит тип).
+  const meritFlawEntries = items
     .filter(i => i.type === 'Feature' && (i.system?.type === 'wod.types.merit' || i.system?.type === 'wod.types.flaw'))
-    .map(i => `${i.name} (${Number(i.system?.level) || 0})`);
-  const noteLines = String(sys.notes || '').split('\n').map(s => s.trim()).filter(Boolean);
-  const meritsFlawsText = [...meritFlawLines, ...noteLines].join('\n');
+    .map(i => ({ name: i.name, points: Number(i.system?.level) || 0, kind: i.system.type === 'wod.types.flaw' ? 'flaw' : 'merit' }));
+  const noteEntries = String(sys.notes || '').split('\n').map(s => s.trim()).filter(Boolean).map(line => {
+    const pm = line.match(/\((\d+)\)\s*$/);
+    const points = pm ? parseInt(pm[1], 10) : 0;
+    const name = line.replace(/\s*\(\d+\)\s*$/, '').trim();
+    return { name, points, kind: 'merit' };
+  });
+  const meritsFlawsOut = [...meritFlawEntries, ...noteEntries];
 
   const lethal = Number(sys.health?.damage?.lethal) || 0;
   const health = {};
@@ -115,7 +119,7 @@ function mapFoundryActorToSheetData(actor, existingSheetData) {
       selfcontrol: Number(sys.advantages?.virtues?.selfcontrol?.permanent) || 0,
       courage: Number(sys.advantages?.virtues?.courage?.permanent) || 0,
     },
-    meritsFlaws: meritsFlawsText || base.meritsFlaws || '',
+    meritsFlaws: meritsFlawsOut.length ? meritsFlawsOut : (Array.isArray(base.meritsFlaws) ? base.meritsFlaws : []),
     humanity: Number(sys.advantages?.path?.permanent) || 0,
     path: sys.advantages?.path?.label === 'wod.advantages.path.humanity' ? 'Человечность' : (base.path || 'Человечность'),
     willpower: { permanent: Number(sys.advantages?.willpower?.permanent) || 0, temp: willpowerTemp },

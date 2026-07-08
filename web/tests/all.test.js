@@ -946,15 +946,31 @@ describe('Parsers — unit', () => {
       const bg = sheetData.backgrounds.find(b => b.name === 'Ресурсы');
       assert.ok(bg, 'ожидался фон «Ресурсы»'); assert.equal(bg.val, 3);
     });
-    it('достоинство из Feature/merit Item возвращается строкой в meritsFlaws', () => {
+    it('достоинство из Feature/merit Item возвращается записью массива meritsFlaws', () => {
       const { sheetData } = mapFoundryActorToSheetData(ACTOR, EXISTING_SHEET);
-      assert.match(sheetData.meritsFlaws, /Внушительный тип \(1\)/);
+      assert.ok(Array.isArray(sheetData.meritsFlaws));
+      const mf = sheetData.meritsFlaws.find(x => x.name === 'Внушительный тип');
+      assert.ok(mf, 'ожидалась запись «Внушительный тип»');
+      assert.equal(mf.points, 1);
+      assert.equal(mf.kind, 'merit');
     });
-    it('несовпавший текст из system.notes добавляется к строкам meritsFlaws', () => {
+    it('недостаток из Feature/flaw Item возвращается с kind: flaw', () => {
+      const actor2 = { ...ACTOR, items: [...ACTOR.items, { name: 'Запах могилы', type: 'Feature', system: { type: 'wod.types.flaw', level: 1, value: 0 } }] };
+      const { sheetData } = mapFoundryActorToSheetData(actor2, EXISTING_SHEET);
+      const flaw = sheetData.meritsFlaws.find(x => x.name === 'Запах могилы');
+      assert.ok(flaw, 'ожидался «Запах могилы»');
+      assert.equal(flaw.kind, 'flaw');
+      assert.equal(flaw.points, 1);
+    });
+    it('несовпавший текст из system.notes добавляется отдельными записями массива', () => {
       const actor2 = { ...ACTOR, system: { ...ACTOR.system, notes: 'Придуманная особенность (2)' } };
       const { sheetData } = mapFoundryActorToSheetData(actor2, EXISTING_SHEET);
-      assert.match(sheetData.meritsFlaws, /Внушительный тип \(1\)/);
-      assert.match(sheetData.meritsFlaws, /Придуманная особенность \(2\)/);
+      const known = sheetData.meritsFlaws.find(x => x.name === 'Внушительный тип');
+      assert.ok(known);
+      const custom = sheetData.meritsFlaws.find(x => x.name === 'Придуманная особенность');
+      assert.ok(custom, 'ожидалась запись из notes');
+      assert.equal(custom.points, 2);
+      assert.equal(custom.kind, 'merit');
     });
     it('system.background → sheetData.history (биография, симметрично экспорту)', () => {
       const { sheetData } = mapFoundryActorToSheetData(ACTOR, EXISTING_SHEET);
