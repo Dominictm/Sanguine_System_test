@@ -6163,8 +6163,8 @@ function _stripSheetHeader(md) {
 
 const V20_ATTRS = {
   physical: [['strength', 'Сила'], ['dexterity', 'Ловкость'], ['stamina', 'Выносливость']],
-  social:   [['charisma', 'Обаяние'], ['manipulation', 'Манипуляция'], ['appearance', 'Привлекательность']],
-  mental:   [['perception', 'Восприятие'], ['intelligence', 'Интеллект'], ['wits', 'Смекалка']],
+  social:   [['charisma', 'Обаяние'], ['manipulation', 'Манипуляция'], ['appearance', 'Привлекательность'], ['composure', 'Самообладание']],
+  mental:   [['perception', 'Восприятие'], ['intelligence', 'Интеллект'], ['wits', 'Смекалка'], ['resolve', 'Решительность']],
 };
 const V20_ATTR_GROUP_LABELS = { physical: 'Физические', social: 'Социальные', mental: 'Ментальные' };
 const V20_ABILITIES = {
@@ -6193,8 +6193,8 @@ function _v20Empty(lineage = 'vampires') {
     header: { name: '', player: '', chronicle: '', nature: '', demeanor: '', concept: '', clan: '', generation: '', sire: '' },
     attributes: {
       physical: { strength: 1, dexterity: 1, stamina: 1 },
-      social:   { charisma: 1, manipulation: 1, appearance: 1 },
-      mental:   { perception: 1, intelligence: 1, wits: 1 },
+      social:   { charisma: 1, manipulation: 1, appearance: 1, composure: 1 },
+      mental:   { perception: 1, intelligence: 1, wits: 1, resolve: 1 },
     },
     abilities: { talents: ab('talents'), skills: ab('skills'), knowledges: ab('knowledges') },
     disciplines: Array.from({ length: 6 }, () => ({ name: '', val: 0 })),
