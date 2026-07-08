@@ -67,7 +67,11 @@ function _mapAbilities(sheetAbilities) {
       if (!name) continue;
       const key = ABILITY_KEY_BY_RU[_norm(name)];
       if (key) {
-        abilities[key] = { value: Number(slot.val) || 0, max: 5, type: ABILITY_GROUP_TYPE[group] };
+        // isvisible: true обязателен — реальный Export Data (смертный.json) показывает, что
+        // это поле не универсально true по умолчанию у системы (часть служебных ключей вроде
+        // dodge/art скрыты по умолчанию); без явного isvisible канонические способности не
+        // отображались на листе Foundry после Import Data (репортнуто пользователем).
+        abilities[key] = { value: Number(slot.val) || 0, max: 5, type: ABILITY_GROUP_TYPE[group], isvisible: true };
       } else {
         customTraits.push({ name, value: Number(slot.val) || 0, group });
       }
@@ -76,11 +80,14 @@ function _mapAbilities(sheetAbilities) {
   return { abilities, customTraits };
 }
 
+// isvisible: true на каждом Item — реальный Export Data (смертный.json) показывает это поле
+// на всех embedded Item (оружие, Trait), и его отсутствие похоже на причину того, что канонические
+// способности/черты не отображались на листе Foundry после Import Data (см. _mapAbilities).
 function _traitItem(name, value, group) {
   const typeSuffix = { talents: 'talentsecondability', skills: 'skillsecondability', knowledges: 'knowledgesecondability' }[group];
   return {
     name, type: 'Trait',
-    system: { type: `wod.types.${typeSuffix}`, level: '0', value, max: 7, isrollable: false },
+    system: { type: `wod.types.${typeSuffix}`, level: '0', value, max: 7, isrollable: false, isvisible: true },
   };
 }
 
@@ -89,7 +96,7 @@ function _disciplineItems(disciplines) {
     .filter(d => String(d?.name || '').trim())
     .map(d => ({
       name: d.name, type: 'Power',
-      system: { type: 'wod.types.discipline', level: 0, value: Number(d.val) || 0, max: 7, game: 'vampire' },
+      system: { type: 'wod.types.discipline', level: 0, value: Number(d.val) || 0, max: 7, game: 'vampire', isvisible: true },
     }));
 }
 
@@ -98,7 +105,7 @@ function _backgroundItems(backgrounds) {
     .filter(b => String(b?.name || '').trim())
     .map(b => ({
       name: b.name, type: 'Feature',
-      system: { type: 'wod.types.background', level: Number(b.val) || 0, value: 0, max: 5 },
+      system: { type: 'wod.types.background', level: Number(b.val) || 0, value: 0, max: 5, isvisible: true },
     }));
 }
 
@@ -107,7 +114,7 @@ function _backgroundItems(backgrounds) {
 function _meritFlawItems(matched) {
   return matched.map(m => ({
     name: m.name, type: 'Feature',
-    system: { type: `wod.types.${m.kind}`, level: m.points, value: 0, max: 5, isrollable: false },
+    system: { type: `wod.types.${m.kind}`, level: m.points, value: 0, max: 5, isrollable: false, isvisible: true },
   }));
 }
 
@@ -121,7 +128,7 @@ function _otherTraitItems(otherTraits) {
     .filter(t => String(t?.name || '').trim())
     .map(t => ({
       name: t.name, type: 'Trait',
-      system: { type: 'wod.types.othertraits', level: '0', value: Number(t.val) || 0, max: 0, isrollable: false },
+      system: { type: 'wod.types.othertraits', level: '0', value: Number(t.val) || 0, max: 0, isrollable: false, isvisible: true },
     }));
 }
 

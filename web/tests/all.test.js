@@ -604,12 +604,18 @@ describe('Parsers — unit', () => {
       assert.equal(a.system.abilities.drive.value, 0);
       assert.equal(a.system.abilities.occult.value, 2);
     });
+    it('канонические способности пишут isvisible:true — иначе Foundry не показывает строку после Import Data', () => {
+      const a = mapCharacterToFoundryActor(CHAR, SHEET);
+      assert.equal(a.system.abilities.leadership.isvisible, true);
+      assert.equal(a.system.abilities.occult.isvisible, true);
+    });
     it('кастомная способность → embedded Item типа Trait', () => {
       const a = mapCharacterToFoundryActor(CHAR, SHEET);
       const trait = a.items.find(i => i.type === 'Trait' && i.name === 'Знания музыки');
       assert.ok(trait, 'ожидался Trait-Item «Знания музыки»');
       assert.equal(trait.system.type, 'wod.types.talentsecondability');
       assert.equal(trait.system.value, 1);
+      assert.equal(trait.system.isvisible, true);
     });
     it('дисциплины (непустые) → embedded Item типа Power/discipline', () => {
       const a = mapCharacterToFoundryActor(CHAR, SHEET);
@@ -648,6 +654,7 @@ describe('Parsers — unit', () => {
       assert.ok(merit, 'ожидался Item «Внушительный тип» (есть в system/library/merits)');
       assert.equal(merit.name, 'Внушительный тип');
       assert.equal(merit.system.level, 1);
+      assert.equal(merit.system.isvisible, true);
       assert.ok(!a.system.notes.includes('Внушительный тип'), 'совпавшая строка не должна дублироваться в notes');
     });
     it('meritsFlaws, не найденный в библиотеке → остаётся текстом в system.notes', () => {
@@ -662,6 +669,7 @@ describe('Parsers — unit', () => {
       assert.ok(bg, 'ожидался Item фона «Ресурсы»');
       assert.equal(bg.name, 'Ресурсы');
       assert.equal(bg.system.level, 3);
+      assert.equal(bg.system.isvisible, true);
     });
     it('settings — минимальный набор has*-флагов для вампира, без soak/initiative/movement', () => {
       const a = mapCharacterToFoundryActor(CHAR, SHEET);
