@@ -513,6 +513,7 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     if (tab === 'new-city')        loadCitiesGrid();
     if (tab === 'lib-disciplines') loadLibrary();
     if (tab === 'lib-psychics')    loadPsychicsLibrary();
+    if (tab === 'lib-merits')      loadMeritsLibrary();
   });
 });
 
@@ -6831,6 +6832,50 @@ document.getElementById('lib-psychics-body')?.addEventListener('click', e => {
   const item = e.target.closest('[data-psy-slug]'); if (item) { _libRenderPsyDetail(item.dataset.psySlug); return; }
 });
 
+// ── Библиотека: справочник достоинств (Physical Merits) ──────────────────────────
+let _meritsCache = { physical: null };
+
+function _libMeritsListHtml() {
+  const merits = _meritsCache.physical || [];
+  return `<div class="merits-lib-list">${merits.map(m =>
+    `<button type="button" class="merit-lib-item" data-merit-slug="${escAttr(m.slug)}" data-merit-category="physical"><span>${escHtml(m.name)}</span><span class="merit-lib-points">${'●'.repeat(m.points)}</span></button>`).join('')}</div>`;
+}
+
+function _libMeritDetailHtml(m) {
+  if (!m) return '<div class="cdet-empty">Достоинство не найдено в справочнике.</div>';
+  return `<div class="merit-lib-detail"><div class="merit-lib-name">${escHtml(m.name)}</div><div class="merit-lib-cost">${'●'.repeat(m.points)} очков</div><div class="merit-lib-desc">${escHtml(m.description)}</div></div>`;
+}
+
+function _libRenderMeritList() {
+  const body = document.getElementById('lib-merits-body');
+  if (body) body.innerHTML = _libMeritsListHtml();
+}
+
+function _libRenderMeritDetail(slug) {
+  const body = document.getElementById('lib-merits-body');
+  if (!body) return;
+  const merit = (_meritsCache.physical || []).find(m => m.slug === slug);
+  body.innerHTML = `<button type="button" class="merit-lib-back" data-merit-back>← к списку</button>${_libMeritDetailHtml(merit)}`;
+}
+
+async function loadMeritsLibrary() {
+  const body = document.getElementById('lib-merits-body');
+  if (!body) return;
+  body.innerHTML = '<div class="loading-state"><div class="spinner"></div>Загрузка...</div>';
+  try {
+    const merits = await fetch('/api/library/merits/physical').then(r => r.json());
+    _meritsCache.physical = Array.isArray(merits) ? merits : [];
+    _libRenderMeritList();
+  } catch (e) {
+    body.innerHTML = `<div class="cdet-empty">Ошибка загрузки: ${escHtml(e.message)}</div>`;
+  }
+}
+
+document.getElementById('lib-merits-body')?.addEventListener('click', e => {
+  const back = e.target.closest('[data-merit-back]'); if (back) { _libRenderMeritList(); return; }
+  const item = e.target.closest('[data-merit-slug]'); if (item) { _libRenderMeritDetail(item.dataset.meritSlug); return; }
+});
+
 // ── Mortal sheet: «Психические способности» row reference (зеркало v20DisciplineKey/
 // _v20OpenDisciplineModal выше, но источник — _psychicsCache/ensurePsychics(), не дисциплины).
 // Имя силы из листа («Психометрия», «Биоконтроль») → slug в справочнике психических способностей.
@@ -7493,37 +7538,6 @@ async function _loadCharSheet(charName) {
   _v20RenderSheet(panel, charName);
 }
 
-// ── Merits tab: load physical merits preview ───────────────────────────────────
-function _renderMeritsPreview(merits) {
-  if (!merits || !Array.isArray(merits)) {
-    return '<div class="cdet-empty">Нет данных о достоинствах</div>';
-  }
-  if (merits.length === 0) {
-    return '<div class="cdet-empty">Достоинства не найдены</div>';
-  }
-  return `<div class="merits-preview">
-    ${merits.map(m => `
-      <div class="merit-item">
-        <div class="merit-name">${escHtml(m.name)}</div>
-        <div class="merit-points">${'●'.repeat(m.points)}</div>
-        <div class="merit-description">${escHtml(m.description)}</div>
-      </div>
-    `).join('')}
-  </div>`;
-}
-
-async function _loadCharMerits() {
-  const body = document.getElementById('merits-body');
-  if (!body) return;
-  body.innerHTML = '<div class="loading-state"><div class="spinner"></div>Загрузка достоинств…</div>';
-  try {
-    const merits = await fetch('/api/library/merits/physical').then(r => r.json());
-    body.innerHTML = _renderMeritsPreview(merits);
-  } catch (e) {
-    body.innerHTML = `<div class="cdet-empty">Ошибка загрузки: ${escHtml(e.message)}</div>`;
-  }
-}
-
 // ═══════════════════ V20 sheet: generate · view · edit (dot-radio) ═══════════════════
 
 function _sheetApi(ctx) {
@@ -8175,7 +8189,6 @@ function openCharDetail(name) {
         <button class="cdet-tab" data-tab="rels">Отношения</button>
         <button class="cdet-tab" data-tab="diaries">Дневники${c.diaries?.length ? ` (${c.diaries.length})` : ''}</button>
         <button class="cdet-tab" data-tab="sheet" data-char="${escHtml(c.name)}">Лист V20</button>
-        <button class="cdet-tab" data-tab="merits">✦ Достоинства</button>
         <button class="cdet-tab" data-tab="desc">Описание</button>
       </div>
       <div class="cdet-panels">
@@ -8238,9 +8251,6 @@ function openCharDetail(name) {
         </div>
         <div class="cdet-panel" data-panel="sheet" id="cdet-sheet-panel">
           <div class="loading-state"><div class="spinner"></div>Загрузка листа…</div>
-        </div>
-        <div class="cdet-panel" data-panel="merits" id="cdet-merits-panel">
-          <div id="merits-body"></div>
         </div>
         <div class="cdet-panel" data-panel="desc">
           <div class="cdet-info-header" style="gap:8px">
@@ -8311,7 +8321,6 @@ document.getElementById('char-detail-content').addEventListener('click', e => {
     const panels = col.querySelector('.cdet-panels');
     if (panels) panels.scrollTop = 0;
     if (tab.dataset.tab === 'sheet') _loadCharSheet(tab.dataset.char);
-    if (tab.dataset.tab === 'merits') _loadCharMerits();
     return;
   }
   if (e.target.closest('#cdet-carousel-prev')) { _carouselGoTo(_carouselIdx - 1, true); return; }

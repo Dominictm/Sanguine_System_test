@@ -2068,8 +2068,8 @@ a:focus-visible {
 
 /* ── Char Detail Modal ─────────────────────────────────────── */
 .modal-detail {
-  width: min(1300px, 96vw);
-  height: min(82vh, 754px);
+  width: min(1600px, 96vw);
+  height: min(82vh, 837px);
   padding: 0;
   overflow: hidden;
   background:
@@ -10099,50 +10099,82 @@ tr.rumor-told:hover .rumor-cb-cell {
    flex-wrap above as a safety net for any still-longer custom text. */
 .confirm-acts .chr-modal-btn { padding: 8px 14px; font-size: var(--fs-xs); letter-spacing: .04em; white-space: nowrap; }
 
-/* ── Merits tab in character detail modal ──────────────────────────── */
-#cdet-merits-panel {
-  padding: 16px;
+/* ── Merits library (справочник достоинств) ──────────────────────────── */
+.merits-lib-list {
   display: flex;
   flex-direction: column;
+  gap: 4px;
+}
+
+.merit-lib-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   gap: 12px;
+  width: 100%;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  padding: 8px 10px;
+  cursor: pointer;
+  text-align: left;
+  color: var(--text);
+  font-size: var(--fs-sm);
+  transition: background 0.15s, border-color 0.15s;
 }
 
-#merits-body {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+.merit-lib-item:hover {
+  background: rgba(184, 134, 11, 0.1);
+  border-color: rgba(184, 134, 11, 0.3);
 }
 
-.merits-preview {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
+.merit-lib-points {
+  font-size: var(--fs-xs);
+  color: var(--gold);
+  letter-spacing: 2px;
+  white-space: nowrap;
+  margin-left: auto;
 }
 
-.merit-item {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 12px;
+.merit-lib-back {
+  display: inline-block;
+  padding: 4px 8px;
+  background: none;
   border: 1px solid var(--border);
-  border-radius: 4px;
-  background: rgba(184, 134, 11, 0.05);
+  border-radius: 2px;
+  cursor: pointer;
+  color: var(--text2);
+  font-size: var(--fs-sm);
+  margin-bottom: 12px;
 }
 
-.merit-name {
-  font-size: var(--fs-base);
+.merit-lib-back:hover {
+  background: rgba(184, 134, 11, 0.05);
+  border-color: var(--gold);
+  color: var(--text);
+}
+
+.merit-lib-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.merit-lib-name {
+  font-size: var(--fs-lg);
   font-weight: 600;
   color: var(--text);
 }
 
-.merit-points {
+.merit-lib-cost {
   font-size: var(--fs-sm);
   color: var(--gold);
   letter-spacing: 2px;
 }
 
-.merit-description {
+.merit-lib-desc {
   font-size: var(--fs-sm);
   color: var(--text2);
-  line-height: 1.5;
+  line-height: 1.6;
+  white-space: pre-wrap;
 }
