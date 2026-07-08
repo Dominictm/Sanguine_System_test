@@ -948,6 +948,39 @@ describe('Parsers — unit', () => {
     });
   });
 
+  describe('zip (createZip/readZip)', () => {
+    const { createZip, readZip } = require('../lib/zip');
+
+    it('round-trip: 3 файла, имена и содержимое совпадают байт-в-байт', () => {
+      const files = [
+        { name: 'foundry_alen.json', data: JSON.stringify({ name: 'Ален', n: 1 }) },
+        { name: 'foundry_gerson.json', data: JSON.stringify({ name: 'Герсон', n: 2 }) },
+        { name: 'foundry_verene.json', data: Buffer.from(JSON.stringify({ name: 'Верене', n: 3 }), 'utf-8') },
+      ];
+      const zipBuf = createZip(files);
+      assert.ok(Buffer.isBuffer(zipBuf));
+      const out = readZip(zipBuf);
+      assert.equal(out.length, 3);
+      for (const f of files) {
+        const match = out.find(o => o.name === f.name);
+        assert.ok(match, `ожидался файл ${f.name} в архиве`);
+        const expected = Buffer.isBuffer(f.data) ? f.data : Buffer.from(f.data, 'utf-8');
+        assert.equal(match.data.toString('utf-8'), expected.toString('utf-8'));
+      }
+    });
+    it('пустой список файлов → валидный (пустой) ZIP', () => {
+      const zipBuf = createZip([]);
+      const out = readZip(zipBuf);
+      assert.equal(out.length, 0);
+    });
+    it('кириллица и юникод в содержимом переживают round-trip', () => {
+      const content = 'Тестовый Смертный — Охранник 🧑';
+      const zipBuf = createZip([{ name: 'test.json', data: content }]);
+      const out = readZip(zipBuf);
+      assert.equal(out[0].data.toString('utf-8'), content);
+    });
+  });
+
   describe('parseLocation', () => {
     const CARD = [
       '# Клуб Носферату',
