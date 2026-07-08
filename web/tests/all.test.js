@@ -493,6 +493,44 @@ describe('Parsers — unit', () => {
     });
   });
 
+  describe('foundry-clans', () => {
+    const {
+      clanRuToFoundryKey, clanFoundryKeyToRu,
+      sectRuToFoundryKey, sectFoundryKeyToRu,
+      parseGenerationNumber, bloodMaxForGeneration,
+    } = require('../lib/foundry-clans');
+
+    it('clanRuToFoundryKey — известный клан', () => {
+      assert.equal(clanRuToFoundryKey('Малкавиан'), 'malkavian');
+      assert.equal(clanRuToFoundryKey('Вентру'), 'ventrue');
+      assert.equal(clanRuToFoundryKey('тореадор'), 'toreador'); // регистронезависимо
+    });
+    it('clanRuToFoundryKey — неизвестный клан → null', () => {
+      assert.equal(clanRuToFoundryKey('Каппадокийцы'), null);
+      assert.equal(clanRuToFoundryKey('Истинный Бруха'), null);
+    });
+    it('clanFoundryKeyToRu — обратное преобразование', () => {
+      assert.equal(clanFoundryKeyToRu('malkavian'), 'Малкавиан');
+      assert.equal(clanFoundryKeyToRu('nosuchclan'), null);
+    });
+    it('sectRuToFoundryKey / sectFoundryKeyToRu', () => {
+      assert.equal(sectRuToFoundryKey('Камарилья'), 'camarilla');
+      assert.equal(sectRuToFoundryKey('Шабаш'), 'sabbat');
+      assert.equal(sectFoundryKeyToRu('camarilla'), 'Камарилья');
+      assert.equal(sectRuToFoundryKey('Нет такой секты'), null);
+    });
+    it('parseGenerationNumber — «N-е» → число', () => {
+      assert.equal(parseGenerationNumber('7-е'), 7);
+      assert.equal(parseGenerationNumber('13-е'), 13);
+      assert.equal(parseGenerationNumber('нет данных'), null);
+    });
+    it('bloodMaxForGeneration — по таблице RULES_V20', () => {
+      assert.equal(bloodMaxForGeneration(7), 20);
+      assert.equal(bloodMaxForGeneration(13), 10);
+      assert.equal(bloodMaxForGeneration(3), null); // 3-е поколение — «счётчик» без предела
+    });
+  });
+
   describe('parseLocation', () => {
     const CARD = [
       '# Клуб Носферату',
