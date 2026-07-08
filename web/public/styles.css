@@ -10098,3 +10098,51 @@ tr.rumor-told:hover .rumor-cb-cell {
    unwrapped justify-content:flex-end never clips itself). Tighter box here +
    flex-wrap above as a safety net for any still-longer custom text. */
 .confirm-acts .chr-modal-btn { padding: 8px 14px; font-size: var(--fs-xs); letter-spacing: .04em; white-space: nowrap; }
+
+/* ── Merits tab in character detail modal ──────────────────────────── */
+#cdet-merits-panel {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+#merits-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.merits-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.merit-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: rgba(184, 134, 11, 0.05);
+}
+
+.merit-name {
+  font-size: var(--fs-base);
+  font-weight: 600;
+  color: var(--text);
+}
+
+.merit-points {
+  font-size: var(--fs-sm);
+  color: var(--gold);
+  letter-spacing: 2px;
+}
+
+.merit-description {
+  font-size: var(--fs-sm);
+  color: var(--text2);
+  line-height: 1.5;
+}
