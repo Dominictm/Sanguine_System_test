@@ -642,9 +642,26 @@ describe('Parsers — unit', () => {
       const a = mapCharacterToFoundryActor(CHAR, SHEET);
       assert.equal(a.system.weakness, 'Избирательность — пьёт только у знати');
     });
-    it('meritsFlaws → system.notes (без попытки структурировать)', () => {
+    it('meritsFlaws, совпавший с библиотекой → embedded Item merit, а не notes', () => {
       const a = mapCharacterToFoundryActor(CHAR, SHEET);
-      assert.match(a.system.notes, /Внушительный тип/);
+      const merit = a.items.find(i => i.type === 'Feature' && i.system.type === 'wod.types.merit');
+      assert.ok(merit, 'ожидался Item «Внушительный тип» (есть в system/library/merits)');
+      assert.equal(merit.name, 'Внушительный тип');
+      assert.equal(merit.system.level, 1);
+      assert.ok(!a.system.notes.includes('Внушительный тип'), 'совпавшая строка не должна дублироваться в notes');
+    });
+    it('meritsFlaws, не найденный в библиотеке → остаётся текстом в system.notes', () => {
+      const sheet = { ...SHEET, meritsFlaws: 'Придуманная особенность (2 очка)' };
+      const a = mapCharacterToFoundryActor(CHAR, sheet);
+      assert.match(a.system.notes, /Придуманная особенность/);
+      assert.equal(a.items.filter(i => i.system.type === 'wod.types.merit' || i.system.type === 'wod.types.flaw').length, 0);
+    });
+    it('фон (backgrounds) → embedded Item типа Feature/background', () => {
+      const a = mapCharacterToFoundryActor(CHAR, SHEET);
+      const bg = a.items.find(i => i.type === 'Feature' && i.system.type === 'wod.types.background');
+      assert.ok(bg, 'ожидался Item фона «Ресурсы»');
+      assert.equal(bg.name, 'Ресурсы');
+      assert.equal(bg.system.level, 3);
     });
     it('settings — минимальный набор has*-флагов для вампира, без soak/initiative/movement', () => {
       const a = mapCharacterToFoundryActor(CHAR, SHEET);
@@ -692,6 +709,8 @@ describe('Parsers — unit', () => {
       items: [
         { name: 'Доминирование', type: 'Power', system: { type: 'wod.types.discipline', value: 3, parentid: '' } },
         { name: 'Знания музыки', type: 'Trait', system: { type: 'wod.types.talentsecondability', value: 1 } },
+        { name: 'Ресурсы', type: 'Feature', system: { type: 'wod.types.background', level: 3, value: 0 } },
+        { name: 'Внушительный тип', type: 'Feature', system: { type: 'wod.types.merit', level: 1, value: 0 } },
       ],
     };
     const EXISTING_SHEET = { lineage: 'vampires', disciplines: [], abilities: { talents: [], skills: [], knowledges: [] } };
@@ -749,6 +768,55 @@ describe('Parsers — unit', () => {
       const actor2 = { ...ACTOR, system: { ...ACTOR.system, clan: '', custom: { clan: 'Каппадокийцы', sect: '' } } };
       const { cardFields } = mapFoundryActorToSheetData(actor2, EXISTING_SHEET);
       assert.equal(cardFields.clan, 'Каппадокийцы');
+    });
+    it('фон из Feature/background Item', () => {
+      const { sheetData } = mapFoundryActorToSheetData(ACTOR, EXISTING_SHEET);
+      const bg = sheetData.backgrounds.find(b => b.name === 'Ресурсы');
+      assert.ok(bg, 'ожидался фон «Ресурсы»'); assert.equal(bg.val, 3);
+    });
+    it('достоинство из Feature/merit Item возвращается строкой в meritsFlaws', () => {
+      const { sheetData } = mapFoundryActorToSheetData(ACTOR, EXISTING_SHEET);
+      assert.match(sheetData.meritsFlaws, /Внушительный тип \(1\)/);
+    });
+    it('несовпавший текст из system.notes добавляется к строкам meritsFlaws', () => {
+      const actor2 = { ...ACTOR, system: { ...ACTOR.system, notes: 'Придуманная особенность (2)' } };
+      const { sheetData } = mapFoundryActorToSheetData(actor2, EXISTING_SHEET);
+      assert.match(sheetData.meritsFlaws, /Внушительный тип \(1\)/);
+      assert.match(sheetData.meritsFlaws, /Придуманная особенность \(2\)/);
+    });
+  });
+
+  describe('foundry-merits', () => {
+    const { matchMeritsFlaws } = require('../lib/foundry-merits');
+
+    it('строка с очками в скобках находит достоинство в библиотеке', () => {
+      const { matched, unmatched } = matchMeritsFlaws('Внушительный тип (1 очко)');
+      assert.equal(unmatched.length, 0);
+      assert.equal(matched.length, 1);
+      assert.equal(matched[0].name, 'Внушительный тип');
+      assert.equal(matched[0].points, 1);
+      assert.equal(matched[0].kind, 'merit');
+    });
+    it('находит недостаток и определяет kind: flaw', () => {
+      const { matched } = matchMeritsFlaws('Запах могилы');
+      assert.equal(matched.length, 1);
+      assert.equal(matched[0].kind, 'flaw');
+      assert.equal(matched[0].points, 1);
+    });
+    it('несколько строк — маркеры списка и пустые строки не мешают', () => {
+      const { matched, unmatched } = matchMeritsFlaws('- Внушительный тип\n\n- Запах могилы (1)');
+      assert.equal(matched.length, 2);
+      assert.equal(unmatched.length, 0);
+    });
+    it('кастомная строка без совпадения в библиотеке остаётся в unmatched', () => {
+      const { matched, unmatched } = matchMeritsFlaws('Придуманная особенность (2 очка)');
+      assert.equal(matched.length, 0);
+      assert.deepEqual(unmatched, ['Придуманная особенность (2 очка)']);
+    });
+    it('пустой текст → пустые массивы', () => {
+      const { matched, unmatched } = matchMeritsFlaws('');
+      assert.deepEqual(matched, []);
+      assert.deepEqual(unmatched, []);
     });
   });
 

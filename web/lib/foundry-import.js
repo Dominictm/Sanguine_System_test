@@ -1,6 +1,8 @@
 'use strict';
 // Обратный маппер: Foundry Actor JSON (Export Data) → Sanguine sheet-data + card fields.
-// См. шапку web/lib/foundry-export.js и docs/superpowers/specs/2026-07-08-foundry-integration-design.md.
+// См. шапку web/lib/foundry-export.js (в т.ч. как достоинства/недостатки/фон
+// экспортируются как embedded Item) и docs/superpowers/specs/
+// 2026-07-08-foundry-integration-design.md.
 
 const { clanFoundryKeyToRu, sectFoundryKeyToRu } = require('./foundry-clans');
 
@@ -49,6 +51,20 @@ function mapFoundryActorToSheetData(actor, existingSheetData) {
     .filter(i => i.type === 'Power' && i.system?.type === 'wod.types.discipline')
     .map(i => ({ name: i.name, val: Number(i.system?.value) || 0 }));
 
+  const backgrounds = items
+    .filter(i => i.type === 'Feature' && i.system?.type === 'wod.types.background')
+    .map(i => ({ name: i.name, val: Number(i.system?.level) || 0 }));
+
+  // Достоинства/недостатки (Feature-Item с system.type merit/flaw, экспортированные
+  // через foundry-merits.js) возвращаются строками «Имя (очки)»; остаток свободного
+  // текста из system.notes (несовпавшие с библиотекой строки) добавляется следом —
+  // см. web/lib/foundry-export.js.
+  const meritFlawLines = items
+    .filter(i => i.type === 'Feature' && (i.system?.type === 'wod.types.merit' || i.system?.type === 'wod.types.flaw'))
+    .map(i => `${i.name} (${Number(i.system?.level) || 0})`);
+  const noteLines = String(sys.notes || '').split('\n').map(s => s.trim()).filter(Boolean);
+  const meritsFlawsText = [...meritFlawLines, ...noteLines].join('\n');
+
   const lethal = Number(sys.health?.damage?.lethal) || 0;
   const health = {};
   HEALTH_LEVELS.forEach((k, i) => { health[k] = i < lethal; });
@@ -88,12 +104,13 @@ function mapFoundryActorToSheetData(actor, existingSheetData) {
     },
     abilities,
     disciplines,
+    backgrounds,
     virtues: {
       conscience: Number(sys.advantages?.virtues?.conscience?.permanent) || 0,
       selfcontrol: Number(sys.advantages?.virtues?.selfcontrol?.permanent) || 0,
       courage: Number(sys.advantages?.virtues?.courage?.permanent) || 0,
     },
-    meritsFlaws: sys.notes || base.meritsFlaws || '',
+    meritsFlaws: meritsFlawsText || base.meritsFlaws || '',
     humanity: Number(sys.advantages?.path?.permanent) || 0,
     path: sys.advantages?.path?.label === 'wod.advantages.path.humanity' ? 'Человечность' : (base.path || 'Человечность'),
     willpower: { permanent: Number(sys.advantages?.willpower?.permanent) || 0, temp: willpowerTemp },

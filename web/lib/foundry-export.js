@@ -3,21 +3,27 @@
 // Схема Actor.system подтверждена разбором реального Export Data — см.
 // docs/superpowers/specs/2026-07-08-foundry-integration-design.md, разделы 1.3/1.7/2.
 //
-// Что НЕ экспортируется (осознанно, см. шапку файла плана docs/superpowers/plans/
-// 2026-07-08-foundry-sync-phase1.md):
-// - Фон (backgrounds) — system.type для Item-Фона не подтверждён на реальных данных,
-//   доделывается в Фазе 2 после проверки на персонаже с непустым Фоном.
-// - Достоинства/Недостатки — Sanguine хранит их одним свободным текстом без очков/типа,
-//   структурировать нельзя не изобретая эвристику — текст целиком уходит в system.notes.
+// Что НЕ экспортируется/экспортируется с оговоркой:
+// - Достоинства/Недостатки — Sanguine хранит их одним свободным текстом без очков/типа.
+//   Строки, совпавшие по имени с библиотекой system/library/{merits,flaws}/*.json
+//   (см. foundry-merits.js), экспортируются как структурированные Item; несовпавшие
+//   (кастомные, не из канона) остаются текстом в system.notes.
+// - Фон (backgrounds) — экспортируется как Item типа Feature, system.type
+//   "wod.types.background", по аналогии с достоинствами/недостатками (тот же паттерн
+//   именования `wod.types.<kind>`, что и у всех подтверждённых типов). Гипотеза,
+//   не подтверждена на реальном экспорте — проверить при следующем визите в Foundry
+//   с персонажем, у которого заполнен Фон; если Foundry ожидает другой system.type,
+//   это одна строка правки в _backgroundItems().
 // - system.settings/soak/initiative/movement — производные поля, их пересчитывает
 //   сама система Foundry при открытии листа; маппер пишет только has*-флаги.
 // - Уровни здоровья (health.<level>.value/total/penalty) — тоже производные от
-//   health.damage.*, не пишутся напрямую (см. Task 2, шапка плана).
+//   health.damage.*, не пишутся напрямую.
 
 const {
   clanRuToFoundryKey, sectRuToFoundryKey,
   parseGenerationNumber, bloodMaxForGeneration,
 } = require('./foundry-clans');
+const { matchMeritsFlaws } = require('./foundry-merits');
 
 // Sanguine ability display name (RU, как в V20_ABILITIES web/public/scripts.js:6170-6174)
 // → Foundry fixed abilities.<key> (EN, template.json partial `ability`).
@@ -81,6 +87,24 @@ function _disciplineItems(disciplines) {
     }));
 }
 
+function _backgroundItems(backgrounds) {
+  return (backgrounds || [])
+    .filter(b => String(b?.name || '').trim())
+    .map(b => ({
+      name: b.name, type: 'Feature',
+      system: { type: 'wod.types.background', level: Number(b.val) || 0, value: 0, max: 5 },
+    }));
+}
+
+// Достоинства/недостатки, совпавшие с библиотекой (см. foundry-merits.js), —
+// структурированные Item; несовпавшие остаются в system.notes (вызывающий код).
+function _meritFlawItems(matched) {
+  return matched.map(m => ({
+    name: m.name, type: 'Feature',
+    system: { type: `wod.types.${m.kind}`, level: m.points, value: 0, max: 5, isrollable: false },
+  }));
+}
+
 // Sanguine отмечает 7 уровней здоровья булевыми флагами (порядок = тяжесть),
 // Foundry хранит суммарные очки урона по типу. Sanguine не различает тип урона —
 // весь отмеченный урон уходит в damage.lethal (разумный дефолт для вампира).
@@ -115,9 +139,13 @@ function mapCharacterToFoundryActor(char, sheetData) {
     ? Number(s.bloodPoolCount) || 0
     : (s.bloodPool || []).filter(Boolean).length;
 
+  const { matched: matchedMeritsFlaws, unmatched: unmatchedMeritsFlaws } = matchMeritsFlaws(s.meritsFlaws);
+
   const items = [
     ...customTraits.map(t => _traitItem(t.name, t.value, t.group)),
     ..._disciplineItems(s.disciplines),
+    ..._backgroundItems(s.backgrounds),
+    ..._meritFlawItems(matchedMeritsFlaws),
   ];
 
   return {
@@ -125,7 +153,7 @@ function mapCharacterToFoundryActor(char, sheetData) {
     type: 'Vampire',
     system: {
       nature: s.header?.nature || '', demeanor: s.header?.demeanor || '',
-      concept: s.header?.concept || '', background: '', notes: s.meritsFlaws || '',
+      concept: s.header?.concept || '', background: '', notes: unmatchedMeritsFlaws.join('\n'),
       settings: {
         haswillpower: true, haspath: true, hasbloodpool: true, hasvirtue: true,
         hasrage: false, hasgnosis: false, hasglamour: false, hasbanality: false,
