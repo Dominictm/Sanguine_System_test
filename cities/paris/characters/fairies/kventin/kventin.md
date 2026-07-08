@@ -1,11 +1,11 @@
-﻿# 🗡️ Квентин / Арлен Дафф
+# 🗡️ Квентин
 
 > 🔗 [Все персонажи](../../../archive/characters_index.md)
 
 ---
 
 - **Слаг:** kventin
-- **Родной город:** Париж
+- **Род:** Слуаг
 - **Алиасы:** Арлен Дафф
 - **Линейка WoD:** Фея
 - **Пол:** Мужской
@@ -25,6 +25,8 @@
   [Блок 3] Dark fantasy digital painting, visible painterly brushstrokes, textured oil-paint effect, cinematic composition, moody gothic atmosphere, Vampire the Masquerade aesthetic, concept art quality, painterly realism, artstation quality, masterpiece
 - **🚫 Негативный промт:**
   photorealistic photography, digital art, anime, cartoon, illustration, watermark, text overlay, blurry, low quality, artifacts, deformed anatomy, extra limbs, oversaturated colors, bright white background, 3D render, CGI.
+- **Натура:** Арлен Дафф
+- **Принадлежность:** Персонаж мастера
 
 ---
 
