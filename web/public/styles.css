@@ -10100,6 +10100,36 @@ tr.rumor-told:hover .rumor-cb-cell {
 .confirm-acts .chr-modal-btn { padding: 8px 14px; font-size: var(--fs-xs); letter-spacing: .04em; white-space: nowrap; }
 
 /* ── Merits library (справочник достоинств) ──────────────────────────── */
+.merits-subtab-bar {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 8px;
+}
+
+.merits-subtab-btn {
+  padding: 6px 12px;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  cursor: pointer;
+  color: var(--text2);
+  font-size: var(--fs-sm);
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
+}
+
+.merits-subtab-btn:hover {
+  color: var(--text);
+  background: rgba(184, 134, 11, 0.05);
+}
+
+.merits-subtab-btn.active {
+  color: var(--gold);
+  border-color: var(--gold);
+  background: rgba(184, 134, 11, 0.1);
+}
+
 .merits-lib-list {
   display: flex;
   flex-direction: column;

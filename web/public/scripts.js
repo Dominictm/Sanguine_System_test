@@ -513,7 +513,20 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     if (tab === 'new-city')        loadCitiesGrid();
     if (tab === 'lib-disciplines') loadLibrary();
     if (tab === 'lib-psychics')    loadPsychicsLibrary();
-    if (tab === 'lib-merits')      loadMeritsLibrary();
+    if (tab === 'lib-merits')      loadMeritsLibrary('physical');
+  });
+
+  // Merits subtabs (physical/mental/social/supernatural)
+  document.addEventListener('click', e => {
+    const btn = e.target.closest('.merits-subtab-btn');
+    if (!btn) return;
+    const cat = btn.dataset.meritCat;
+    if (!cat) return;
+
+    const bar = btn.closest('.merits-subtab-bar');
+    bar.querySelectorAll('.merits-subtab-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    loadMeritsLibrary(cat);
   });
 });
 
@@ -6832,13 +6845,14 @@ document.getElementById('lib-psychics-body')?.addEventListener('click', e => {
   const item = e.target.closest('[data-psy-slug]'); if (item) { _libRenderPsyDetail(item.dataset.psySlug); return; }
 });
 
-// ── Библиотека: справочник достоинств (Physical Merits) ──────────────────────────
-let _meritsCache = { physical: null };
+// ── Библиотека: справочник достоинств (физические/умственные/социальные/сверхъестественные) ──
+let _meritsCache = { physical: null, mental: null, social: null, supernatural: null };
+let _currentMeritCategory = 'physical';
 
-function _libMeritsListHtml() {
-  const merits = _meritsCache.physical || [];
+function _libMeritsListHtml(category) {
+  const merits = _meritsCache[category] || [];
   return `<div class="merits-lib-list">${merits.map(m =>
-    `<button type="button" class="merit-lib-item" data-merit-slug="${escAttr(m.slug)}" data-merit-category="physical"><span>${escHtml(m.name)}</span><span class="merit-lib-points">${'●'.repeat(m.points)}</span></button>`).join('')}</div>`;
+    `<button type="button" class="merit-lib-item" data-merit-slug="${escAttr(m.slug)}" data-merit-category="${category}"><span>${escHtml(m.name)}</span><span class="merit-lib-points">${'●'.repeat(m.points)}</span></button>`).join('')}</div>`;
 }
 
 function _libMeritDetailHtml(m) {
@@ -6846,34 +6860,37 @@ function _libMeritDetailHtml(m) {
   return `<div class="merit-lib-detail"><div class="merit-lib-name">${escHtml(m.name)}</div><div class="merit-lib-cost">${'●'.repeat(m.points)} очков</div><div class="merit-lib-desc">${escHtml(m.description)}</div></div>`;
 }
 
-function _libRenderMeritList() {
+function _libRenderMeritList(category) {
   const body = document.getElementById('lib-merits-body');
-  if (body) body.innerHTML = _libMeritsListHtml();
+  if (body) body.innerHTML = _libMeritsListHtml(category);
 }
 
-function _libRenderMeritDetail(slug) {
+function _libRenderMeritDetail(slug, category) {
   const body = document.getElementById('lib-merits-body');
   if (!body) return;
-  const merit = (_meritsCache.physical || []).find(m => m.slug === slug);
+  const merit = (_meritsCache[category] || []).find(m => m.slug === slug);
   body.innerHTML = `<button type="button" class="merit-lib-back" data-merit-back>← к списку</button>${_libMeritDetailHtml(merit)}`;
 }
 
-async function loadMeritsLibrary() {
+async function loadMeritsLibrary(category) {
   const body = document.getElementById('lib-merits-body');
   if (!body) return;
+
+  _currentMeritCategory = category;
   body.innerHTML = '<div class="loading-state"><div class="spinner"></div>Загрузка...</div>';
+
   try {
-    const merits = await fetch('/api/library/merits/physical').then(r => r.json());
-    _meritsCache.physical = Array.isArray(merits) ? merits : [];
-    _libRenderMeritList();
+    const merits = await fetch(`/api/library/merits/${category}`).then(r => r.json());
+    _meritsCache[category] = Array.isArray(merits) ? merits : [];
+    _libRenderMeritList(category);
   } catch (e) {
     body.innerHTML = `<div class="cdet-empty">Ошибка загрузки: ${escHtml(e.message)}</div>`;
   }
 }
 
 document.getElementById('lib-merits-body')?.addEventListener('click', e => {
-  const back = e.target.closest('[data-merit-back]'); if (back) { _libRenderMeritList(); return; }
-  const item = e.target.closest('[data-merit-slug]'); if (item) { _libRenderMeritDetail(item.dataset.meritSlug); return; }
+  const back = e.target.closest('[data-merit-back]'); if (back) { _libRenderMeritList(_currentMeritCategory); return; }
+  const item = e.target.closest('[data-merit-slug]'); if (item) { _libRenderMeritDetail(item.dataset.meritSlug, item.dataset.meritCategory); return; }
 });
 
 // ── Mortal sheet: «Психические способности» row reference (зеркало v20DisciplineKey/
