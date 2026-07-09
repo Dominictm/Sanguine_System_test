@@ -104,24 +104,6 @@ $g.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQuality
 $g.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::HighQuality
 $g.DrawImage($src, 0, 0, 400, 400)
 
-# Vignette safety net: SDXL occasionally ignores the "solid black background"
-# prompt and leaves the corners white/grey (seed-dependent, seen on several
-# generations even with strong prompting). Rather than chase this with more
-# prompt wording, force it deterministically — a radial gradient brush that's
-# transparent at the center (where the medallion sits) and fades to the
-# site's near-black bg color at the edges, so the card corners are always
-# dark regardless of what the model drew there.
-$path = New-Object System.Drawing.Drawing2D.GraphicsPath
-$path.AddEllipse(-40, -40, 480, 480)
-$brush = New-Object System.Drawing.Drawing2D.PathGradientBrush($path)
-$brush.CenterColor = [System.Drawing.Color]::FromArgb(0, 8, 6, 10)
-$brush.SurroundColors = @([System.Drawing.Color]::FromArgb(255, 8, 6, 10))
-$blend = New-Object System.Drawing.Drawing2D.Blend
-$blend.Positions = [float[]]@(0.0, 0.55, 1.0)
-$blend.Factors = [float[]]@(0.0, 0.0, 1.0)
-$brush.Blend = $blend
-$g.FillRectangle($brush, 0, 0, 400, 400)
-
 $dst.Save("${dstPath.replace(/\\/g, '\\\\')}", [System.Drawing.Imaging.ImageFormat]::Png)
 $g.Dispose(); $dst.Dispose(); $src.Dispose()
 `.trim();
