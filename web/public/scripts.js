@@ -4892,7 +4892,12 @@ async function ensureCharsLoaded() {
   try {
     const data = await fetch('/api/characters').then(r => r.json());
     STATE.characters = Array.isArray(data) ? data : [];
-  } catch {}
+  } catch (e) {
+    // Swallowed on purpose (callers show whatever list they already have),
+    // but log it — a network failure here looks identical to "no characters
+    // exist" otherwise (docs/audit/2026-07-09-project-improvement-plan.md P1.7).
+    console.error('ensureCharsLoaded:', e);
+  }
 }
 // ensureLocsLoaded is defined at the bottom of the file (city-aware version)
 

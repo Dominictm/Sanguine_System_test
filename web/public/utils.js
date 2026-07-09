@@ -172,3 +172,24 @@ function getOrigLabel(id) {
     }
   }).observe(document.body, { childList: true });
 })();
+
+// ── apiFetch: opt-in helper for consistent fetch error handling ────────────
+// docs/audit/2026-07-09-project-improvement-plan.md P1.7 found ~140 raw
+// fetch() calls across the frontend with inconsistent .catch()/.ok handling
+// (some silently swallow errors, some don't check status at all). Rewriting
+// all 140 at once was explicitly out of scope (too much surface for one
+// pass) — this helper exists so NEW code, and code touched incidentally
+// while fixing something else, has a one-line consistent option instead of
+// hand-rolling try/catch + .ok checks again. Throws on network failure or a
+// non-2xx response (with the parsed JSON body's `.error` if present).
+async function apiFetch(url, opts) {
+  let res;
+  try {
+    res = await fetch(url, opts);
+  } catch (e) {
+    throw new Error(`Сеть недоступна: ${e.message}`);
+  }
+  const body = await res.json().catch(() => null);
+  if (!res.ok) throw new Error(body?.error || `Запрос не удался (${res.status})`);
+  return body;
+}

@@ -1373,5 +1373,10 @@ async function ensureLocsLoaded() {
     // Only refresh the location filter when on the locations page (element may be absent)
     const distSel = document.getElementById('loc-filter-district');
     if (distSel) populateDistrictFilter();
-  } catch {}
+  } catch (e) {
+    // Swallowed on purpose (callers show whatever list they already have),
+    // but log it — a network failure here looks identical to "no locations
+    // exist" otherwise (docs/audit/2026-07-09-project-improvement-plan.md P1.7).
+    console.error('ensureLocsLoaded:', e);
+  }
 }
