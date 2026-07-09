@@ -564,6 +564,9 @@ module.exports = function charactersRouter({
       const cardPath = path.join(charsDir(city), char.lineageFolder, char.slug, `${char.slug}.md`);
       let card = await fs.readFile(cardPath, 'utf-8').catch(() => null);
       if (card) {
+        // Normalise CRLF first so the \n-based lookahead below always matches —
+        // cards checked out on Windows (core.autocrlf) are CRLF on disk.
+        card = card.replace(/\r\n/g, '\n');
         const newLine = `- [Образ ${nextNum}](art/${filename})`;
         if (card.includes('⏳ Изображение не предоставлено')) {
           card = card.replace('- ⏳ Изображение не предоставлено', newLine);

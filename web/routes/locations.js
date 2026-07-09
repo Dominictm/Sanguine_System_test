@@ -244,6 +244,9 @@ module.exports = function locationsRouter({ makeGenerationClient, isOA, oaCall }
 
       let card = await fs.readFile(mdPath, 'utf-8').catch(() => null);
       if (card) {
+        // Normalise CRLF first so the \n-based lookahead below always matches —
+        // cards checked out on Windows (core.autocrlf) are CRLF on disk.
+        card = card.replace(/\r\n/g, '\n');
         const newLine = `- [Образ ${nextNum}](art/${filename})`;
         if (/⏳[^\n]*изображение не предоставлено/i.test(card)) {
           card = card.replace(/- ⏳[^\n]*изображение не предоставлено[^\n]*/i, newLine);

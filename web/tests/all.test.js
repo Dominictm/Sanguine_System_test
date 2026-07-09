@@ -2273,6 +2273,40 @@ describe('API — integration', () => {
     });
   });
 
+  // ── Image upload ──────────────────────────────────────────────────────────────
+  describe('Image upload', () => {
+    it('POST /upload-image — неизвестный персонаж → 404', async () => {
+      const { status } = await apiJson(
+        `/api/characters/${encodeURIComponent(CHAR_UNKNOWN)}/upload-image${CITY}`,
+        { method: 'POST', body: JSON.stringify({ base64: 'AAAA', ext: 'jpg' }) });
+      assert.equal(status, 404);
+    });
+
+    it('POST /upload-image — сохраняет файл в art/, дописывает секцию изображений в карточке', async () => {
+      const cardPath = path.join(CITY_ROOT, 'characters', 'vampires', CHAR_GERSON, `${CHAR_GERSON}.md`);
+      const original = await fs.readFile(cardPath, 'utf-8');
+      let createdFile = null;
+      try {
+        const { status, body } = await apiJson(
+          `/api/characters/${CHAR_GERSON}/upload-image${CITY}`,
+          { method: 'POST', body: JSON.stringify({ base64: 'iVBORw0KGgo=', ext: 'jpg' }) });
+        assert.equal(status, 200);
+        assert.equal(body.success, true);
+        assert.match(body.filename, new RegExp(`^${CHAR_GERSON}_\\d+\\.jpg$`));
+
+        createdFile = path.join(CITY_ROOT, 'characters', 'vampires', CHAR_GERSON, 'art', body.filename);
+        const written = await fs.readFile(createdFile);
+        assert.ok(written.length > 0, 'файл изображения должен быть записан на диск');
+
+        const updatedCard = await fs.readFile(cardPath, 'utf-8');
+        assert.match(updatedCard, new RegExp(`art/${body.filename}`), 'карточка должна ссылаться на новый файл');
+      } finally {
+        if (createdFile) await fs.rm(createdFile, { force: true });
+        await fs.writeFile(cardPath, original, 'utf-8');
+      }
+    });
+  });
+
   // ── Locations — write guards ─────────────────────────────────────────────────
   describe('Locations — write guards', () => {
     it('PUT fields — unknown slug → 404', async () => {

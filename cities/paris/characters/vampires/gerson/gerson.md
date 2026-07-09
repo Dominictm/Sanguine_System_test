@@ -72,7 +72,6 @@
 
 - [Образ 1](art/gerson_01.jpg)
 - [Образ 2](art/gerson_02.jpg)
-- [Образ 2](art/gerson_02.jpg)
 
 
 
