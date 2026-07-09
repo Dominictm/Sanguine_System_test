@@ -6524,15 +6524,32 @@ function _v20Normalize(m) {
   e.backgrounds = _v20TrimTrailingEmpty(_v20PadSlots(m.backgrounds, 0, maxDots));
   Object.assign(e.virtues, _v20PickClamped(m.virtues, 5));
   // meritsFlaws: string → array (старый формат листа, ещё не открытый в браузере после этого
-  // обновления). _v20Normalize не может быть async (вызывается синхронно из рендера), поэтому
-  // миграция запускается в фоне: временно оставляем массив пустым, а как только промис
-  // разрешится — заново нормализуем и перерисовываем лист (тот же приём, что уже применяется
-  // для библиотек дисциплин/нумина — см. _v20LoadLibrary).
+  // обновления). _v20Normalize не может быть async (вызывается синхронно из рендера) — сначала
+  // синхронный разбор БЕЗ сверки с библиотекой (имя + очки из «(N)» суффикса, kind:'merit' по
+  // умолчанию), чтобы модель никогда не была видимо пустой: случайное сохранение до того, как
+  // придёт ответ библиотеки, не потеряет данные (просто останется неточным до обогащения).
+  // Обогащение points/kind из справочника — в фоне, и трогает только строки, которые всё ещё
+  // совпадают с исходным синхронным разбором (пользователь их не редактировал/не удалял), чтобы
+  // не затереть правки, сделанные, пока промис ещё не разрешился.
   if (typeof m.meritsFlaws === 'string') {
     const rawString = m.meritsFlaws;
-    e.meritsFlaws = [];
-    _v20MigrateMeritsFlawsString(rawString).then(arr => {
-      if (_v20Model === e) { _v20Model.meritsFlaws = _v20TrimTrailingEmpty(_v20PadMeritsFlaws(arr, 0)); _v20RenderSheet(document.getElementById('cdet-sheet-panel'), _v20Ctx?.name); }
+    const basic = String(rawString || '').split('\n').map(s => s.trim()).filter(Boolean).map(line => {
+      const nm = _v20ExtractMeritFlawName(line);
+      const pm = line.match(/\((\d+)/);
+      return { name: nm, points: pm ? parseInt(pm[1], 10) : 0, kind: 'merit' };
+    });
+    e.meritsFlaws = _v20TrimTrailingEmpty(_v20PadMeritsFlaws(basic, 0));
+    _v20MigrateMeritsFlawsString(rawString).then(enriched => {
+      if (_v20Model !== e) return;
+      const current = _v20Model.meritsFlaws;
+      enriched.forEach((en, i) => {
+        const cur = current[i];
+        const orig = basic[i];
+        if (cur && orig && cur.name === orig.name && cur.points === orig.points && cur.kind === orig.kind) {
+          cur.name = en.name; cur.points = en.points; cur.kind = en.kind;
+        }
+      });
+      _v20RenderSheet(document.getElementById('cdet-sheet-panel'), _v20Ctx?.name);
     });
   } else {
     e.meritsFlaws = _v20TrimTrailingEmpty(_v20PadMeritsFlaws(m.meritsFlaws, 0));
@@ -7277,15 +7294,29 @@ async function _v20RunAction(action) {
 async function _v20LoadLibrary(kind) {
   if (_v20LibraryCache[kind]) return _v20LibraryCache[kind];
   try {
-    const endpoint = kind === 'discipline' ? '/api/library/disciplines' : '/api/library/psychics';
-    const data = await fetch(endpoint).then(r => r.json());
-    _v20LibraryCache[kind] = Array.isArray(data) ? data : [];
+    if (kind === 'meritflaw') {
+      // Достоинства/недостатки живут в двух раздельных эндпоинтах — сливаем в один список,
+      // помечая каждую запись _kind (сырые JSON-записи library/{merits,flaws} не несут этот
+      // дискриминатор сами по себе, в отличие от серверного индекса foundry-merits.js).
+      const [merits, flaws] = await Promise.all([
+        fetch('/api/library/merits').then(r => r.json()),
+        fetch('/api/library/flaws').then(r => r.json()),
+      ]);
+      const tag = (list, k) => (Array.isArray(list) ? list : []).map(x => ({ ...x, _kind: k }));
+      _v20LibraryCache[kind] = [...tag(merits, 'merit'), ...tag(flaws, 'flaw')];
+    } else {
+      const endpoint = kind === 'discipline' ? '/api/library/disciplines' : '/api/library/psychics';
+      const data = await fetch(endpoint).then(r => r.json());
+      _v20LibraryCache[kind] = Array.isArray(data) ? data : [];
+    }
   } catch { _v20LibraryCache[kind] = []; }
   return _v20LibraryCache[kind];
 }
 
 function _v20LibPickerKindToSection(kind) {
-  return kind === 'discipline' ? 'disciplines' : 'psychicPowers';
+  if (kind === 'discipline') return 'disciplines';
+  if (kind === 'meritflaw') return 'meritsFlaws';
+  return 'psychicPowers';
 }
 
 async function _v20ToggleLibPicker(kind) {
@@ -7308,7 +7339,9 @@ function _v20RenderV20LibList(kind, lib, pickerEl) {
   if (!listEl) return;
   listEl.innerHTML = (lib || []).map(item => {
     const name = item.name || item.ru || '';
-    const hint = (item.levels || []).length ? `${(item.levels || []).length} уровней` : '';
+    const hint = kind === 'meritflaw'
+      ? `${item._kind === 'flaw' ? 'Недостаток' : 'Достоинство'} · ${item.category || ''} · ${item.points ?? 0} очк.`
+      : ((item.levels || []).length ? `${(item.levels || []).length} уровней` : '');
     return `<button type="button" class="v20-lib-item" data-v20-lib-item="${escAttr(name)}" data-v20-lib-kind="${kind}"><span>${escHtml(name)}</span><span class="v20-lib-hint">${escHtml(hint)}</span></button>`;
   }).join('');
 }
@@ -7317,6 +7350,21 @@ function _v20AddLibraryItem(kind, name) {
   const section = _v20LibPickerKindToSection(kind);
   const m = _v20Model;
   if (!m[section]) return;
+
+  if (kind === 'meritflaw') {
+    // Достоинства/недостатки хранят points+kind из библиотеки, не дот-значение «1», в отличие
+    // от дисциплин/нумина ниже — берём их из закешированного списка пикера по имени.
+    const lib = _v20LibraryCache.meritflaw || [];
+    const found = lib.find(x => (x.name || '') === name);
+    const points = found ? Number(found.points) || 0 : 0;
+    const mfKind = found?._kind === 'flaw' ? 'flaw' : 'merit';
+    const emptySlot = m.meritsFlaws.find(x => !String(x?.name || '').trim());
+    if (emptySlot) { emptySlot.name = name; emptySlot.points = points; emptySlot.kind = mfKind; }
+    else m.meritsFlaws.push({ name, points, kind: mfKind });
+    _v20MarkDirty();
+    _v20RenderSheet(document.getElementById('cdet-sheet-panel'), _v20Ctx.name);
+    return;
+  }
 
   // Заполнить первую уже существующую пустую строку (оставшуюся от ИИ-листа или от «+
   // Добавить»), а не всегда плодить новую — иначе клик по «+ Из справочника» добавлял 7-ю
@@ -7498,12 +7546,29 @@ function _v20RenderSheet(panel, charName) {
   const healthRows = V20_HEALTH.map(([k, ru, pen]) =>
     `<label class="v20-health-row"><input type="checkbox" class="v20-box" data-bpath="health.${k}"${m.health[k] ? ' checked' : ''}><span class="v20-health-name">${escHtml(ru)}</span><span class="v20-health-pen">${escHtml(pen)}</span></label>`).join('');
 
+  const mfLibBtn = `<button type="button" class="v20-mini-action v20-lib-add-btn" data-v20-lib-kind="meritflaw" title="Добавить из справочника достоинств/недостатков">+ Из справочника</button>`;
+  const mfRows = m.meritsFlaws.map((mf, i) => {
+    const rm = `<button type="button" class="v20-row-remove-btn" data-v20-remove="meritsFlaws" data-v20-remove-idx="${i}" title="Удалить строку">×</button>`;
+    return `<div class="v20-row v20-named v20-mf-row">${rm}
+      <input class="v20-line-input" data-tpath="meritsFlaws.${i}.name" value="${escAttr(mf.name)}" placeholder="Название">
+      <select class="v20-mf-kind" data-tpath="meritsFlaws.${i}.kind">
+        <option value="merit"${mf.kind !== 'flaw' ? ' selected' : ''}>Достоинство</option>
+        <option value="flaw"${mf.kind === 'flaw' ? ' selected' : ''}>Недостаток</option>
+      </select>
+      <input type="number" min="0" class="v20-mini-input" data-tpath="meritsFlaws.${i}.points" value="${escAttr(mf.points)}">
+    </div>`;
+  }).join('');
+
   const bottom = `
     <div class="v20-band">Преимущества и состояние</div>
     <div class="v20-grid3 v20-bottom">
       <div class="v20-col">
-        <div class="v20-col-title">Достоинства и недостатки</div>
-        <textarea class="v20-textarea" data-tpath="meritsFlaws" rows="6" placeholder="По строке на пункт…">${escHtml(m.meritsFlaws)}</textarea>
+        <div class="v20-col-title">Достоинства и недостатки${mfLibBtn}${_v20AddRowBtn('meritsFlaws')}</div>
+        <div class="v20-lib-picker" data-v20-lib-kind="meritflaw" hidden>
+          <input type="text" class="v20-lib-search" placeholder="Поиск…" data-v20-lib-kind="meritflaw">
+          <div class="v20-lib-list" data-v20-lib-kind="meritflaw"></div>
+        </div>
+        ${mfRows}
         <div class="v20-col-title" style="margin-top:12px">Изъян${clanInfo && clanInfo.weakness ? `<button type="button" class="v20-mini-action" data-v20-action="insert-clan-weakness">+ слабость клана</button>` : ''}</div>
         <input class="v20-field-input" data-tpath="flaw" value="${escAttr(m.flaw)}">
       </div>
@@ -7836,7 +7901,7 @@ async function _v20Regen(btn) {
 }
 
 let _v20Model = null, _v20Ctx = null, _v20DirtyFlag = false;
-let _v20LibraryCache = { discipline: null, numina: null };
+let _v20LibraryCache = { discipline: null, numina: null, meritflaw: null };
 async function _loadCharSheet(charName) {
   const panel = document.getElementById('cdet-sheet-panel');
   if (!panel) return;

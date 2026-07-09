@@ -976,6 +976,12 @@ describe('Parsers — unit', () => {
       const { sheetData } = mapFoundryActorToSheetData(ACTOR, EXISTING_SHEET);
       assert.equal(sheetData.history, 'Родился в Тулузе, обращён в 1920-х.');
     });
+    it('импорт без merit/flaw Item и без notes сохраняет уже существующий meritsFlaws (не затирает в [])', () => {
+      const actorNoMF = { ...ACTOR, system: { ...ACTOR.system, notes: '' }, items: ACTOR.items.filter(i => i.system?.type !== 'wod.types.merit') };
+      const existingWithString = { ...EXISTING_SHEET, meritsFlaws: 'Старая запись (1 очко)' };
+      const { sheetData } = mapFoundryActorToSheetData(actorNoMF, existingWithString);
+      assert.equal(sheetData.meritsFlaws, 'Старая запись (1 очко)', 'строковый формат не должен тихо теряться при пустом импорте');
+    });
   });
 
   describe('foundry-merits', () => {

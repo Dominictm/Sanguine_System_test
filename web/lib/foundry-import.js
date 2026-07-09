@@ -119,7 +119,11 @@ function mapFoundryActorToSheetData(actor, existingSheetData) {
       selfcontrol: Number(sys.advantages?.virtues?.selfcontrol?.permanent) || 0,
       courage: Number(sys.advantages?.virtues?.courage?.permanent) || 0,
     },
-    meritsFlaws: meritsFlawsOut.length ? meritsFlawsOut : (Array.isArray(base.meritsFlaws) ? base.meritsFlaws : []),
+    // Если импорт не дал ни одной записи (нет Feature-Item'ов merit/flaw и пустые notes) —
+    // сохраняем то, что уже было на листе, каким бы оно ни было (массив нового формата ИЛИ ещё
+    // не смигрированная строка старого формата), а не заменяем на []. base.meritsFlaws ?? []
+    // (не Array.isArray-проверка) — иначе строковый формат тихо терялся при повторном импорте.
+    meritsFlaws: meritsFlawsOut.length ? meritsFlawsOut : (base.meritsFlaws ?? []),
     humanity: Number(sys.advantages?.path?.permanent) || 0,
     path: sys.advantages?.path?.label === 'wod.advantages.path.humanity' ? 'Человечность' : (base.path || 'Человечность'),
     willpower: { permanent: Number(sys.advantages?.willpower?.permanent) || 0, temp: willpowerTemp },
