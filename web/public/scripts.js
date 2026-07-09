@@ -7634,11 +7634,11 @@ function _v20RenderSheet(panel, charName) {
     `<div class="v20-combat-row">${V20_COMBAT_COLS.map(k => `<input class="v20-line-input" data-tpath="combat.${i}.${k}" value="${escAttr(c[k])}">`).join('')}</div>`).join('');
 
   const page2 = `
-    <div class="v20-band">Специализации · параметры${isVamp ? ' · ритуалы' : ''}</div>
+    <div class="v20-band">Специализации · параметры${(isVamp || isMortal) ? ' · ритуалы' : ''}</div>
     <div class="v20-grid3">
       <div class="v20-col"><div class="v20-col-title">Специализации</div>${specRows}</div>
       <div class="v20-col"><div class="v20-col-title">Другие параметры${_v20AddRowBtn('otherTraits')}</div>${otRows}</div>
-      ${isVamp ? `<div class="v20-col"><div class="v20-col-title">Ритуалы${_v20AddRowBtn('rituals')}</div>${ritRows}</div>` : '<div class="v20-col"></div>'}
+      ${(isVamp || isMortal) ? `<div class="v20-col"><div class="v20-col-title">Ритуалы${_v20AddRowBtn('rituals')}</div>${ritRows}</div>` : '<div class="v20-col"></div>'}
     </div>
     <div class="v20-band">История и описание</div>
     <div class="v20-grid3">
