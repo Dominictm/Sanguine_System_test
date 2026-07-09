@@ -10044,7 +10044,8 @@ tr.rumor-told:hover .rumor-cb-cell {
 /* Унифицировано со стилем .cdet-tab / #page-library .tab-btn (тот же
    референс — вкладки модального окна персонажа), см. запрос 2026-07-09. */
 .merits-subtab-bar,
-.flaws-subtab-bar {
+.flaws-subtab-bar,
+.backgrounds-subtab-bar {
   display: flex;
   background: color-mix(in srgb, var(--accent) 10%, var(--bg3));
   border-bottom: 1px solid var(--border);
@@ -10052,7 +10053,8 @@ tr.rumor-told:hover .rumor-cb-cell {
 }
 
 .merits-subtab-btn,
-.flaws-subtab-btn {
+.flaws-subtab-btn,
+.backgrounds-subtab-btn {
   flex: 1;
   padding: 12px 6px;
   background: none;
@@ -10069,13 +10071,15 @@ tr.rumor-told:hover .rumor-cb-cell {
 }
 
 .merits-subtab-btn:hover,
-.flaws-subtab-btn:hover {
+.flaws-subtab-btn:hover,
+.backgrounds-subtab-btn:hover {
   color: var(--text2);
   background: color-mix(in srgb, var(--accent) 5%, transparent);
 }
 
 .merits-subtab-btn.active,
-.flaws-subtab-btn.active {
+.flaws-subtab-btn.active,
+.backgrounds-subtab-btn.active {
   color: var(--accent);
   border-bottom-color: var(--accent);
   background: linear-gradient(180deg,

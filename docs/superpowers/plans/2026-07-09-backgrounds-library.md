@@ -54,31 +54,31 @@
 
 **Файл:** `web/public/v20-sheet.js` (правка)
 
-- [ ] `_backgroundsCache = { general: null, vampire: null, ghoul: null, mage: null, changeling: null }`
-- [ ] `_backgroundBySlug(category, slug)`
-- [ ] `_libBackgroundDetailHtml(b)` — по образцу `_libDisciplineDetailHtml` (заголовок + `_libPowerHtml`-подобный рендер уровней), НЕ по образцу `_libMeritDetailHtml`
-- [ ] `_libBackgroundCardsHtml(category)` — карточка: имя + индикатор «есть шкала уровней» (не фиксированные точки, как у достоинств)
-- [ ] `_libRenderBackgroundList(category)`
-- [ ] `_v20RenderBackgroundDetail(slug, category)` → рендер в `#v20-disc-modal-body`, кнопка `data-modal-close`
-- [ ] `_v20OpenBackgroundModal(slug, category)` → `_v20EnsureLibModal().classList.add('open')` + рендер
-- [ ] `loadBackgroundsLibrary(category)` — fetch + кэш + рендер
-- [ ] Клик-делегирование на `#lib-backgrounds-body` (по образцу merits/flaws)
+- [x] `_backgroundsCache = { general: null, vampire: null, ghoul: null, mage: null, changeling: null }`
+- [x] `_backgroundBySlug(category, slug)`
+- [x] `_libBackgroundDetailHtml(b)` — по образцу `_libDisciplineDetailHtml` (заголовок + `_libPowerHtml`-подобный рендер уровней), НЕ по образцу `_libMeritDetailHtml`
+- [x] `_libBackgroundCardsHtml(category)` — карточка: только имя (без meta-строки — нет естественного короткого значения, в отличие от clan/category у дисциплин/психики)
+- [x] `_libRenderBackgroundList(category)`
+- [x] `_v20RenderBackgroundDetail(slug, category)` → рендер в `#v20-disc-modal-body`, кнопка `data-modal-close`
+- [x] `_v20OpenBackgroundModal(slug, category)` → `_v20EnsureLibModal().classList.add('open')` + рендер
+- [x] `loadBackgroundsLibrary(category)` — fetch + кэш + рендер
+- [x] Клик-делегирование на `#lib-backgrounds-body` (по образцу merits/flaws)
 
 ### Задача 5 — HTML: пятая вкладка + суб-табы
 
 **Файл:** `web/public/index.html` (правка)
 
-- [ ] Кнопка `data-tab="lib-backgrounds"` в `#page-library .tab-bar`
-- [ ] `<div class="tab-panel" id="tab-lib-backgrounds">` с суб-таб-баром
+- [x] Кнопка `data-tab="lib-backgrounds"` в `#page-library .tab-bar`
+- [x] `<div class="tab-panel" id="tab-lib-backgrounds">` с суб-таб-баром
       (`.backgrounds-subtab-bar`/`-btn`, `data-bg-cat="general|vampire|ghoul|mage|changeling"`)
       и `<div class="lib-panel" id="lib-backgrounds-body">`
 
 ### Задача 6 — CSS + JS-биндинг суб-табов
 
-- [ ] `styles.css`: расширить существующий comma-selector
+- [x] `styles.css`: расширить существующий comma-selector
       `.merits-subtab-bar, .flaws-subtab-bar` → добавить `.backgrounds-subtab-bar`
       (не дублировать блок)
-- [ ] `scripts.js`: делегированный обработчик `.backgrounds-subtab-btn` (по
+- [x] `scripts.js`: делегированный обработчик `.backgrounds-subtab-btn` (по
       образцу merits/flaws, строки ~613-637) + вызов `loadBackgroundsLibrary('general')`
       при первом открытии вкладки `lib-backgrounds`
 

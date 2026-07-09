@@ -608,6 +608,7 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     if (tab === 'lib-psychics')    loadPsychicsLibrary();
     if (tab === 'lib-merits')      loadMeritsLibrary('physical');
     if (tab === 'lib-flaws')       loadFlawsLibrary('физические');
+    if (tab === 'lib-backgrounds') loadBackgroundsLibrary('general');
   });
 
   // Merits subtabs (physical/mental/social/supernatural)
@@ -634,6 +635,19 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     bar.querySelectorAll('.flaws-subtab-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
     loadFlawsLibrary(cat);
+  });
+
+  // Backgrounds subtabs (general/vampire/ghoul/mage/changeling)
+  document.addEventListener('click', e => {
+    const btn = e.target.closest('.backgrounds-subtab-btn');
+    if (!btn) return;
+    const cat = btn.dataset.bgCat;
+    if (!cat) return;
+
+    const bar = btn.closest('.backgrounds-subtab-bar');
+    bar.querySelectorAll('.backgrounds-subtab-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    loadBackgroundsLibrary(cat);
   });
 });
 

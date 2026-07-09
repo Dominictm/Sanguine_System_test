@@ -997,6 +997,80 @@ document.getElementById('lib-flaws-body')?.addEventListener('click', e => {
   if (card) _v20OpenFlawModal(card.dataset.flawSlug, card.dataset.flawCategory);
 });
 
+// ── Библиотека: справочник фактов биографии (общие/вампиры/гули/маги/подменыши) ──
+// В отличие от достоинств/недостатков, у Дополнений нет фиксированной
+// стоимости — это шкала 1–5, где важно, что даёт каждый уровень. Поэтому
+// карточка/детали рендерятся по образцу дисциплин (_libPowerHtml/_libLevelDots),
+// а не достоинств (_libMeritDetailHtml).
+let _backgroundsCache = { general: null, vampire: null, ghoul: null, mage: null, changeling: null };
+
+function _backgroundBySlug(category, slug) {
+  return (_backgroundsCache[category] || []).find(b => b.slug === slug) || null;
+}
+
+// Разбирает multiline "system" ("1: текст\n2: текст\n…") в HTML-блоки уровней,
+// тем же визуальным языком, что и уровни дисциплин/психики.
+function _libBackgroundLevelsHtml(system) {
+  const levels = String(system || '').split('\n').map(line => {
+    const m = line.match(/^(\d+):\s*(.*)$/);
+    return m ? { n: parseInt(m[1], 10), text: m[2] } : null;
+  }).filter(Boolean);
+  return levels.map(l => `<div class="lib-power">
+    <div class="lib-power-head">${_libLevelDots(l.n)}</div>
+    <p class="lib-power-text">${escHtml(l.text)}</p>
+  </div>`).join('');
+}
+
+function _libBackgroundDetailHtml(b) {
+  if (!b) return '<div class="cdet-empty">Факт биографии не найден в справочнике.</div>';
+  const note = b.description ? `<div class="v20-disc-note">${escHtml(b.description)}</div>` : '';
+  return `<div class="v20-disc-detail-head"><h3>${escHtml(b.name)}</h3></div>${note}${_libBackgroundLevelsHtml(b.system)}`;
+}
+
+function _libBackgroundCardsHtml(category) {
+  const items = _backgroundsCache[category] || [];
+  return `<div class="lib-cards">${items.map(b =>
+    `<button type="button" class="lib-card" data-bg-slug="${escAttr(b.slug)}" data-bg-category="${category}">
+      <div class="lib-card-name">${escHtml(b.name)}</div>
+    </button>`).join('')}</div>`;
+}
+
+function _libRenderBackgroundList(category) {
+  const body = document.getElementById('lib-backgrounds-body');
+  if (body) body.innerHTML = _libBackgroundCardsHtml(category);
+}
+
+function _v20RenderBackgroundDetail(slug, category) {
+  const body = document.getElementById('v20-disc-modal-body');
+  if (!body) return;
+  body.innerHTML = `<button type="button" class="v20-disc-back" data-modal-close>← закрыть</button>${_libBackgroundDetailHtml(_backgroundBySlug(category, slug))}`;
+}
+
+async function _v20OpenBackgroundModal(slug, category) {
+  _v20EnsureLibModal().classList.add('open');
+  _v20RenderBackgroundDetail(slug, category);
+}
+
+async function loadBackgroundsLibrary(category) {
+  const body = document.getElementById('lib-backgrounds-body');
+  if (!body) return;
+
+  body.innerHTML = '<div class="loading-state"><div class="spinner"></div>Загрузка...</div>';
+
+  try {
+    const items = await fetch(`/api/library/backgrounds/${category}`).then(r => r.json());
+    _backgroundsCache[category] = Array.isArray(items) ? items : [];
+    _libRenderBackgroundList(category);
+  } catch (e) {
+    body.innerHTML = `<div class="cdet-empty">Ошибка загрузки: ${escHtml(e.message)}</div>`;
+  }
+}
+
+document.getElementById('lib-backgrounds-body')?.addEventListener('click', e => {
+  const card = e.target.closest('[data-bg-slug]');
+  if (card) _v20OpenBackgroundModal(card.dataset.bgSlug, card.dataset.bgCategory);
+});
+
 // ── Mortal sheet: «Психические способности» row reference (зеркало v20DisciplineKey/
 // _v20OpenDisciplineModal выше, но источник — _psychicsCache/ensurePsychics(), не дисциплины).
 // Имя силы из листа («Психометрия», «Биоконтроль») → slug в справочнике психических способностей.
