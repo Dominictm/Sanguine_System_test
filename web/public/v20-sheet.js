@@ -746,11 +746,15 @@ function _libDisciplineListHtml() {
 // клик открывает ту же модалку, что и ссылка на дисциплину в листе персонажа
 // (см. _v20OpenDisciplineModal), а не подменяет содержимое страницы.
 function _libDisciplineCardsHtml() {
-  return `<div class="lib-cards">${(_disciplinesCache || []).map(d =>
-    `<button type="button" class="lib-card" data-disc-slug="${escAttr(d.slug)}">
-      <div class="lib-card-name">${escHtml(d.name)}</div>
-      <div class="lib-card-meta">${escHtml(d.clans || '')}</div>
-    </button>`).join('')}</div>`;
+  return `<div class="lib-cards">${(_disciplinesCache || []).map(d => {
+    const art = d.hasArt
+      ? `<img class="lib-card-art" src="/img/system/library/disciplines/${escAttr(d.slug)}.png" alt="">`
+      : '';
+    const inner = `<div class="lib-card-name">${escHtml(d.name)}</div><div class="lib-card-meta">${escHtml(d.clans || '')}</div>`;
+    return `<button type="button" class="lib-card${d.hasArt ? ' has-art' : ''}" data-disc-slug="${escAttr(d.slug)}">
+      ${art}${d.hasArt ? `<div class="lib-card-overlay">${inner}</div>` : inner}
+    </button>`;
+  }).join('')}</div>`;
 }
 
 // Имя дисциплины из листа («Прорицание», «Auspex», «Прорицание (Auspex)») → slug.
@@ -863,11 +867,15 @@ function _libPsyListHtml() {
 // Библиотека → вкладка «Психика»: карточки (как у персонажей), детали — в той же
 // общей модалке, что и дисциплины (см. _v20OpenPsychicModal ниже).
 function _libPsychicCardsHtml() {
-  return `<div class="lib-cards">${(_psychicsCache || []).map(p =>
-    `<button type="button" class="lib-card" data-psy-slug="${escAttr(p.slug)}">
-      <div class="lib-card-name">${escHtml(p.name)}</div>
-      <div class="lib-card-meta">${escHtml(p.category || '')}</div>
-    </button>`).join('')}</div>`;
+  return `<div class="lib-cards">${(_psychicsCache || []).map(p => {
+    const art = p.hasArt
+      ? `<img class="lib-card-art" src="/img/system/library/psychics/${escAttr(p.slug)}.png" alt="">`
+      : '';
+    const inner = `<div class="lib-card-name">${escHtml(p.name)}</div><div class="lib-card-meta">${escHtml(p.category || '')}</div>`;
+    return `<button type="button" class="lib-card${p.hasArt ? ' has-art' : ''}" data-psy-slug="${escAttr(p.slug)}">
+      ${art}${p.hasArt ? `<div class="lib-card-overlay">${inner}</div>` : inner}
+    </button>`;
+  }).join('')}</div>`;
 }
 function _libRenderPsyList() {
   const body = document.getElementById('lib-psychics-body');
