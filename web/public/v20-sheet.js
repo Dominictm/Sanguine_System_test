@@ -746,10 +746,10 @@ function _libDisciplineListHtml() {
 // клик открывает ту же модалку, что и ссылка на дисциплину в листе персонажа
 // (см. _v20OpenDisciplineModal), а не подменяет содержимое страницы.
 function _libDisciplineCardsHtml() {
-  return `<div class="lib-disc-cards">${(_disciplinesCache || []).map(d =>
-    `<button type="button" class="lib-disc-card" data-disc-slug="${escAttr(d.slug)}">
-      <div class="lib-disc-card-name">${escHtml(d.name)}</div>
-      <div class="lib-disc-card-clans">${escHtml(d.clans || '')}</div>
+  return `<div class="lib-cards">${(_disciplinesCache || []).map(d =>
+    `<button type="button" class="lib-card" data-disc-slug="${escAttr(d.slug)}">
+      <div class="lib-card-name">${escHtml(d.name)}</div>
+      <div class="lib-card-meta">${escHtml(d.clans || '')}</div>
     </button>`).join('')}</div>`;
 }
 
@@ -776,26 +776,42 @@ function _v20RenderDisciplineDetail(slug) {
   body.innerHTML = `<button type="button" class="v20-disc-back" data-disc-back>← к списку</button>${_libDisciplineDetailHtml(_discBySlug(slug))}`;
 }
 function _v20CloseDisciplineModal() { document.getElementById('v20-disc-modal-backdrop')?.classList.remove('open'); }
-async function _v20OpenDisciplineModal(name, preresolvedSlug) {
+
+// Single shared modal shell for all 4 library sections (disciplines/psychics/
+// merits/flaws) — created once, on whichever section is opened first. All
+// four click-delegate types are wired here (not per-section) so opening one
+// section before another never leaves a type's clicks unhandled inside the
+// modal (a real bug this fixed: the discipline-only and psychic-only openers
+// used to each attach their own partial delegate on first creation only).
+function _v20EnsureLibModal() {
   let modal = document.getElementById('v20-disc-modal-backdrop');
-  if (!modal) {
-    modal = document.createElement('div');
-    modal.id = 'v20-disc-modal-backdrop';
-    modal.className = 'v20-disc-modal-backdrop';
-    modal.innerHTML = `<div class="v20-disc-modal">
-      <button type="button" class="v20-disc-modal-close" id="v20-disc-modal-close" aria-label="Закрыть справочник">✕</button>
-      <div id="v20-disc-modal-body"></div>
-    </div>`;
-    document.body.appendChild(modal);
-    modal.addEventListener('click', e => { if (e.target === modal) _v20CloseDisciplineModal(); });
-    modal.querySelector('#v20-disc-modal-close').addEventListener('click', _v20CloseDisciplineModal);
-    _bindLibraryClicks(modal, {
-      itemAttr: 'data-disc-slug', backAttr: 'data-disc-back',
-      onItem: ds => _v20RenderDisciplineDetail(ds.discSlug), onBack: _v20RenderDisciplineLibrary,
-    });
-    document.addEventListener('keydown', e => { if (e.key === 'Escape') _v20CloseDisciplineModal(); });
-  }
-  modal.classList.add('open');
+  if (modal) return modal;
+  modal = document.createElement('div');
+  modal.id = 'v20-disc-modal-backdrop';
+  modal.className = 'v20-disc-modal-backdrop';
+  modal.innerHTML = `<div class="v20-disc-modal">
+    <button type="button" class="v20-disc-modal-close" id="v20-disc-modal-close" aria-label="Закрыть справочник">✕</button>
+    <div id="v20-disc-modal-body"></div>
+  </div>`;
+  document.body.appendChild(modal);
+  modal.addEventListener('click', e => { if (e.target === modal) _v20CloseDisciplineModal(); });
+  modal.querySelector('#v20-disc-modal-close').addEventListener('click', _v20CloseDisciplineModal);
+  modal.addEventListener('click', e => {
+    // data-modal-close: merits/flaws detail has no in-modal list to return to
+    // (only disciplines/psychics do, since those are also opened by name from
+    // a character sheet reference) — its "back" just closes the modal.
+    const close = e.target.closest('[data-modal-close]'); if (close) { _v20CloseDisciplineModal(); return; }
+    const back = e.target.closest('[data-disc-back]'); if (back) { _v20RenderDisciplineLibrary(); return; }
+    const item = e.target.closest('[data-disc-slug]'); if (item) { _v20RenderDisciplineDetail(item.dataset.discSlug); return; }
+    const pback = e.target.closest('[data-psy-back]'); if (pback) { _v20RenderPsychicLibrary(); return; }
+    const pitem = e.target.closest('[data-psy-slug]'); if (pitem) { _v20RenderPsychicDetail(pitem.dataset.psySlug); return; }
+  });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') _v20CloseDisciplineModal(); });
+  return modal;
+}
+
+async function _v20OpenDisciplineModal(name, preresolvedSlug) {
+  _v20EnsureLibModal().classList.add('open');
   const body = document.getElementById('v20-disc-modal-body');
   if (body) body.innerHTML = '<div class="loading-state"><div class="spinner"></div>Загрузка справочника…</div>';
   await ensureDisciplines();
@@ -844,13 +860,18 @@ function _libPsyListHtml() {
   return `<div class="v20-disc-list">${(_psychicsCache || []).map(p =>
     `<button type="button" class="v20-disc-list-item" data-psy-slug="${escAttr(p.slug)}"><span>${escHtml(p.name)}</span><span class="v20-disc-list-clans">${escHtml(p.category || '')}</span></button>`).join('')}</div>`;
 }
+// Библиотека → вкладка «Психика»: карточки (как у персонажей), детали — в той же
+// общей модалке, что и дисциплины (см. _v20OpenPsychicModal ниже).
+function _libPsychicCardsHtml() {
+  return `<div class="lib-cards">${(_psychicsCache || []).map(p =>
+    `<button type="button" class="lib-card" data-psy-slug="${escAttr(p.slug)}">
+      <div class="lib-card-name">${escHtml(p.name)}</div>
+      <div class="lib-card-meta">${escHtml(p.category || '')}</div>
+    </button>`).join('')}</div>`;
+}
 function _libRenderPsyList() {
   const body = document.getElementById('lib-psychics-body');
-  if (body) body.innerHTML = _libPsyListHtml();
-}
-function _libRenderPsyDetail(slug) {
-  const body = document.getElementById('lib-psychics-body');
-  if (body) body.innerHTML = `<button type="button" class="v20-disc-back" data-psy-back>← к списку</button>${_libPsyDetailHtml(_psyBySlug(slug))}`;
+  if (body) body.innerHTML = _libPsychicCardsHtml();
 }
 async function loadPsychicsLibrary() {
   const body = document.getElementById('lib-psychics-body');
@@ -858,43 +879,52 @@ async function loadPsychicsLibrary() {
   await ensurePsychics();
   _libRenderPsyList();
 }
-_bindLibraryClicks(document.getElementById('lib-psychics-body'), {
-  itemAttr: 'data-psy-slug', backAttr: 'data-psy-back',
-  onItem: ds => _libRenderPsyDetail(ds.psySlug), onBack: _libRenderPsyList,
+document.getElementById('lib-psychics-body')?.addEventListener('click', e => {
+  const card = e.target.closest('[data-psy-slug]');
+  if (card) _v20OpenPsychicModal(null, card.dataset.psySlug);
 });
 
 // ── Библиотека: справочник достоинств (физические/умственные/социальные/сверхъестественные) ──
 let _meritsCache = { physical: null, mental: null, social: null, supernatural: null };
-let _currentMeritCategory = 'physical';
-
-function _libMeritsListHtml(category) {
-  const merits = _meritsCache[category] || [];
-  return `<div class="merits-lib-list">${merits.map(m =>
-    `<button type="button" class="merit-lib-item" data-merit-slug="${escAttr(m.slug)}" data-merit-category="${category}"><span>${escHtml(m.name)}</span><span class="merit-lib-points">${'●'.repeat(m.points)}</span></button>`).join('')}</div>`;
-}
 
 function _libMeritDetailHtml(m) {
   if (!m) return '<div class="cdet-empty">Достоинство не найдено в справочнике.</div>';
   return `<div class="merit-lib-detail"><div class="merit-lib-name">${escHtml(m.name)}</div><div class="merit-lib-cost">${'●'.repeat(m.points)} очков</div><div class="merit-lib-desc">${escHtml(m.description)}</div></div>`;
 }
 
-function _libRenderMeritList(category) {
-  const body = document.getElementById('lib-merits-body');
-  if (body) body.innerHTML = _libMeritsListHtml(category);
+// Библиотека → вкладка «Достоинства»: карточки (как у персонажей), детали — в
+// общей модалке (см. _v20EnsureLibModal). Категория идёт с карточки, т.к. кэш
+// достоинств ключуется по категории, а не общим списком, как у дисциплин.
+function _libMeritCardsHtml(category) {
+  const merits = _meritsCache[category] || [];
+  return `<div class="lib-cards">${merits.map(m =>
+    `<button type="button" class="lib-card" data-merit-slug="${escAttr(m.slug)}" data-merit-category="${category}">
+      <div class="lib-card-name">${escHtml(m.name)}</div>
+      <div class="lib-card-meta">${'●'.repeat(m.points)}</div>
+    </button>`).join('')}</div>`;
 }
 
-function _libRenderMeritDetail(slug, category) {
+function _libRenderMeritList(category) {
   const body = document.getElementById('lib-merits-body');
+  if (body) body.innerHTML = _libMeritCardsHtml(category);
+}
+
+function _v20RenderMeritDetail(slug, category) {
+  const body = document.getElementById('v20-disc-modal-body');
   if (!body) return;
   const merit = (_meritsCache[category] || []).find(m => m.slug === slug);
-  body.innerHTML = `<button type="button" class="merit-lib-back" data-merit-back>← к списку</button>${_libMeritDetailHtml(merit)}`;
+  body.innerHTML = `<button type="button" class="v20-disc-back" data-modal-close>← закрыть</button>${_libMeritDetailHtml(merit)}`;
+}
+
+async function _v20OpenMeritModal(slug, category) {
+  _v20EnsureLibModal().classList.add('open');
+  _v20RenderMeritDetail(slug, category);
 }
 
 async function loadMeritsLibrary(category) {
   const body = document.getElementById('lib-merits-body');
   if (!body) return;
 
-  _currentMeritCategory = category;
   body.innerHTML = '<div class="loading-state"><div class="spinner"></div>Загрузка...</div>';
 
   try {
@@ -906,43 +936,51 @@ async function loadMeritsLibrary(category) {
   }
 }
 
-_bindLibraryClicks(document.getElementById('lib-merits-body'), {
-  itemAttr: 'data-merit-slug', backAttr: 'data-merit-back',
-  onItem: ds => _libRenderMeritDetail(ds.meritSlug, ds.meritCategory), onBack: () => _libRenderMeritList(_currentMeritCategory),
+document.getElementById('lib-merits-body')?.addEventListener('click', e => {
+  const card = e.target.closest('[data-merit-slug]');
+  if (card) _v20OpenMeritModal(card.dataset.meritSlug, card.dataset.meritCategory);
 });
 
 // ── Библиотека: справочник недостатков (физические/умственные/социальные/сверхъестественные) ──
 let _flawsCache = { 'физические': null, 'умственные': null, 'социальные': null, 'сверхъестественные': null };
-let _currentFlawCategory = 'физические';
-
-function _libFlawsListHtml(category) {
-  const flaws = _flawsCache[category] || [];
-  return `<div class="merits-lib-list">${flaws.map(m =>
-    `<button type="button" class="merit-lib-item" data-flaw-slug="${escAttr(m.slug)}" data-flaw-category="${category}"><span>${escHtml(m.name)}</span><span class="merit-lib-points">${'●'.repeat(m.points)}</span></button>`).join('')}</div>`;
-}
 
 function _libFlawDetailHtml(m) {
   if (!m) return '<div class="cdet-empty">Недостаток не найден в справочнике.</div>';
   return `<div class="merit-lib-detail"><div class="merit-lib-name">${escHtml(m.name)}</div><div class="merit-lib-cost">${'●'.repeat(m.points)} очков</div><div class="merit-lib-desc">${escHtml(m.description)}</div></div>`;
 }
 
-function _libRenderFlawList(category) {
-  const body = document.getElementById('lib-flaws-body');
-  if (body) body.innerHTML = _libFlawsListHtml(category);
+// Библиотека → вкладка «Недостатки»: карточки (как у персонажей), детали — в
+// общей модалке (см. _v20EnsureLibModal). Зеркалит достоинства выше.
+function _libFlawCardsHtml(category) {
+  const flaws = _flawsCache[category] || [];
+  return `<div class="lib-cards">${flaws.map(m =>
+    `<button type="button" class="lib-card" data-flaw-slug="${escAttr(m.slug)}" data-flaw-category="${category}">
+      <div class="lib-card-name">${escHtml(m.name)}</div>
+      <div class="lib-card-meta">${'●'.repeat(m.points)}</div>
+    </button>`).join('')}</div>`;
 }
 
-function _libRenderFlawDetail(slug, category) {
+function _libRenderFlawList(category) {
   const body = document.getElementById('lib-flaws-body');
+  if (body) body.innerHTML = _libFlawCardsHtml(category);
+}
+
+function _v20RenderFlawDetail(slug, category) {
+  const body = document.getElementById('v20-disc-modal-body');
   if (!body) return;
   const flaw = (_flawsCache[category] || []).find(m => m.slug === slug);
-  body.innerHTML = `<button type="button" class="merit-lib-back" data-flaw-back>← к списку</button>${_libFlawDetailHtml(flaw)}`;
+  body.innerHTML = `<button type="button" class="v20-disc-back" data-modal-close>← закрыть</button>${_libFlawDetailHtml(flaw)}`;
+}
+
+async function _v20OpenFlawModal(slug, category) {
+  _v20EnsureLibModal().classList.add('open');
+  _v20RenderFlawDetail(slug, category);
 }
 
 async function loadFlawsLibrary(category) {
   const body = document.getElementById('lib-flaws-body');
   if (!body) return;
 
-  _currentFlawCategory = category;
   body.innerHTML = '<div class="loading-state"><div class="spinner"></div>Загрузка...</div>';
 
   try {
@@ -954,9 +992,9 @@ async function loadFlawsLibrary(category) {
   }
 }
 
-_bindLibraryClicks(document.getElementById('lib-flaws-body'), {
-  itemAttr: 'data-flaw-slug', backAttr: 'data-flaw-back',
-  onItem: ds => _libRenderFlawDetail(ds.flawSlug, ds.flawCategory), onBack: () => _libRenderFlawList(_currentFlawCategory),
+document.getElementById('lib-flaws-body')?.addEventListener('click', e => {
+  const card = e.target.closest('[data-flaw-slug]');
+  if (card) _v20OpenFlawModal(card.dataset.flawSlug, card.dataset.flawCategory);
 });
 
 // ── Mortal sheet: «Психические способности» row reference (зеркало v20DisciplineKey/
@@ -986,32 +1024,12 @@ function _v20RenderPsychicDetail(slug) {
 // Reuses the same modal shell/backdrop as _v20OpenDisciplineModal (#v20-disc-modal-backdrop) —
 // only one of the two modals is ever open at a time (vampire sheet has no psychic rows and vice
 // versa), so sharing the DOM node is safe and avoids a near-duplicate modal markup block.
-async function _v20OpenPsychicModal(name) {
-  let modal = document.getElementById('v20-disc-modal-backdrop');
-  if (!modal) {
-    modal = document.createElement('div');
-    modal.id = 'v20-disc-modal-backdrop';
-    modal.className = 'v20-disc-modal-backdrop';
-    modal.innerHTML = `<div class="v20-disc-modal">
-      <button type="button" class="v20-disc-modal-close" id="v20-disc-modal-close" aria-label="Закрыть справочник">✕</button>
-      <div id="v20-disc-modal-body"></div>
-    </div>`;
-    document.body.appendChild(modal);
-    modal.addEventListener('click', e => { if (e.target === modal) _v20CloseDisciplineModal(); });
-    modal.querySelector('#v20-disc-modal-close').addEventListener('click', _v20CloseDisciplineModal);
-    modal.addEventListener('click', e => {
-      const back = e.target.closest('[data-disc-back]'); if (back) { _v20RenderDisciplineLibrary(); return; }
-      const item = e.target.closest('[data-disc-slug]'); if (item) { _v20RenderDisciplineDetail(item.dataset.discSlug); return; }
-      const pback = e.target.closest('[data-psy-back]'); if (pback) { _v20RenderPsychicLibrary(); return; }
-      const pitem = e.target.closest('[data-psy-slug]'); if (pitem) { _v20RenderPsychicDetail(pitem.dataset.psySlug); return; }
-    });
-    document.addEventListener('keydown', e => { if (e.key === 'Escape') _v20CloseDisciplineModal(); });
-  }
-  modal.classList.add('open');
+async function _v20OpenPsychicModal(name, preresolvedSlug) {
+  _v20EnsureLibModal().classList.add('open');
   const body = document.getElementById('v20-disc-modal-body');
   if (body) body.innerHTML = '<div class="loading-state"><div class="spinner"></div>Загрузка справочника…</div>';
   await ensurePsychics();
-  const slug = name ? v20PsychicKey(name) : null;
+  const slug = preresolvedSlug || (name ? v20PsychicKey(name) : null);
   if (slug) _v20RenderPsychicDetail(slug);
   else _v20RenderPsychicLibrary();
 }

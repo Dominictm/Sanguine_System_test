@@ -7982,15 +7982,17 @@ a.md-link-loc:hover {
   font-size: 15px;
 }
 
-/* Библиотека → «Дисциплины» как карточки (по образцу .char-card), клик
-   открывает .v20-disc-modal-backdrop вместо подмены содержимого страницы. */
-.lib-disc-cards {
+/* Библиотека — все 4 раздела (Дисциплины/Психика/Достоинства/Недостатки) как
+   карточки (по образцу .char-card), клик открывает .v20-disc-modal-backdrop
+   вместо подмены содержимого страницы. Один набор классов на все разделы —
+   визуально идентичны, различается только то, что кладут в .lib-card-meta. */
+.lib-cards {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(min(240px, 100%), 1fr));
   gap: 14px;
 }
 
-.lib-disc-card {
+.lib-card {
   background: var(--bg3);
   border: 2px solid var(--border);
   border-radius: 2px;
@@ -8002,7 +8004,7 @@ a.md-link-loc:hover {
   transition: border-color .2s var(--ease), background .2s var(--ease), transform .2s var(--ease);
 }
 
-.lib-disc-card::before {
+.lib-card::before {
   content: '';
   position: absolute;
   left: 0; top: 0; bottom: 0;
@@ -8012,25 +8014,25 @@ a.md-link-loc:hover {
   transition: opacity .2s;
 }
 
-.lib-disc-card:hover {
+.lib-card:hover {
   border-color: rgb(139 0 0 / 40%);
   background: var(--bg4);
   transform: translateY(-1px);
   box-shadow: 0px 5px 22px rgb(139 0 0 / 60%);
 }
 
-.lib-disc-card:hover::before {
+.lib-card:hover::before {
   opacity: 1;
 }
 
-.lib-disc-card-name {
+.lib-card-name {
   font-family: var(--f-heading);
   font-size: var(--fs-base);
   color: var(--text);
   margin-bottom: 6px;
 }
 
-.lib-disc-card-clans {
+.lib-card-meta {
   font-size: var(--fs-xs);
   color: var(--text3);
 }
@@ -10064,60 +10066,6 @@ tr.rumor-told:hover .rumor-cb-cell {
   background: linear-gradient(180deg,
     color-mix(in srgb, var(--accent) 2%, transparent) 0%,
     color-mix(in srgb, var(--accent) 35%, transparent) 100%);
-}
-
-.merits-lib-list {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.merit-lib-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  width: 100%;
-  background: none;
-  border: 1px solid transparent;
-  border-radius: 3px;
-  padding: 8px 10px;
-  cursor: pointer;
-  text-align: left;
-  color: var(--text);
-  font-size: var(--fs-sm);
-  transition: background 0.15s, border-color 0.15s;
-}
-
-.merit-lib-item:hover {
-  background: rgba(184, 134, 11, 0.1);
-  border-color: rgba(184, 134, 11, 0.3);
-}
-
-.merit-lib-points {
-  font-size: var(--fs-xs);
-  color: var(--gold);
-  letter-spacing: 2px;
-  white-space: nowrap;
-  margin-left: auto;
-}
-
-.merit-lib-back {
-  display: inline-block;
-  padding: 4px 8px;
-  background: none;
-  border: 1px solid var(--border);
-  border-radius: 2px;
-  cursor: pointer;
-  color: var(--text2);
-  font-size: var(--fs-sm);
-  margin-bottom: 12px;
-}
-
-.merit-lib-back:hover {
-  background: rgba(184, 134, 11, 0.05);
-  border-color: var(--gold);
-  color: var(--text);
 }
 
 .merit-lib-detail {
