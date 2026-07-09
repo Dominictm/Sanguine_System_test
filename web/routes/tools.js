@@ -646,7 +646,7 @@ module.exports = function toolsRouter({
       u.searchParams.set('code_challenge_method', 'S256');
       u.searchParams.set('state', state);
       res.json({ ok: true, url: u.toString(), state });
-    } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+    } catch (e) { serverError(res, e); }
   });
 
   // Step 2 — exchange the pasted code («CODE#STATE») for a token; write credentials.
@@ -677,7 +677,7 @@ module.exports = function toolsRouter({
       _oauthPending.delete(state);
       const oauth = await writeClaudeOauth(data);
       res.json({ ok: true, claudeOauth: _oauthInfo(oauth) });
-    } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+    } catch (e) { serverError(res, e); }
   });
 
   // Refresh the access token (used when expired but a refresh_token exists).
@@ -691,7 +691,7 @@ module.exports = function toolsRouter({
     try {
       const oauth = await readOauthCached(true);
       res.json({ ok: true, claudeOauth: _oauthInfo(oauth) || null, hasAnthropicKey: !!process.env.ANTHROPIC_API_KEY });
-    } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+    } catch (e) { serverError(res, e); }
   });
 
   router.post('/api/log-session', async (req, res) => {

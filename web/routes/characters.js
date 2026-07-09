@@ -925,7 +925,7 @@ ${styles.slice(0, 2000)}`;
       await writeFileAtomic(path.join(dir, `${char.slug}-sheet.md`), content.replace(/\s*$/, '') + '\n', 'utf-8');
       await ensureSheetLink(path.join(dir, `${char.slug}.md`), `${char.slug}-sheet.md`);
       res.json({ ok: true });
-    } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+    } catch (e) { serverError(res, e); }
   });
 
   // ── Structured V20 sheet data (JSON sidecar) ──────────────────────────────────
@@ -962,7 +962,7 @@ ${styles.slice(0, 2000)}`;
       const dir   = path.join(charsDir(city), char.lineageFolder, char.slug);
       await writeFileAtomic(path.join(dir, `${char.slug}-sheet.json`), JSON.stringify(data, null, 2), 'utf-8');
       res.json({ ok: true });
-    } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+    } catch (e) { serverError(res, e); }
   });
 
   // ── Foundry sync (Фаза 1, вариант c — см. docs/superpowers/specs/

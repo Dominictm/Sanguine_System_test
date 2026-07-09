@@ -241,7 +241,7 @@ module.exports = function npcRouter({ makeGenerationClient, generateV20Sheet, en
       if (!await fs.stat(p.dir).catch(() => null)) return res.status(404).json({ ok: false, error: 'Папка НПС не найдена' });
       await writeFileAtomic(p.sheet, content.replace(/\s*$/, '') + '\n', 'utf-8');
       res.json({ ok: true });
-    } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+    } catch (e) { serverError(res, e); }
   });
 
   // GET /api/chronicles/:chr/modules/:mod/npc/:slug/promote-check

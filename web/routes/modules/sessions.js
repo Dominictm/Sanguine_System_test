@@ -44,7 +44,7 @@ module.exports = function sessionsRouter() {
       res.json({ ok: true, n: sessions.length });
     } catch (e) {
       console.error('[module-session]', e.message);
-      res.status(500).json({ ok: false, error: e.message });
+      serverError(res, e);
     }
   });
 
@@ -74,7 +74,7 @@ module.exports = function sessionsRouter() {
       res.json({ ok: true, n: i + 1 });
     } catch (e) {
       console.error('[module-session-edit]', e.message);
-      res.status(500).json({ ok: false, error: e.message });
+      serverError(res, e);
     }
   });
 

@@ -321,7 +321,7 @@ module.exports = function lifecycleRouter({ makeGenerationClient, isOA, oaCall }
       res.json({ ok: true, finale, event, reminders });
     } catch (e) {
       console.error('[close-module]', e.message);
-      res.status(500).json({ ok: false, error: e.message });
+      serverError(res, e);
     }
   });
 

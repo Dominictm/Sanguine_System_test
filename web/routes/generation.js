@@ -687,7 +687,7 @@ ${stubContents.map(s => `\n---\n## ${s.rel}\n${s.txt}`).join('\n')}`;
       res.json({ ok: true, written, pending, failed, model });
     } catch (e) {
       console.error('[openrouter-prose]', e.message);
-      res.status(500).json({ ok: false, error: e.message });
+      serverError(res, e);
     }
   });
 
@@ -743,7 +743,7 @@ ${stubContents.map(s => `\n---\n## ${s.rel}\n${s.txt}`).join('\n')}`;
         summary: result.result || ''
       });
     } catch (e) {
-      res.status(500).json({ ok: false, error: e.message });
+      serverError(res, e);
     }
   });
 
