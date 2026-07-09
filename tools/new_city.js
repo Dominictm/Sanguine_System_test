@@ -30,19 +30,24 @@ if (!/^\d{3,4}$/.test(year)) {
 const base = path.join(ROOT, 'cities', slug);
 if (fs.existsSync(base)) { console.error(`Город "${slug}" уже существует.`); process.exit(1); }
 
-const W = (rel, txt) => { const a = path.join(base, rel); fs.mkdirSync(path.dirname(a), { recursive: true }); fs.writeFileSync(a, txt, 'utf8'); };
-const KEEP = rel => { const a = path.join(base, rel, '.gitkeep'); fs.mkdirSync(path.dirname(a), { recursive: true }); fs.writeFileSync(a, ''); };
+try {
+  const W = (rel, txt) => { const a = path.join(base, rel); fs.mkdirSync(path.dirname(a), { recursive: true }); fs.writeFileSync(a, txt, 'utf8'); };
+  const KEEP = rel => { const a = path.join(base, rel, '.gitkeep'); fs.mkdirSync(path.dirname(a), { recursive: true }); fs.writeFileSync(a, ''); };
 
-// Каркас (city.md + archive/* + пустые папки) — единый источник с POST /api/cities,
-// см. cityScaffold в web/lib/parsers.js.
-const { files, keepDirs } = cityScaffold({
-  display, year,
-  political, locations: locationsTxt, leitmotif, specifics, avoid, sources,
-  districts: districtsCsv,
-});
-for (const [rel, txt] of Object.entries(files)) W(rel, txt);
-for (const rel of keepDirs) KEEP(rel);
+  // Каркас (city.md + archive/* + пустые папки) — единый источник с POST /api/cities,
+  // см. cityScaffold в web/lib/parsers.js.
+  const { files, keepDirs } = cityScaffold({
+    display, year,
+    political, locations: locationsTxt, leitmotif, specifics, avoid, sources,
+    districts: districtsCsv,
+  });
+  for (const [rel, txt] of Object.entries(files)) W(rel, txt);
+  for (const rel of keepDirs) KEEP(rel);
 
-console.log(`✓ Город «${display}» создан: cities/${slug}/`);
-console.log(`  Дальше: опиши cities/${slug}/city.md, добавь персонажей (system/rules/npcs_city.md),`);
-console.log(`  логируй сессии через веб (вкладка «Сессия», выбери город «${slug}»).`);
+  console.log(`✓ Город «${display}» создан: cities/${slug}/`);
+  console.log(`  Дальше: опиши cities/${slug}/city.md, добавь персонажей (system/rules/npcs_city.md),`);
+  console.log(`  логируй сессии через веб (вкладка «Сессия», выбери город «${slug}»).`);
+} catch (e) {
+  console.error(`Не удалось создать город "${slug}": ${e.message}`);
+  process.exit(1);
+}
