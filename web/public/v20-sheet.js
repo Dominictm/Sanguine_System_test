@@ -1023,8 +1023,9 @@ function _libBackgroundLevelsHtml(system) {
 
 function _libBackgroundDetailHtml(b) {
   if (!b) return '<div class="cdet-empty">Факт биографии не найден в справочнике.</div>';
+  const sect = b.sectOnly ? `<span class="lib-card-sect">Только ${escHtml(b.sectOnly)}</span>` : '';
   const note = b.description ? `<div class="v20-disc-note">${escHtml(b.description)}</div>` : '';
-  return `<div class="v20-disc-detail-head"><h3>${escHtml(b.name)}</h3></div>${note}${_libBackgroundLevelsHtml(b.system)}`;
+  return `<div class="v20-disc-detail-head"><h3>${escHtml(b.name)}</h3>${sect}</div>${note}${_libBackgroundLevelsHtml(b.system)}`;
 }
 
 function _libBackgroundCardsHtml(category) {
@@ -1032,6 +1033,7 @@ function _libBackgroundCardsHtml(category) {
   return `<div class="lib-cards">${items.map(b =>
     `<button type="button" class="lib-card" data-bg-slug="${escAttr(b.slug)}" data-bg-category="${category}">
       <div class="lib-card-name">${escHtml(b.name)}</div>
+      ${b.sectOnly ? `<div class="lib-card-sect">Только ${escHtml(b.sectOnly)}</div>` : ''}
     </button>`).join('')}</div>`;
 }
 

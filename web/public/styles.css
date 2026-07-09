@@ -8078,6 +8078,25 @@ a.md-link-loc:hover {
   color: var(--text3);
 }
 
+/* Факты биографии, доступные только определённой секте (напр. Шабашу) —
+   пометка на карточке и в заголовке модалки. */
+.lib-card-sect {
+  display: inline-block;
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
+  color: var(--gold);
+  padding: 2px 8px;
+  border-radius: 2px;
+  font-size: var(--fs-3xs);
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.lib-card > .lib-card-sect {
+  margin-top: 8px;
+}
+
 .v20-disc-note {
   font-size: 19px;
   color: var(--text2);
