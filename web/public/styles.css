@@ -7982,6 +7982,59 @@ a.md-link-loc:hover {
   font-size: 15px;
 }
 
+/* Библиотека → «Дисциплины» как карточки (по образцу .char-card), клик
+   открывает .v20-disc-modal-backdrop вместо подмены содержимого страницы. */
+.lib-disc-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(240px, 100%), 1fr));
+  gap: 14px;
+}
+
+.lib-disc-card {
+  background: var(--bg3);
+  border: 2px solid var(--border);
+  border-radius: 2px;
+  padding: 18px;
+  text-align: left;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  transition: border-color .2s var(--ease), background .2s var(--ease), transform .2s var(--ease);
+}
+
+.lib-disc-card::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 3px;
+  background: var(--accent);
+  opacity: 0;
+  transition: opacity .2s;
+}
+
+.lib-disc-card:hover {
+  border-color: rgb(139 0 0 / 40%);
+  background: var(--bg4);
+  transform: translateY(-1px);
+  box-shadow: 0px 5px 22px rgb(139 0 0 / 60%);
+}
+
+.lib-disc-card:hover::before {
+  opacity: 1;
+}
+
+.lib-disc-card-name {
+  font-family: var(--f-heading);
+  font-size: var(--fs-base);
+  color: var(--text);
+  margin-bottom: 6px;
+}
+
+.lib-disc-card-clans {
+  font-size: var(--fs-xs);
+  color: var(--text3);
+}
+
 .v20-disc-back {
   background: transparent;
   border: none;

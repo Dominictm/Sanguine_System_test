@@ -742,6 +742,17 @@ function _libDisciplineListHtml() {
     `<button type="button" class="v20-disc-list-item" data-disc-slug="${escAttr(d.slug)}"><span>${escHtml(d.name)}</span><span class="v20-disc-list-clans">${escHtml(d.clans || '')}</span></button>`).join('')}</div>`;
 }
 
+// Библиотека → вкладка «Дисциплины»: карточки (как у персонажей), а не список —
+// клик открывает ту же модалку, что и ссылка на дисциплину в листе персонажа
+// (см. _v20OpenDisciplineModal), а не подменяет содержимое страницы.
+function _libDisciplineCardsHtml() {
+  return `<div class="lib-disc-cards">${(_disciplinesCache || []).map(d =>
+    `<button type="button" class="lib-disc-card" data-disc-slug="${escAttr(d.slug)}">
+      <div class="lib-disc-card-name">${escHtml(d.name)}</div>
+      <div class="lib-disc-card-clans">${escHtml(d.clans || '')}</div>
+    </button>`).join('')}</div>`;
+}
+
 // Имя дисциплины из листа («Прорицание», «Auspex», «Прорицание (Auspex)») → slug.
 function v20DisciplineKey(name) {
   const norm = String(name || '').toLowerCase().replace(/\(.*?\)/g, '').trim();
@@ -765,7 +776,7 @@ function _v20RenderDisciplineDetail(slug) {
   body.innerHTML = `<button type="button" class="v20-disc-back" data-disc-back>← к списку</button>${_libDisciplineDetailHtml(_discBySlug(slug))}`;
 }
 function _v20CloseDisciplineModal() { document.getElementById('v20-disc-modal-backdrop')?.classList.remove('open'); }
-async function _v20OpenDisciplineModal(name) {
+async function _v20OpenDisciplineModal(name, preresolvedSlug) {
   let modal = document.getElementById('v20-disc-modal-backdrop');
   if (!modal) {
     modal = document.createElement('div');
@@ -788,19 +799,16 @@ async function _v20OpenDisciplineModal(name) {
   const body = document.getElementById('v20-disc-modal-body');
   if (body) body.innerHTML = '<div class="loading-state"><div class="spinner"></div>Загрузка справочника…</div>';
   await ensureDisciplines();
-  const slug = name ? v20DisciplineKey(name) : null;
+  const slug = preresolvedSlug || (name ? v20DisciplineKey(name) : null);
   if (slug) _v20RenderDisciplineDetail(slug);
   else _v20RenderDisciplineLibrary();
 }
 
-// ── Library page → «Дисциплины» tab (same reference, full-page instead of modal) ──
+// ── Library page → «Дисциплины» tab: cards (as characters), detail opens in
+// the shared modal (_v20OpenDisciplineModal) instead of replacing the page ──
 function _libRenderDisciplineList() {
   const body = document.getElementById('lib-disciplines-body');
-  if (body) body.innerHTML = _libDisciplineListHtml();
-}
-function _libRenderDisciplineDetail(slug) {
-  const body = document.getElementById('lib-disciplines-body');
-  if (body) body.innerHTML = `<button type="button" class="v20-disc-back" data-disc-back>← к списку</button>${_libDisciplineDetailHtml(_discBySlug(slug))}`;
+  if (body) body.innerHTML = _libDisciplineCardsHtml();
 }
 async function loadLibrary() {
   const body = document.getElementById('lib-disciplines-body');
@@ -808,9 +816,9 @@ async function loadLibrary() {
   await ensureDisciplines();
   _libRenderDisciplineList();
 }
-_bindLibraryClicks(document.getElementById('lib-disciplines-body'), {
-  itemAttr: 'data-disc-slug', backAttr: 'data-disc-back',
-  onItem: ds => _libRenderDisciplineDetail(ds.discSlug), onBack: _libRenderDisciplineList,
+document.getElementById('lib-disciplines-body')?.addEventListener('click', e => {
+  const card = e.target.closest('[data-disc-slug]');
+  if (card) _v20OpenDisciplineModal(null, card.dataset.discSlug);
 });
 
 // ── Psychic powers reference library (зеркало справочника дисциплин выше) ──────
