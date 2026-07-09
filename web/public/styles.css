@@ -1444,6 +1444,29 @@ body {
   display: block;
 }
 
+/* Библиотека — вкладки унифицированы со стилем модального окна персонажа
+   (.cdet-tab-bar/.cdet-tab): равноширокие вкладки, тонированная плашка,
+   градиент на активной. Scoped to #page-library — .tab-bar/.tab-btn is
+   shared with the Tools page, which keeps its own left-aligned style for now. */
+#page-library .tab-bar {
+  background: color-mix(in srgb, var(--accent) 10%, var(--bg3));
+}
+#page-library .tab-btn {
+  flex: 1;
+  padding: 12px 6px;
+  font-size: var(--fs-2xs);
+  text-align: center;
+}
+#page-library .tab-btn:hover {
+  background: color-mix(in srgb, var(--accent) 5%, transparent);
+}
+#page-library .tab-btn.active {
+  color: var(--accent);
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--accent) 2%, transparent) 0%,
+    color-mix(in srgb, var(--accent) 35%, transparent) 100%);
+}
+
 .cities-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
