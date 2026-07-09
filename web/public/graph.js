@@ -181,7 +181,18 @@ function renderGraph(data) {
 
   // ── Zoom ──
   const g = svg.append('g');
-  const zoom = d3.zoom().scaleExtent([.2, 4]).on('zoom', e => g.attr('transform', e.transform));
+  // Минимальный радиус хит-зоны узла в экранных пикселях — узел должен
+  // оставаться удобно кликабельным даже на maximum zoom-out (scaleExtent
+  // ниже 1), где видимый node-circle (r=14-18 в SVG-единицах) сжимается
+  // до нескольких экранных пикселей и курсор промахивается мимо, попадая
+  // на фон/линии вместо узла (это и выглядит как «пропала возможность
+  // двигать миниатюры» при отдалении).
+  const HIT_MIN_PX = 24;
+  const hitRadius = (d, k) => Math.max(r(d), HIT_MIN_PX / k);
+  const zoom = d3.zoom().scaleExtent([.2, 4]).on('zoom', e => {
+    g.attr('transform', e.transform);
+    nodeG.selectAll('circle.node-hit').attr('r', d => hitRadius(d, e.transform.k));
+  });
   svg.call(zoom);
   STATE.graph.zoom = zoom;
   STATE.graph.svg  = svg;
@@ -206,6 +217,13 @@ function renderGraph(data) {
     );
 
   const r = d => d.lineage === 'vampire' ? 18 : d.lineage === 'fairy' ? 16 : 14;
+
+  // Невидимый увеличенный круг под видимым узлом — держит хит-зону перетаскивания
+  // на комфортных ~HIT_MIN_PX экранных пикселей на любом уровне зума (см. hitRadius выше).
+  nodeG.append('circle')
+    .attr('class', 'node-hit')
+    .attr('r', d => hitRadius(d, d3.zoomTransform(svgEl).k))
+    .attr('fill', 'transparent');
 
   nodeG.append('circle')
     .attr('class', 'node-circle')
