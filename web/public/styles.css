@@ -561,14 +561,6 @@ body {
   background: rgba(184, 134, 11, .12);
   border: 1px solid rgba(184, 134, 11, .4);
   color: var(--gold);
-  font-family: var(--f-heading);
-  font-size: var(--fs-2xs);
-  letter-spacing: .1em;
-  text-transform: uppercase;
-  padding: 6px 12px;
-  border-radius: 2px;
-  cursor: pointer;
-  transition: background .15s, border-color .15s, color .15s;
 }
 
 .ais-confirm-btn:hover:not(:disabled) {
@@ -753,14 +745,6 @@ body {
   background: rgba(60, 100, 180, .12);
   border: 1px solid rgba(60, 100, 180, .4);
   color: var(--c-info);
-  font-family: var(--f-heading);
-  font-size: var(--fs-2xs);
-  letter-spacing: .1em;
-  text-transform: uppercase;
-  padding: 6px 12px;
-  border-radius: 2px;
-  cursor: pointer;
-  transition: background .15s, border-color .15s, color .15s;
 }
 
 .ais-restart-btn:hover:not(:disabled) {
@@ -1212,6 +1196,48 @@ body {
 .btn-icon:hover {
   border-color: var(--accent2);
   color: var(--text);
+}
+
+/* ── Compact action button: shared box model, colors vary per class ──
+   26-class cluster found by /impeccable audit (2026-07-09) — see
+   docs/design/2026-07-09-buttons-and-blocks-unification-plan.md, cluster A.
+   .modp-back-btn/.modp-gen-btn previously had no explicit border-radius
+   (fell back to native <button> UA rendering) — now unified to 2px too. */
+.ais-confirm-btn,
+.ais-restart-btn,
+.modal-back-btn,
+.btn-img-upload,
+.btn-create-char,
+.cdet-upload-btn,
+.cdet-edit-btn,
+.cdet-rel-del-btn,
+.cdet-rel-add-btn,
+.cdet-gen-prompt-btn,
+.cdet-gen-appearance-btn,
+.cdet-save-btn,
+.cdet-cancel-btn,
+.city-edit-btn,
+.city-del-btn,
+.chr-delete-btn,
+.chp-create-btn,
+.mod-gen-scenario-btn,
+.mod-fill-add-btn,
+.chd-mod-del-btn,
+.module-del-btn,
+.chd-recap-btn,
+.hooks-add-btn,
+.diary-back,
+.diary-entry-del-btn,
+.modp-back-btn,
+.modp-gen-btn {
+  font-family: var(--f-heading);
+  font-size: var(--fs-2xs);
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  padding: 6px 12px;
+  border-radius: 2px;
+  cursor: pointer;
+  transition: background .15s, border-color .15s, color .15s;
 }
 
 .graph-legend {
@@ -1965,14 +1991,6 @@ a:focus-visible {
   background: none;
   border: 1px solid var(--border);
   color: var(--text2);
-  font-family: var(--f-heading);
-  font-size: var(--fs-2xs);
-  letter-spacing: .1em;
-  text-transform: uppercase;
-  padding: 6px 12px;
-  cursor: pointer;
-  border-radius: 2px;
-  transition: background .15s, border-color .15s, color .15s;
   flex-shrink: 0;
 }
 
@@ -2033,14 +2051,6 @@ a:focus-visible {
   background: none;
   border: 1px solid var(--border);
   color: var(--text3);
-  font-family: var(--f-heading);
-  font-size: var(--fs-2xs);
-  letter-spacing: .1em;
-  text-transform: uppercase;
-  padding: 6px 12px;
-  border-radius: 2px;
-  cursor: pointer;
-  transition: background .15s, border-color .15s, color .15s;
   text-align: center;
 }
 
@@ -2053,14 +2063,6 @@ a:focus-visible {
   background: none;
   border: 1px solid var(--accent);
   color: var(--accent2);
-  font-family: var(--f-heading);
-  font-size: var(--fs-2xs);
-  letter-spacing: .1em;
-  text-transform: uppercase;
-  padding: 6px 12px;
-  cursor: pointer;
-  border-radius: 2px;
-  transition: background .15s, border-color .15s, color .15s;
   white-space: nowrap;
 }
 
@@ -2377,17 +2379,9 @@ a:focus-visible {
 .cdet-upload-btn {
   display: block;
   width: 100%;
-  padding: 6px 12px;
   background: rgba(139, 0, 0, .14);
   border: 1px solid var(--border2);
   color: var(--text);
-  font-family: var(--f-heading);
-  font-size: var(--fs-2xs);
-  letter-spacing: .1em;
-  text-transform: uppercase;
-  cursor: pointer;
-  border-radius: 2px;
-  transition: background .15s, border-color .15s, color .15s;
   margin-top: 8px;
 }
 
@@ -2519,14 +2513,6 @@ a:focus-visible {
   background: transparent;
   border: 1px solid var(--border);
   color: var(--text3);
-  padding: 6px 12px;
-  font-family: var(--f-heading);
-  font-size: var(--fs-2xs);
-  letter-spacing: .1em;
-  text-transform: uppercase;
-  border-radius: 2px;
-  cursor: pointer;
-  transition: background .15s, border-color .15s, color .15s;
 }
 
 /* Delete-character button in the detail sticky header (left of the ✕ close).
@@ -2663,16 +2649,8 @@ a:focus-visible {
   flex: 0 0 auto;
   background: none;
   border: 1px solid rgba(139, 0, 0, .40);
-  border-radius: 2px;
   color: var(--accent2);
-  cursor: pointer;
-  font-family: var(--f-heading);
-  font-size: var(--fs-2xs);
-  letter-spacing: .1em;
-  text-transform: uppercase;
   line-height: 1;
-  padding: 6px 12px;
-  transition: background .15s, border-color .15s, color .15s;
 }
 
 .cdet-rel-del-btn:hover {
@@ -2685,15 +2663,7 @@ a:focus-visible {
   margin-top: 12px;
   background: rgba(184, 134, 11, 0.1);
   border: 1px solid var(--gold);
-  border-radius: 2px;
   color: var(--gold);
-  cursor: pointer;
-  font-family: var(--f-heading);
-  font-size: var(--fs-2xs);
-  letter-spacing: .1em;
-  text-transform: uppercase;
-  padding: 6px 12px;
-  transition: background .15s, border-color .15s, color .15s;
 }
 
 .cdet-rel-add-btn:hover {
@@ -2747,14 +2717,6 @@ a:focus-visible {
   background: rgba(184, 134, 11, .1);
   border: 1px solid var(--gold);
   color: var(--gold);
-  padding: 6px 12px;
-  font-family: var(--f-heading);
-  font-size: var(--fs-2xs);
-  letter-spacing: .1em;
-  text-transform: uppercase;
-  border-radius: 2px;
-  cursor: pointer;
-  transition: background .15s, border-color .15s, color .15s;
 }
 
 .cdet-gen-prompt-btn:hover,
@@ -2809,14 +2771,6 @@ a:focus-visible {
   background: rgba(184, 134, 11, .15);
   border: 1px solid var(--gold);
   color: var(--gold);
-  padding: 6px 12px;
-  font-family: var(--f-heading);
-  font-size: var(--fs-2xs);
-  letter-spacing: .1em;
-  text-transform: uppercase;
-  border-radius: 2px;
-  cursor: pointer;
-  transition: background .15s, border-color .15s, color .15s;
 }
 
 .cdet-save-btn:hover {
@@ -2827,14 +2781,6 @@ a:focus-visible {
   background: transparent;
   border: 1px solid var(--border);
   color: var(--text3);
-  padding: 6px 12px;
-  font-family: var(--f-heading);
-  font-size: var(--fs-2xs);
-  letter-spacing: .1em;
-  text-transform: uppercase;
-  border-radius: 2px;
-  cursor: pointer;
-  transition: background .15s, border-color .15s, color .15s;
 }
 
 .cdet-cancel-btn:hover {
@@ -3061,15 +3007,7 @@ a:focus-visible {
 }
 .city-edit-btn,
 .city-del-btn {
-  font-family: var(--f-heading);
-  font-size: var(--fs-2xs);
-  letter-spacing: .1em;
-  text-transform: uppercase;
-  padding: 6px 12px;
-  border-radius: 2px;
-  cursor: pointer;
   white-space: nowrap;
-  transition: background .15s, border-color .15s, color .15s;
 }
 .city-edit-btn {
   background: rgba(184, 134, 11, .12);
@@ -3114,15 +3052,7 @@ a:focus-visible {
   background: transparent;
   border: 1px solid rgba(139, 0, 0, .4);
   color: var(--accent2);
-  font-family: var(--f-heading);
-  font-size: var(--fs-2xs);
-  letter-spacing: .1em;
-  text-transform: uppercase;
-  padding: 6px 12px;
-  border-radius: 2px;
-  cursor: pointer;
   white-space: nowrap;
-  transition: background .15s, border-color .15s, color .15s;
 }
 
 .chr-delete-btn:hover {
@@ -3135,14 +3065,6 @@ a:focus-visible {
   background: rgba(184, 134, 11, .1);
   border: 1px solid rgba(184, 134, 11, .4);
   color: var(--gold);
-  font-family: var(--f-heading);
-  font-size: var(--fs-2xs);
-  letter-spacing: .1em;
-  text-transform: uppercase;
-  padding: 6px 12px;
-  border-radius: 2px;
-  cursor: pointer;
-  transition: background .15s, border-color .15s, color .15s;
   white-space: nowrap;
 }
 
@@ -3282,16 +3204,8 @@ a:focus-visible {
   background: rgba(60, 120, 200, .12);
   border: 1px solid rgba(60, 120, 200, .4);
   color: var(--c-info);
-  font-family: var(--f-heading);
-  font-size: var(--fs-2xs);
-  letter-spacing: .1em;
-  text-transform: uppercase;
-  padding: 6px 12px;
-  border-radius: 2px;
-  cursor: pointer;
   white-space: nowrap;
   flex-shrink: 0;
-  transition: background .15s, border-color .15s, color .15s;
 }
 
 .mod-gen-scenario-btn:hover {
@@ -3350,15 +3264,7 @@ a:focus-visible {
   background: transparent;
   border: 1px solid var(--border);
   color: var(--text-dim);
-  font-family: var(--f-heading);
-  font-size: var(--fs-2xs);
-  letter-spacing: .1em;
-  text-transform: uppercase;
-  padding: 6px 12px;
-  border-radius: 2px;
-  cursor: pointer;
   white-space: nowrap;
-  transition: background .15s, border-color .15s, color .15s;
 }
 
 .mod-fill-add-btn:hover {
@@ -3558,15 +3464,7 @@ a:focus-visible {
   background: transparent;
   border: 1px solid rgba(139, 0, 0, .40);
   color: var(--accent2);
-  font-family: var(--f-heading);
-  font-size: var(--fs-2xs);
-  letter-spacing: .1em;
-  text-transform: uppercase;
-  padding: 6px 12px;
-  border-radius: 2px;
-  cursor: pointer;
   white-space: nowrap;
-  transition: background .15s, border-color .15s, color .15s;
 }
 
 .chd-mod-del-btn:hover {
@@ -3581,15 +3479,7 @@ a:focus-visible {
   background: transparent;
   border: 1px solid rgba(139, 0, 0, .40);
   color: var(--accent2);
-  font-family: var(--f-heading);
-  font-size: var(--fs-2xs);
-  letter-spacing: .1em;
-  text-transform: uppercase;
-  padding: 6px 12px;
-  border-radius: 2px;
-  cursor: pointer;
   white-space: nowrap;
-  transition: background .15s, border-color .15s, color .15s;
   z-index: 1;
   line-height: 1.4;
 }
@@ -3633,15 +3523,7 @@ a:focus-visible {
   background: rgba(184, 134, 11, .10);
   border: 1px solid rgba(184, 134, 11, .40);
   color: var(--gold);
-  font-family: var(--f-heading);
-  font-size: var(--fs-2xs);
-  letter-spacing: .1em;
-  text-transform: uppercase;
-  padding: 6px 12px;
-  border-radius: 2px;
-  cursor: pointer;
   white-space: nowrap;
-  transition: background .15s, border-color .15s, color .15s;
 }
 
 .chd-recap-btn:hover:not(:disabled) {
@@ -4963,15 +4845,7 @@ a:focus-visible {
   background: rgba(139, 0, 0, .08);
   border: 1px solid rgba(139, 0, 0, .5);
   color: rgba(220, 100, 100, .85);
-  padding: 6px 12px;
-  font-family: var(--f-heading);
-  font-size: var(--fs-2xs);
-  letter-spacing: .1em;
-  text-transform: uppercase;
-  border-radius: 2px;
-  cursor: pointer;
   width: 100%;
-  transition: background .15s, border-color .15s, color .15s;
 }
 
 .hooks-add-btn:hover {
@@ -5172,14 +5046,6 @@ a:focus-visible {
   background: none;
   border: 1px solid var(--border);
   color: var(--text2);
-  font-family: var(--f-heading);
-  font-size: var(--fs-2xs);
-  letter-spacing: .1em;
-  text-transform: uppercase;
-  padding: 6px 12px;
-  border-radius: 2px;
-  cursor: pointer;
-  transition: background .15s, border-color .15s, color .15s;
 }
 
 .diary-back:hover {
@@ -5208,14 +5074,6 @@ a:focus-visible {
   background: none;
   border: 1px solid rgba(139, 0, 0, .55);
   color: rgba(220, 100, 100, .9);
-  font-family: var(--f-heading);
-  font-size: var(--fs-2xs);
-  letter-spacing: .1em;
-  text-transform: uppercase;
-  padding: 6px 12px;
-  border-radius: 2px;
-  cursor: pointer;
-  transition: background .15s, border-color .15s, color .15s;
 }
 
 .diary-entry-del-btn:hover {
@@ -6539,13 +6397,6 @@ a.md-link-loc:hover {
   background: none;
   border: 1px solid var(--border);
   color: var(--gold);
-  padding: 6px 12px;
-  font-family: var(--f-heading);
-  font-size: var(--fs-2xs);
-  letter-spacing: .1em;
-  text-transform: uppercase;
-  cursor: pointer;
-  transition: background .15s, border-color .15s, color .15s;
   white-space: nowrap;
 }
 
@@ -6558,13 +6409,6 @@ a.md-link-loc:hover {
   background: rgba(139, 0, 0, 0.15);
   border: 1px solid rgba(139, 0, 0, 0.5);
   color: var(--c-error);
-  padding: 6px 12px;
-  font-family: var(--f-heading);
-  font-size: var(--fs-2xs);
-  letter-spacing: .1em;
-  text-transform: uppercase;
-  cursor: pointer;
-  transition: background .15s, border-color .15s, color .15s;
   white-space: nowrap;
 }
 
@@ -6802,10 +6646,14 @@ a.md-link-loc:hover {
   align-items: center;
 }
 
-.modp-canon-btn {
-  background: rgba(184, 134, 11, 0.12);
-  border: 1px solid rgba(184, 134, 11, 0.5);
-  color: var(--gold);
+/* ── "Sheet action" button: shared box model (cluster B) — background/border
+   alpha values differ slightly per class (drift noted in
+   docs/design/2026-07-09-buttons-and-blocks-unification-plan.md); left as-is
+   here since reconciling those is a separate, visually-affecting decision. */
+.modp-canon-btn,
+.modp-npc-dlg-btn,
+.cdet-sheet-btn,
+.sheet-btn {
   padding: 7px 14px;
   border-radius: 2px;
   cursor: pointer;
@@ -6814,7 +6662,13 @@ a.md-link-loc:hover {
   letter-spacing: .1em;
   text-transform: uppercase;
   white-space: nowrap;
-  transition: background .15s, border-color .15s;
+  transition: background .15s, border-color .15s, color .15s;
+}
+
+.modp-canon-btn {
+  background: rgba(184, 134, 11, 0.12);
+  border: 1px solid rgba(184, 134, 11, 0.5);
+  color: var(--gold);
 }
 
 .modp-canon-btn:hover {
@@ -7132,15 +6986,6 @@ a.md-link-loc:hover {
   background: rgba(139, 0, 0, 0.14);
   border: 1px solid rgba(184, 0, 0, 0.5);
   color: var(--accent2);
-  padding: 7px 14px;
-  border-radius: 2px;
-  cursor: pointer;
-  font-family: var(--f-heading);
-  font-size: var(--fs-2xs);
-  letter-spacing: .1em;
-  text-transform: uppercase;
-  white-space: nowrap;
-  transition: background .15s, border-color .15s, color .15s;
 }
 
 .modp-npc-dlg-btn:hover {
@@ -7209,15 +7054,6 @@ a.md-link-loc:hover {
   background: rgba(184, 134, 11, 0.12);
   border: 1px solid rgba(184, 134, 11, 0.45);
   color: var(--gold);
-  padding: 7px 14px;
-  border-radius: 2px;
-  cursor: pointer;
-  font-family: var(--f-heading);
-  font-size: var(--fs-2xs);
-  letter-spacing: .1em;
-  text-transform: uppercase;
-  white-space: nowrap;
-  transition: background .15s, border-color .15s;
 }
 
 .cdet-sheet-btn:hover {
@@ -7336,15 +7172,6 @@ a.md-link-loc:hover {
   background: rgba(184, 134, 11, 0.14);
   border: 1px solid rgba(184, 134, 11, 0.5);
   color: var(--gold);
-  padding: 7px 14px;
-  border-radius: 2px;
-  cursor: pointer;
-  font-family: var(--f-heading);
-  font-size: var(--fs-2xs);
-  letter-spacing: .1em;
-  text-transform: uppercase;
-  white-space: nowrap;
-  transition: background .15s, border-color .15s;
 }
 
 .sheet-btn:hover {
