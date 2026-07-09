@@ -1651,10 +1651,9 @@ select.form-control {
   flex: 1;
 }
 
-.btn-submit {
-  background: var(--accent);
-  border: 1px solid var(--accent2);
-  color: var(--text);
+/* ── Primary button: shared box model with .chr-modal-btn (cluster C) ── */
+.btn-submit,
+.chr-modal-btn {
   padding: 12px 28px;
   font-family: var(--f-heading);
   font-size: var(--fs-base);
@@ -1662,7 +1661,13 @@ select.form-control {
   text-transform: uppercase;
   border-radius: 2px;
   cursor: pointer;
-  transition: background .15s, border-color .15s;
+  transition: background .15s, border-color .15s, color .15s;
+}
+
+.btn-submit {
+  background: var(--accent);
+  border: 1px solid var(--accent2);
+  color: var(--text);
   position: relative;
   overflow: hidden;
 }
@@ -3895,15 +3900,7 @@ a:focus-visible {
 }
 
 .chr-modal-btn {
-  padding: 12px 28px;
-  border-radius: 2px;
-  font-family: var(--f-heading);
-  font-size: var(--fs-base);
-  letter-spacing: .1em;
-  text-transform: uppercase;
-  cursor: pointer;
   border: 1px solid;
-  transition: background .15s, border-color .15s, color .15s;
 }
 
 .chr-modal-btn.cancel {
@@ -9866,15 +9863,6 @@ tr.rumor-told:hover .rumor-cb-cell {
 }
 .modp-gen-result-title { font-weight: 600; color: var(--c-success); }
 .modp-gen-warn { color: var(--c-danger-text); }
-
-.btn-danger {
-  background: var(--c-danger);
-  color: var(--pure-white); border: none;
-  padding: 8px 20px;
-  border-radius: 4px;
-  cursor: pointer; font-size: var(--fs-sm);
-}
-.btn-danger:disabled { opacity: .4; cursor: default; }
 
 /* Tablets in portrait (iPad classic/mini 768px, iPad Air 820px) and large
    phones: stack the detail modals (image over content) so the fixed image
