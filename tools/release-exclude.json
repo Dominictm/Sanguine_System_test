@@ -3,5 +3,9 @@
   ".vscode",
   ".impeccable",
   ".github",
-  ".claude"
+  ".claude",
+  "docs/superpowers",
+  "docs/design",
+  "docs/audit",
+  "web/tests"
 ]

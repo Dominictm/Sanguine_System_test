@@ -6,7 +6,8 @@
 //      молча при будущих правках исходных файлов).
 //   2. Вычищает содержимое cities/<город>/ (оставляя файлы прямо в cities/, напр. README.md).
 //   3. Удаляет пути из tools/release-exclude.json (дев-окружение: .claude, .github,
-//      .vscode, .impeccable, art-genegic — не нужны Рассказчику в релизе).
+//      .vscode, .impeccable, art-genegic, docs/superpowers, docs/design, docs/audit,
+//      web/tests — не нужны Рассказчику в релизе).
 //
 // Используется автосборкой релиза (.github/workflows/release-test.yml) и локально:
 //   node tools/build_release.js [--root <dir>] [--dry-run]
