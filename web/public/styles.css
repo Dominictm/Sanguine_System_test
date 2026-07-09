@@ -9971,38 +9971,46 @@ tr.rumor-told:hover .rumor-cb-cell {
 .confirm-acts .chr-modal-btn { padding: 8px 14px; font-size: var(--fs-xs); letter-spacing: .04em; white-space: nowrap; }
 
 /* ── Merits/Flaws library (справочник достоинств и недостатков) ──────── */
+/* Унифицировано со стилем .cdet-tab / #page-library .tab-btn (тот же
+   референс — вкладки модального окна персонажа), см. запрос 2026-07-09. */
 .merits-subtab-bar,
 .flaws-subtab-bar {
   display: flex;
-  gap: 4px;
-  margin-bottom: 12px;
+  background: color-mix(in srgb, var(--accent) 10%, var(--bg3));
   border-bottom: 1px solid var(--border);
-  padding-bottom: 8px;
+  margin-bottom: 12px;
 }
 
 .merits-subtab-btn,
 .flaws-subtab-btn {
-  padding: 6px 12px;
+  flex: 1;
+  padding: 12px 6px;
   background: none;
-  border: 1px solid transparent;
-  border-radius: 3px;
+  border: none;
+  border-bottom: 2px solid transparent;
+  font-family: var(--f-heading);
+  font-size: var(--fs-2xs);
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--text3);
   cursor: pointer;
-  color: var(--text2);
-  font-size: var(--fs-sm);
-  transition: color 0.15s, background 0.15s, border-color 0.15s;
+  transition: color .15s, background .15s;
+  margin-bottom: -1px;
 }
 
 .merits-subtab-btn:hover,
 .flaws-subtab-btn:hover {
-  color: var(--text);
-  background: rgba(184, 134, 11, 0.05);
+  color: var(--text2);
+  background: color-mix(in srgb, var(--accent) 5%, transparent);
 }
 
 .merits-subtab-btn.active,
 .flaws-subtab-btn.active {
-  color: var(--gold);
-  border-color: var(--gold);
-  background: rgba(184, 134, 11, 0.1);
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--accent) 2%, transparent) 0%,
+    color-mix(in srgb, var(--accent) 35%, transparent) 100%);
 }
 
 .merits-lib-list {
