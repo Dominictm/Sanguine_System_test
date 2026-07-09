@@ -21,6 +21,12 @@
   --gold: #B8860B;
   --gold2: #DAA520;
   --crimson: #DC143C;
+  /* Gold-tint alphas for the "sheet action" button family (cluster B —
+     see docs/design/2026-07-09-buttons-and-blocks-unification-plan.md);
+     canonicalizes .12/.5/.22 which had drifted to .14/.45/.24 in one class. */
+  --gold-tint-weak: rgba(184, 134, 11, 0.12);
+  --gold-tint-strong: rgba(184, 134, 11, 0.5);
+  --gold-tint-hover: rgba(184, 134, 11, 0.22);
   /* ── Text ── */
   --text: #E8E0D0;
   --text2: #a89880;
@@ -6663,14 +6669,14 @@ a.md-link-loc:hover {
 }
 
 .modp-canon-btn {
-  background: rgba(184, 134, 11, 0.12);
-  border: 1px solid rgba(184, 134, 11, 0.5);
+  background: var(--gold-tint-weak);
+  border: 1px solid var(--gold-tint-strong);
   color: var(--gold);
 }
 
 .modp-canon-btn:hover {
   border-color: var(--gold);
-  background: rgba(184, 134, 11, 0.22);
+  background: var(--gold-tint-hover);
 }
 
 .modp-canon-btn:disabled {
@@ -7048,14 +7054,14 @@ a.md-link-loc:hover {
 }
 
 .cdet-sheet-btn {
-  background: rgba(184, 134, 11, 0.12);
-  border: 1px solid rgba(184, 134, 11, 0.45);
+  background: var(--gold-tint-weak);
+  border: 1px solid var(--gold-tint-strong);
   color: var(--gold);
 }
 
 .cdet-sheet-btn:hover {
   border-color: var(--gold);
-  background: rgba(184, 134, 11, 0.22);
+  background: var(--gold-tint-hover);
 }
 
 .cdet-sheet-btn:disabled {
@@ -7166,14 +7172,14 @@ a.md-link-loc:hover {
 }
 
 .sheet-btn {
-  background: rgba(184, 134, 11, 0.14);
-  border: 1px solid rgba(184, 134, 11, 0.5);
+  background: var(--gold-tint-weak);
+  border: 1px solid var(--gold-tint-strong);
   color: var(--gold);
 }
 
 .sheet-btn:hover {
   border-color: var(--gold);
-  background: rgba(184, 134, 11, 0.24);
+  background: var(--gold-tint-hover);
 }
 
 .sheet-btn:disabled {
