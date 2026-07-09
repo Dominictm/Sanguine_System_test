@@ -900,7 +900,7 @@ function _libMeritCardsHtml(category) {
   return `<div class="lib-cards">${merits.map(m =>
     `<button type="button" class="lib-card" data-merit-slug="${escAttr(m.slug)}" data-merit-category="${category}">
       <div class="lib-card-name">${escHtml(m.name)}</div>
-      <div class="lib-card-meta">${'●'.repeat(m.points)}</div>
+      <div class="lib-card-points">${'<span class="lib-dot"></span>'.repeat(m.points)}</div>
     </button>`).join('')}</div>`;
 }
 
@@ -956,7 +956,7 @@ function _libFlawCardsHtml(category) {
   return `<div class="lib-cards">${flaws.map(m =>
     `<button type="button" class="lib-card" data-flaw-slug="${escAttr(m.slug)}" data-flaw-category="${category}">
       <div class="lib-card-name">${escHtml(m.name)}</div>
-      <div class="lib-card-meta">${'●'.repeat(m.points)}</div>
+      <div class="lib-card-points">${'<span class="lib-dot"></span>'.repeat(m.points)}</div>
     </button>`).join('')}</div>`;
 }
 

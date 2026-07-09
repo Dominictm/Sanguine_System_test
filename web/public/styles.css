@@ -8037,6 +8037,21 @@ a.md-link-loc:hover {
   color: var(--text3);
 }
 
+/* Достоинства/Недостатки — стоимость в точках на карточке: крупнее и по
+   центру, а не мелким текстом слева (см. .lib-dot — красный кружок с
+   золотым бордером, уже используется для уровня силы в описаниях). */
+.lib-card-points {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.lib-card-points .lib-dot {
+  width: 16px;
+  height: 16px;
+}
+
 .v20-disc-back {
   background: transparent;
   border: none;
