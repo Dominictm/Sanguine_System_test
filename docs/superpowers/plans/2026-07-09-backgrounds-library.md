@@ -30,25 +30,25 @@
 Результат — 5 JSON-файлов:
 `system/library/backgrounds/{general,vampire,ghoul,mage,changeling}.json`
 
-- [ ] Собрать точный список URL/названий страниц по каждой категории
-- [ ] Дозапросить каждую страницу, извлечь описание + систему
-- [ ] Собрать 5 JSON-файлов по схеме из спеки (`slug`/`name`/`description`/`system`/`category`)
-- [ ] Прогнать `node -e` валидацию: нет пустых/дублирующихся `slug` (тот же баг, что чинили у Достоинств)
+- [x] Собрать точный список URL/названий страниц по каждой категории
+- [x] Дозапросить каждую страницу, извлечь описание + систему
+- [x] Собрать 5 JSON-файлов по схеме из спеки (`slug`/`name`/`description`/`system`/`category`) — 51 запись
+- [x] Прогнать `node -e` валидацию: нет пустых/дублирующихся `slug` (тот же баг, что чинили у Достоинств)
 
 ### Задача 2 — Backend: loader
 
 **Файл:** `web/lib/backgrounds-loader.js` (новый, копия `merits-loader.js`)
 
-- [ ] Написать `loadBackgrounds(category)`/`getBackgrounds(category)`/`getAllBackgrounds()`
-- [ ] Список категорий: `['general','vampire','ghoul','mage','changeling']`
+- [x] Написать `loadBackgrounds(category)`/`getBackgrounds(category)`/`getAllBackgrounds()`
+- [x] Список категорий: `['general','vampire','ghoul','mage','changeling']`
 
 ### Задача 3 — Backend: роуты
 
 **Файл:** `web/routes/library.js` (правка)
 
-- [ ] `GET /api/library/backgrounds/:category`
-- [ ] `GET /api/library/backgrounds` (плоский список всех категорий)
-- [ ] Тест: `web/tests/all.test.js` — по образцу тестов `/api/library/merits`
+- [x] `GET /api/library/backgrounds/:category`
+- [x] `GET /api/library/backgrounds` (плоский список всех категорий)
+- [x] Тест: `web/tests/all.test.js` — по образцу тестов `/api/library/merits`
 
 ### Задача 4 — Frontend: карточки + модалка
 

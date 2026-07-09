@@ -13,6 +13,7 @@ const { parseDisciplineMd } = require('../lib/disciplines');
 const { parsePsychicMd } = require('../lib/psychics');
 const { getMerits, getAllMerits } = require('../lib/merits-loader');
 const { getFlaws, getAllFlaws } = require('../lib/flaws-loader');
+const { getBackgrounds, getAllBackgrounds } = require('../lib/backgrounds-loader');
 
 const router = express.Router();
 
@@ -106,6 +107,21 @@ router.get('/api/library/merits', (_req, res) => {
 
 router.get('/api/library/flaws', (_req, res) => {
   try { res.json(Object.values(getAllFlaws()).flat()); }
+  catch (e) { serverError(res, e); }
+});
+
+// ── Библиотека: справочник фактов биографии (system/library/backgrounds/*.json) ──
+// JSON-based backgrounds library (general, vampire, ghoul, mage, changeling)
+router.get('/api/library/backgrounds/:category', (_req, res) => {
+  try {
+    const category = _req.params.category;
+    const backgrounds = getBackgrounds(category);
+    res.json(backgrounds);
+  } catch (e) { serverError(res, e); }
+});
+
+router.get('/api/library/backgrounds', (_req, res) => {
+  try { res.json(Object.values(getAllBackgrounds()).flat()); }
   catch (e) { serverError(res, e); }
 });
 

@@ -1688,6 +1688,25 @@ describe('API — integration', () => {
       assert.ok(sample, 'ожидался известный недостаток «Запах могилы»');
       assert.equal(typeof sample.points, 'number');
     });
+    it('GET /api/library/backgrounds/:category → массив одной категории', async () => {
+      const { status, body } = await apiJson('/api/library/backgrounds/general');
+      assert.equal(status, 200);
+      assert.ok(Array.isArray(body));
+      assert.ok(body.length > 0);
+      const sample = body.find(b => b.name === 'Ресурсы');
+      assert.ok(sample, 'ожидался известный факт биографии «Ресурсы»');
+      assert.equal(sample.category, 'general');
+      assert.equal(typeof sample.description, 'string');
+    });
+    it('GET /api/library/backgrounds → массив всех категорий', async () => {
+      const { status, body } = await apiJson('/api/library/backgrounds');
+      assert.equal(status, 200);
+      assert.ok(Array.isArray(body));
+      assert.ok(body.length > 0);
+      const categories = new Set(body.map(b => b.category));
+      assert.deepEqual([...categories].sort(),
+        ['changeling', 'general', 'ghoul', 'mage', 'vampire']);
+    });
   });
 
   // ── Locations ──────────────────────────────────────────────────────────────
