@@ -1707,6 +1707,42 @@ describe('API — integration', () => {
       assert.deepEqual([...categories].sort(),
         ['changeling', 'general', 'ghoul', 'mage', 'vampire']);
     });
+    it('GET /api/library/disciplines → hasArt отражает наличие web/public/img/system/library/disciplines/<slug>.png', async () => {
+      // Полностью самодостаточная фикстура (синтетические .md + .png), а не
+      // проверка на реальной дисциплине — иначе тест сломается сам собой
+      // после батч-генерации арта, когда у всех 17 реальных дисциплин
+      // появится настоящий арт и любое захардкоженное "у X ещё нет арта"
+      // станет ложным.
+      const discDir = path.join(__dirname, '../../system/library/disciplines');
+      const imgDir = path.join(__dirname, '../public/img/system/library/disciplines');
+      await fs.mkdir(imgDir, { recursive: true });
+      const mdWithArt = path.join(discDir, '__test_with_art__.md');
+      const mdNoArt = path.join(discDir, '__test_no_art__.md');
+      const pngWithArt = path.join(imgDir, '__test_with_art__.png');
+      await fs.writeFile(mdWithArt, '# 🐺 Тест с артом (Test)\n');
+      await fs.writeFile(mdNoArt, '# 🐺 Тест без арта (Test)\n');
+      await fs.writeFile(pngWithArt, Buffer.from([0]));
+      try {
+        const { status, body } = await apiJson('/api/library/disciplines');
+        assert.equal(status, 200);
+        const withArt = body.find(d => d.slug === '__test_with_art__');
+        const noArt = body.find(d => d.slug === '__test_no_art__');
+        assert.ok(withArt, 'фикстура __test_with_art__ должна попасть в список');
+        assert.ok(noArt, 'фикстура __test_no_art__ должна попасть в список');
+        assert.equal(withArt.hasArt, true);
+        assert.equal(noArt.hasArt, false);
+      } finally {
+        await fs.rm(mdWithArt, { force: true });
+        await fs.rm(mdNoArt, { force: true });
+        await fs.rm(pngWithArt, { force: true });
+      }
+    });
+    it('GET /api/library/psychics → у всех записей есть поле hasArt (boolean)', async () => {
+      const { status, body } = await apiJson('/api/library/psychics');
+      assert.equal(status, 200);
+      assert.ok(body.length > 0);
+      for (const p of body) assert.equal(typeof p.hasArt, 'boolean');
+    });
   });
 
   // ── Locations ──────────────────────────────────────────────────────────────

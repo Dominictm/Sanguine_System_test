@@ -27,17 +27,26 @@ async function loadDisciplines() {
   if (!files) return [];
   const mds = files.filter(f => f.endsWith('.md') && f.toLowerCase() !== 'readme.md').sort();
 
+  const imgDir = path.join(__dirname, '..', 'public', 'img', 'system', 'library', 'disciplines');
+  const artFiles = await fs.readdir(imgDir).catch(() => []);
+
   // Сигнатура по mtime каждого файла: правка содержимого существующего .md
   // не меняет mtime каталога, поэтому ключевать по нему нельзя (иначе кэш не сбросится).
+  // Список картинок тоже входит в сигнатуру — появление нового PNG должно
+  // сбрасывать кэш так же надёжно, как правка текста дисциплины.
   const stats = await Promise.all(mds.map(f => fs.stat(path.join(DISC_DIR, f)).catch(() => null)));
-  const sig = mds.map((f, i) => `${f}:${stats[i] ? stats[i].mtimeMs : 0}`).join('|');
+  const sig = mds.map((f, i) => `${f}:${stats[i] ? stats[i].mtimeMs : 0}`).join('|') + '||art:' + artFiles.sort().join(',');
   if (_discCache && _discCache.sig === sig) return _discCache.list;
 
   const list = [];
   for (const f of mds) {
     const slug = f.replace(/\.md$/, '');
     const md = await fs.readFile(path.join(DISC_DIR, f), 'utf-8').catch(() => '');
-    if (md) list.push(parseDisciplineMd(md, slug));
+    if (md) {
+      const parsed = parseDisciplineMd(md, slug);
+      parsed.hasArt = artFiles.includes(slug + '.png');
+      list.push(parsed);
+    }
   }
   _discCache = { sig, list };
   return list;
@@ -58,15 +67,22 @@ async function loadPsychics() {
   if (!files) return [];
   const mds = files.filter(f => f.endsWith('.md') && f.toLowerCase() !== 'readme.md').sort();
 
+  const imgDir = path.join(__dirname, '..', 'public', 'img', 'system', 'library', 'psychics');
+  const artFiles = await fs.readdir(imgDir).catch(() => []);
+
   const stats = await Promise.all(mds.map(f => fs.stat(path.join(PSY_DIR, f)).catch(() => null)));
-  const sig = mds.map((f, i) => `${f}:${stats[i] ? stats[i].mtimeMs : 0}`).join('|');
+  const sig = mds.map((f, i) => `${f}:${stats[i] ? stats[i].mtimeMs : 0}`).join('|') + '||art:' + artFiles.sort().join(',');
   if (_psyCache && _psyCache.sig === sig) return _psyCache.list;
 
   const list = [];
   for (const f of mds) {
     const slug = f.replace(/\.md$/, '');
     const md = await fs.readFile(path.join(PSY_DIR, f), 'utf-8').catch(() => '');
-    if (md) list.push(parsePsychicMd(md, slug));
+    if (md) {
+      const parsed = parsePsychicMd(md, slug);
+      parsed.hasArt = artFiles.includes(slug + '.png');
+      list.push(parsed);
+    }
   }
   _psyCache = { sig, list };
   return list;
