@@ -680,6 +680,21 @@ function _v20OpenRollModal(seed) {
   _v20RenderRollLog();
 }
 
+// Shared "list ⇄ detail" click delegation for the 4 near-identical library
+// pickers below (disciplines modal + lib tab, psychics modal + lib tab,
+// merits/flaws lib tabs) — see docs/audit/2026-07-09-project-improvement-plan.md,
+// P1.6. Only the event-wiring is unified here; each library keeps its own
+// cache shape and HTML builders (disciplines/psychics = flat array keyed by
+// slug, merits/flaws = keyed by category) since those are genuinely
+// different data models, not copy-paste duplication worth forcing together.
+function _bindLibraryClicks(container, { itemAttr, backAttr, onItem, onBack }) {
+  if (!container) return;
+  container.addEventListener('click', e => {
+    const back = e.target.closest(`[${backAttr}]`); if (back) { onBack(); return; }
+    const item = e.target.closest(`[${itemAttr}]`); if (item) { onItem(item.dataset); return; }
+  });
+}
+
 // ── Discipline reference library (Фаза 3) ──────────────────────────────────
 // Источник истины — system/library/disciplines/*.md (сервер парсит → /api/library/disciplines).
 let _disciplinesCache = null;
@@ -763,9 +778,9 @@ async function _v20OpenDisciplineModal(name) {
     document.body.appendChild(modal);
     modal.addEventListener('click', e => { if (e.target === modal) _v20CloseDisciplineModal(); });
     modal.querySelector('#v20-disc-modal-close').addEventListener('click', _v20CloseDisciplineModal);
-    modal.addEventListener('click', e => {
-      const back = e.target.closest('[data-disc-back]'); if (back) { _v20RenderDisciplineLibrary(); return; }
-      const item = e.target.closest('[data-disc-slug]'); if (item) { _v20RenderDisciplineDetail(item.dataset.discSlug); return; }
+    _bindLibraryClicks(modal, {
+      itemAttr: 'data-disc-slug', backAttr: 'data-disc-back',
+      onItem: ds => _v20RenderDisciplineDetail(ds.discSlug), onBack: _v20RenderDisciplineLibrary,
     });
     document.addEventListener('keydown', e => { if (e.key === 'Escape') _v20CloseDisciplineModal(); });
   }
@@ -793,9 +808,9 @@ async function loadLibrary() {
   await ensureDisciplines();
   _libRenderDisciplineList();
 }
-document.getElementById('lib-disciplines-body')?.addEventListener('click', e => {
-  const back = e.target.closest('[data-disc-back]'); if (back) { _libRenderDisciplineList(); return; }
-  const item = e.target.closest('[data-disc-slug]'); if (item) { _libRenderDisciplineDetail(item.dataset.discSlug); return; }
+_bindLibraryClicks(document.getElementById('lib-disciplines-body'), {
+  itemAttr: 'data-disc-slug', backAttr: 'data-disc-back',
+  onItem: ds => _libRenderDisciplineDetail(ds.discSlug), onBack: _libRenderDisciplineList,
 });
 
 // ── Psychic powers reference library (зеркало справочника дисциплин выше) ──────
@@ -835,9 +850,9 @@ async function loadPsychicsLibrary() {
   await ensurePsychics();
   _libRenderPsyList();
 }
-document.getElementById('lib-psychics-body')?.addEventListener('click', e => {
-  const back = e.target.closest('[data-psy-back]'); if (back) { _libRenderPsyList(); return; }
-  const item = e.target.closest('[data-psy-slug]'); if (item) { _libRenderPsyDetail(item.dataset.psySlug); return; }
+_bindLibraryClicks(document.getElementById('lib-psychics-body'), {
+  itemAttr: 'data-psy-slug', backAttr: 'data-psy-back',
+  onItem: ds => _libRenderPsyDetail(ds.psySlug), onBack: _libRenderPsyList,
 });
 
 // ── Библиотека: справочник достоинств (физические/умственные/социальные/сверхъестественные) ──
@@ -883,9 +898,9 @@ async function loadMeritsLibrary(category) {
   }
 }
 
-document.getElementById('lib-merits-body')?.addEventListener('click', e => {
-  const back = e.target.closest('[data-merit-back]'); if (back) { _libRenderMeritList(_currentMeritCategory); return; }
-  const item = e.target.closest('[data-merit-slug]'); if (item) { _libRenderMeritDetail(item.dataset.meritSlug, item.dataset.meritCategory); return; }
+_bindLibraryClicks(document.getElementById('lib-merits-body'), {
+  itemAttr: 'data-merit-slug', backAttr: 'data-merit-back',
+  onItem: ds => _libRenderMeritDetail(ds.meritSlug, ds.meritCategory), onBack: () => _libRenderMeritList(_currentMeritCategory),
 });
 
 // ── Библиотека: справочник недостатков (физические/умственные/социальные/сверхъестественные) ──
@@ -931,9 +946,9 @@ async function loadFlawsLibrary(category) {
   }
 }
 
-document.getElementById('lib-flaws-body')?.addEventListener('click', e => {
-  const back = e.target.closest('[data-flaw-back]'); if (back) { _libRenderFlawList(_currentFlawCategory); return; }
-  const item = e.target.closest('[data-flaw-slug]'); if (item) { _libRenderFlawDetail(item.dataset.flawSlug, item.dataset.flawCategory); return; }
+_bindLibraryClicks(document.getElementById('lib-flaws-body'), {
+  itemAttr: 'data-flaw-slug', backAttr: 'data-flaw-back',
+  onItem: ds => _libRenderFlawDetail(ds.flawSlug, ds.flawCategory), onBack: () => _libRenderFlawList(_currentFlawCategory),
 });
 
 // ── Mortal sheet: «Психические способности» row reference (зеркало v20DisciplineKey/
