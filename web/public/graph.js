@@ -211,7 +211,13 @@ function renderGraph(data) {
     .selectAll('g').data(nodes).join('g')
     .attr('class', 'node-group')
     .call(d3.drag()
-      .on('start', (e, d) => { if (!e.active) sim.alphaTarget(.3).restart(); d.fx = d.x; d.fy = d.y; })
+      // tickCount сбрасывается на каждый новый драг — иначе счётчик копится
+      // между отдельными перетаскиваниями (каждое даёт симуляции пару сотен
+      // тиков через alphaTarget) и после 2-3 драгов MAX_SIM_TICKS срабатывает
+      // навсегда: sim.stop() останавливает tick-обработчик, который единственный
+      // обновляет transform узлов — d.fx/d.fy продолжают меняться при следующем
+      // драге, но экран больше не перерисовывается, будто узел «перестал двигаться».
+      .on('start', (e, d) => { tickCount = 0; if (!e.active) sim.alphaTarget(.3).restart(); d.fx = d.x; d.fy = d.y; })
       .on('drag',  (e, d) => { d.fx = e.x; d.fy = e.y; })
       .on('end',   (e, d) => { if (!e.active) sim.alphaTarget(0); d.fx = null; d.fy = null; })
     );
