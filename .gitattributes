@@ -1,1 +1,9 @@
 *.bat text eol=crlf
+
+# Normalize everything else to LF. Without this, cities/**/*.md accumulates
+# mixed CRLF/LF line endings over time (edited on Windows with core.autocrlf,
+# then rewritten by Node's fs.writeFile which always emits \n) — any later
+# read-modify-write (a test, close_chronicle.js, a PUT endpoint) then "fixes"
+# the mixed endings to pure LF, showing up as a spurious whole-file diff even
+# though the content didn't meaningfully change.
+* text=auto eol=lf

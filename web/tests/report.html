@@ -116,7 +116,7 @@
   }
   .stat-box.s-total .val { color: var(--gold); }
   .stat-box.s-pass  .val { color: var(--green2); }
-  .stat-box.s-fail  .val { color: var(--red2); }
+  .stat-box.s-fail  .val { color: var(--text-dim); }
   .stat-box.s-dur   .val { color: var(--text-dim); }
   .stat-box.s-pct   .val { color: var(--gold); }
 
@@ -127,7 +127,7 @@
   }
   .progress-fill {
     height: 100%;
-    width: 98%;
+    width: 100%;
     background: linear-gradient(90deg, var(--crimson), var(--blood));
     transition: width .6s ease;
   }
@@ -240,23 +240,23 @@
 
 <div class="report-header">
   <h1>Vampire: The Masquerade</h1>
-  <p class="subtitle">CHRONICLE MANAGER · TEST REPORT · 01.07.2026, 19:18:53</p>
-  <span class="status-badge bad">5 FAILED</span>
+  <p class="subtitle">CHRONICLE MANAGER · TEST REPORT · 09.07.2026, 14:37:20</p>
+  <span class="status-badge good">ALL PASSED</span>
 </div>
 
 <div class="summary-bar">
-  <div class="stat-box s-total"><span class="val">212</span><span class="lbl">TOTAL</span></div>
-  <div class="stat-box s-pass"> <span class="val">207</span> <span class="lbl">PASSED</span></div>
-  <div class="stat-box s-fail"> <span class="val">5</span> <span class="lbl">FAILED</span></div>
-  <div class="stat-box s-dur">  <span class="val">1.67s</span><span class="lbl">DURATION</span></div>
-  <div class="stat-box s-pct">  <span class="val">98%</span><span class="lbl">PASS RATE</span></div>
+  <div class="stat-box s-total"><span class="val">320</span><span class="lbl">TOTAL</span></div>
+  <div class="stat-box s-pass"> <span class="val">320</span> <span class="lbl">PASSED</span></div>
+  <div class="stat-box s-fail"> <span class="val">0</span> <span class="lbl">FAILED</span></div>
+  <div class="stat-box s-dur">  <span class="val">2.02s</span><span class="lbl">DURATION</span></div>
+  <div class="stat-box s-pct">  <span class="val">100%</span><span class="lbl">PASS RATE</span></div>
 </div>
 <div class="progress-track"><div class="progress-fill"></div></div>
 
 <div class="results">
   
 <details class="suite suite-pass" open>
-  <summary><span class="suite-name">Parsers — unit</span><span class="suite-stat"><span class="s-pass">91✓</span></span></summary>
+  <summary><span class="suite-name">Parsers — unit</span><span class="suite-stat"><span class="s-pass">168✓</span></span></summary>
   <div class="suite-body">
 <details class="suite suite-pass" open>
   <summary><span class="suite-name">readPrompt — Format A (indented)</span><span class="suite-stat"><span class="s-pass">2✓</span></span></summary>
@@ -303,8 +303,8 @@
 <div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">handles digits</span></div>
 <div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">null / undefined → empty string</span></div>
 <div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">already-ASCII slug is stable</span></div>
-<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">browser parity — public/scripts.js _NTR mirrors CYRILLIC_TR</span></div>
-<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">browser parity — public/scripts.js _LATIN_TR mirrors LATIN_TR</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">browser parity — public/utils.js _NTR mirrors CYRILLIC_TR</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">browser parity — public/utils.js _LATIN_TR mirrors LATIN_TR</span></div>
 <div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">non-Cyrillic diacritics fold (Düsseldorf→dusseldorf, Şanlıurfa→sanliurfa)</span></div></div>
 </details>
 
@@ -405,6 +405,86 @@
 </details>
 
 <details class="suite suite-pass" open>
+  <summary><span class="suite-name">foundry-clans</span><span class="suite-stat"><span class="s-pass">6✓</span></span></summary>
+  <div class="suite-body"><div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">clanRuToFoundryKey — известный клан</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">clanRuToFoundryKey — неизвестный клан → null</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">clanFoundryKeyToRu — обратное преобразование</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">sectRuToFoundryKey / sectFoundryKeyToRu</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">parseGenerationNumber — «N-е» → число</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">bloodMaxForGeneration — по таблице RULES_V20</span></div></div>
+</details>
+
+<details class="suite suite-pass" open>
+  <summary><span class="suite-name">foundry-export</span><span class="suite-stat"><span class="s-pass">18✓</span></span></summary>
+  <div class="suite-body"><div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">shape: type Vampire, header/generation/clan/sect</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">неизвестный клан/секта → custom.{clan,sect}, а не сломанный ключ</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">атрибуты — все 11 ключей, включая composure/resolve</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">канонические способности → abilities.&lt;key&gt;.value</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">канонические способности пишут isvisible:true — иначе Foundry не показывает строку после Import Data</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">кастомная способность → embedded Item типа Trait</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">дисциплины (непустые) → embedded Item типа Power/discipline</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">добродетели/воля/запас крови</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">Путь/Человечность → advantages.path</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">здоровье → damage.lethal, не отдельные value/total</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">flaw (слабость клана) → system.weakness</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">history → system.background (биография, не путать с Item-Фоном)</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">description → system.appearance (собранный читаемый текст, пустые поля пропущены)</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">meritsFlaws, совпавший с библиотекой → embedded Item merit, а не notes</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">meritsFlaws, не найденный в библиотеке → остаётся текстом в system.notes</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">meritsFlaws как массив (новый формат) — экспорт напрямую, без сверки с библиотекой</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">фон (backgrounds) → embedded Item типа Feature/background</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">settings — минимальный набор has*-флагов для вампира, без soak/initiative/movement</span></div></div>
+</details>
+
+<details class="suite suite-pass" open>
+  <summary><span class="suite-name">foundry-export — Mortal</span><span class="suite-stat"><span class="s-pass">6✓</span></span></summary>
+  <div class="suite-body"><div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">type Mortal, без clan/sect/generation/generationmod/sire/bloodline/weakness/custom в system</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">advantages.bloodpool всё равно пишется (общий блок для всех линеек), max=0 — не фантомные 30</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">settings.has* — mortal-пресет: haswillpower/haspath/hasvirtue true, hasbloodpool false</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">Человечность/Путь/Воля/Добродетели читаются как у вампира</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">Фон и кастомная способность экспортируются как у вампира</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">otherTraits → embedded Item типа Trait/othertraits</span></div></div>
+</details>
+
+<details class="suite suite-pass" open>
+  <summary><span class="suite-name">foundry-import</span><span class="suite-stat"><span class="s-pass">18✓</span></span></summary>
+  <div class="suite-body"><div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">Mortal: othertraits Item → sheetData.otherTraits</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">Mortal: clan/sect/generation остаются пустыми в cardFields (ключей нет в system)</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">Mortal: Человечность/Путь/Воля/Фон/кастомная способность читаются как у вампира</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">атрибуты (9 канонических + composure/resolve)</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">канонические способности возвращаются как fixed:true строки с RU-именем</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">Trait-Item → кастомная способность в нужной группе</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">дисциплины из Power/discipline Item</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">добродетели/воля/запас крови</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">Путь/Человечность</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">здоровье: damage.lethal=3 → 3 первых уровня отмечены</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">cardFields — клан/секта/поколение/сир для PUT /fields</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">неизвестный i18n-ключ клана → берём custom.clan как есть</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">фон из Feature/background Item</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">достоинство из Feature/merit Item возвращается записью массива meritsFlaws</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">недостаток из Feature/flaw Item возвращается с kind: flaw</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">несовпавший текст из system.notes добавляется отдельными записями массива</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">system.background → sheetData.history (биография, симметрично экспорту)</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">импорт без merit/flaw Item и без notes сохраняет уже существующий meritsFlaws (не затирает в [])</span></div></div>
+</details>
+
+<details class="suite suite-pass" open>
+  <summary><span class="suite-name">foundry-merits</span><span class="suite-stat"><span class="s-pass">5✓</span></span></summary>
+  <div class="suite-body"><div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">строка с очками в скобках находит достоинство в библиотеке</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">находит недостаток и определяет kind: flaw</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">несколько строк — маркеры списка и пустые строки не мешают</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">кастомная строка без совпадения в библиотеке остаётся в unmatched</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">пустой текст → пустые массивы</span></div></div>
+</details>
+
+<details class="suite suite-pass" open>
+  <summary><span class="suite-name">zip (createZip/readZip)</span><span class="suite-stat"><span class="s-pass">3✓</span></span></summary>
+  <div class="suite-body"><div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">round-trip: 3 файла, имена и содержимое совпадают байт-в-байт</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">пустой список файлов → валидный (пустой) ZIP</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">кириллица и юникод в содержимом переживают round-trip</span></div></div>
+</details>
+
+<details class="suite suite-pass" open>
   <summary><span class="suite-name">parseLocation</span><span class="suite-stat"><span class="s-pass">3✓</span></span></summary>
   <div class="suite-body"><div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">title + meta fields</span></div>
 <div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">atmosphere + masquerade level high</span></div>
@@ -423,11 +503,44 @@
   <summary><span class="suite-name">parseChronicleParticipants</span><span class="suite-stat"><span class="s-pass">2✓</span></span></summary>
   <div class="suite-body"><div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">collects names, skips anonymous</span></div>
 <div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">empty text → empty array</span></div></div>
+</details>
+
+<details class="suite suite-pass" open>
+  <summary><span class="suite-name">parseScenarioSections / replaceScenarioSection</span><span class="suite-stat"><span class="s-pass">12✓</span></span></summary>
+  <div class="suite-body"><div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">splits into preamble + ## sections, strips only the trailing divider</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">no ## headings → whole text is preamble, sections empty</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">replaceScenarioSection swaps only the target section, leaves others intact</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">replaceScenarioSection — неизвестный заголовок возвращает текст без изменений</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">replaceScenarioSections — применяет несколько замен за один проход, неизвестные заголовки — в skipped</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">hasManualSceneMarker/addManualSceneMarker/clearManualSceneMarker — round-trip</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">insertScenarioScene — вставляет новую сцену перед «Финал» с инкрементом номера, ставит метку</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">insertScenarioScene — без блока «Финал» добавляет сцену в конец</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">insertScenarioScene — «Финальная сцена» не считается блоком «Финал» (не anchored-совпадение)</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">insertScenarioScene — числа сцен с пропусками: инкремент от максимума, а не от количества</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">разворачивает вложенные `### Сцена N` (под общим `## Сцены`) в отдельные разделы верхнего уровня</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">replaceScenarioSection на вложенной сцене меняет только её, сохраняя соседние сцены и обёртку</span></div></div>
+</details>
+
+<details class="suite suite-pass" open>
+  <summary><span class="suite-name">checkScenarioStructure</span><span class="suite-stat"><span class="s-pass">3✓</span></span></summary>
+  <div class="suite-body"><div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">эталонная плоская структура (GM-справка/Пролог/Сцена N/Финал/Открытые вопросы/Колорит) → missing пуст</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">минимальная структура (Пролог/Сцена N/Финал) без вопросов/колорита → 2 недостающие темы</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">пустой сценарий → все 5 тем отсутствуют</span></div></div>
+</details>
+
+<details class="suite suite-pass" open>
+  <summary><span class="suite-name">parsePoliticalFactions / setPoliticalFactionInfluence</span><span class="suite-stat"><span class="s-pass">6✓</span></span></summary>
+  <div class="suite-body"><div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">парсит легаси-блоки «Сила» (⬛×n⬜×(5-n), шаг 20) — обратная совместимость со старыми файлами</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">парсит новую процентную запись («80%») наравне с легаси-блоками</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">нет таблицы → пустой массив</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">setPoliticalFactionInfluence меняет только целевую фракцию (переводит её на «%»-запись), остальное не трогает</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">setPoliticalFactionInfluence округляет до шага 5 и добавляет новую фракцию строкой</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">setPoliticalFactionInfluence создаёт таблицу с нуля, если её ещё нет в файле</span></div></div>
 </details></div>
 </details>
 
 <details class="suite suite-pass" open>
-  <summary><span class="suite-name">API — integration</span><span class="suite-stat"><span class="s-pass">84✓</span></span></summary>
+  <summary><span class="suite-name">API — integration</span><span class="suite-stat"><span class="s-pass">152✓</span></span></summary>
   <div class="suite-body">
 <details class="suite suite-pass" open>
   <summary><span class="suite-name">Health / system</span><span class="suite-stat"><span class="s-pass">5✓</span></span></summary>
@@ -439,7 +552,7 @@
 </details>
 
 <details class="suite suite-pass" open>
-  <summary><span class="suite-name">Characters</span><span class="suite-stat"><span class="s-pass">8✓</span></span></summary>
+  <summary><span class="suite-name">Characters</span><span class="suite-stat"><span class="s-pass">21✓</span></span></summary>
   <div class="suite-body"><div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">returns non-empty array</span></div>
 <div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">each char has name / lineage / status</span></div>
 <div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">each char has hasSheet boolean</span></div>
@@ -447,19 +560,46 @@
 <div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">GET /api/characters/all-images → plain object</span></div>
 <div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">GET /:name/sheet — no sheet → {exists: false}</span></div>
 <div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">GET unknown/sheet → 404</span></div>
-<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">GET /:name/images → {images[]}</span></div></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">GET /:name/images → {images[]}</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">GET /api/export/characters → тот же массив + заголовок скачивания</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">GET /:slug/export-foundry → Foundry Actor JSON + заголовок скачивания</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">GET unknown/export-foundry → 404</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">GET /:slug/export-foundry для смертного → 200, type Mortal</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">GET /:slug/export-foundry для феи → 400 (пока не поддержано)</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">POST /:slug/import-foundry → пишет sheet-data, возвращает cardFields</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">POST /:slug/import-foundry без actor → 400</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">POST /:slug/import-foundry с actor.type Mortal на вампира → 400 (не даём затереть чужой линейкой)</span></div>
+
+<details class="suite suite-pass" open>
+  <summary><span class="suite-name">POST /api/characters/export-foundry-bulk</span><span class="suite-stat"><span class="s-pass">5✓</span></span></summary>
+  <div class="suite-body"><div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">happy path: вампир + смертный → ZIP с двумя foundry_&lt;slug&gt;.json</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">пустой список slugs → 400</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">только неподдерживаемые линейки → 400</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">смешанный список: неподдерживаемые тихо пропускаются, ZIP содержит только поддержанные</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">повреждённый -sheet.json одного персонажа не роняет весь массовый экспорт</span></div></div>
+</details></div>
 </details>
 
 <details class="suite suite-pass" open>
-  <summary><span class="suite-name">Locations</span><span class="suite-stat"><span class="s-pass">2✓</span></span></summary>
+  <summary><span class="suite-name">Library</span><span class="suite-stat"><span class="s-pass">2✓</span></span></summary>
+  <div class="suite-body"><div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">GET /api/library/merits → массив всех категорий, каждая запись {name,points,category}</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">GET /api/library/flaws → массив всех категорий</span></div></div>
+</details>
+
+<details class="suite suite-pass" open>
+  <summary><span class="suite-name">Locations</span><span class="suite-stat"><span class="s-pass">5✓</span></span></summary>
   <div class="suite-body"><div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">GET /api/locations → array</span></div>
-<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">each location has title and slug</span></div></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">each location has title and slug</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">POST /api/locations/parse-generated парсит сырой AI-текст (общий с parseLocation)</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">POST /api/locations/parse-generated без text → 400</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">GET /api/export/locations → тот же массив + заголовок скачивания</span></div></div>
 </details>
 
 <details class="suite suite-pass" open>
-  <summary><span class="suite-name">Graph</span><span class="suite-stat"><span class="s-pass">2✓</span></span></summary>
+  <summary><span class="suite-name">Graph</span><span class="suite-stat"><span class="s-pass">3✓</span></span></summary>
   <div class="suite-body"><div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">GET /api/graph → {nodes[], links[]}</span></div>
-<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">each node has id field</span></div></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">each node has id field</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">GET /api/graph?compact=true → один узел на линейку</span></div></div>
 </details>
 
 <details class="suite suite-pass" open>
@@ -484,10 +624,11 @@
 </details>
 
 <details class="suite suite-pass" open>
-  <summary><span class="suite-name">Search</span><span class="suite-stat"><span class="s-pass">3✓</span></span></summary>
+  <summary><span class="suite-name">Search</span><span class="suite-stat"><span class="s-pass">4✓</span></span></summary>
   <div class="suite-body"><div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">short query (&lt; 3 chars) → empty results</span></div>
 <div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">returns expected shape for real query</span></div>
-<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">character results have slug/name/lineage/excerpt</span></div></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">character results have slug/name/lineage/excerpt</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">module results carry chronicleDisplay (кириллица из events.md), не голый слаг</span></div></div>
 </details>
 
 <details class="suite suite-pass" open>
@@ -568,9 +709,10 @@
 </details>
 
 <details class="suite suite-pass" open>
-  <summary><span class="suite-name">AI generation — happy path (mock)</span><span class="suite-stat"><span class="s-pass">2✓</span></span></summary>
+  <summary><span class="suite-name">AI generation — happy path (mock)</span><span class="suite-stat"><span class="s-pass">3✓</span></span></summary>
   <div class="suite-body"><div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">POST dialogue — known char + situation → 200 with replies</span></div>
-<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">POST canon-check — valid text → 200 with issues array</span></div></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">POST canon-check — valid text → 200 with issues array</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">POST /api/locations/generate field=sensory + channel → 200 with value (per-channel регенерация сенсорики)</span></div></div>
 </details>
 
 <details class="suite suite-pass" open>
@@ -598,6 +740,15 @@
 </details>
 
 <details class="suite suite-pass" open>
+  <summary><span class="suite-name">Faction influence — GET/PUT</span><span class="suite-stat"><span class="s-pass">5✓</span></span></summary>
+  <div class="suite-body"><div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">GET /api/factions/influence отдаёт распарсенные фракции реального political_state.md</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">PUT /api/factions/influence — валидация: без имени → 400, влияние вне 0-100 → 400</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">PUT /api/factions/influence — round-trip: обновляет существующую фракцию, не трогая остальные</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">PUT /api/factions/influence — новая фракция добавляется как отдельная строка</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">cityScaffold сразу засевает «Баланс сил» фракциями из поля factions (influence 0%), а GET дополнительно подтягивает те, что позже добавлены в city.md, но ещё не в political_state.md</span></div></div>
+</details>
+
+<details class="suite suite-pass" open>
   <summary><span class="suite-name">Chronicles &amp; modules — write guards</span><span class="suite-stat"><span class="s-pass">3✓</span></span></summary>
   <div class="suite-body"><div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">GET delete-preview — unknown chronicle → 404</span></div>
 <div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">DELETE — unknown chronicle → 404</span></div>
@@ -605,100 +756,68 @@
 </details>
 
 <details class="suite suite-pass" open>
+  <summary><span class="suite-name">Module write endpoints</span><span class="suite-stat"><span class="s-pass">34✓</span></span></summary>
+  <div class="suite-body"><div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">PUT /fields — path traversal → 400</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">PUT /fields — unknown module → 404</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">PUT /fields — title round-trip</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">PUT /scenario — empty → 400</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">PUT /scenario — round-trip</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">PUT /scenario/section — правит один раздел, остальные не трогает</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">PUT /scenario/section — неизвестный раздел → 404</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">POST /scenario/section/regenerate — перегенерирует раздел (AI_MOCK), остальные не трогает</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">POST /scenario/section/regenerate — неизвестный раздел → 404</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">PUT /scenario/section — с parent правит нужное одноимённое поле, не первое попавшееся</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">PUT /scenario/block/fields — сохраняет несколько полей одним запросом</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">PUT /scenario/block/fields — неизвестное поле идёт в skipped, остальные сохраняются</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">PUT /scenario/block/fields — пустой массив fields → 400</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">PUT /scenario/block/fields — все поля не найдены → 404, файл не изменяется</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">POST /scenario/scene — добавляет новую сцену перед «Финал», ставит метку</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">POST /scenario/scene — сценарий не найден → 404</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">POST /scenario/block/regenerate — перегенерация «Финал» снимает метку sceneAdded (AI_MOCK)</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">POST /scenario/block/regenerate — перегенерация НЕ-финального блока НЕ снимает метку sceneAdded (AI_MOCK)</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">POST /scenario/block/regenerate — перегенерирует блок целиком (AI_MOCK), другие блоки не трогает</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">POST /scenario/block/regenerate — неизвестный блок → 404</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">GET /detail — эталонный формат сценария (Пролог/Сцена N/Финал прямыми заголовками, meta:npcs/meta:locations) парсится корректно</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">POST /npc — без имени → 400</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">POST /npc — добавление и дубликат → 409</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">GET /detail — резолвит слаг модульного НПС по имени, если ссылка в npc.md устарела (регрессия: 404 на /promote)</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">POST /api/chronicles/:chr/modules — type пишется в карточку, дефолт «Игровая сессия»</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">POST /api/chronicles/:chr/modules — format пишется в карточку</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">PUT /fields — trackInChronology переключается и отражается в /detail</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">GET /detail — chronicleDisplay: кириллическое название хроники, не голый слаг</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">PUT /finale — пустой → 400</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">PUT /finale — round-trip, отражается в /detail</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">PUT /api/chronicles/:chr/modules/:mod/move — переносит модуль в другую хронику</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">PUT /api/chronicles/:chr/modules/:mod/move — целевая хроника не найдена → 404</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">DELETE /api/chronicles/:chr/modules/:mod — неизвестный модуль → 404</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">DELETE /api/chronicles/:chr/modules/:mod — создать и удалить модуль (регрессия: rmdir не был импортирован в routes/modules.js)</span></div></div>
+</details>
+
+<details class="suite suite-pass" open>
+  <summary><span class="suite-name">Character fields — status/statusDetails</span><span class="suite-stat"><span class="s-pass">1✓</span></span></summary>
+  <div class="suite-body"><div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">PUT /api/characters/:slug/fields — status и statusDetails пишутся в карточку и читаются обратно</span></div></div>
+</details>
+
+<details class="suite suite-pass" open>
+  <summary><span class="suite-name">Import/Export — characters &amp; locations</span><span class="suite-stat"><span class="s-pass">7✓</span></span></summary>
+  <div class="suite-body"><div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">GET /api/export/characters отдаёт raw для каждой карточки</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">GET /api/export/locations отдаёт raw + dirRelPath для каждой карточки</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">POST /api/import/characters — пустой список → 400</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">POST /api/import/characters — создаёт карточку под новым слагом, второй прогон без overwrite пропускает</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">POST /api/import/characters — неизвестная линейка → errors, недопустимый слаг → errors</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">POST /api/import/locations — создаёт карточку по dirRelPath, второй прогон без overwrite пропускает</span></div>
+<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">POST /api/import/locations — путь с «..» отклоняется</span></div></div>
+</details>
+
+<details class="suite suite-pass" open>
   <summary><span class="suite-name">Rumors — write round-trip</span><span class="suite-stat"><span class="s-pass">1✓</span></span></summary>
   <div class="suite-body"><div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">PUT writes content, GET reads it back</span></div></div>
-</details></div>
-</details>
-
-<details class="suite suite-fail" open>
-  <summary><span class="suite-name">E2E — сквозной цикл хроники</span><span class="suite-stat"><span class="s-fail">5✗</span>&nbsp;<span class="s-pass">32✓</span></span></summary>
-  <div class="suite-body">
-<details class="suite suite-pass" open>
-  <summary><span class="suite-name">1. Город</span><span class="suite-stat"><span class="s-pass">3✓</span></span></summary>
-  <div class="suite-body"><div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">POST /api/tool/new_city создаёт город</span></div>
-<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">город виден в /api/cities</span></div>
-<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">/api/status отдаёт домен города</span></div></div>
-</details>
-
-<details class="suite suite-pass" open>
-  <summary><span class="suite-name">1b. CRUD городов (API)</span><span class="suite-stat"><span class="s-pass">12✓</span></span></summary>
-  <div class="suite-body"><div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">POST /api/cities создаёт город из полей</span></div>
-<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">POST пробрасывает description и factions в city.md</span></div>
-<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">POST синхронизирует «Карту фракций» (political_state.md) при создании</span></div>
-<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">POST с уже существующим слагом → 409</span></div>
-<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">POST без названия → 400</span></div>
-<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">POST без года → 400</span></div>
-<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">POST с нечисловым годом → 400</span></div>
-<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">GET detail отдаёт parsed.display/year/секции</span></div>
-<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">PUT (fields) переписывает display</span></div>
-<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">PUT (raw cityMd) сохраняет произвольный markdown</span></div>
-<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">PUT без cityMd/fields → 400</span></div>
-<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">DELETE мягко удаляет (город пропадает из /api/cities)</span></div></div>
-</details>
-
-<details class="suite suite-pass" open>
-  <summary><span class="suite-name">2. Персонаж и локация</span><span class="suite-stat"><span class="s-pass">4✓</span></span></summary>
-  <div class="suite-body"><div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">new_npc создаёт карточку вампира</span></div>
-<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">карточка содержит обязательные поля</span></div>
-<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">new_location создаёт карточку локации</span></div>
-<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">/api/characters отдаёт созданного персонажа</span></div></div>
-</details>
-
-<details class="suite suite-fail" open>
-  <summary><span class="suite-name">2b. AI-генерация (mock)</span><span class="suite-stat"><span class="s-fail">2✗</span>&nbsp;<span class="s-pass">2✓</span></span></summary>
-  <div class="suite-body"><div class="test test-fail"><span class="t-icon">✗</span><span class="t-name">POST sheet/generate создаёт и сохраняет лист V20</span><pre class="test-error">HTTP 404: {"ok":false,"error":"Персонаж не найден"}
-
-404 !== 200
-</pre></div>
-<div class="test test-fail"><span class="t-icon">✗</span><span class="t-name">GET sheet возвращает сохранённый лист</span><pre class="test-error">Expected values to be strictly equal:
-
-404 !== 200
-</pre></div>
-<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">POST dialogue возвращает реплики в характере</span></div>
-<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">POST canon-check возвращает массив issues</span></div></div>
-</details>
-
-<details class="suite suite-fail" open>
-  <summary><span class="suite-name">2c. Удаление персонажа</span><span class="suite-stat"><span class="s-fail">3✗</span>&nbsp;<span class="s-pass">1✓</span></span></summary>
-  <div class="suite-body"><div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">new_npc создаёт одноразового персонажа</span></div>
-<div class="test test-fail"><span class="t-icon">✗</span><span class="t-name">DELETE архивирует папку в _deleted</span><pre class="test-error">HTTP 404: {"error":"Персонаж не найден"}
-
-404 !== 200
-</pre></div>
-<div class="test test-fail"><span class="t-icon">✗</span><span class="t-name">персонаж исчез из /api/characters</span><pre class="test-error">удалённый всё ещё в списке</pre></div>
-<div class="test test-fail"><span class="t-icon">✗</span><span class="t-name">строка реестра удалена</span><pre class="test-error">ссылка осталась в индексе</pre></div></div>
-</details>
-
-<details class="suite suite-pass" open>
-  <summary><span class="suite-name">3. Логирование сессии</span><span class="suite-stat"><span class="s-pass">4✓</span></span></summary>
-  <div class="suite-body"><div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">предпросмотр (dryRun) возвращает previewHash и план</span></div>
-<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">запись с устаревшим хэшем отклоняется (409)</span></div>
-<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">запись (dryRun:false) с верным хэшем создаёт артефакты</span></div>
-<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">инлайн-НПС записан как карточка-заготовка</span></div></div>
-</details>
-
-<details class="suite suite-pass" open>
-  <summary><span class="suite-name">4. Состояние после сессии</span><span class="suite-stat"><span class="s-pass">2✓</span></span></summary>
-  <div class="suite-body"><div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">/api/status отражает события, модуль и персонажей</span></div>
-<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">/api/chronicles содержит созданную хронику</span></div></div>
-</details>
-
-<details class="suite suite-pass" open>
-  <summary><span class="suite-name">5. Закрытие хроники</span><span class="suite-stat"><span class="s-pass">3✓</span></span></summary>
-  <div class="suite-body"><div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">close_chronicle проставляет статус «Закрыта»</span></div>
-<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">открытые нити закрыты после close_chronicle</span></div>
-<div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">build_city_events пересобирает индекс города</span></div></div>
-</details>
-
-<details class="suite suite-pass" open>
-  <summary><span class="suite-name">6. Целостность данных</span><span class="suite-stat"><span class="s-pass">1✓</span></span></summary>
-  <div class="suite-body"><div class="test test-pass"><span class="t-icon">✓</span><span class="t-name">validate_cards --strict проходит без ошибок</span></div></div>
 </details></div>
 </details>
 </div>
 
 <div class="report-footer">
-  Generated by <span>Sanguine System</span> test suite &mdash; 01.07.2026, 19:18:53
+  Generated by <span>Sanguine System</span> test suite &mdash; 09.07.2026, 14:37:20
 </div>
 
 </body>
