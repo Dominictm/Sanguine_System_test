@@ -3125,7 +3125,7 @@ a:focus-visible {
   background: var(--bg3);
   border: 1px solid var(--border);
   color: var(--text);
-  font-size: var(--fs-base);
+  font-size: var(--fs-md);
   padding: 7px 10px;
   border-radius: 2px;
   outline: none;
@@ -8968,7 +8968,7 @@ a.md-link-loc:hover {
 
 /* ── Faction influence diagram (архив «Фракции») ── */
 .faction-inf-panel {
-  background: var(--bg3);
+  background: rgb(74 31 13 / 27%);
   border: 1px solid var(--border);
   border-radius: 3px;
   padding: 16px;

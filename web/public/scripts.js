@@ -5216,7 +5216,7 @@ async function loadFactionsInfluence() {
       <div class="faction-inf-header">
         <span class="faction-inf-title">📊 Влияние фракций</span>
         <div class="faction-inf-add">
-          <input type="text" id="faction-inf-add-name" placeholder="Новая фракция..." class="chr-form-input">
+          <input type="text" id="faction-inf-add-name" placeholder="Новая фракция" class="chr-form-input">
           <button class="modp-edit-btn" id="faction-inf-add-btn">+ Добавить</button>
         </div>
       </div>
