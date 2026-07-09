@@ -6897,7 +6897,7 @@ a.md-link-loc:hover {
   background: none;
   border: 1px solid var(--border);
   color: var(--muted);
-  border-radius: 3px;
+  border-radius: 2px;
   padding: 3px 8px;
   font-size: var(--fs-xs);
   cursor: pointer;
@@ -6914,7 +6914,7 @@ a.md-link-loc:hover {
   background: none;
   border: 1px solid var(--border);
   color: var(--muted);
-  border-radius: 3px;
+  border-radius: 2px;
   padding: 3px 8px;
   font-size: var(--fs-xs);
   cursor: pointer;
@@ -8308,7 +8308,7 @@ a.md-link-loc:hover {
 .modp-session {
   background: var(--bg-panel);
   border: 1px solid var(--crimson);
-  border-radius: 4px;
+  border-radius: 2px;
   padding: 14px 18px;
 }
 
@@ -8545,7 +8545,7 @@ a.md-link-loc:hover {
     background: rgb(139 0 0 / 7%);
   padding: 14px 18px;
   margin-bottom: 12px;
-  border-radius: 3px;
+  border-radius: 2px;
   transition: border-color 0.2s;
 }
 
@@ -8630,7 +8630,7 @@ a.md-link-loc:hover {
   border: 1px solid var(--border);
   color: var(--accent);
   padding: 2px 10px;
-  border-radius: 3px;
+  border-radius: 2px;
   font-size: var(--fs-sm);
   cursor: pointer;
   margin-bottom: 6px;
@@ -8648,7 +8648,7 @@ a.md-link-loc:hover {
   color: var(--pure-white);
   border: none;
   padding: 4px 14px;
-  border-radius: 3px;
+  border-radius: 2px;
   font-size: var(--fs-sm);
   cursor: pointer;
 }
@@ -8658,7 +8658,7 @@ a.md-link-loc:hover {
   border: 1px solid var(--border);
   color: var(--text2);
   padding: 4px 12px;
-  border-radius: 3px;
+  border-radius: 2px;
   font-size: var(--fs-sm);
   cursor: pointer;
 }
@@ -8726,7 +8726,7 @@ a.md-link-loc:hover {
 .modp-scenario-block {
   background: rgb(139 0 0 / 7%);
   border: 1px solid var(--border);
-  border-radius: 4px;
+  border-radius: 2px;
   padding: 14px 16px;
   margin-bottom: 14px;
   transition: border-color .2s var(--ease), box-shadow .2s var(--ease);
@@ -8780,7 +8780,7 @@ a.md-link-loc:hover {
 .modp-field-regen-btn {
   background: none;
   border: 1px solid var(--border);
-  border-radius: 3px;
+  border-radius: 2px;
   color: var(--text2);
   font-size: var(--fs-sm, 12px);
   line-height: 1;
@@ -9663,7 +9663,7 @@ tr.rumor-told:hover .rumor-cb-cell {
   background: rgba(139, 0, 0, .1);
   border: 1px solid var(--accent);
   color: var(--accent);
-  border-radius: 4px;
+  border-radius: 2px;
   padding: 5px 12px;
   font-size: var(--fs-sm);
   cursor: pointer;
