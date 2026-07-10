@@ -443,7 +443,7 @@ async function makeGenerationClient(preferSource = null, modelOverride = null) {
             } catch { /* fall through to error */ }
           }
           _oauthCredsCacheAt = 0; // invalidate so next call re-reads
-          throw new Error('Claude.ai OAuth токен истёк. Войди заново (Инструменты → Модели AI) или выполни команду в Claude Code.');
+          throw Object.assign(new Error('Claude.ai OAuth токен истёк. Войди заново (Инструменты → Модели AI) или выполни команду в Claude Code.'), { status: 401 });
         }
         return { source: 'claude-login', client: new Anthropic({ authToken: oauth.accessToken }), model: clModel() };
       }
@@ -457,14 +457,14 @@ async function makeGenerationClient(preferSource = null, modelOverride = null) {
   if (process.env.OPENROUTER_API_KEY && !wantClaude)            return { source: 'openrouter', model: orModel() };
   if (process.env.GEMINI_API_KEY     && !wantClaude)            return { source: 'gemini',     model: geModel() };
 
-  throw new Error(
+  throw Object.assign(new Error(
     'Нет источника для генерации. Варианты:\n' +
     '• web/.env: GEMINI_API_KEY=...\n' +
     '• web/.env: OPENROUTER_API_KEY=sk-or-...\n' +
     '• web/.env: OPENAI_API_KEY=sk-...\n' +
     '• ANTHROPIC_API_KEY в переменных окружения\n' +
     '• Запусти Claude Code для OAuth-авторизации'
-  );
+  ), { status: 503 });
 }
 
 // ── OpenRouter vision call (OpenAI-compatible) ────────────────────────────────
