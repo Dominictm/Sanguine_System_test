@@ -177,6 +177,14 @@ module.exports = function generationRouter({
       const userPrompt   = `Перед тобой ${imageBuffers.length > 1 ? `${imageBuffers.length} изображения` : 'изображение'} ${lineageName} по имени ${char.name}.\n\nОпиши внешность для карточки. Требования:\n- 3–5 конкретных визуальных маркеров (лицо, волосы, кожа, глаза, одежда, характерные детали)\n- Стиль: лаконичный, образный, готический. Без «воды».\n- Язык: русский.\n- Формат: один абзац, без списков и заголовков.\n- Упомяни всё необычное, характерное, запоминающееся.\n- Запрет: не упоминать кровь, раны, увечья, явные признаки насилия — даже если они видны на изображении.${genderNote}`;
 
       let appearance = '';
+      const imgContents = imageBuffers.map(({ buf, mime }) => ({
+        type: 'image', source: { type: 'base64', media_type: mime, data: buf.toString('base64') },
+      }));
+      const claudeModel = validModels().includes(req.body?.model) ? req.body.model : 'claude-opus-4-8';
+      const callClaudeVision = client => callAnthropicWithRetry(client, {
+        model: claudeModel, max_tokens: 300, system: systemPrompt,
+        messages: [{ role: 'user', content: [...imgContents, { type: 'text', text: userPrompt }] }],
+      }, { label: 'generate-appearance' }).then(m => m.content[0]?.text?.trim() || '');
 
       if (isOA(gen)) {
         // Try primary model, then fallbacks if endpoint not found
@@ -203,21 +211,44 @@ module.exports = function generationRouter({
         }
         if (!appearance) {
           if (allRateLimited) {
-            return res.status(429).json({ rateLimited: true, error: 'Превышен лимит запросов ко всем моделям. Подождите минуту и попробуйте снова.' });
+            // OpenRouter/OpenAI исчерпаны — пробуем Claude (OAuth/API key), если
+            // он доступен, прежде чем сдаться с 429.
+            try {
+              const claudeGen = await makeGenerationClient('claude', null);
+              if (claudeGen?.client) {
+                console.warn('[generate-appearance] OpenRouter/OpenAI исчерпаны, пробуем Claude...');
+                appearance = await callClaudeVision(claudeGen.client);
+                gen.source = claudeGen.source + '-fallback';
+              }
+            } catch { /* появится ниже как 429 */ }
+            if (!appearance) {
+              return res.status(429).json({ rateLimited: true, error: 'Превышен лимит запросов ко всем моделям. Подождите минуту и попробуйте снова.' });
+            }
+          } else {
+            throw lastErr;
           }
-          throw lastErr;
         }
       } else {
         // Anthropic SDK format
-        const imgContents = imageBuffers.map(({ buf, mime }) => ({
-          type: 'image', source: { type: 'base64', media_type: mime, data: buf.toString('base64') },
-        }));
-        const model = validModels().includes(req.body?.model) ? req.body.model : 'claude-opus-4-8';
-        const message = await callAnthropicWithRetry(gen.client, {
-          model, max_tokens: 300, system: systemPrompt,
-          messages: [{ role: 'user', content: [...imgContents, { type: 'text', text: userPrompt }] }],
-        }, { label: 'generate-appearance' });
-        appearance = message.content[0]?.text?.trim() || '';
+        try {
+          appearance = await callClaudeVision(gen.client);
+        } catch (e) {
+          // Claude (OAuth/API key) исчерпал повторы — если настроен ещё один
+          // провайдер с поддержкой изображений, пробуем его, прежде чем сдаться.
+          // Иначе пользователь остаётся с 429 даже спустя долгое ожидание —
+          // OAuth-лимит Claude.ai не сбрасывается за секунды бэкоффа.
+          if (e.rateLimited && process.env.OPENROUTER_API_KEY) {
+            console.warn('[generate-appearance] Claude исчерпан, пробуем OpenRouter...');
+            appearance = (await callOpenRouter(process.env.OPENROUTER_MODEL || 'openrouter/free', systemPrompt, userPrompt, imageBuffers)).trim();
+            gen.source = 'openrouter-fallback';
+          } else if (e.rateLimited && process.env.OPENAI_API_KEY) {
+            console.warn('[generate-appearance] Claude исчерпан, пробуем OpenAI...');
+            appearance = (await callOpenAI(process.env.OPENAI_MODEL || 'gpt-4o-mini', systemPrompt, userPrompt, imageBuffers)).trim();
+            gen.source = 'openai-fallback';
+          } else {
+            throw e;
+          }
+        }
       }
 
       res.json({ ok: true, appearance, imagesUsed: imageBuffers.length, source: gen.source });
