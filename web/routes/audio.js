@@ -134,7 +134,7 @@ router.get('/api/audio/presets', async (req, res) => {
         .map(pt => {
           const track = tracks.find(t => t.id === pt.trackId);
           if (!track) return null; // трек удалён из библиотеки — тихо пропускаем
-          return { trackId: pt.trackId, volume: pt.volume, title: track.title, url: `/audio-lib/${track.id}.${track.ext}` };
+          return { trackId: pt.trackId, volume: pt.volume, loop: pt.loop !== false, title: track.title, url: `/audio-lib/${track.id}.${track.ext}` };
         })
         .filter(Boolean);
       return {
@@ -153,6 +153,7 @@ function _cleanPresetTracks(rawTracks) {
     .map(t => ({
       trackId: String(t?.trackId || ''),
       volume: Math.max(0, Math.min(1, typeof t?.volume === 'number' ? t.volume : 1)),
+      loop: typeof t?.loop === 'boolean' ? t.loop : true,
     }))
     .filter(t => t.trackId);
 }

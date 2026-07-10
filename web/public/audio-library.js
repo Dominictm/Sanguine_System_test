@@ -35,8 +35,8 @@ function _audioLibRender() {
   // (см. спеку) — t.category !== 'music' покрывает и это, и явное 'effect'.
   const music = _audioLibCache.filter(t => t.category === 'music');
   const fx    = _audioLibCache.filter(t => t.category !== 'music');
-  musicEl.innerHTML = music.length ? music.map(_audioLibCardHtml).join('') : '<div class="loading-state">Пока нет фоновой музыки.</div>';
-  fxEl.innerHTML    = fx.length    ? fx.map(_audioLibCardHtml).join('')    : '<div class="loading-state">Пока нет эффектов.</div>';
+  musicEl.innerHTML = music.length ? music.map(_audioLibCardHtml).join('') : '<div class="loading-state audio-lib-col-empty">Пока нет фоновой музыки.</div>';
+  fxEl.innerHTML    = fx.length    ? fx.map(_audioLibCardHtml).join('')    : '<div class="loading-state audio-lib-col-empty">Пока нет эффектов.</div>';
 }
 
 async function loadAudioLibrary() {
@@ -254,6 +254,9 @@ function _audioPresetTrackPickerRowHtml(t) {
     <input type="checkbox" data-preset-pick-track value="${escAttr(t.id)}">
     <span class="audio-preset-picker-title">${escHtml(t.title)}</span>
     <input type="range" data-preset-pick-volume min="0" max="1" step="0.01" value="${t.volume}" disabled>
+    <span class="audio-preset-picker-loop">
+      <input type="checkbox" data-preset-pick-loop checked disabled>🔁
+    </span>
   </label>`;
 }
 
@@ -265,17 +268,21 @@ function _audioPresetRenderTrackPicker(checkedTracks = []) {
     if (!row) return; // трек мог быть удалён из библиотеки — пропускаем в форме редактирования
     const checkbox = row.querySelector('[data-preset-pick-track]');
     const volume   = row.querySelector('[data-preset-pick-volume]');
+    const loop     = row.querySelector('[data-preset-pick-loop]');
     checkbox.checked = true;
     volume.disabled  = false;
     volume.value     = ct.volume;
+    loop.disabled    = false;
+    loop.checked     = ct.loop !== false;
   });
 }
 
 document.getElementById('audio-preset-track-list')?.addEventListener('change', e => {
   const checkbox = e.target.closest('[data-preset-pick-track]');
   if (!checkbox) return;
-  const volume = checkbox.closest('.audio-preset-picker-row').querySelector('[data-preset-pick-volume]');
-  volume.disabled = !checkbox.checked;
+  const row = checkbox.closest('.audio-preset-picker-row');
+  row.querySelector('[data-preset-pick-volume]').disabled = !checkbox.checked;
+  row.querySelector('[data-preset-pick-loop]').disabled = !checkbox.checked;
 });
 
 async function _audioPresetLoadLocationsOnce() {
@@ -318,10 +325,14 @@ document.getElementById('audio-preset-form')?.addEventListener('submit', async e
   const name = document.getElementById('audio-preset-name').value.trim();
   const locationSlug = document.getElementById('audio-preset-location').value || null;
   const tracks = Array.from(document.querySelectorAll('#audio-preset-track-list [data-preset-pick-track]:checked'))
-    .map(cb => ({
-      trackId: cb.value,
-      volume: parseFloat(cb.closest('.audio-preset-picker-row').querySelector('[data-preset-pick-volume]').value),
-    }));
+    .map(cb => {
+      const row = cb.closest('.audio-preset-picker-row');
+      return {
+        trackId: cb.value,
+        volume: parseFloat(row.querySelector('[data-preset-pick-volume]').value),
+        loop: row.querySelector('[data-preset-pick-loop]').checked,
+      };
+    });
 
   if (!name) { errEl.textContent = 'Укажите название'; errEl.style.display = ''; return; }
   if (!tracks.length) { errEl.textContent = 'Отметьте хотя бы один звук'; errEl.style.display = ''; return; }
@@ -352,27 +363,33 @@ let _audioActivePresetId = null;
 
 function _audioPresetCardHtml(p) {
   const isActive = _audioActivePresetId === p.id;
-  const locationHtml = p.locationTitle
-    ? `<div class="audio-preset-location">
-        ${p.locationImageUrl ? `<img class="audio-preset-loc-img" src="${escAttr(p.locationImageUrl)}" alt="">` : ''}
-        <span class="audio-preset-loc-name">${escHtml(p.locationTitle)}</span>
-      </div>`
+  const hasBg = !!p.locationImageUrl;
+  const bgHtml = hasBg
+    ? `<img class="audio-preset-loc-bg" src="${escAttr(p.locationImageUrl)}" alt=""><div class="audio-preset-loc-scrim"></div>`
     : '';
-  const tracksHtml = p.tracks.map(t => `
+  const locationHtml = p.locationTitle ? `<span class="audio-preset-loc-name">${escHtml(p.locationTitle)}</span>` : '';
+  const tracksHtml = p.tracks.map(t => {
+    const loopOn = t.loop !== false;
+    return `
     <div class="audio-preset-track-row" data-preset-track-id="${escAttr(t.trackId)}">
       <span class="audio-preset-track-title">${escHtml(t.title)}</span>
       <input type="range" data-preset-track-volume min="0" max="1" step="0.01" value="${t.volume}">
-    </div>`).join('');
-  return `<div class="audio-preset-card" data-preset-id="${escAttr(p.id)}">
-    <div class="audio-card-title">${escHtml(p.name)}</div>
-    ${locationHtml}
-    <div class="audio-preset-tracks">${tracksHtml}</div>
-    <div class="audio-card-row">
-      <button type="button" class="audio-card-play-btn${isActive ? ' playing' : ''}" data-preset-play aria-label="Запустить/остановить пресет">${isActive ? '⏸' : '▶'}</button>
-    </div>
-    <div class="audio-card-actions">
-      <button type="button" class="audio-card-icon-btn" data-preset-edit aria-label="Редактировать пресет">✎</button>
-      <button type="button" class="audio-card-icon-btn" data-preset-delete aria-label="Удалить пресет">🗑</button>
+      <button type="button" class="audio-preset-track-loop${loopOn ? ' active' : ''}" data-preset-track-loop aria-pressed="${loopOn}" aria-label="Зацикливание">🔁</button>
+    </div>`;
+  }).join('');
+  return `<div class="audio-preset-card${hasBg ? ' has-bg' : ''}" data-preset-id="${escAttr(p.id)}">
+    ${bgHtml}
+    <div class="audio-preset-content">
+      <div class="audio-card-title">${escHtml(p.name)}</div>
+      ${locationHtml}
+      <div class="audio-preset-tracks">${tracksHtml}</div>
+      <div class="audio-card-row">
+        <button type="button" class="audio-card-play-btn${isActive ? ' playing' : ''}" data-preset-play aria-label="Запустить/остановить пресет">${isActive ? '⏸' : '▶'}</button>
+      </div>
+      <div class="audio-card-actions">
+        <button type="button" class="audio-card-icon-btn" data-preset-edit aria-label="Редактировать пресет">✎</button>
+        <button type="button" class="audio-card-icon-btn" data-preset-delete aria-label="Удалить пресет">🗑</button>
+      </div>
     </div>
   </div>`;
 }
@@ -404,6 +421,7 @@ async function _audioPresetPlay(presetId) {
     if (!card) continue; // трек удалён из библиотеки — тихо пропускаем
     const audioEl = card.querySelector('[data-audio-el]');
     audioEl.volume = t.volume;
+    audioEl.loop = t.loop !== false;
     try {
       await audioEl.play();
       const playBtn = card.querySelector('[data-audio-play]');
@@ -443,7 +461,9 @@ function _audioPresetDebouncedSaveTrackVolume(presetId, trackId, volume) {
   _audioPresetVolumeTimers[key] = setTimeout(async () => {
     const preset = (_audioPresetCache || []).find(p => p.id === presetId);
     if (!preset) return;
-    const tracks = preset.tracks.map(t => t.trackId === trackId ? { trackId: t.trackId, volume } : { trackId: t.trackId, volume: t.volume });
+    const tracks = preset.tracks.map(t => t.trackId === trackId
+      ? { trackId: t.trackId, volume, loop: t.loop }
+      : { trackId: t.trackId, volume: t.volume, loop: t.loop });
     try {
       await apiFetch(`/api/audio/presets/${encodeURIComponent(presetId)}`, {
         method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tracks }),
@@ -475,7 +495,40 @@ document.querySelector('.audio-lib-columns')?.addEventListener('click', async e 
   }
   const deleteBtn = e.target.closest('[data-preset-delete]');
   if (deleteBtn) { await _audioPresetDelete(deleteBtn.closest('.audio-preset-card').dataset.presetId); return; }
+
+  const trackLoopBtn = e.target.closest('[data-preset-track-loop]');
+  if (trackLoopBtn) { await _audioPresetToggleTrackLoop(trackLoopBtn); return; }
 });
+
+async function _audioPresetToggleTrackLoop(btn) {
+  const presetCard = btn.closest('.audio-preset-card');
+  const presetId = presetCard.dataset.presetId;
+  const trackId = btn.closest('[data-preset-track-id]').dataset.presetTrackId;
+  const preset = (_audioPresetCache || []).find(p => p.id === presetId);
+  if (!preset) return;
+  const entry = preset.tracks.find(t => t.trackId === trackId);
+  if (!entry) return;
+  const next = !(entry.loop !== false);
+  btn.classList.toggle('active', next);
+  btn.setAttribute('aria-pressed', String(next));
+  // Если пресет сейчас играет — применяем сразу к уже играющему треку.
+  if (_audioActivePresetId === presetId) {
+    const trackCard = document.querySelector(`.audio-card[data-audio-id="${CSS.escape(trackId)}"]`);
+    const audioEl = trackCard?.querySelector('[data-audio-el]');
+    if (audioEl) audioEl.loop = next;
+  }
+  const tracks = preset.tracks.map(t => t.trackId === trackId
+    ? { trackId: t.trackId, volume: t.volume, loop: next }
+    : { trackId: t.trackId, volume: t.volume, loop: t.loop });
+  try {
+    await apiFetch(`/api/audio/presets/${encodeURIComponent(presetId)}`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tracks }),
+    });
+    entry.loop = next;
+  } catch (e) {
+    showToast('Не удалось сохранить зацикливание: ' + e.message, 'error');
+  }
+}
 
 document.querySelector('.audio-lib-columns')?.addEventListener('input', e => {
   const slider = e.target.closest('[data-preset-track-volume]');
