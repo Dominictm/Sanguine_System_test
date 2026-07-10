@@ -226,14 +226,15 @@ function _audioLibStopAll() {
     btn.classList.remove('playing');
   });
 }
-document.getElementById('audio-lib-stop-all-btn')?.addEventListener('click', _audioLibStopAll);
+document.getElementById('audio-lib-stop-all-btn')?.addEventListener('click', () => {
+  _audioLibStopAll();
+  _audioActivePresetId = null;
+  _audioPresetRender();
+});
 
 let _audioPresetCache = null; // [{ id, name, locationSlug, locationTitle, locationImageUrl, tracks:[{trackId,volume,title,url}], createdAt }]
 let _audioPresetLocations = null; // [{ slug, title }] — cached, loaded once per page visit
 let _audioPresetEditingId = null; // null = creating a new preset; otherwise editing this preset's id
-
-// TODO(Task 6): replaced with the real preset loader/renderer.
-async function loadAudioPresets() {}
 
 function _audioPresetTrackPickerRowHtml(t) {
   return `<label class="audio-preset-picker-row">
@@ -332,6 +333,152 @@ document.getElementById('audio-preset-form')?.addEventListener('submit', async e
   } catch (e) {
     errEl.textContent = e.message; errEl.style.display = '';
   }
+});
+
+let _audioActivePresetId = null;
+
+function _audioPresetCardHtml(p) {
+  const isActive = _audioActivePresetId === p.id;
+  const locationHtml = p.locationTitle
+    ? `<div class="audio-preset-location">
+        ${p.locationImageUrl ? `<img class="audio-preset-loc-img" src="${escAttr(p.locationImageUrl)}" alt="">` : ''}
+        <span class="audio-preset-loc-name">${escHtml(p.locationTitle)}</span>
+      </div>`
+    : '';
+  const tracksHtml = p.tracks.map(t => `
+    <div class="audio-preset-track-row" data-preset-track-id="${escAttr(t.trackId)}">
+      <span class="audio-preset-track-title">${escHtml(t.title)}</span>
+      <input type="range" data-preset-track-volume min="0" max="1" step="0.01" value="${t.volume}">
+    </div>`).join('');
+  return `<div class="audio-preset-card" data-preset-id="${escAttr(p.id)}">
+    <div class="audio-card-title">${escHtml(p.name)}</div>
+    ${locationHtml}
+    <div class="audio-preset-tracks">${tracksHtml}</div>
+    <div class="audio-card-row">
+      <button type="button" class="audio-card-play-btn${isActive ? ' playing' : ''}" data-preset-play aria-label="Запустить/остановить пресет">${isActive ? '⏸' : '▶'}</button>
+    </div>
+    <div class="audio-card-actions">
+      <button type="button" class="audio-card-icon-btn" data-preset-edit aria-label="Редактировать пресет">✎</button>
+      <button type="button" class="audio-card-icon-btn" data-preset-delete aria-label="Удалить пресет">🗑</button>
+    </div>
+  </div>`;
+}
+
+function _audioPresetRender() {
+  const el = document.getElementById('audio-lib-presets-cards');
+  if (!el) return;
+  el.innerHTML = (_audioPresetCache && _audioPresetCache.length)
+    ? _audioPresetCache.map(_audioPresetCardHtml).join('')
+    : '<div class="loading-state">Пока нет пресетов.</div>';
+}
+
+async function loadAudioPresets() {
+  try {
+    _audioPresetCache = await apiFetch('/api/audio/presets');
+  } catch (e) {
+    showToast('Не удалось загрузить пресеты: ' + e.message, 'error');
+    _audioPresetCache = [];
+  }
+  _audioPresetRender();
+}
+
+async function _audioPresetPlay(presetId) {
+  const preset = (_audioPresetCache || []).find(p => p.id === presetId);
+  if (!preset) return;
+  _audioLibStopAll(); // сначала остановить всё — см. спеку
+  for (const t of preset.tracks) {
+    const card = document.querySelector(`.audio-card[data-audio-id="${CSS.escape(t.trackId)}"]`);
+    if (!card) continue; // трек удалён из библиотеки — тихо пропускаем
+    const audioEl = card.querySelector('[data-audio-el]');
+    audioEl.volume = t.volume;
+    try {
+      await audioEl.play();
+      const playBtn = card.querySelector('[data-audio-play]');
+      playBtn.textContent = '⏸';
+      playBtn.classList.add('playing');
+    } catch (e) {
+      showToast(`Не удалось запустить «${t.title}»: ` + e.message, 'error');
+    }
+  }
+  _audioActivePresetId = presetId;
+  _audioPresetRender();
+}
+
+function _audioPresetStop() {
+  _audioLibStopAll();
+  _audioActivePresetId = null;
+  _audioPresetRender();
+}
+
+async function _audioPresetDelete(presetId) {
+  const preset = (_audioPresetCache || []).find(p => p.id === presetId);
+  if (!await showConfirm(`Удалить пресет «${preset?.name || ''}»?\nДействие необратимо.`, { danger: true, confirmText: 'Удалить' })) return;
+  try {
+    await apiFetch(`/api/audio/presets/${encodeURIComponent(presetId)}`, { method: 'DELETE' });
+    if (_audioActivePresetId === presetId) _audioActivePresetId = null;
+    _audioPresetCache = _audioPresetCache.filter(p => p.id !== presetId);
+    _audioPresetRender();
+  } catch (e) {
+    showToast('Не удалось удалить пресет: ' + e.message, 'error');
+  }
+}
+
+let _audioPresetVolumeTimers = {};
+function _audioPresetDebouncedSaveTrackVolume(presetId, trackId, volume) {
+  const key = presetId + ':' + trackId;
+  clearTimeout(_audioPresetVolumeTimers[key]);
+  _audioPresetVolumeTimers[key] = setTimeout(async () => {
+    const preset = (_audioPresetCache || []).find(p => p.id === presetId);
+    if (!preset) return;
+    const tracks = preset.tracks.map(t => t.trackId === trackId ? { trackId: t.trackId, volume } : { trackId: t.trackId, volume: t.volume });
+    try {
+      await apiFetch(`/api/audio/presets/${encodeURIComponent(presetId)}`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tracks }),
+      });
+      const entry = preset.tracks.find(t => t.trackId === trackId);
+      if (entry) entry.volume = volume;
+    } catch (e) {
+      showToast('Не удалось сохранить громкость пресета: ' + e.message, 'error');
+    }
+  }, 400);
+}
+
+// ── Делегирование кликов/ввода для карточек пресетов — тот же общий
+// контейнер .audio-lib-columns, что и у карточек треков (см. Task 3). ──
+document.querySelector('.audio-lib-columns')?.addEventListener('click', async e => {
+  const playBtn = e.target.closest('[data-preset-play]');
+  if (playBtn) {
+    const presetId = playBtn.closest('.audio-preset-card').dataset.presetId;
+    if (_audioActivePresetId === presetId) await _audioPresetStop();
+    else await _audioPresetPlay(presetId);
+    return;
+  }
+  const editBtn = e.target.closest('[data-preset-edit]');
+  if (editBtn) {
+    const presetId = editBtn.closest('.audio-preset-card').dataset.presetId;
+    const preset = (_audioPresetCache || []).find(p => p.id === presetId);
+    if (preset) await _audioPresetOpenModal(preset);
+    return;
+  }
+  const deleteBtn = e.target.closest('[data-preset-delete]');
+  if (deleteBtn) { await _audioPresetDelete(deleteBtn.closest('.audio-preset-card').dataset.presetId); return; }
+});
+
+document.querySelector('.audio-lib-columns')?.addEventListener('input', e => {
+  const slider = e.target.closest('[data-preset-track-volume]');
+  if (!slider) return;
+  const presetCard = slider.closest('.audio-preset-card');
+  const presetId   = presetCard.dataset.presetId;
+  const trackId    = slider.closest('[data-preset-track-id]').dataset.presetTrackId;
+  const volume     = parseFloat(slider.value);
+
+  // Если этот пресет сейчас играет — громкость меняется вживую у уже играющего трека.
+  if (_audioActivePresetId === presetId) {
+    const trackCard = document.querySelector(`.audio-card[data-audio-id="${CSS.escape(trackId)}"]`);
+    const audioEl = trackCard?.querySelector('[data-audio-el]');
+    if (audioEl) audioEl.volume = volume;
+  }
+  _audioPresetDebouncedSaveTrackVolume(presetId, trackId, volume);
 });
 
 // ── Модалка загрузки ──
