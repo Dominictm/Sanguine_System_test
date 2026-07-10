@@ -32,7 +32,14 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git checkout -B test
+          # --orphan: коммит без родителя. "git checkout -B test" на этом месте
+          # создавал бы test поверх текущего HEAD (master) — новый коммит
+          # наследовал бы родителем весь master, а с ним и всю историю
+          # репозитория (сотни коммитов с артом персонажей и т.д.), раздувая
+          # `git clone --branch test` до сотен мегабайт несмотря на то, что
+          # рабочее дерево уже вычищено build_release.js. Orphan-коммит не
+          # тянет за собой никакой истории — только текущее дерево.
+          git checkout --orphan test
           git add -A
           git commit -m "release(test): автосборка из master ${GITHUB_SHA::7}" --allow-empty
           git push --force origin test
