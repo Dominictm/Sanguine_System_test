@@ -176,6 +176,13 @@ module.exports = function generationRouter({
       const systemPrompt = `Ты — редактор персонажных карточек для настольной RPG Vampire: The Masquerade. Пиши прозу строго по литературному стилю проекта.${litStyle ? `\n\n# ЛИТЕРАТУРНЫЙ СТИЛЬ (system/rules/literary_style.md)\n${litStyle}` : ''}`;
       const userPrompt   = `Перед тобой ${imageBuffers.length > 1 ? `${imageBuffers.length} изображения` : 'изображение'} ${lineageName} по имени ${char.name}.\n\nОпиши внешность для карточки. Требования:\n- 3–5 конкретных визуальных маркеров (лицо, волосы, кожа, глаза, одежда, характерные детали)\n- Стиль: лаконичный, образный, готический. Без «воды».\n- Язык: русский.\n- Формат: один абзац, без списков и заголовков.\n- Упомяни всё необычное, характерное, запоминающееся.\n- Запрет: не упоминать кровь, раны, увечья, явные признаки насилия — даже если они видны на изображении.${genderNote}`;
 
+      // Некоторые бесплатные модели за роутером openrouter/free иногда возвращают
+      // не описание, а артефакт модерационного классификатора («User Safety: safe»
+      // и т.п.) — валидный непустой текст, но не то, что просили. Раньше это тихо
+      // принималось как успех и автосохранялось поверх настоящей внешности персонажа.
+      const _isBogusAppearance = text => !text || text.trim().length < 25
+        || /^(user safety|content policy|i cannot|i can'?t assist|as an ai)/i.test(text.trim());
+
       let appearance = '';
       const imgContents = imageBuffers.map(({ buf, mime }) => ({
         type: 'image', source: { type: 'base64', media_type: mime, data: buf.toString('base64') },
@@ -193,7 +200,14 @@ module.exports = function generationRouter({
         let allRateLimited = true;
         for (const m of modelsToTry) {
           try {
-            appearance = await oaCall(gen)(m, systemPrompt, userPrompt, imageBuffers);
+            const out = await oaCall(gen)(m, systemPrompt, userPrompt, imageBuffers);
+            if (_isBogusAppearance(out)) {
+              console.warn(`[generate-appearance] model ${m} вернул нерелевантный ответ, пробуем следующую...`);
+              lastErr = Object.assign(new Error(`Модель «${m}» вернула нерелевантный ответ вместо описания.`), { status: 502 });
+              allRateLimited = false;
+              continue;
+            }
+            appearance = out;
             if (m !== gen.model) console.log(`[generate-appearance] fallback model used: ${m}`);
             allRateLimited = false;
             break;
@@ -217,8 +231,8 @@ module.exports = function generationRouter({
               const claudeGen = await makeGenerationClient('claude', null);
               if (claudeGen?.client) {
                 console.warn('[generate-appearance] OpenRouter/OpenAI исчерпаны, пробуем Claude...');
-                appearance = await callClaudeVision(claudeGen.client);
-                gen.source = claudeGen.source + '-fallback';
+                const out = await callClaudeVision(claudeGen.client);
+                if (!_isBogusAppearance(out)) { appearance = out; gen.source = claudeGen.source + '-fallback'; }
               }
             } catch { /* появится ниже как 429 */ }
             if (!appearance) {
@@ -231,25 +245,43 @@ module.exports = function generationRouter({
       } else {
         // Anthropic SDK format
         try {
-          appearance = await callClaudeVision(gen.client);
+          const out = await callClaudeVision(gen.client);
+          if (_isBogusAppearance(out)) throw Object.assign(new Error('Claude вернул нерелевантный ответ вместо описания.'), { status: 502 });
+          appearance = out;
         } catch (e) {
           // Claude (OAuth/API key) исчерпал повторы — если настроен ещё один
           // провайдер с поддержкой изображений, пробуем его, прежде чем сдаться.
           // Иначе пользователь остаётся с 429 даже спустя долгое ожидание —
           // OAuth-лимит Claude.ai не сбрасывается за секунды бэкоффа.
-          if (e.rateLimited && process.env.OPENROUTER_API_KEY) {
-            console.warn('[generate-appearance] Claude исчерпан, пробуем OpenRouter...');
-            appearance = (await callOpenRouter(process.env.OPENROUTER_MODEL || 'openrouter/free', systemPrompt, userPrompt, imageBuffers)).trim();
-            gen.source = 'openrouter-fallback';
-          } else if (e.rateLimited && process.env.OPENAI_API_KEY) {
+          if ((e.rateLimited || e.status === 502) && process.env.OPENROUTER_API_KEY) {
+            // openrouter/free (default alias) не всегда умеет в vision — перебираем
+            // тот же curated список моделей, что и основная OA-ветка (oaModels),
+            // а не один жёстко заданный алиас.
+            const orGen = { source: 'openrouter', model: process.env.OPENROUTER_MODEL || 'openrouter/free' };
+            for (const m of oaModels(orGen)) {
+              try {
+                console.warn(`[generate-appearance] Claude исчерпан, пробуем OpenRouter (${m})...`);
+                const out = (await callOpenRouter(m, systemPrompt, userPrompt, imageBuffers)).trim();
+                if (!_isBogusAppearance(out)) { appearance = out; gen.source = 'openrouter-fallback'; break; }
+                console.warn(`[generate-appearance] OpenRouter fallback ${m} вернул нерелевантный ответ, пробуем следующую...`);
+              } catch (orErr) {
+                console.warn(`[generate-appearance] OpenRouter fallback ${m} не сработал (${orErr.status}), пробуем следующую...`);
+              }
+            }
+            if (!appearance) throw e;
+          } else if ((e.rateLimited || e.status === 502) && process.env.OPENAI_API_KEY) {
             console.warn('[generate-appearance] Claude исчерпан, пробуем OpenAI...');
-            appearance = (await callOpenAI(process.env.OPENAI_MODEL || 'gpt-4o-mini', systemPrompt, userPrompt, imageBuffers)).trim();
+            const out = (await callOpenAI(process.env.OPENAI_MODEL || 'gpt-4o-mini', systemPrompt, userPrompt, imageBuffers)).trim();
+            if (_isBogusAppearance(out)) throw e;
+            appearance = out;
             gen.source = 'openai-fallback';
           } else {
             throw e;
           }
         }
       }
+
+      if (!appearance) return res.status(502).json({ error: 'Модель вернула нерелевантный ответ. Попробуйте другой провайдер в настройках AI.' });
 
       res.json({ ok: true, appearance, imagesUsed: imageBuffers.length, source: gen.source });
     } catch (e) {
