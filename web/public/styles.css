@@ -8180,6 +8180,50 @@ a.md-link-loc:hover {
   cursor: pointer;
 }
 
+.audio-preset-track-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 260px;
+  overflow-y: auto;
+  border: 1px solid var(--border2);
+  border-radius: 2px;
+  padding: 8px;
+}
+
+.audio-preset-picker-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 4px;
+  cursor: pointer;
+}
+
+.audio-preset-picker-title {
+  flex: 1;
+  font-size: var(--fs-sm);
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.audio-preset-picker-row input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.audio-preset-picker-row input[type="range"] {
+  width: 100px;
+  accent-color: var(--accent);
+}
+
+.audio-preset-picker-row input[type="range"]:disabled {
+  opacity: .35;
+}
+
 /* ── Звуковая библиотека — карточка звука. Не переиспользует .lib-card
    (которая является целиком кликабельным <button>, открывающим модалку
    деталей) — здесь карточка содержит несколько независимых интерактивных

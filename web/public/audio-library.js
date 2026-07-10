@@ -228,8 +228,111 @@ function _audioLibStopAll() {
 }
 document.getElementById('audio-lib-stop-all-btn')?.addEventListener('click', _audioLibStopAll);
 
+let _audioPresetCache = null; // [{ id, name, locationSlug, locationTitle, locationImageUrl, tracks:[{trackId,volume,title,url}], createdAt }]
+let _audioPresetLocations = null; // [{ slug, title }] — cached, loaded once per page visit
+let _audioPresetEditingId = null; // null = creating a new preset; otherwise editing this preset's id
+
 // TODO(Task 6): replaced with the real preset loader/renderer.
 async function loadAudioPresets() {}
+
+function _audioPresetTrackPickerRowHtml(t) {
+  return `<label class="audio-preset-picker-row">
+    <input type="checkbox" data-preset-pick-track value="${escAttr(t.id)}">
+    <span class="audio-preset-picker-title">${escHtml(t.title)}</span>
+    <input type="range" data-preset-pick-volume min="0" max="1" step="0.01" value="${t.volume}" disabled>
+  </label>`;
+}
+
+function _audioPresetRenderTrackPicker(checkedTracks = []) {
+  const list = document.getElementById('audio-preset-track-list');
+  list.innerHTML = (_audioLibCache || []).map(_audioPresetTrackPickerRowHtml).join('');
+  checkedTracks.forEach(ct => {
+    const row = list.querySelector(`input[data-preset-pick-track][value="${CSS.escape(ct.trackId)}"]`)?.closest('.audio-preset-picker-row');
+    if (!row) return; // трек мог быть удалён из библиотеки — пропускаем в форме редактирования
+    const checkbox = row.querySelector('[data-preset-pick-track]');
+    const volume   = row.querySelector('[data-preset-pick-volume]');
+    checkbox.checked = true;
+    volume.disabled  = false;
+    volume.value     = ct.volume;
+  });
+}
+
+document.getElementById('audio-preset-track-list')?.addEventListener('change', e => {
+  const checkbox = e.target.closest('[data-preset-pick-track]');
+  if (!checkbox) return;
+  const volume = checkbox.closest('.audio-preset-picker-row').querySelector('[data-preset-pick-volume]');
+  volume.disabled = !checkbox.checked;
+});
+
+async function _audioPresetLoadLocationsOnce() {
+  if (_audioPresetLocations) return _audioPresetLocations;
+  try {
+    _audioPresetLocations = await fetch('/api/locations' + window.location.search).then(r => r.json());
+  } catch { _audioPresetLocations = []; }
+  return _audioPresetLocations;
+}
+
+async function _audioPresetPopulateLocationSelect(selectedSlug = '') {
+  const sel = document.getElementById('audio-preset-location');
+  const locs = await _audioPresetLoadLocationsOnce();
+  sel.innerHTML = '<option value="">— Без локации —</option>' +
+    locs.map(loc => `<option value="${escAttr(loc.slug)}"${loc.slug === selectedSlug ? ' selected' : ''}>${escHtml(loc.title || loc.slug)}</option>`).join('');
+}
+
+const _audioPresetModal = document.getElementById('audio-preset-modal');
+
+async function _audioPresetOpenModal(preset = null) {
+  _audioPresetEditingId = preset ? preset.id : null;
+  document.getElementById('audio-preset-modal-title').textContent = preset ? 'Редактировать пресет' : 'Создать пресет';
+  document.getElementById('audio-preset-name').value = preset ? preset.name : '';
+  document.getElementById('audio-preset-err').style.display = 'none';
+  await _audioPresetPopulateLocationSelect(preset ? (preset.locationSlug || '') : '');
+  _audioPresetRenderTrackPicker(preset ? preset.tracks : []);
+  _audioPresetModal.classList.add('open');
+}
+
+document.getElementById('audio-preset-create-btn')?.addEventListener('click', () => _audioPresetOpenModal(null));
+document.getElementById('audio-preset-close')?.addEventListener('click', () => _audioPresetModal.classList.remove('open'));
+document.getElementById('audio-preset-cancel')?.addEventListener('click', () => _audioPresetModal.classList.remove('open'));
+_audioPresetModal?.addEventListener('click', e => { if (e.target === _audioPresetModal) _audioPresetModal.classList.remove('open'); });
+
+document.getElementById('audio-preset-form')?.addEventListener('submit', async e => {
+  e.preventDefault();
+  const errEl = document.getElementById('audio-preset-err');
+  errEl.style.display = 'none';
+
+  const name = document.getElementById('audio-preset-name').value.trim();
+  const locationSlug = document.getElementById('audio-preset-location').value || null;
+  const tracks = Array.from(document.querySelectorAll('#audio-preset-track-list [data-preset-pick-track]:checked'))
+    .map(cb => ({
+      trackId: cb.value,
+      volume: parseFloat(cb.closest('.audio-preset-picker-row').querySelector('[data-preset-pick-volume]').value),
+    }));
+
+  if (!name) { errEl.textContent = 'Укажите название'; errEl.style.display = ''; return; }
+  if (!tracks.length) { errEl.textContent = 'Отметьте хотя бы один звук'; errEl.style.display = ''; return; }
+
+  try {
+    if (_audioPresetEditingId) {
+      const updated = await apiFetch(`/api/audio/presets/${encodeURIComponent(_audioPresetEditingId)}`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, locationSlug, tracks }),
+      });
+      const idx = _audioPresetCache.findIndex(p => p.id === updated.id);
+      if (idx !== -1) _audioPresetCache[idx] = { ..._audioPresetCache[idx], ...updated };
+    } else {
+      await apiFetch('/api/audio/presets', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, locationSlug, tracks }),
+      });
+    }
+    await loadAudioPresets();
+    _audioPresetModal.classList.remove('open');
+    showToast(_audioPresetEditingId ? 'Пресет обновлён' : 'Пресет создан', 'success');
+  } catch (e) {
+    errEl.textContent = e.message; errEl.style.display = '';
+  }
+});
 
 // ── Модалка загрузки ──
 const _audioUploadModal = document.getElementById('audio-upload-modal');
