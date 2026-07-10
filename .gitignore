@@ -14,6 +14,12 @@ web/nul
 # комититься и пушиться на гит как часть UI, а не личный арт города/персонажей.
 !web/public/img/
 !web/public/img/**
+
+# Звуковая библиотека (саундборд) — общая для всех городов, но каждый
+# пользователь собирает свою локально: не коммитим ни файлы, ни манифест
+# (см. docs/superpowers/specs/2026-07-10-audio-library-design.md).
+cities/audio/
+
 .claude/settings.local.json
 Thumbs.db
 desktop.ini

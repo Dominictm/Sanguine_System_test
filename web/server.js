@@ -18,11 +18,12 @@ const { parsePsychicMd } = require('./lib/psychics');
 const { runMigrations } = require('./lib/migrations');
 const { loadDiaryStyleRules, compressEventsToState, compressChronicleEvents, parseEventsText, buildNarrativeContext, findCharacterCard } = require('./lib/context_builder');
 const {
-  CITIES_DIR, reqCity, writeFileAtomic, setBrokenLinks,
+  CITIES_DIR, AUDIO_DIR, reqCity, writeFileAtomic, setBrokenLinks,
 } = require('./lib/db');
 
 const { C, serverError, aiRateLimit } = require('./lib/http');
 const { router: libraryRouter, loadDisciplines, loadPsychics } = require('./routes/library');
+const { router: audioRouter } = require('./routes/audio');
 const { router: citiesRouter } = require('./routes/cities');
 const { router: archiveRouter } = require('./routes/archive');
 const { router: threadsRouter } = require('./routes/threads');
@@ -68,12 +69,22 @@ const ROOT = path.join(__dirname, '..');
 // состояние с routes/dashboard.js и routes/tools.js (E1.2d).
 
 app.use(compression());
+// /api/audio needs a higher body-size limit than the rest of the app (base64
+// inflates a 20MB audio file to ~27MB) — this MUST be registered before the
+// general express.json below. body-parser sets req._body once it parses a
+// request, and every later json() middleware silently no-ops on re-entry —
+// so if the general 20mb parser ran first for this path, it would already
+// reject any oversized /api/audio upload before this route-specific limit is
+// ever consulted.
+app.use('/api/audio', express.json({ limit: '30mb' }));
 app.use(express.json({ limit: '20mb' }));
 // maxAge lets the browser reuse the heavy app shell between loads; ETag/Last-Modified
 // still revalidate after it expires, so edits during development surface within minutes.
 app.use(express.static(path.join(__dirname, 'public'), { maxAge: '5m' }));
 // Serve images straight out of cities/<city>/… (characters/<lin>/<slug>/art/, locations/…)
 app.use('/city-img', express.static(CITIES_DIR, { maxAge: '1h' }));
+// Serve uploaded soundboard audio files straight out of cities/audio/ (routes/audio.js).
+app.use('/audio-lib', express.static(AUDIO_DIR, { maxAge: '1h' }));
 
 
 // ── Request logger ────────────────────────────────────────────────────────────
@@ -180,6 +191,7 @@ app.use((req, res, next) => {
 
 // ── Доменные роутеры (routes/*.js) ────────────────────────────────────────────
 app.use(libraryRouter);
+app.use(audioRouter);
 app.use(citiesRouter);
 app.use(archiveRouter);
 app.use(threadsRouter);

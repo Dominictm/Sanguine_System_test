@@ -2362,6 +2362,88 @@ describe('API — integration', () => {
     });
   });
 
+  describe('API — audio library', () => {
+    const AUDIO_ROOT = path.join(__dirname, '../../cities/audio');
+    const INDEX_PATH = path.join(AUDIO_ROOT, 'index.json');
+
+    // cities/audio/ doesn't exist until first use — snapshot whatever's there
+    // (nothing, on a clean checkout) so every test can restore it exactly.
+    let indexExisted, originalIndex;
+    before(async () => {
+      originalIndex = await fs.readFile(INDEX_PATH, 'utf-8').catch(() => null);
+      indexExisted = originalIndex !== null;
+    });
+    after(async () => {
+      if (indexExisted) await fs.writeFile(INDEX_PATH, originalIndex, 'utf-8');
+      else await fs.rm(INDEX_PATH, { force: true });
+    });
+
+    it('GET /api/audio — пустой список на чистой установке', async () => {
+      if (indexExisted) return; // только на чистом манифесте показателен
+      const { status, body } = await apiJson('/api/audio');
+      assert.equal(status, 200);
+      assert.deepEqual(body, []);
+    });
+
+    it('POST /api/audio — отклоняет неподдерживаемый формат', async () => {
+      const { status, body } = await apiJson('/api/audio', {
+        method: 'POST',
+        body: JSON.stringify({ title: 'Тест', filename: 'x.flac', mimetype: 'audio/flac', data: 'AAAA' }),
+      });
+      assert.equal(status, 400);
+      assert.ok(body.error);
+    });
+
+    it('POST /api/audio — отклоняет пустое название', async () => {
+      const { status } = await apiJson('/api/audio', {
+        method: 'POST',
+        body: JSON.stringify({ title: '   ', filename: 'x.mp3', mimetype: 'audio/mpeg', data: 'AAAA' }),
+      });
+      assert.equal(status, 400);
+    });
+
+    it('POST /api/audio — отклоняет файл больше 20МБ', async () => {
+      const bigBuf = Buffer.alloc(20 * 1024 * 1024 + 10);
+      const { status, body } = await apiJson('/api/audio', {
+        method: 'POST',
+        body: JSON.stringify({ title: 'Слишком большой', filename: 'big.mp3', mimetype: 'audio/mpeg', data: bigBuf.toString('base64') }),
+      });
+      assert.equal(status, 400);
+      assert.ok(body.error);
+    });
+
+    it('POST /api/audio — сохраняет файл и запись в index.json; GET возвращает его', async () => {
+      let created = null;
+      try {
+        const { status, body } = await apiJson('/api/audio', {
+          method: 'POST',
+          body: JSON.stringify({ title: 'Гроза за окном', filename: 'storm.wav', mimetype: 'audio/wav', data: 'UklGRiQAAABXQVZFZm10' }),
+        });
+        assert.equal(status, 200);
+        assert.equal(body.title, 'Гроза за окном');
+        assert.equal(body.ext, 'wav');
+        assert.equal(body.volume, 1);
+        assert.ok(body.id);
+        assert.equal(body.url, `/audio-lib/${body.id}.wav`);
+        created = body.id;
+
+        const writtenPath = path.join(AUDIO_ROOT, `${body.id}.wav`);
+        const written = await fs.readFile(writtenPath);
+        assert.ok(written.length > 0, 'аудиофайл должен быть записан на диск');
+
+        const { status: listStatus, body: list } = await apiJson('/api/audio');
+        assert.equal(listStatus, 200);
+        assert.ok(list.some(t => t.id === created && t.title === 'Гроза за окном'));
+      } finally {
+        if (created) {
+          await fs.rm(path.join(AUDIO_ROOT, `${created}.wav`), { force: true });
+          const list = JSON.parse(await fs.readFile(INDEX_PATH, 'utf-8').catch(() => '[]'));
+          await fs.writeFile(INDEX_PATH, JSON.stringify(list.filter(t => t.id !== created), null, 2), 'utf-8');
+        }
+      }
+    });
+  });
+
   // ── Locations — write guards ─────────────────────────────────────────────────
   describe('Locations — write guards', () => {
     it('PUT fields — unknown slug → 404', async () => {
