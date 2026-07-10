@@ -2,7 +2,7 @@
 const express = require('express');
 const { spawn } = require('child_process');
 const {
-  path, fs, serverError, aiRateLimit, callAnthropicWithRetry,
+  path, fs, serverError, aiRateLimit,
   ROOT, cityDir, charsDir, locsDir, chroniclesDir, archiveDir,
   reqCity, writeFileAtomic, invalidateChars,
   getAllCharacters, getAllLocations, listModules, tableCell, LINEAGE_MAP,
@@ -19,7 +19,7 @@ const {
   _writeSessionsFile, _patchModuleMain,
 } = require('./shared');
 
-module.exports = function lifecycleRouter({ makeGenerationClient, isOA, oaCall }) {
+module.exports = function lifecycleRouter({ makeGenerationClient, genTextWithRetry }) {
   const router = express.Router();
 
   router.get('/api/chronicles/:chr/modules/:mod/delete-preview', async (req, res) => {
@@ -220,8 +220,7 @@ module.exports = function lifecycleRouter({ makeGenerationClient, isOA, oaCall }
                     || '(сессии не зафиксированы — опирайся на сценарий)';
 
       const gen = await makeGenerationClient(req.body?.source || null, req.body?.model || null).catch(() => null);
-      if (!gen?.client && !(gen && isOA(gen)))
-        return res.status(503).json({ ok: false, error: 'Нет доступного AI-провайдера. Настрой в Инструменты → Модели AI.' });
+      if (!gen) return res.status(503).json({ ok: false, error: 'Нет доступного AI-провайдера. Настрой в Инструменты → Модели AI.' });
 
       // Phase-C rules slice as context (MODULE-close, NOT chronicle-close)
       const phaseC = (moduleRules.match(/Фаза C[\s\S]{0,700}/)?.[0]) || '';
@@ -234,13 +233,8 @@ module.exports = function lifecycleRouter({ makeGenerationClient, isOA, oaCall }
   ${phaseC}`;
 
       const runGen = async (system, user, maxTokens) => {
-        if (isOA(gen)) {
-          return oaCall(gen)(gen.model, system, user, [], 90000, maxTokens);
-        }
-        const m = await callAnthropicWithRetry(gen.client,
-          { model: 'claude-opus-4-8', max_tokens: maxTokens, system, messages: [{ role: 'user', content: user }] },
-          { label: 'module-close' });
-        return m.content[0]?.text?.trim() || '';
+        const out = await genTextWithRetry(gen, { system, user, maxTokens, model: 'claude-opus-4-8' });
+        return out.text.trim();
       };
 
       // 1. finale.md — literary finale by what actually happened in play

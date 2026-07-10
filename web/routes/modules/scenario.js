@@ -1,7 +1,7 @@
 'use strict';
 const express = require('express');
 const {
-  path, fs, serverError, aiRateLimit, callAnthropicWithRetry,
+  path, fs, serverError, aiRateLimit,
   ROOT, cityDir, charsDir, locsDir, chroniclesDir, archiveDir,
   reqCity, writeFileAtomic, invalidateChars,
   getAllCharacters, getAllLocations, listModules, tableCell, LINEAGE_MAP,
@@ -18,7 +18,7 @@ const {
   _writeSessionsFile, _patchModuleMain,
 } = require('./shared');
 
-module.exports = function scenarioRouter({ makeGenerationClient, isOA, oaCall }) {
+module.exports = function scenarioRouter({ makeGenerationClient, genTextWithRetry }) {
   const router = express.Router();
 
   router.put('/api/chronicles/:chr/modules/:mod/scenario/section', express.json(), async (req, res) => {
@@ -163,19 +163,10 @@ ${target.body}
 - Верни ТОЛЬКО новый текст раздела — без строки заголовка «## ${heading}» и без обрамляющих markdown-разделителей «---».`;
 
       const gen = await makeGenerationClient().catch(() => null);
-      let newBody = '';
-      if (gen && isOA(gen)) {
-        newBody = await oaCall(gen)(gen.model, systemPrompt, userPrompt, [], 60000, 2500);
-      } else if (gen?.client) {
-        const msg = await callAnthropicWithRetry(gen.client, {
-          model: 'claude-opus-4-8', max_tokens: 2500,
-          system: systemPrompt,
-          messages: [{ role: 'user', content: userPrompt }],
-        }, { label: 'scenario-section' });
-        newBody = msg.content[0]?.text?.trim() || '';
-      } else {
-        return res.status(503).json({ ok: false, error: 'Нет доступного AI-провайдера. Настрой в Инструменты → Модели AI.' });
-      }
+      if (!gen) return res.status(503).json({ ok: false, error: 'Нет доступного AI-провайдера. Настрой в Инструменты → Модели AI.' });
+      const newBody = (await genTextWithRetry(gen, {
+        system: systemPrompt, user: userPrompt, maxTokens: 2500, model: 'claude-opus-4-8',
+      })).text.trim();
       if (!newBody) return res.status(500).json({ ok: false, error: 'AI вернул пустой ответ.' });
 
       const updated = replaceScenarioSection(raw, heading, newBody, parent);
@@ -266,19 +257,10 @@ ${currentBlockMd}
 - Верни ТОЛЬКО новый текст блока начиная СРАЗУ с первого «### » (без строки заголовка «## ${heading}», без обрамляющих markdown-разделителей «---»). Если нужен вводный текст перед первым «### » — начни с него.`;
 
       const gen = await makeGenerationClient().catch(() => null);
-      let newBlockText = '';
-      if (gen && isOA(gen)) {
-        newBlockText = await oaCall(gen)(gen.model, systemPrompt, userPrompt, [], 60000, 3000);
-      } else if (gen?.client) {
-        const msg = await callAnthropicWithRetry(gen.client, {
-          model: 'claude-opus-4-8', max_tokens: 3000,
-          system: systemPrompt,
-          messages: [{ role: 'user', content: userPrompt }],
-        }, { label: 'scenario-block' });
-        newBlockText = msg.content[0]?.text?.trim() || '';
-      } else {
-        return res.status(503).json({ ok: false, error: 'Нет доступного AI-провайдера. Настрой в Инструменты → Модели AI.' });
-      }
+      if (!gen) return res.status(503).json({ ok: false, error: 'Нет доступного AI-провайдера. Настрой в Инструменты → Модели AI.' });
+      const newBlockText = (await genTextWithRetry(gen, {
+        system: systemPrompt, user: userPrompt, maxTokens: 3000, model: 'claude-opus-4-8',
+      })).text.trim();
       if (!newBlockText) return res.status(500).json({ ok: false, error: 'AI вернул пустой ответ.' });
 
       const { intro, children: newChildren } = splitH3Body(newBlockText);

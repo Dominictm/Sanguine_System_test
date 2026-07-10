@@ -10,7 +10,7 @@
 const express = require('express');
 const path    = require('path');
 const fs      = require('fs').promises;
-const { serverError, aiRateLimit, callAnthropicWithRetry } = require('../lib/http');
+const { serverError, aiRateLimit } = require('../lib/http');
 const {
   ROOT, DEFAULT_CITY, charsDir, chroniclesDir, archiveDir,
   reqCity, writeFileAtomic, invalidateChars, getAllCharacters, mapLimit,
@@ -94,7 +94,7 @@ async function buildChronicleDeletePreview(city, slug) {
 
 // Фабрика: server.js передаёт AI-хелперы и runValidationBackground при монтировании.
 module.exports = function chroniclesRouter({
-  makeGenerationClient, isOA, oaCall, oaModels, validModels, runValidationBackground,
+  makeGenerationClient, runValidationBackground, genTextWithRetry,
 }) {
   const router = express.Router();
 
@@ -346,40 +346,11 @@ module.exports = function chroniclesRouter({
 СОБЫТИЯ (от старых к новым):
 ${digest}`;
 
-      let recap = '';
-      if (isOA(gen)) {
-        const modelsToTry = oaModels(gen);
-        let lastErr, allRateLimited = true;
-        for (const m of modelsToTry) {
-          try {
-            recap = await oaCall(gen)(m, systemPrompt, userPrompt, [], 75000, 600);
-            allRateLimited = false;
-            break;
-          } catch (e) {
-            lastErr = e;
-            const is429 = e.status === 429;
-            const retryable = e.status === 404 || e.status === 502 || is429 || (e.status === 400 && /not a valid model|No endpoints/i.test(e.message))
-              || (e.status === 403 && /moderation|flagged/i.test(e.message));
-            if (!retryable) { allRateLimited = false; throw e; }
-            if (!is429) allRateLimited = false;
-            if (is429) await new Promise(r => setTimeout(r, 800));
-          }
-        }
-        if (!recap) {
-          if (allRateLimited) return res.status(429).json({ rateLimited: true, error: 'Превышен лимит запросов ко всем моделям. Подождите минуту и попробуйте снова.' });
-          throw lastErr;
-        }
-      } else {
-        const model = validModels().includes(req.body?.model) ? req.body.model : 'claude-haiku-4-5-20251001';
-        const message = await callAnthropicWithRetry(gen.client, {
-          model, max_tokens: 600, system: systemPrompt,
-          messages: [{ role: 'user', content: userPrompt }],
-        }, { label: 'chronicle-recap' });
-        recap = message.content[0]?.text?.trim() || '';
-      }
+      const out = await genTextWithRetry(gen, { system: systemPrompt, user: userPrompt, maxTokens: 600 });
+      const recap = out.text.trim();
 
       if (!recap) return res.status(500).json({ error: 'Модель вернула пустой ответ. Попробуйте ещё раз.' });
-      res.json({ ok: true, recap, eventsUsed: recent.length, source: gen.source });
+      res.json({ ok: true, recap, eventsUsed: recent.length, source: out.source });
     } catch (e) {
       const status = e.status ?? 500;
       const msg    = e.error?.error?.message ?? e.message ?? String(e);

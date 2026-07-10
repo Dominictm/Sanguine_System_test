@@ -1,7 +1,7 @@
 'use strict';
 const express = require('express');
 const {
-  path, fs, serverError, aiRateLimit, callAnthropicWithRetry,
+  path, fs, serverError, aiRateLimit,
   ROOT, cityDir, charsDir, locsDir, chroniclesDir, archiveDir,
   reqCity, writeFileAtomic, invalidateChars,
   getAllCharacters, getAllLocations, listModules, tableCell, LINEAGE_MAP,
@@ -18,7 +18,7 @@ const {
   _writeSessionsFile, _patchModuleMain,
 } = require('./shared');
 
-module.exports = function fillRouter({ makeGenerationClient, isOA, oaCall }) {
+module.exports = function fillRouter({ makeGenerationClient, genTextWithRetry }) {
   const router = express.Router();
 
   router.post('/api/chronicles/:chr/modules/:mod/fill', aiRateLimit, express.json(), async (req, res) => {
@@ -144,20 +144,11 @@ module.exports = function fillRouter({ makeGenerationClient, isOA, oaCall }) {
 
       // Use makeGenerationClient (respects OpenRouter/Claude preference)
       const gen = await makeGenerationClient().catch(() => null);
-      let scenarioText = '';
+      if (!gen) return res.status(503).json({ ok: false, error: 'Нет доступного AI-провайдера. Настрой в Инструменты → Модели AI.' });
 
-      if (gen && isOA(gen)) {
-        scenarioText = await oaCall(gen)(gen.model, systemPrompt, userPrompt, [], 90000, 4000);
-      } else if (gen?.client) {
-        const msg = await callAnthropicWithRetry(gen.client, {
-          model: 'claude-opus-4-8', max_tokens: 4000,
-          system: systemPrompt,
-          messages: [{ role: 'user', content: userPrompt }],
-        }, { label: 'module-fill' });
-        scenarioText = msg.content[0]?.text?.trim() || '';
-      } else {
-        return res.status(503).json({ ok: false, error: 'Нет доступного AI-провайдера. Настрой в Инструменты → Модели AI.' });
-      }
+      const scenarioText = (await genTextWithRetry(gen, {
+        system: systemPrompt, user: userPrompt, maxTokens: 4000, model: 'claude-opus-4-8',
+      })).text.trim();
 
       if (!scenarioText) return res.status(500).json({ ok: false, error: 'AI вернул пустой ответ.' });
 
@@ -287,16 +278,9 @@ module.exports = function fillRouter({ makeGenerationClient, isOA, oaCall }) {
 
   Язык: русский. Стиль: готический нуар VtM.`;
 
-          let allLocsRaw = '';
-          if (locGen && isOA(locGen)) {
-            allLocsRaw = await oaCall(locGen)(locGen.model, '', allCardsPrompt, [], 90000, newLocNames.length * 800 + 200);
-          } else if (locGen?.client) {
-            const m = await callAnthropicWithRetry(locGen.client, {
-              model: 'claude-haiku-4-5-20251001', max_tokens: newLocNames.length * 800 + 200,
-              messages: [{ role: 'user', content: allCardsPrompt }],
-            }, { label: 'module-fill-locations' });
-            allLocsRaw = m.content[0]?.text || '';
-          }
+          const allLocsRaw = locGen ? (await genTextWithRetry(locGen, {
+            system: '', user: allCardsPrompt, maxTokens: newLocNames.length * 800 + 200, model: 'claude-haiku-4-5-20251001',
+          })).text : '';
 
           if (allLocsRaw) {
             const locCards = JSON.parse(allLocsRaw.match(/\[[\s\S]*\]/)?.[0] || '[]');
@@ -348,16 +332,9 @@ module.exports = function fillRouter({ makeGenerationClient, isOA, oaCall }) {
 
   Язык: русский. Стиль: готический нуар VtM.`;
 
-          let npcRaw = '';
-          if (gen && isOA(gen)) {
-            npcRaw = await oaCall(gen)(gen.model, '', npcPrompt, [], 90000, newNpcs.length * 900 + 300);
-          } else if (gen?.client) {
-            const m = await callAnthropicWithRetry(gen.client, {
-              model: 'claude-haiku-4-5-20251001', max_tokens: newNpcs.length * 900 + 300,
-              messages: [{ role: 'user', content: npcPrompt }],
-            }, { label: 'module-fill-npcs' });
-            npcRaw = m.content[0]?.text || '';
-          }
+          const npcRaw = gen ? (await genTextWithRetry(gen, {
+            system: '', user: npcPrompt, maxTokens: newNpcs.length * 900 + 300, model: 'claude-haiku-4-5-20251001',
+          })).text : '';
 
           if (npcRaw) {
             const npcCards = JSON.parse(npcRaw.match(/\[[\s\S]*\]/)?.[0] || '[]');

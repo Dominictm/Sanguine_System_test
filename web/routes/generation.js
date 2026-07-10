@@ -127,7 +127,7 @@ async function buildProseContext(city, valid) {
 // Фабрика: server.js передаёт AI-хелперы при монтировании.
 module.exports = function generationRouter({
   makeGenerationClient, isOA, oaCall, oaModels, validModels,
-  callOpenAI, callOpenRouter, runClaude, defaultClaudeModel,
+  callOpenAI, callOpenRouter, runClaude, defaultClaudeModel, genTextWithRetry,
 }) {
   const router = express.Router();
 
@@ -148,7 +148,12 @@ module.exports = function generationRouter({
 
       const preferSource = req.body?.preferSource || null;
       const orModel      = req.body?.orModel      || null;
-      const gen = await makeGenerationClient(preferSource, orModel);
+      let gen = await makeGenerationClient(preferSource, orModel);
+      // Gemini здесь не поддерживается (нет vision-интеграции для этого эндпоинта,
+      // в отличие от текстовых — см. genTextWithRetry) — раньше это падало в 500
+      // (gen.client === undefined попадал в Anthropic-ветку). Молча переключаемся
+      // на авто-выбор (OpenRouter/Claude), а не отдаём непонятную ошибку.
+      if (gen.source === 'gemini') gen = await makeGenerationClient(null, null);
 
       // OAuth tier has tighter limits — cap at 1 image; OpenRouter/API-key can use more
       const MAX_IMGS = gen.source === 'claude-login' ? 1 : 4;
@@ -354,43 +359,12 @@ Requirements:
         negative = (parsed.negative || '').trim();
       };
 
-      if (isOA(gen)) {
-        const modelsToTry = oaModels(gen);
-        let lastErr, allRateLimited = true;
-        for (const m of modelsToTry) {
-          try {
-            // Free OpenRouter routing often lands on reasoning models that burn most of the
-            // budget on chain-of-thought before any content — give it enough headroom to finish.
-            parseResult(await oaCall(gen)(m, systemPrompt, userPrompt, [], 75000, 2500));
-            allRateLimited = false;
-            break;
-          } catch (e) {
-            lastErr = e;
-            const is429 = e.status === 429;
-            const retryable = e.status === 404 || e.status === 502 || is429 || (e.status === 400 && /not a valid model|No endpoints/i.test(e.message))
-              || (e.status === 403 && /moderation|flagged/i.test(e.message));
-            if (!retryable) { allRateLimited = false; throw e; }
-            if (!is429) allRateLimited = false;
-            console.warn(`[generate-prompt] model ${m} unavailable (${e.status}), trying next...`);
-            if (is429) await new Promise(r => setTimeout(r, 800));
-          }
-        }
-        if (!positive) {
-          if (allRateLimited) return res.status(429).json({ rateLimited: true, error: 'Превышен лимит запросов ко всем моделям. Подождите минуту и попробуйте снова.' });
-          throw lastErr;
-        }
-      } else {
-        const model = validModels().includes(req.body?.model) ? req.body.model : 'claude-haiku-4-5-20251001';
-        const message = await callAnthropicWithRetry(gen.client, {
-          model, max_tokens: 600, system: systemPrompt,
-          messages: [{ role: 'user', content: userPrompt }],
-        }, { label: 'generate-prompt' });
-        parseResult(message.content[0]?.text?.trim() || '');
-      }
+      const out = await genTextWithRetry(gen, { system: systemPrompt, user: userPrompt, maxTokens: 2500 });
+      parseResult(out.text);
 
       if (!positive) return res.status(500).json({ error: 'Модель не вернула промт. Попробуйте ещё раз.' });
 
-      res.json({ ok: true, positive, negative, source: gen.source });
+      res.json({ ok: true, positive, negative, source: out.source });
     } catch (e) {
       const status = e?.status ?? 500;
       const msg    = e?.error?.error?.message ?? e?.message ?? String(e);
@@ -446,41 +420,12 @@ Requirements:
         voice       = (parsed.voice || '').trim();
       };
 
-      if (isOA(gen)) {
-        const modelsToTry = oaModels(gen);
-        let lastErr, allRateLimited = true;
-        for (const m of modelsToTry) {
-          try {
-            parseResult(await oaCall(gen)(m, systemPrompt, userPrompt, [], 75000, 1200));
-            allRateLimited = false;
-            break;
-          } catch (e) {
-            lastErr = e;
-            const is429 = e.status === 429;
-            const retryable = e.status === 404 || e.status === 502 || is429 || (e.status === 400 && /not a valid model|No endpoints/i.test(e.message))
-              || (e.status === 403 && /moderation|flagged/i.test(e.message));
-            if (!retryable) { allRateLimited = false; throw e; }
-            if (!is429) allRateLimited = false;
-            console.warn(`[generate-personality] model ${m} unavailable (${e.status}), trying next...`);
-            if (is429) await new Promise(r => setTimeout(r, 800));
-          }
-        }
-        if (!personality) {
-          if (allRateLimited) return res.status(429).json({ rateLimited: true, error: 'Превышен лимит запросов ко всем моделям. Подождите минуту и попробуйте снова.' });
-          throw lastErr;
-        }
-      } else {
-        const model = validModels().includes(req.body?.model) ? req.body.model : 'claude-haiku-4-5-20251001';
-        const message = await callAnthropicWithRetry(gen.client, {
-          model, max_tokens: 500, system: systemPrompt,
-          messages: [{ role: 'user', content: userPrompt }],
-        }, { label: 'generate-personality' });
-        parseResult(message.content[0]?.text?.trim() || '');
-      }
+      const out = await genTextWithRetry(gen, { system: systemPrompt, user: userPrompt, maxTokens: 500 });
+      parseResult(out.text);
 
       if (!personality) return res.status(500).json({ error: 'Модель не вернула характер. Попробуйте ещё раз.' });
 
-      res.json({ ok: true, personality, voice, source: gen.source });
+      res.json({ ok: true, personality, voice, source: out.source });
     } catch (e) {
       const status = e?.status ?? 500;
       const msg    = e?.error?.error?.message ?? e?.message ?? String(e);
@@ -526,42 +471,12 @@ Requirements:
 
 Выведи ТОЛЬКО текст биографии — без заголовков, без кавычек, без JSON.`;
 
-      let biography = '';
-      if (isOA(gen)) {
-        const modelsToTry = oaModels(gen);
-        let lastErr, allRateLimited = true;
-        for (const m of modelsToTry) {
-          try {
-            biography = (await oaCall(gen)(m, systemPrompt, userPrompt, [], 75000, 700)).trim();
-            allRateLimited = false;
-            break;
-          } catch (e) {
-            lastErr = e;
-            const is429 = e.status === 429;
-            const retryable = e.status === 404 || e.status === 502 || is429 || (e.status === 400 && /not a valid model|No endpoints/i.test(e.message))
-              || (e.status === 403 && /moderation|flagged/i.test(e.message));
-            if (!retryable) { allRateLimited = false; throw e; }
-            if (!is429) allRateLimited = false;
-            console.warn(`[generate-biography] model ${m} unavailable (${e.status}), trying next...`);
-            if (is429) await new Promise(r => setTimeout(r, 800));
-          }
-        }
-        if (!biography) {
-          if (allRateLimited) return res.status(429).json({ rateLimited: true, error: 'Превышен лимит запросов ко всем моделям. Подождите минуту и попробуйте снова.' });
-          throw lastErr;
-        }
-      } else {
-        const model = validModels().includes(req.body?.model) ? req.body.model : 'claude-haiku-4-5-20251001';
-        const message = await callAnthropicWithRetry(gen.client, {
-          model, max_tokens: 600, system: systemPrompt,
-          messages: [{ role: 'user', content: userPrompt }],
-        }, { label: 'generate-biography' });
-        biography = message.content[0]?.text?.trim() || '';
-      }
+      const out = await genTextWithRetry(gen, { system: systemPrompt, user: userPrompt, maxTokens: 700 });
+      const biography = out.text.trim();
 
       if (!biography) return res.status(500).json({ error: 'Модель не вернула биографию. Попробуйте ещё раз.' });
 
-      res.json({ ok: true, biography, source: gen.source });
+      res.json({ ok: true, biography, source: out.source });
     } catch (e) {
       const status = e?.status ?? 500;
       const msg    = e?.error?.error?.message ?? e?.message ?? String(e);
@@ -901,16 +816,7 @@ ${text}
 [{"severity":"high|medium|low","character":"<имя>","issue":"<что не сходится с фактом>","quote":"<короткая цитата из текста>"}]
 Если противоречий нет — верни [].`;
 
-      let raw = '';
-      if (isOA(gen)) {
-        raw = await oaCall(gen)(gen.model, systemPrompt, userPrompt, [], 75000, 1500);
-      } else {
-        const m = await callAnthropicWithRetry(gen.client, {
-          model: gen.model, max_tokens: 1500, system: systemPrompt,
-          messages: [{ role: 'user', content: userPrompt }],
-        }, { label: 'canon-check' });
-        raw = m.content[0]?.text?.trim() || '';
-      }
+      const raw = (await genTextWithRetry(gen, { system: systemPrompt, user: userPrompt, maxTokens: 1500 })).text;
       let issues = [];
       try { issues = JSON.parse(raw.match(/\[[\s\S]*\]/)?.[0] || '[]'); } catch {}
       if (!Array.isArray(issues)) issues = [];

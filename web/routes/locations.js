@@ -7,7 +7,7 @@
 const express = require('express');
 const path    = require('path');
 const fs      = require('fs').promises;
-const { serverError, aiRateLimit, callAnthropicWithRetry } = require('../lib/http');
+const { serverError, aiRateLimit } = require('../lib/http');
 const {
   ROOT, reqCity, locsDir, writeFileAtomic, invalidateLocs,
   getAllLocations, findLocMdPath,
@@ -55,7 +55,7 @@ function _locCardTemplate(name, district) {
 }
 
 // Фабрика: server.js передаёт AI-хелперы при монтировании.
-module.exports = function locationsRouter({ makeGenerationClient, isOA, oaCall }) {
+module.exports = function locationsRouter({ makeGenerationClient, genTextWithRetry }) {
   const router = express.Router();
 
   router.get('/api/locations', async (req, res) => {
@@ -305,16 +305,7 @@ ${_locCardTemplate(locName, district?.trim() || '')}
 Заполни шаблон полностью. Верни только Markdown-карточку без лишнего текста.
 Язык: русский. Стиль: готический нуар VtM.`;
 
-          let raw = '';
-          if (gen && isOA(gen)) {
-            raw = await oaCall(gen)(gen.model, '', prompt, [], 60000, 1300);
-          } else if (gen?.client) {
-            const m = await callAnthropicWithRetry(gen.client, {
-              model: 'claude-haiku-4-5-20251001', max_tokens: 1300,
-              messages: [{ role: 'user', content: prompt }],
-            }, { label: 'loc-create' });
-            raw = m.content[0]?.text || '';
-          }
+          const raw = gen ? (await genTextWithRetry(gen, { system: '', user: prompt, maxTokens: 1300 })).text : '';
           if (raw.trim()) content = raw.trim() + '\n';
         } catch (genErr) {
           console.warn('[loc-create] generation failed:', genErr.message);
@@ -391,16 +382,7 @@ ${_locCardTemplate(locName)}
         maxTok = 1400;
       }
 
-      let result = '';
-      if (isOA(gen)) {
-        result = await oaCall(gen)(gen.model, '', prompt, [], 60000, maxTok);
-      } else if (gen?.client) {
-        const m = await callAnthropicWithRetry(gen.client, {
-          model: 'claude-haiku-4-5-20251001', max_tokens: maxTok,
-          messages: [{ role: 'user', content: prompt }],
-        }, { label: 'locations-generate' });
-        result = m.content[0]?.text || '';
-      }
+      const result = (await genTextWithRetry(gen, { system: '', user: prompt, maxTokens: maxTok })).text;
 
       if (field) res.json({ value: result.trim() });
       else       res.json({ content: result.trim() });

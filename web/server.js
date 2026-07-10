@@ -197,8 +197,7 @@ app.use(archiveRouter);
 app.use(threadsRouter);
 app.use(locationsRouterFactory({
   makeGenerationClient: (...a) => makeGenerationClient(...a),
-  isOA:   g => _isOA(g),
-  oaCall: g => _oaCall(g),
+  genTextWithRetry: (...a) => genTextWithRetry(...a),
 }));
 app.use(charactersRouterFactory({
   runValidationBackground: () => runValidationBackground(),
@@ -212,11 +211,8 @@ app.use(charactersRouterFactory({
 }));
 app.use(chroniclesRouterFactory({
   makeGenerationClient: (...a) => makeGenerationClient(...a),
-  isOA:      g => _isOA(g),
-  oaCall:    g => _oaCall(g),
-  oaModels:  g => _oaModels(g),
-  validModels: () => VALID_MODELS,
   runValidationBackground: () => runValidationBackground(),
+  genTextWithRetry: (...a) => genTextWithRetry(...a),
 }));
 app.use(modulesRouterFactory({
   makeGenerationClient: (...a) => makeGenerationClient(...a),
@@ -224,6 +220,7 @@ app.use(modulesRouterFactory({
   oaCall: g => _oaCall(g),
   generateV20Sheet: (...a) => _generateV20Sheet(...a),
   ensureSheetLink:  (...a) => _ensureSheetLink(...a),
+  genTextWithRetry: (...a) => genTextWithRetry(...a),
 }));
 app.use(generationRouterFactory({
   makeGenerationClient: (...a) => makeGenerationClient(...a),
@@ -235,6 +232,7 @@ app.use(generationRouterFactory({
   callOpenRouter: (...a) => callOpenRouter(...a),
   runClaude:      (...a) => runClaude(...a),
   defaultClaudeModel: () => DEFAULT_CLAUDE_MODEL,
+  genTextWithRetry: (...a) => genTextWithRetry(...a),
 }));
 app.use(dashboardRouter);
 app.use(toolsRouterFactory({
@@ -567,22 +565,23 @@ const _oaModels = gen => (gen.source === 'openai' ? [gen.model] : [gen.model, ..
 // Plain-text generation with 429/529 retry (Claude) + automatic OpenRouter fallback.
 // Anthropic subscription/API keys rate-limit aggressively; this keeps short generations
 // (NPC replies, etc.) from hard-failing — it backs off, then falls back to a free model.
-async function genTextWithRetry(gen, { system, user, maxTokens = 900, fallbackOR = true }) {
+async function genTextWithRetry(gen, { system, user, maxTokens = 900, fallbackOR = true, model = null }) {
+  const useModel = model || gen.model;
   if (gen.source === 'gemini') {
-    const text = await generateGeminiText(system, user, { model: gen.model, maxTokens });
-    return { text, source: 'gemini', model: gen.model };
+    const text = await generateGeminiText(system, user, { model: useModel, maxTokens });
+    return { text, source: 'gemini', model: useModel };
   }
   if (_isOA(gen)) {
-    return { text: await _oaCall(gen)(gen.model, system, user, [], 75000, maxTokens), source: gen.source, model: gen.model };
+    return { text: await _oaCall(gen)(useModel, system, user, [], 75000, maxTokens), source: gen.source, model: useModel };
   }
   const delays = [1000, 3000, 6000];
   for (let attempt = 0; ; attempt++) {
     try {
       const m = await gen.client.messages.create({
-        model: gen.model, max_tokens: maxTokens, system,
+        model: useModel, max_tokens: maxTokens, system,
         messages: [{ role: 'user', content: user }],
       });
-      return { text: m.content[0]?.text?.trim() || '', source: gen.source, model: gen.model };
+      return { text: m.content[0]?.text?.trim() || '', source: gen.source, model: useModel };
     } catch (e) {
       const code = e.status ?? e.statusCode;
       const overloaded = code === 429 || code === 529;
