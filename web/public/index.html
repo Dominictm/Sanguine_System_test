@@ -729,8 +729,26 @@
         <button class="btn-submit" id="audio-lib-upload-btn" style="margin-left:auto">+ Загрузить звук</button>
         <button class="btn-submit btn-secondary" id="audio-lib-stop-all-btn">⏹ Остановить всё</button>
       </div>
-      <div class="lib-cards" id="audio-lib-grid">
-        <div class="loading-state"><div class="spinner"></div>Загрузка...</div>
+      <div class="audio-lib-columns">
+        <div class="audio-lib-column">
+          <h2 class="audio-lib-column-title">Фоновая музыка</h2>
+          <div class="audio-lib-col-cards" id="audio-lib-music-cards">
+            <div class="loading-state"><div class="spinner"></div>Загрузка...</div>
+          </div>
+        </div>
+        <div class="audio-lib-column">
+          <h2 class="audio-lib-column-title">Эффекты</h2>
+          <div class="audio-lib-col-cards" id="audio-lib-effects-cards">
+            <div class="loading-state"><div class="spinner"></div>Загрузка...</div>
+          </div>
+        </div>
+        <div class="audio-lib-column">
+          <h2 class="audio-lib-column-title">Аудио пресеты</h2>
+          <button type="button" class="btn-submit" id="audio-preset-create-btn" style="margin-bottom:12px">+ Создать пресет</button>
+          <div class="audio-lib-col-cards" id="audio-lib-presets-cards">
+            <div class="loading-state"><div class="spinner"></div>Загрузка...</div>
+          </div>
+        </div>
       </div>
     </section>
 

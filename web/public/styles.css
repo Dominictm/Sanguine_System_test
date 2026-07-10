@@ -8138,14 +8138,35 @@ a.md-link-loc:hover {
   margin-top: 8px;
 }
 
+/* ── Звуковая библиотека — 3 колонки (музыка/эффекты/пресеты). ── */
+.audio-lib-columns {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 24px;
+  align-items: start;
+}
+
+.audio-lib-column-title {
+  font-family: var(--f-heading);
+  font-size: var(--fs-md);
+  color: var(--gold);
+  margin-bottom: 14px;
+}
+
+.audio-lib-col-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
 /* ── Звуковая библиотека — карточка звука. Не переиспользует .lib-card
    (которая является целиком кликабельным <button>, открывающим модалку
    деталей) — здесь карточка содержит несколько независимых интерактивных
    элементов разом (play/pause, громкость, переименование, удаление), а
    вложенные интерактивные элементы внутри <button> недопустимы в HTML.
-   Сетка (.lib-cards) и цветовая база — общие с остальной библиотекой. ── */
+   Цветовая база — общая с остальной библиотекой; ширина не фиксирована —
+   карточка заполняет свою колонку в .audio-lib-columns. ── */
 .audio-card {
-  width: 200px;
   min-height: 160px;
   background: var(--bg3);
   border: 2px solid var(--border);

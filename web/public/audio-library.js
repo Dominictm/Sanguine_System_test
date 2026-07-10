@@ -25,18 +25,23 @@ function _audioLibCardHtml(t) {
 }
 
 function _audioLibRender() {
-  const grid = document.getElementById('audio-lib-grid');
-  if (!grid) return;
-  if (!_audioLibCache.length) {
-    grid.innerHTML = '<div class="loading-state">Библиотека пуста — загрузите первый звук.</div>';
-    return;
-  }
-  grid.innerHTML = _audioLibCache.map(_audioLibCardHtml).join('');
+  const musicEl = document.getElementById('audio-lib-music-cards');
+  const fxEl    = document.getElementById('audio-lib-effects-cards');
+  if (!musicEl || !fxEl) return;
+  // Записи, загруженные до появления поля category, трактуются как эффект
+  // (см. спеку) — t.category !== 'music' покрывает и это, и явное 'effect'.
+  const music = _audioLibCache.filter(t => t.category === 'music');
+  const fx    = _audioLibCache.filter(t => t.category !== 'music');
+  musicEl.innerHTML = music.length ? music.map(_audioLibCardHtml).join('') : '<div class="loading-state">Пока нет фоновой музыки.</div>';
+  fxEl.innerHTML    = fx.length    ? fx.map(_audioLibCardHtml).join('')    : '<div class="loading-state">Пока нет эффектов.</div>';
 }
 
 async function loadAudioLibrary() {
-  const grid = document.getElementById('audio-lib-grid');
-  if (grid) grid.innerHTML = '<div class="loading-state"><div class="spinner"></div>Загрузка...</div>';
+  const musicEl = document.getElementById('audio-lib-music-cards');
+  const fxEl    = document.getElementById('audio-lib-effects-cards');
+  const loading = '<div class="loading-state"><div class="spinner"></div>Загрузка...</div>';
+  if (musicEl) musicEl.innerHTML = loading;
+  if (fxEl)    fxEl.innerHTML    = loading;
   try {
     _audioLibCache = await apiFetch('/api/audio');
   } catch (e) {
@@ -44,10 +49,13 @@ async function loadAudioLibrary() {
     _audioLibCache = [];
   }
   _audioLibRender();
+  await loadAudioPresets();
 }
 
-// ── Play/pause + громкость (делегирование на контейнере, привязано один раз) ──
-document.getElementById('audio-lib-grid')?.addEventListener('click', async e => {
+// ── Play/pause + громкость (делегирование на общем контейнере страницы,
+// накрывает обе колонки треков и колонку пресетов одним обработчиком —
+// проще, чем регистрировать один и тот же диспетчер трижды). ──
+document.querySelector('.audio-lib-columns')?.addEventListener('click', async e => {
   const playBtn = e.target.closest('[data-audio-play]');
   if (playBtn) {
     const card = playBtn.closest('.audio-card');
@@ -99,7 +107,7 @@ async function _audioLibToggleLoop(card, loopBtn) {
   }
 }
 
-document.getElementById('audio-lib-grid')?.addEventListener('input', e => {
+document.querySelector('.audio-lib-columns')?.addEventListener('input', e => {
   const slider = e.target.closest('[data-audio-volume]');
   if (!slider) return;
   const card = slider.closest('.audio-card');
@@ -163,17 +171,23 @@ async function _audioLibDelete(card) {
   }
 }
 
-// ── Остановить всё: пауза + сброс позиции для каждого играющего трека ──
-document.getElementById('audio-lib-stop-all-btn')?.addEventListener('click', () => {
-  document.querySelectorAll('#audio-lib-grid [data-audio-el]').forEach(audioEl => {
+// ── Остановить всё: пауза + сброс позиции для каждого играющего трека.
+// Именованная функция (не только обработчик клика) — запуск пресета тоже
+// сначала останавливает всё, см. Task 6. ──
+function _audioLibStopAll() {
+  document.querySelectorAll('[data-audio-el]').forEach(audioEl => {
     audioEl.pause();
     audioEl.currentTime = 0;
   });
-  document.querySelectorAll('#audio-lib-grid [data-audio-play]').forEach(btn => {
+  document.querySelectorAll('.audio-card [data-audio-play]').forEach(btn => {
     btn.textContent = '▶';
     btn.classList.remove('playing');
   });
-});
+}
+document.getElementById('audio-lib-stop-all-btn')?.addEventListener('click', _audioLibStopAll);
+
+// TODO(Task 6): replaced with the real preset loader/renderer.
+async function loadAudioPresets() {}
 
 // ── Модалка загрузки ──
 const _audioUploadModal = document.getElementById('audio-upload-modal');
