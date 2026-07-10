@@ -27,7 +27,12 @@ if ($Filter) {
 
 foreach ($file in $mdFiles) {
     $content = Get-Content $file.FullName -Raw -Encoding UTF8
+    if ($null -eq $content) { continue }   # empty file — Get-Content -Raw returns $null, not ""
     $dir     = $file.DirectoryName
+
+    # Strip fenced code blocks — example snippets (e.g. in docs/superpowers/plans/)
+    # often contain markdown-link-looking syntax as literal example text, not real links.
+    $content = [regex]::Replace($content, '(?s)```.*?```', '')
 
     $links = @()
     # angle-bracket links: [text](<url>)
@@ -43,7 +48,7 @@ foreach ($file in $mdFiles) {
         if ($raw -match '^(https?://|mailto:|#)') { $skipped++; continue }
         $path = $raw -replace '#[^)]*$', ''
         if ($path -eq '') { $skipped++; continue }
-        if ($path -match '\[') { $skipped++; continue }   # template placeholder
+        if ($path -match '\[|\$\{') { $skipped++; continue }   # template placeholder (incl. JS template literals in example code)
 
         $decoded = [System.Uri]::UnescapeDataString($path)
         try {

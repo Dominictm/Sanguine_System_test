@@ -1,6 +1,6 @@
 # 🎭 Дигураль
 
-> 🔗 [Модуль](../../progulki_po_metro.md)
+> 🔗 [Модуль](../../../chronicles/sluchaynye_sobytiya/modules/progulki_po_metro/progulki_po_metro.md)
 
 - **Слаг:** digural
 - **Родной город:** balmont
