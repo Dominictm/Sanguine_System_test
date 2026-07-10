@@ -8159,6 +8159,27 @@ a.md-link-loc:hover {
   gap: 14px;
 }
 
+.audio-category-radios {
+  display: flex;
+  gap: 20px;
+}
+
+.audio-category-radio {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--fs-sm);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.audio-category-radio input[type="radio"] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
 /* ── Звуковая библиотека — карточка звука. Не переиспользует .lib-card
    (которая является целиком кликабельным <button>, открывающим модалку
    деталей) — здесь карточка содержит несколько независимых интерактивных

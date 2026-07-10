@@ -8,7 +8,8 @@ let _audioLibCache = null; // [{ id, ext, filename, title, volume, loop, created
 function _audioLibCardHtml(t) {
   // Записи, загруженные до появления поля loop, ещё не имеют его в index.json —
   // трактуем как включённое (прежнее жёстко зашитое поведение), а не как выключенное.
-  const loopOn = t.loop !== false;
+  const loopOn   = t.loop !== false;
+  const isMusic  = t.category === 'music';
   return `<div class="audio-card" data-audio-id="${escAttr(t.id)}">
     <div class="audio-card-title" data-audio-title-view>${escHtml(t.title)}</div>
     <audio data-audio-el src="${escAttr(t.url)}" ${loopOn ? 'loop' : ''} preload="none"></audio>
@@ -17,6 +18,7 @@ function _audioLibCardHtml(t) {
       <input type="range" class="audio-card-volume" data-audio-volume min="0" max="1" step="0.01" value="${t.volume}">
     </div>
     <div class="audio-card-actions">
+      <button type="button" class="audio-card-icon-btn" data-audio-category aria-label="Сменить категорию (сейчас: ${isMusic ? 'фоновая музыка' : 'аудио эффект'})">${isMusic ? '🎵' : '🔊'}</button>
       <button type="button" class="audio-card-icon-btn${loopOn ? ' active' : ''}" data-audio-loop aria-pressed="${loopOn}" aria-label="Зацикливание">🔁</button>
       <button type="button" class="audio-card-icon-btn" data-audio-rename aria-label="Переименовать">✎</button>
       <button type="button" class="audio-card-icon-btn" data-audio-delete aria-label="Удалить">🗑</button>
@@ -79,6 +81,9 @@ document.querySelector('.audio-lib-columns')?.addEventListener('click', async e 
     return;
   }
 
+  const categoryBtn = e.target.closest('[data-audio-category]');
+  if (categoryBtn) { await _audioLibToggleCategory(categoryBtn.closest('.audio-card'), categoryBtn); return; }
+
   const loopBtn = e.target.closest('[data-audio-loop]');
   if (loopBtn) { await _audioLibToggleLoop(loopBtn.closest('.audio-card'), loopBtn); return; }
 
@@ -105,6 +110,43 @@ async function _audioLibToggleLoop(card, loopBtn) {
   } catch (e) {
     showToast('Не удалось сохранить зацикливание: ' + e.message, 'error');
   }
+}
+
+async function _audioLibToggleCategory(card, btn) {
+  const id = card.dataset.audioId;
+  const entry = _audioLibCache.find(t => t.id === id);
+  if (!entry) return;
+  const next = entry.category === 'music' ? 'effect' : 'music';
+  try {
+    const updated = await apiFetch(`/api/audio/${encodeURIComponent(id)}`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ category: next }),
+    });
+    entry.category = updated.category;
+    btn.textContent = entry.category === 'music' ? '🎵' : '🔊';
+    btn.setAttribute('aria-label', `Сменить категорию (сейчас: ${entry.category === 'music' ? 'фоновая музыка' : 'аудио эффект'})`);
+    const targetContainer = document.getElementById(entry.category === 'music' ? 'audio-lib-music-cards' : 'audio-lib-effects-cards');
+    targetContainer.appendChild(card); // переносит живой DOM-узел (аудио продолжает играть, если играло) в другую колонку
+    _audioLibRefreshColumnEmptyStates();
+  } catch (e) {
+    showToast('Не удалось сменить категорию: ' + e.message, 'error');
+  }
+}
+
+function _audioLibRefreshColumnEmptyStates() {
+  [
+    ['audio-lib-music-cards', 'Пока нет фоновой музыки.'],
+    ['audio-lib-effects-cards', 'Пока нет эффектов.'],
+  ].forEach(([containerId, emptyText]) => {
+    const el = document.getElementById(containerId);
+    if (!el) return;
+    const hasCards = el.querySelector('.audio-card') !== null;
+    let placeholder = el.querySelector('.audio-lib-col-empty');
+    if (!hasCards && !placeholder) {
+      el.insertAdjacentHTML('beforeend', `<div class="loading-state audio-lib-col-empty">${emptyText}</div>`);
+    } else if (hasCards && placeholder) {
+      placeholder.remove();
+    }
+  });
 }
 
 document.querySelector('.audio-lib-columns')?.addEventListener('input', e => {
@@ -210,7 +252,9 @@ document.getElementById('audio-upload-form')?.addEventListener('submit', async e
 
   const title = document.getElementById('audio-upload-title').value.trim();
   const file  = document.getElementById('audio-upload-file').files[0];
+  const categoryInput = document.querySelector('input[name="audio-upload-category"]:checked');
   if (!title) { errEl.textContent = 'Укажите название'; errEl.style.display = ''; return; }
+  if (!categoryInput) { errEl.textContent = 'Выберите категорию'; errEl.style.display = ''; return; }
   if (!file)  { errEl.textContent = 'Выберите файл'; errEl.style.display = ''; return; }
   if (!ALLOWED_AUDIO_MIME.includes(file.type)) {
     errEl.textContent = 'Неподдерживаемый формат (нужен mp3/ogg/wav)'; errEl.style.display = ''; return;
@@ -230,7 +274,7 @@ document.getElementById('audio-upload-form')?.addEventListener('submit', async e
   try {
     const created = await apiFetch('/api/audio', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title, filename: file.name, mimetype: file.type, data: base64 }),
+      body: JSON.stringify({ title, filename: file.name, mimetype: file.type, data: base64, category: categoryInput.value }),
     });
     _audioLibCache.push(created);
     _audioLibRender();

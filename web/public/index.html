@@ -1314,6 +1314,17 @@
         <input class="form-control" id="audio-upload-title" type="text" required placeholder="Например, «Гроза за окном»">
       </div>
       <div class="form-group">
+        <label class="form-label">Категория *</label>
+        <div class="audio-category-radios">
+          <label class="audio-category-radio">
+            <input type="radio" name="audio-upload-category" value="music" required> Фоновая музыка
+          </label>
+          <label class="audio-category-radio">
+            <input type="radio" name="audio-upload-category" value="effect" required> Аудио эффекты
+          </label>
+        </div>
+      </div>
+      <div class="form-group">
         <label class="form-label" for="audio-upload-file">Аудиофайл (mp3/ogg/wav, до 20МБ) *</label>
         <input class="form-control" id="audio-upload-file" type="file" accept="audio/mpeg,audio/ogg,audio/wav" required>
       </div>
