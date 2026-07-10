@@ -2412,17 +2412,35 @@ describe('API — integration', () => {
       assert.ok(body.error);
     });
 
+    it('POST /api/audio — отклоняет отсутствующую категорию', async () => {
+      const { status, body } = await apiJson('/api/audio', {
+        method: 'POST',
+        body: JSON.stringify({ title: 'Тест', filename: 'x.mp3', mimetype: 'audio/mpeg', data: 'AAAA' }),
+      });
+      assert.equal(status, 400);
+      assert.ok(body.error);
+    });
+
+    it('POST /api/audio — отклоняет недопустимое значение категории', async () => {
+      const { status } = await apiJson('/api/audio', {
+        method: 'POST',
+        body: JSON.stringify({ title: 'Тест', filename: 'x.mp3', mimetype: 'audio/mpeg', data: 'AAAA', category: 'ambient' }),
+      });
+      assert.equal(status, 400);
+    });
+
     it('POST /api/audio — сохраняет файл и запись в index.json; GET возвращает его', async () => {
       let created = null;
       try {
         const { status, body } = await apiJson('/api/audio', {
           method: 'POST',
-          body: JSON.stringify({ title: 'Гроза за окном', filename: 'storm.wav', mimetype: 'audio/wav', data: 'UklGRiQAAABXQVZFZm10' }),
+          body: JSON.stringify({ title: 'Гроза за окном', filename: 'storm.wav', mimetype: 'audio/wav', data: 'UklGRiQAAABXQVZFZm10', category: 'music' }),
         });
         assert.equal(status, 200);
         assert.equal(body.title, 'Гроза за окном');
         assert.equal(body.ext, 'wav');
         assert.equal(body.volume, 1);
+        assert.equal(body.category, 'music');
         assert.ok(body.id);
         assert.equal(body.url, `/audio-lib/${body.id}.wav`);
         created = body.id;
@@ -2450,22 +2468,39 @@ describe('API — integration', () => {
       assert.equal(status, 404);
     });
 
-    it('PUT /api/audio/:id — переименование и громкость; DELETE удаляет файл и запись', async () => {
+    it('PUT /api/audio/:id — отклоняет недопустимое значение категории', async () => {
       const { body: created } = await apiJson('/api/audio', {
         method: 'POST',
-        body: JSON.stringify({ title: 'Черновое имя', filename: 'x.ogg', mimetype: 'audio/ogg', data: 'T2dnUw==' }),
+        body: JSON.stringify({ title: 'Для проверки категории', filename: 'x.mp3', mimetype: 'audio/mpeg', data: 'AAAA', category: 'music' }),
+      });
+      try {
+        const { status } = await apiJson(`/api/audio/${created.id}`, {
+          method: 'PUT', body: JSON.stringify({ category: 'ambient' }),
+        });
+        assert.equal(status, 400);
+      } finally {
+        await apiJson(`/api/audio/${created.id}`, { method: 'DELETE' });
+      }
+    });
+
+    it('PUT /api/audio/:id — переименование, громкость, зацикливание, категория; DELETE удаляет файл и запись', async () => {
+      const { body: created } = await apiJson('/api/audio', {
+        method: 'POST',
+        body: JSON.stringify({ title: 'Черновое имя', filename: 'x.ogg', mimetype: 'audio/ogg', data: 'T2dnUw==', category: 'effect' }),
       });
       const id = created.id;
 
       assert.equal(created.loop, true, 'по умолчанию зацикливание включено');
+      assert.equal(created.category, 'effect');
 
       const { status: putStatus, body: updated } = await apiJson(`/api/audio/${id}`, {
-        method: 'PUT', body: JSON.stringify({ title: 'Финальное имя', volume: 0.4, loop: false }),
+        method: 'PUT', body: JSON.stringify({ title: 'Финальное имя', volume: 0.4, loop: false, category: 'music' }),
       });
       assert.equal(putStatus, 200);
       assert.equal(updated.title, 'Финальное имя');
       assert.equal(updated.volume, 0.4);
       assert.equal(updated.loop, false);
+      assert.equal(updated.category, 'music');
 
       const { status: putEmptyStatus } = await apiJson(`/api/audio/${id}`, {
         method: 'PUT', body: JSON.stringify({ title: '   ' }),

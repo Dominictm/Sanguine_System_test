@@ -22,6 +22,7 @@ const MIME_EXT = {
   'audio/x-wav': 'wav',
 };
 const MAX_BYTES = 20 * 1024 * 1024; // 20MB, см. спеку
+const CATEGORIES = ['music', 'effect'];
 
 async function readIndex() {
   const raw = await fs.readFile(INDEX_PATH, 'utf-8').catch(() => null);
@@ -43,10 +44,11 @@ router.get('/api/audio', async (_req, res) => {
 
 router.post('/api/audio', async (req, res) => {
   try {
-    const { title, filename, mimetype, data } = req.body || {};
+    const { title, filename, mimetype, data, category } = req.body || {};
     const ext = MIME_EXT[mimetype];
     if (!ext) return res.status(400).json({ error: 'Неподдерживаемый формат аудио (нужен mp3/ogg/wav)' });
     if (!title || !title.trim()) return res.status(400).json({ error: 'Название не может быть пустым' });
+    if (!CATEGORIES.includes(category)) return res.status(400).json({ error: 'Укажите категорию: фоновая музыка или аудио эффект' });
     if (!data) return res.status(400).json({ error: 'Файл не передан' });
 
     const buf = Buffer.from(data, 'base64');
@@ -59,7 +61,7 @@ router.post('/api/audio', async (req, res) => {
     const list = await readIndex();
     const entry = {
       id, ext, filename: filename || `${id}.${ext}`,
-      title: title.trim(), volume: 1, loop: true, createdAt: new Date().toISOString(),
+      title: title.trim(), volume: 1, loop: true, category, createdAt: new Date().toISOString(),
     };
     list.push(entry);
     await writeIndex(list);
@@ -85,6 +87,10 @@ router.put('/api/audio/:id', async (req, res) => {
     }
     if (typeof req.body.loop === 'boolean') {
       entry.loop = req.body.loop;
+    }
+    if (typeof req.body.category === 'string') {
+      if (!CATEGORIES.includes(req.body.category)) return res.status(400).json({ error: 'Недопустимая категория' });
+      entry.category = req.body.category;
     }
     await writeIndex(list);
     res.json(entry);
