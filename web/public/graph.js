@@ -158,8 +158,18 @@ function renderGraph(data) {
     grad.append('stop').attr('offset', '100%').attr('stop-color', col).attr('stop-opacity', .6);
   });
 
+  // Общий круглый clip для портретов узлов — objectBoundingBox делает его
+  // независимым от радиуса конкретного узла (0.5,0.5,0.5 = вписанный круг
+  // в любой прямоугольник, к которому применён), один <clipPath> на все узлы.
+  defs.append('clipPath').attr('id', 'node-portrait-clip').attr('clipPathUnits', 'objectBoundingBox')
+    .append('circle').attr('cx', .5).attr('cy', .5).attr('r', .5);
+
   // ── Simulation ──
-  const nodes = data.nodes.map(d => ({ ...d }));
+  // Портрет персонажа на узле графа берётся из STATE.characters (загружается
+  // в loadGraph перед вызовом renderGraph) — /api/graph отдаёт только связи,
+  // без арта, поэтому сопоставляем по имени так же, как showInfoPanel ниже.
+  const charByName = new Map((STATE.characters || []).map(c => [c.name, c]));
+  const nodes = data.nodes.map(d => ({ ...d, imageUrl: charByName.get(d.id)?.imageUrl || null }));
   const links = data.links.map(d => ({ ...d }));
 
   const sim = d3.forceSimulation(nodes)
@@ -249,7 +259,18 @@ function renderGraph(data) {
     .attr('letter-spacing', '.06em')
     .text(d => d.id.split(' ').slice(0, 2).join(' '));
 
-  nodeG.append('text')
+  // Портрет персонажа поверх node-circle (обрезан в круг общим clipPath);
+  // без арта — прежний эмодзи-фолбэк по линейке.
+  nodeG.filter(d => !!d.imageUrl).append('image')
+    .attr('class', 'node-portrait')
+    .attr('href', d => d.imageUrl)
+    .attr('x', d => -r(d)).attr('y', d => -r(d))
+    .attr('width', d => r(d) * 2).attr('height', d => r(d) * 2)
+    .attr('preserveAspectRatio', 'xMidYMid slice')
+    .attr('clip-path', 'url(#node-portrait-clip)')
+    .attr('pointer-events', 'none');
+
+  nodeG.filter(d => !d.imageUrl).append('text')
     .attr('text-anchor', 'middle').attr('dy', '0.4em')
     .attr('font-size', 22).attr('pointer-events', 'none')
     .text(d => LINEAGE_ICONS[d.lineage] || '👤');
