@@ -32,8 +32,9 @@ const reqCity = req => {
 async function listCities() {
   try {
     const es = await fs.readdir(CITIES_DIR, { withFileTypes: true });
-    // Skip dot-dirs and the _deleted soft-delete bin (and any _-prefixed internal dir).
-    return es.filter(e => e.isDirectory() && !/^[._]/.test(e.name)).map(e => e.name);
+    // Skip dot-dirs and the _deleted soft-delete bin (and any _-prefixed internal dir),
+    // plus "audio" — the shared soundboard library (see AUDIO_DIR above), not a city.
+    return es.filter(e => e.isDirectory() && !/^[._]/.test(e.name) && e.name !== 'audio').map(e => e.name);
   } catch { return []; }
 }
 

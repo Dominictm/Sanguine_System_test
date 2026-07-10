@@ -43,13 +43,27 @@ async function loadAudioLibrary() {
 }
 
 // ── Play/pause + громкость (делегирование на контейнере, привязано один раз) ──
-document.getElementById('audio-lib-grid')?.addEventListener('click', e => {
+document.getElementById('audio-lib-grid')?.addEventListener('click', async e => {
   const playBtn = e.target.closest('[data-audio-play]');
   if (playBtn) {
     const card = playBtn.closest('.audio-card');
     const audioEl = card.querySelector('[data-audio-el]');
-    if (audioEl.paused) { audioEl.play(); playBtn.textContent = '⏸'; playBtn.classList.add('playing'); }
-    else { audioEl.pause(); playBtn.textContent = '▶'; playBtn.classList.remove('playing'); }
+    if (audioEl.paused) {
+      // play() returns a promise that can reject (autoplay policy, decode error,
+      // missing file) — flipping the button to "playing" before it resolves would
+      // show a misleading state if playback never actually starts.
+      try {
+        await audioEl.play();
+        playBtn.textContent = '⏸';
+        playBtn.classList.add('playing');
+      } catch (err) {
+        showToast('Не удалось начать воспроизведение: ' + err.message, 'error');
+      }
+    } else {
+      audioEl.pause();
+      playBtn.textContent = '▶';
+      playBtn.classList.remove('playing');
+    }
     return;
   }
 
