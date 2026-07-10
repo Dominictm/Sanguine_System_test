@@ -193,53 +193,63 @@ module.exports = function generationRouter({
         messages: [{ role: 'user', content: [...imgContents, { type: 'text', text: userPrompt }] }],
       }, { label: 'generate-appearance' }).then(m => m.content[0]?.text?.trim() || '');
 
+      // Пробует все vision-модели OpenRouter (тот же curated-список, что у основной
+      // OA-ветки), возвращает первый непустой и не-«бесполезный» ответ.
+      const tryOpenRouterModels = async label => {
+        const orGen = { source: 'openrouter', model: process.env.OPENROUTER_MODEL || 'openrouter/free' };
+        for (const m of oaModels(orGen)) {
+          try {
+            console.warn(`[generate-appearance] ${label}, пробуем OpenRouter (${m})...`);
+            const out = (await callOpenRouter(m, systemPrompt, userPrompt, imageBuffers)).trim();
+            if (!_isBogusAppearance(out)) return out;
+            console.warn(`[generate-appearance] OpenRouter ${m} вернул нерелевантный ответ, пробуем следующую...`);
+          } catch (orErr) {
+            console.warn(`[generate-appearance] OpenRouter ${m} не сработал (${orErr.status}), пробуем следующую...`);
+          }
+        }
+        return '';
+      };
+
       if (isOA(gen)) {
         // Try primary model, then fallbacks if endpoint not found
         const modelsToTry = oaModels(gen);
         let lastErr;
-        let allRateLimited = true;
         for (const m of modelsToTry) {
           try {
             const out = await oaCall(gen)(m, systemPrompt, userPrompt, imageBuffers);
             if (_isBogusAppearance(out)) {
               console.warn(`[generate-appearance] model ${m} вернул нерелевантный ответ, пробуем следующую...`);
               lastErr = Object.assign(new Error(`Модель «${m}» вернула нерелевантный ответ вместо описания.`), { status: 502 });
-              allRateLimited = false;
               continue;
             }
             appearance = out;
             if (m !== gen.model) console.log(`[generate-appearance] fallback model used: ${m}`);
-            allRateLimited = false;
             break;
           } catch (e) {
             lastErr = e;
             const is429 = e.status === 429;
-            const retryable = e.status === 404 || e.status === 502 || is429
-              || (e.status === 400 && /not a valid model|No endpoints/i.test(e.message))
-              || (e.status === 403 && /moderation|flagged/i.test(e.message));
-            if (!retryable) { allRateLimited = false; throw e; }
-            if (!is429) allRateLimited = false;
             console.warn(`[generate-appearance] model ${m} unavailable (${e.status}), trying next...`);
             if (is429) await new Promise(r => setTimeout(r, 800));
           }
         }
         if (!appearance) {
-          if (allRateLimited) {
-            // OpenRouter/OpenAI исчерпаны — пробуем Claude (OAuth/API key), если
-            // он доступен, прежде чем сдаться с 429.
-            try {
-              const claudeGen = await makeGenerationClient('claude', null);
-              if (claudeGen?.client) {
-                console.warn('[generate-appearance] OpenRouter/OpenAI исчерпаны, пробуем Claude...');
-                const out = await callClaudeVision(claudeGen.client);
-                if (!_isBogusAppearance(out)) { appearance = out; gen.source = claudeGen.source + '-fallback'; }
-              }
-            } catch { /* появится ниже как 429 */ }
-            if (!appearance) {
-              return res.status(429).json({ rateLimited: true, error: 'Превышен лимит запросов ко всем моделям. Подождите минуту и попробуйте снова.' });
+          // Все модели OpenRouter/OpenAI провалились (rate limit, недоступность,
+          // мусорный ответ — что угодно) — пробуем Claude (OAuth/API key), если
+          // он доступен, прежде чем сдаться.
+          try {
+            const claudeGen = await makeGenerationClient('claude', null);
+            if (claudeGen?.client) {
+              console.warn('[generate-appearance] OpenRouter/OpenAI не сработали, пробуем Claude...');
+              const out = await callClaudeVision(claudeGen.client);
+              if (!_isBogusAppearance(out)) { appearance = out; gen.source = claudeGen.source + '-fallback'; }
             }
-          } else {
-            throw lastErr;
+          } catch { /* появится ниже общей ошибкой */ }
+          if (!appearance) {
+            const status = lastErr?.status === 429 ? 429 : (lastErr?.status ?? 502);
+            return res.status(status).json({
+              error: lastErr?.message || 'Не удалось сгенерировать внешность ни одним из провайдеров.',
+              ...(status === 429 ? { rateLimited: true } : {}),
+            });
           }
         }
       } else {
@@ -249,35 +259,23 @@ module.exports = function generationRouter({
           if (_isBogusAppearance(out)) throw Object.assign(new Error('Claude вернул нерелевантный ответ вместо описания.'), { status: 502 });
           appearance = out;
         } catch (e) {
-          // Claude (OAuth/API key) исчерпал повторы — если настроен ещё один
-          // провайдер с поддержкой изображений, пробуем его, прежде чем сдаться.
-          // Иначе пользователь остаётся с 429 даже спустя долгое ожидание —
-          // OAuth-лимит Claude.ai не сбрасывается за секунды бэкоффа.
-          if ((e.rateLimited || e.status === 502) && process.env.OPENROUTER_API_KEY) {
-            // openrouter/free (default alias) не всегда умеет в vision — перебираем
-            // тот же curated список моделей, что и основная OA-ветка (oaModels),
-            // а не один жёстко заданный алиас.
-            const orGen = { source: 'openrouter', model: process.env.OPENROUTER_MODEL || 'openrouter/free' };
-            for (const m of oaModels(orGen)) {
-              try {
-                console.warn(`[generate-appearance] Claude исчерпан, пробуем OpenRouter (${m})...`);
-                const out = (await callOpenRouter(m, systemPrompt, userPrompt, imageBuffers)).trim();
-                if (!_isBogusAppearance(out)) { appearance = out; gen.source = 'openrouter-fallback'; break; }
-                console.warn(`[generate-appearance] OpenRouter fallback ${m} вернул нерелевантный ответ, пробуем следующую...`);
-              } catch (orErr) {
-                console.warn(`[generate-appearance] OpenRouter fallback ${m} не сработал (${orErr.status}), пробуем следующую...`);
-              }
+          // Claude (OAuth/API key) подвёл — по ЛЮБОЙ причине (rate limit, обрыв сети,
+          // мусорный ответ, что угодно ещё): если настроен другой провайдер с
+          // поддержкой изображений, пробуем его, прежде чем возвращать ошибку целиком.
+          if (process.env.OPENROUTER_API_KEY) {
+            const out = await tryOpenRouterModels('Claude не сработал');
+            if (out) { appearance = out; gen.source = 'openrouter-fallback'; }
+            else if (process.env.OPENAI_API_KEY) {
+              console.warn('[generate-appearance] Claude и OpenRouter не сработали, пробуем OpenAI...');
+              const oaOut = (await callOpenAI(process.env.OPENAI_MODEL || 'gpt-4o-mini', systemPrompt, userPrompt, imageBuffers).catch(() => '')).trim();
+              if (!_isBogusAppearance(oaOut)) { appearance = oaOut; gen.source = 'openai-fallback'; }
             }
-            if (!appearance) throw e;
-          } else if ((e.rateLimited || e.status === 502) && process.env.OPENAI_API_KEY) {
-            console.warn('[generate-appearance] Claude исчерпан, пробуем OpenAI...');
-            const out = (await callOpenAI(process.env.OPENAI_MODEL || 'gpt-4o-mini', systemPrompt, userPrompt, imageBuffers)).trim();
-            if (_isBogusAppearance(out)) throw e;
-            appearance = out;
-            gen.source = 'openai-fallback';
-          } else {
-            throw e;
+          } else if (process.env.OPENAI_API_KEY) {
+            console.warn('[generate-appearance] Claude не сработал, пробуем OpenAI...');
+            const out = (await callOpenAI(process.env.OPENAI_MODEL || 'gpt-4o-mini', systemPrompt, userPrompt, imageBuffers).catch(() => '')).trim();
+            if (!_isBogusAppearance(out)) { appearance = out; gen.source = 'openai-fallback'; }
           }
+          if (!appearance) throw e;
         }
       }
 
