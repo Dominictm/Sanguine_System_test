@@ -59,7 +59,7 @@ router.post('/api/audio', async (req, res) => {
     const list = await readIndex();
     const entry = {
       id, ext, filename: filename || `${id}.${ext}`,
-      title: title.trim(), volume: 1, createdAt: new Date().toISOString(),
+      title: title.trim(), volume: 1, loop: true, createdAt: new Date().toISOString(),
     };
     list.push(entry);
     await writeIndex(list);
@@ -82,6 +82,9 @@ router.put('/api/audio/:id', async (req, res) => {
     }
     if (typeof req.body.volume === 'number') {
       entry.volume = Math.max(0, Math.min(1, req.body.volume));
+    }
+    if (typeof req.body.loop === 'boolean') {
+      entry.loop = req.body.loop;
     }
     await writeIndex(list);
     res.json(entry);

@@ -8239,6 +8239,13 @@ a.md-link-loc:hover {
   color: var(--accent);
 }
 
+/* Зацикливание — тоже .audio-card-icon-btn, но это переключатель (on/off),
+   а не разовое действие вроде переименования/удаления — нужно постоянно
+   видимое состояние, не только на hover. */
+.audio-card-icon-btn.active {
+  color: var(--accent);
+}
+
 .v20-disc-note {
   font-size: 19px;
   color: var(--text2);

@@ -2457,12 +2457,15 @@ describe('API — integration', () => {
       });
       const id = created.id;
 
+      assert.equal(created.loop, true, 'по умолчанию зацикливание включено');
+
       const { status: putStatus, body: updated } = await apiJson(`/api/audio/${id}`, {
-        method: 'PUT', body: JSON.stringify({ title: 'Финальное имя', volume: 0.4 }),
+        method: 'PUT', body: JSON.stringify({ title: 'Финальное имя', volume: 0.4, loop: false }),
       });
       assert.equal(putStatus, 200);
       assert.equal(updated.title, 'Финальное имя');
       assert.equal(updated.volume, 0.4);
+      assert.equal(updated.loop, false);
 
       const { status: putEmptyStatus } = await apiJson(`/api/audio/${id}`, {
         method: 'PUT', body: JSON.stringify({ title: '   ' }),
