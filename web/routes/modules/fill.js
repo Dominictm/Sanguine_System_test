@@ -1,7 +1,7 @@
 'use strict';
 const express = require('express');
 const {
-  path, fs, serverError, aiRateLimit,
+  path, fs, serverError, aiRateLimit, callAnthropicWithRetry,
   ROOT, cityDir, charsDir, locsDir, chroniclesDir, archiveDir,
   reqCity, writeFileAtomic, invalidateChars,
   getAllCharacters, getAllLocations, listModules, tableCell, LINEAGE_MAP,
@@ -149,11 +149,11 @@ module.exports = function fillRouter({ makeGenerationClient, isOA, oaCall }) {
       if (gen && isOA(gen)) {
         scenarioText = await oaCall(gen)(gen.model, systemPrompt, userPrompt, [], 90000, 4000);
       } else if (gen?.client) {
-        const msg = await gen.client.messages.create({
+        const msg = await callAnthropicWithRetry(gen.client, {
           model: 'claude-opus-4-8', max_tokens: 4000,
           system: systemPrompt,
           messages: [{ role: 'user', content: userPrompt }],
-        });
+        }, { label: 'module-fill' });
         scenarioText = msg.content[0]?.text?.trim() || '';
       } else {
         return res.status(503).json({ ok: false, error: 'Нет доступного AI-провайдера. Настрой в Инструменты → Модели AI.' });
@@ -291,10 +291,10 @@ module.exports = function fillRouter({ makeGenerationClient, isOA, oaCall }) {
           if (locGen && isOA(locGen)) {
             allLocsRaw = await oaCall(locGen)(locGen.model, '', allCardsPrompt, [], 90000, newLocNames.length * 800 + 200);
           } else if (locGen?.client) {
-            const m = await locGen.client.messages.create({
+            const m = await callAnthropicWithRetry(locGen.client, {
               model: 'claude-haiku-4-5-20251001', max_tokens: newLocNames.length * 800 + 200,
               messages: [{ role: 'user', content: allCardsPrompt }],
-            });
+            }, { label: 'module-fill-locations' });
             allLocsRaw = m.content[0]?.text || '';
           }
 
@@ -352,10 +352,10 @@ module.exports = function fillRouter({ makeGenerationClient, isOA, oaCall }) {
           if (gen && isOA(gen)) {
             npcRaw = await oaCall(gen)(gen.model, '', npcPrompt, [], 90000, newNpcs.length * 900 + 300);
           } else if (gen?.client) {
-            const m = await gen.client.messages.create({
+            const m = await callAnthropicWithRetry(gen.client, {
               model: 'claude-haiku-4-5-20251001', max_tokens: newNpcs.length * 900 + 300,
               messages: [{ role: 'user', content: npcPrompt }],
-            });
+            }, { label: 'module-fill-npcs' });
             npcRaw = m.content[0]?.text || '';
           }
 

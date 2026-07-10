@@ -5,7 +5,7 @@
 
 const path    = require('path');
 const fs      = require('fs').promises;
-const { serverError, aiRateLimit } = require('../../lib/http');
+const { serverError, aiRateLimit, callAnthropicWithRetry } = require('../../lib/http');
 const {
   ROOT, cityDir, charsDir, locsDir, chroniclesDir, archiveDir,
   reqCity, writeFileAtomic, invalidateChars,
@@ -549,7 +549,7 @@ async function _patchModuleMain(modDir, mod, firstLoc) {
 // Фабрика: server.js передаёт AI-хелперы и character-sheet генерацию при монтировании.
 
 module.exports = {
-  path, fs, serverError, aiRateLimit,
+  path, fs, serverError, aiRateLimit, callAnthropicWithRetry,
   ROOT, cityDir, charsDir, locsDir, chroniclesDir, archiveDir,
   reqCity, writeFileAtomic, invalidateChars,
   getAllCharacters, getAllLocations, listModules, tableCell, LINEAGE_MAP,

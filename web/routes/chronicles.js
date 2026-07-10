@@ -10,7 +10,7 @@
 const express = require('express');
 const path    = require('path');
 const fs      = require('fs').promises;
-const { serverError, aiRateLimit } = require('../lib/http');
+const { serverError, aiRateLimit, callAnthropicWithRetry } = require('../lib/http');
 const {
   ROOT, DEFAULT_CITY, charsDir, chroniclesDir, archiveDir,
   reqCity, writeFileAtomic, invalidateChars, getAllCharacters, mapLimit,
@@ -371,10 +371,10 @@ ${digest}`;
         }
       } else {
         const model = validModels().includes(req.body?.model) ? req.body.model : 'claude-haiku-4-5-20251001';
-        const message = await gen.client.messages.create({
+        const message = await callAnthropicWithRetry(gen.client, {
           model, max_tokens: 600, system: systemPrompt,
           messages: [{ role: 'user', content: userPrompt }],
-        });
+        }, { label: 'chronicle-recap' });
         recap = message.content[0]?.text?.trim() || '';
       }
 
@@ -384,7 +384,7 @@ ${digest}`;
       const status = e.status ?? 500;
       const msg    = e.error?.error?.message ?? e.message ?? String(e);
       console.error(`[chronicle-recap] ${status}`, msg);
-      res.status(status >= 400 && status < 600 ? status : 500).json({ error: msg });
+      res.status(status >= 400 && status < 600 ? status : 500).json({ error: msg, ...(e.rateLimited ? { rateLimited: true } : {}) });
     }
   });
 

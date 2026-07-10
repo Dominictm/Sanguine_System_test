@@ -1,7 +1,7 @@
 'use strict';
 const express = require('express');
 const {
-  path, fs, serverError, aiRateLimit,
+  path, fs, serverError, aiRateLimit, callAnthropicWithRetry,
   ROOT, cityDir, charsDir, locsDir, chroniclesDir, archiveDir,
   reqCity, writeFileAtomic, invalidateChars,
   getAllCharacters, getAllLocations, listModules, tableCell, LINEAGE_MAP,
@@ -167,11 +167,11 @@ ${target.body}
       if (gen && isOA(gen)) {
         newBody = await oaCall(gen)(gen.model, systemPrompt, userPrompt, [], 60000, 2500);
       } else if (gen?.client) {
-        const msg = await gen.client.messages.create({
+        const msg = await callAnthropicWithRetry(gen.client, {
           model: 'claude-opus-4-8', max_tokens: 2500,
           system: systemPrompt,
           messages: [{ role: 'user', content: userPrompt }],
-        });
+        }, { label: 'scenario-section' });
         newBody = msg.content[0]?.text?.trim() || '';
       } else {
         return res.status(503).json({ ok: false, error: 'Нет доступного AI-провайдера. Настрой в Инструменты → Модели AI.' });
@@ -270,11 +270,11 @@ ${currentBlockMd}
       if (gen && isOA(gen)) {
         newBlockText = await oaCall(gen)(gen.model, systemPrompt, userPrompt, [], 60000, 3000);
       } else if (gen?.client) {
-        const msg = await gen.client.messages.create({
+        const msg = await callAnthropicWithRetry(gen.client, {
           model: 'claude-opus-4-8', max_tokens: 3000,
           system: systemPrompt,
           messages: [{ role: 'user', content: userPrompt }],
-        });
+        }, { label: 'scenario-block' });
         newBlockText = msg.content[0]?.text?.trim() || '';
       } else {
         return res.status(503).json({ ok: false, error: 'Нет доступного AI-провайдера. Настрой в Инструменты → Модели AI.' });

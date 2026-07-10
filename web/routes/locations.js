@@ -7,7 +7,7 @@
 const express = require('express');
 const path    = require('path');
 const fs      = require('fs').promises;
-const { serverError, aiRateLimit } = require('../lib/http');
+const { serverError, aiRateLimit, callAnthropicWithRetry } = require('../lib/http');
 const {
   ROOT, reqCity, locsDir, writeFileAtomic, invalidateLocs,
   getAllLocations, findLocMdPath,
@@ -309,10 +309,10 @@ ${_locCardTemplate(locName, district?.trim() || '')}
           if (gen && isOA(gen)) {
             raw = await oaCall(gen)(gen.model, '', prompt, [], 60000, 1300);
           } else if (gen?.client) {
-            const m = await gen.client.messages.create({
+            const m = await callAnthropicWithRetry(gen.client, {
               model: 'claude-haiku-4-5-20251001', max_tokens: 1300,
               messages: [{ role: 'user', content: prompt }],
-            });
+            }, { label: 'loc-create' });
             raw = m.content[0]?.text || '';
           }
           if (raw.trim()) content = raw.trim() + '\n';
@@ -395,10 +395,10 @@ ${_locCardTemplate(locName)}
       if (isOA(gen)) {
         result = await oaCall(gen)(gen.model, '', prompt, [], 60000, maxTok);
       } else if (gen?.client) {
-        const m = await gen.client.messages.create({
+        const m = await callAnthropicWithRetry(gen.client, {
           model: 'claude-haiku-4-5-20251001', max_tokens: maxTok,
           messages: [{ role: 'user', content: prompt }],
-        });
+        }, { label: 'locations-generate' });
         result = m.content[0]?.text || '';
       }
 

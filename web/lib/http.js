@@ -51,4 +51,32 @@ setInterval(() => {
   }
 }, 300_000).unref();
 
-module.exports = { C, serverError, aiRateLimit };
+// ── Retry-on-429 для прямых вызовов Anthropic SDK ─────────────────────────────
+// Ветка OpenRouter/OpenAI у каждого AI-эндпоинта сама перебирает модели и
+// пережидает 429 (см. routes/generation.js и др.) — но прямой вызов
+// client.messages.create() (claude-login OAuth / ANTHROPIC_API_KEY) этого не
+// делал: единичный временный rate-limit от Claude.ai сразу проваливал запрос.
+// Повторяет с бэкоффом (учитывая Retry-After, если он есть), затем сдаётся с
+// тем же {rateLimited:true}, что и OA-ветки.
+async function callAnthropicWithRetry(client, params, { attempts = 3, label = 'generation' } = {}) {
+  let lastErr;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await client.messages.create(params);
+    } catch (e) {
+      if (e.status !== 429) throw e;
+      lastErr = e;
+      if (i === attempts - 1) break;
+      const retryAfterSec = Number(e.headers?.['retry-after']) || 0;
+      const waitMs = retryAfterSec > 0 ? retryAfterSec * 1000 : 1000 * Math.pow(2, i);
+      console.warn(`[${label}] 429 от Anthropic, повтор через ${waitMs}мс (попытка ${i + 1}/${attempts})...`);
+      await new Promise(r => setTimeout(r, waitMs));
+    }
+  }
+  const err = new Error('Превышен лимит запросов Claude. Подождите минуту и попробуйте снова.');
+  err.status = 429;
+  err.rateLimited = true;
+  throw err;
+}
+
+module.exports = { C, serverError, aiRateLimit, callAnthropicWithRetry };

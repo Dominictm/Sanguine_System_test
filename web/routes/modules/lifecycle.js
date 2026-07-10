@@ -2,7 +2,7 @@
 const express = require('express');
 const { spawn } = require('child_process');
 const {
-  path, fs, serverError, aiRateLimit,
+  path, fs, serverError, aiRateLimit, callAnthropicWithRetry,
   ROOT, cityDir, charsDir, locsDir, chroniclesDir, archiveDir,
   reqCity, writeFileAtomic, invalidateChars,
   getAllCharacters, getAllLocations, listModules, tableCell, LINEAGE_MAP,
@@ -237,7 +237,9 @@ module.exports = function lifecycleRouter({ makeGenerationClient, isOA, oaCall }
         if (isOA(gen)) {
           return oaCall(gen)(gen.model, system, user, [], 90000, maxTokens);
         }
-        const m = await gen.client.messages.create({ model: 'claude-opus-4-8', max_tokens: maxTokens, system, messages: [{ role: 'user', content: user }] });
+        const m = await callAnthropicWithRetry(gen.client,
+          { model: 'claude-opus-4-8', max_tokens: maxTokens, system, messages: [{ role: 'user', content: user }] },
+          { label: 'module-close' });
         return m.content[0]?.text?.trim() || '';
       };
 

@@ -115,7 +115,7 @@ function _delinkSlug(content, slug) {
 // Фабрика: server.js передаёт runValidationBackground + AI-хелперы при монтировании.
 module.exports = function charactersRouter({
   runValidationBackground,
-  makeGenerationClient, isOA, oaCall, oaModels, genTextWithRetry,
+  makeGenerationClient, genTextWithRetry,
   generateV20Sheet, ensureSheetLink,
 }) {
   const router = express.Router();
@@ -785,27 +785,8 @@ ${hint ? `Акцент/пожелание: ${hint}\n` : ''}${draftTxt ? `\nЧе�
 ${draftTxt ? '- Сохрани канву и факты черновика выше, углуби и доработай стиль/детали — не противоречь содержанию.\n' : ''}- Лаконично и литературно, по правилам diary_rules.md.
 - Верни ТОЛЬКО текст записи (без заголовков и markdown-полей).`;
 
-      let text = '';
-      if (isOA(gen)) {
-        const models = oaModels(gen);
-        let lastErr;
-        for (const m of models) {
-          try { text = await oaCall(gen)(m, systemPrompt, userPrompt, []); if (m !== gen.model) console.log(`[diary-gen] fallback model: ${m}`); break; }
-          catch (e) {
-            lastErr = e;
-            const retry = e.status === 404 || e.status === 429 || e.status === 502 || (e.status === 400 && /not a valid model|No endpoints/i.test(e.message));
-            if (!retry) throw e;
-          }
-        }
-        if (!text) throw lastErr;
-      } else {
-        const msg = await gen.client.messages.create({
-          model: gen.model, max_tokens: 1200, system: systemPrompt,
-          messages: [{ role: 'user', content: userPrompt }],
-        });
-        text = msg.content[0]?.text?.trim() || '';
-      }
-      res.json({ ok: true, text, source: gen.source });
+      const out = await genTextWithRetry(gen, { system: systemPrompt, user: userPrompt, maxTokens: 1200 });
+      res.json({ ok: true, text: out.text, source: out.source });
     } catch (e) {
       const status = e.status ?? 500;
       res.status(status >= 400 && status < 600 ? status : 500).json({ error: e.message ?? String(e) });
