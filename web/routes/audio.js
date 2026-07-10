@@ -9,11 +9,12 @@ const path    = require('path');
 const fs      = require('fs').promises;
 const crypto  = require('crypto');
 const { serverError } = require('../lib/http');
-const { AUDIO_DIR, writeFileAtomic } = require('../lib/db');
+const { AUDIO_DIR, writeFileAtomic, reqCity, getAllLocations } = require('../lib/db');
 
 const router = express.Router();
 
 const INDEX_PATH = path.join(AUDIO_DIR, 'index.json');
+const PRESETS_PATH = path.join(AUDIO_DIR, 'presets.json');
 
 const MIME_EXT = {
   'audio/mpeg':  'mp3',
@@ -33,6 +34,17 @@ async function readIndex() {
 async function writeIndex(list) {
   await fs.mkdir(AUDIO_DIR, { recursive: true });
   await writeFileAtomic(INDEX_PATH, JSON.stringify(list, null, 2), 'utf-8');
+}
+
+async function readPresets() {
+  const raw = await fs.readFile(PRESETS_PATH, 'utf-8').catch(() => null);
+  if (!raw) return [];
+  try { return JSON.parse(raw); } catch { return []; }
+}
+
+async function writePresets(list) {
+  await fs.mkdir(AUDIO_DIR, { recursive: true });
+  await writeFileAtomic(PRESETS_PATH, JSON.stringify(list, null, 2), 'utf-8');
 }
 
 router.get('/api/audio', async (_req, res) => {
@@ -107,6 +119,96 @@ router.delete('/api/audio/:id', async (req, res) => {
     const [entry] = list.splice(idx, 1);
     await fs.unlink(path.join(AUDIO_DIR, `${entry.id}.${entry.ext}`)).catch(() => {});
     await writeIndex(list);
+    res.json({ ok: true });
+  } catch (e) { serverError(res, e); }
+});
+
+router.get('/api/audio/presets', async (req, res) => {
+  try {
+    const presets = await readPresets();
+    const tracks  = await readIndex();
+    const locs    = await getAllLocations(reqCity(req));
+    const enriched = presets.map(p => {
+      const loc = p.locationSlug ? locs.find(l => l.slug === p.locationSlug) : null;
+      const resolvedTracks = p.tracks
+        .map(pt => {
+          const track = tracks.find(t => t.id === pt.trackId);
+          if (!track) return null; // трек удалён из библиотеки — тихо пропускаем
+          return { trackId: pt.trackId, volume: pt.volume, title: track.title, url: `/audio-lib/${track.id}.${track.ext}` };
+        })
+        .filter(Boolean);
+      return {
+        id: p.id, name: p.name, locationSlug: p.locationSlug || null,
+        locationTitle: loc ? (loc.title || null) : null,
+        locationImageUrl: loc ? (loc.imageUrl || null) : null,
+        tracks: resolvedTracks, createdAt: p.createdAt,
+      };
+    });
+    res.json(enriched);
+  } catch (e) { serverError(res, e); }
+});
+
+function _cleanPresetTracks(rawTracks) {
+  return (Array.isArray(rawTracks) ? rawTracks : [])
+    .map(t => ({
+      trackId: String(t?.trackId || ''),
+      volume: Math.max(0, Math.min(1, typeof t?.volume === 'number' ? t.volume : 1)),
+    }))
+    .filter(t => t.trackId);
+}
+
+router.post('/api/audio/presets', async (req, res) => {
+  try {
+    const { name, locationSlug, tracks } = req.body || {};
+    if (!name || !name.trim()) return res.status(400).json({ error: 'Название пресета не может быть пустым' });
+    const cleanTracks = _cleanPresetTracks(tracks);
+    if (!cleanTracks.length) return res.status(400).json({ error: 'Пресет должен содержать хотя бы один звук' });
+
+    const presets = await readPresets();
+    const entry = {
+      id: crypto.randomUUID(), name: name.trim(),
+      locationSlug: locationSlug || null, tracks: cleanTracks,
+      createdAt: new Date().toISOString(),
+    };
+    presets.push(entry);
+    await writePresets(presets);
+    res.json(entry);
+  } catch (e) { serverError(res, e); }
+});
+
+router.put('/api/audio/presets/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const presets = await readPresets();
+    const entry = presets.find(p => p.id === id);
+    if (!entry) return res.status(404).json({ error: 'Пресет не найден' });
+
+    if (typeof req.body.name === 'string') {
+      const trimmed = req.body.name.trim();
+      if (!trimmed) return res.status(400).json({ error: 'Название пресета не может быть пустым' });
+      entry.name = trimmed;
+    }
+    if ('locationSlug' in (req.body || {})) {
+      entry.locationSlug = req.body.locationSlug || null;
+    }
+    if (req.body && req.body.tracks !== undefined) {
+      const cleanTracks = _cleanPresetTracks(req.body.tracks);
+      if (!cleanTracks.length) return res.status(400).json({ error: 'Пресет должен содержать хотя бы один звук' });
+      entry.tracks = cleanTracks;
+    }
+    await writePresets(presets);
+    res.json(entry);
+  } catch (e) { serverError(res, e); }
+});
+
+router.delete('/api/audio/presets/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const presets = await readPresets();
+    const idx = presets.findIndex(p => p.id === id);
+    if (idx === -1) return res.status(404).json({ error: 'Пресет не найден' });
+    presets.splice(idx, 1);
+    await writePresets(presets);
     res.json({ ok: true });
   } catch (e) { serverError(res, e); }
 });

@@ -2523,6 +2523,121 @@ describe('API — integration', () => {
       const { status } = await apiJson('/api/audio/__no_such_id__', { method: 'DELETE' });
       assert.equal(status, 404);
     });
+
+    describe('Presets', () => {
+      const PRESETS_PATH = path.join(AUDIO_ROOT, 'presets.json');
+      let presetsExisted, originalPresets;
+      before(async () => {
+        originalPresets = await fs.readFile(PRESETS_PATH, 'utf-8').catch(() => null);
+        presetsExisted = originalPresets !== null;
+      });
+      after(async () => {
+        if (presetsExisted) await fs.writeFile(PRESETS_PATH, originalPresets, 'utf-8');
+        else await fs.rm(PRESETS_PATH, { force: true });
+      });
+
+      it('POST /api/audio/presets — без названия → 400', async () => {
+        const { status } = await apiJson('/api/audio/presets', {
+          method: 'POST', body: JSON.stringify({ name: '  ', tracks: [{ trackId: 'x', volume: 1 }] }),
+        });
+        assert.equal(status, 400);
+      });
+
+      it('POST /api/audio/presets — без звуков → 400', async () => {
+        const { status } = await apiJson('/api/audio/presets', {
+          method: 'POST', body: JSON.stringify({ name: 'Пустой пресет', tracks: [] }),
+        });
+        assert.equal(status, 400);
+      });
+
+      it('POST/GET/PUT/DELETE /api/audio/presets — полный цикл, резолвит title/url трека и null-локацию', async () => {
+        const { body: track } = await apiJson('/api/audio', {
+          method: 'POST',
+          body: JSON.stringify({ title: 'Трек для пресета', filename: 'x.mp3', mimetype: 'audio/mpeg', data: 'AAAA', category: 'effect' }),
+        });
+        let presetId = null;
+        try {
+          const { status: postStatus, body: created } = await apiJson('/api/audio/presets', {
+            method: 'POST',
+            body: JSON.stringify({
+              name: 'Тестовый пресет', locationSlug: '__no_such_location__',
+              tracks: [{ trackId: track.id, volume: 0.5 }],
+            }),
+          });
+          assert.equal(postStatus, 200);
+          assert.equal(created.name, 'Тестовый пресет');
+          assert.ok(created.id);
+          presetId = created.id;
+
+          const { status: getStatus, body: list } = await apiJson('/api/audio/presets');
+          assert.equal(getStatus, 200);
+          const mine = list.find(p => p.id === presetId);
+          assert.ok(mine);
+          assert.equal(mine.locationTitle, null, 'несуществующая локация резолвится в null, а не в ошибку');
+          assert.equal(mine.locationImageUrl, null);
+          assert.equal(mine.tracks.length, 1);
+          assert.equal(mine.tracks[0].title, 'Трек для пресета');
+          assert.equal(mine.tracks[0].volume, 0.5);
+          assert.equal(mine.tracks[0].url, track.url);
+
+          const { status: putStatus, body: updated } = await apiJson(`/api/audio/presets/${presetId}`, {
+            method: 'PUT', body: JSON.stringify({ name: 'Переименованный пресет', tracks: [{ trackId: track.id, volume: 0.9 }] }),
+          });
+          assert.equal(putStatus, 200);
+          assert.equal(updated.name, 'Переименованный пресет');
+          assert.equal(updated.tracks[0].volume, 0.9);
+
+          const { status: putMissingStatus } = await apiJson('/api/audio/presets/__no_such_id__', {
+            method: 'PUT', body: JSON.stringify({ name: 'x' }),
+          });
+          assert.equal(putMissingStatus, 404);
+
+          const { status: delStatus, body: delBody } = await apiJson(`/api/audio/presets/${presetId}`, { method: 'DELETE' });
+          assert.equal(delStatus, 200);
+          assert.equal(delBody.ok, true);
+          presetId = null;
+
+          const { status: delMissingStatus } = await apiJson('/api/audio/presets/__no_such_id__', { method: 'DELETE' });
+          assert.equal(delMissingStatus, 404);
+        } finally {
+          if (presetId) await apiJson(`/api/audio/presets/${presetId}`, { method: 'DELETE' });
+          await apiJson(`/api/audio/${track.id}`, { method: 'DELETE' });
+        }
+      });
+
+      it('GET /api/audio/presets — ссылка на удалённый трек тихо пропускается, остальные треки остаются', async () => {
+        const { body: keepTrack } = await apiJson('/api/audio', {
+          method: 'POST',
+          body: JSON.stringify({ title: 'Останется', filename: 'a.mp3', mimetype: 'audio/mpeg', data: 'AAAA', category: 'music' }),
+        });
+        const { body: doomedTrack } = await apiJson('/api/audio', {
+          method: 'POST',
+          body: JSON.stringify({ title: 'Будет удалён', filename: 'b.mp3', mimetype: 'audio/mpeg', data: 'AAAA', category: 'effect' }),
+        });
+        let presetId = null;
+        try {
+          const { body: preset } = await apiJson('/api/audio/presets', {
+            method: 'POST',
+            body: JSON.stringify({
+              name: 'Переживёт удаление трека',
+              tracks: [{ trackId: keepTrack.id, volume: 1 }, { trackId: doomedTrack.id, volume: 1 }],
+            }),
+          });
+          presetId = preset.id;
+
+          await apiJson(`/api/audio/${doomedTrack.id}`, { method: 'DELETE' });
+
+          const { body: list } = await apiJson('/api/audio/presets');
+          const mine = list.find(p => p.id === presetId);
+          assert.ok(mine, 'пресет остаётся, даже если один из его треков удалён');
+          assert.equal(mine.tracks.length, 1, 'удалённый трек тихо выпадает из tracks[]');
+          assert.equal(mine.tracks[0].trackId, keepTrack.id);
+        } finally {
+          if (presetId) await apiJson(`/api/audio/presets/${presetId}`, { method: 'DELETE' });
+          await apiJson(`/api/audio/${keepTrack.id}`, { method: 'DELETE' });
+        }
+      });
+    });
   });
 
   // ── Locations — write guards ─────────────────────────────────────────────────
