@@ -15,6 +15,7 @@ function _audioLibCardHtml(t) {
     <audio data-audio-el src="${escAttr(t.url)}" ${loopOn ? 'loop' : ''} preload="none"></audio>
     <div class="audio-card-row">
       <button type="button" class="audio-card-play-btn" data-audio-play aria-label="Играть/пауза">▶</button>
+      <button type="button" class="audio-card-icon-btn" data-audio-stop aria-label="Остановить полностью">⏹</button>
       <input type="range" class="audio-card-volume" data-audio-volume min="0" max="1" step="0.01" value="${t.volume}">
     </div>
     <div class="audio-card-actions">
@@ -78,6 +79,18 @@ document.querySelector('.audio-lib-columns')?.addEventListener('click', async e 
       playBtn.textContent = '▶';
       playBtn.classList.remove('playing');
     }
+    return;
+  }
+
+  const stopBtn = e.target.closest('[data-audio-stop]');
+  if (stopBtn) {
+    const card = stopBtn.closest('.audio-card');
+    const audioEl = card.querySelector('[data-audio-el]');
+    audioEl.pause();
+    audioEl.currentTime = 0;
+    const playBtn = card.querySelector('[data-audio-play]');
+    playBtn.textContent = '▶';
+    playBtn.classList.remove('playing');
     return;
   }
 
