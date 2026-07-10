@@ -68,4 +68,38 @@ router.post('/api/audio', async (req, res) => {
   } catch (e) { serverError(res, e); }
 });
 
+router.put('/api/audio/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const list = await readIndex();
+    const entry = list.find(t => t.id === id);
+    if (!entry) return res.status(404).json({ error: 'Звук не найден' });
+
+    if (typeof req.body.title === 'string') {
+      const trimmed = req.body.title.trim();
+      if (!trimmed) return res.status(400).json({ error: 'Название не может быть пустым' });
+      entry.title = trimmed;
+    }
+    if (typeof req.body.volume === 'number') {
+      entry.volume = Math.max(0, Math.min(1, req.body.volume));
+    }
+    await writeIndex(list);
+    res.json(entry);
+  } catch (e) { serverError(res, e); }
+});
+
+router.delete('/api/audio/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const list = await readIndex();
+    const idx = list.findIndex(t => t.id === id);
+    if (idx === -1) return res.status(404).json({ error: 'Звук не найден' });
+
+    const [entry] = list.splice(idx, 1);
+    await fs.unlink(path.join(AUDIO_DIR, `${entry.id}.${entry.ext}`)).catch(() => {});
+    await writeIndex(list);
+    res.json({ ok: true });
+  } catch (e) { serverError(res, e); }
+});
+
 module.exports = { router, readIndex, writeIndex };

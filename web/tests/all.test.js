@@ -2442,6 +2442,49 @@ describe('API — integration', () => {
         }
       }
     });
+
+    it('PUT /api/audio/:id — 404 для несуществующего id', async () => {
+      const { status } = await apiJson('/api/audio/__no_such_id__', {
+        method: 'PUT', body: JSON.stringify({ title: 'Новое имя' }),
+      });
+      assert.equal(status, 404);
+    });
+
+    it('PUT /api/audio/:id — переименование и громкость; DELETE удаляет файл и запись', async () => {
+      const { body: created } = await apiJson('/api/audio', {
+        method: 'POST',
+        body: JSON.stringify({ title: 'Черновое имя', filename: 'x.ogg', mimetype: 'audio/ogg', data: 'T2dnUw==' }),
+      });
+      const id = created.id;
+
+      const { status: putStatus, body: updated } = await apiJson(`/api/audio/${id}`, {
+        method: 'PUT', body: JSON.stringify({ title: 'Финальное имя', volume: 0.4 }),
+      });
+      assert.equal(putStatus, 200);
+      assert.equal(updated.title, 'Финальное имя');
+      assert.equal(updated.volume, 0.4);
+
+      const { status: putEmptyStatus } = await apiJson(`/api/audio/${id}`, {
+        method: 'PUT', body: JSON.stringify({ title: '   ' }),
+      });
+      assert.equal(putEmptyStatus, 400);
+
+      const filePath = path.join(AUDIO_ROOT, `${id}.ogg`);
+      assert.ok(await fs.readFile(filePath).then(() => true).catch(() => false));
+
+      const { status: delStatus, body: delBody } = await apiJson(`/api/audio/${id}`, { method: 'DELETE' });
+      assert.equal(delStatus, 200);
+      assert.equal(delBody.ok, true);
+      assert.ok(await fs.readFile(filePath).then(() => false).catch(() => true), 'файл должен быть удалён');
+
+      const { body: listAfter } = await apiJson('/api/audio');
+      assert.ok(!listAfter.some(t => t.id === id));
+    });
+
+    it('DELETE /api/audio/:id — 404 для несуществующего id', async () => {
+      const { status } = await apiJson('/api/audio/__no_such_id__', { method: 'DELETE' });
+      assert.equal(status, 404);
+    });
   });
 
   // ── Locations — write guards ─────────────────────────────────────────────────
