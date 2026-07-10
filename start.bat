@@ -1,5 +1,4 @@
 @echo off
-chcp 866 > nul
 cd /d "%~dp0"
 
 echo.
@@ -15,7 +14,7 @@ goto node_ok
 :node_missing
 echo   Node.js not found.
 echo.
-choice /C YN /M "��⠭����� Node.js ��⮬���᪨?"
+choice /C YN /M "Install Node.js automatically?"
 if errorlevel 2 goto node_manual
 if errorlevel 1 goto node_autoinstall
 
@@ -39,10 +38,19 @@ if %errorlevel% neq 0 (
     exit /b 1
 )
 
-echo   Installing Node.js (a UAC prompt may appear)...
-msiexec /i "%TEMP%\node-installer.msi" /qn /norestart
+rem msiexec needs administrator rights to install Node.js machine-wide. Running
+rem it directly under /qn (silent) with a non-elevated parent process just fails
+rem outright instead of asking - so we force an explicit UAC prompt here via
+rem PowerShell's Start-Process -Verb RunAs, and always return a real numeric
+rem exit code to this .bat even if the user declines the prompt (which throws
+rem a PowerShell exception rather than setting a plain exit code).
+echo   Installing Node.js (a Windows administrator prompt will appear - please accept it)...
+powershell -NoProfile -Command "try { $p = Start-Process msiexec.exe -ArgumentList '/i','\"%TEMP%\node-installer.msi\"','/qn','/norestart' -Verb RunAs -Wait -PassThru; exit $p.ExitCode } catch { exit 1 }"
 if %errorlevel% neq 0 (
-    echo   ERROR: Node.js installation failed.
+    echo   ERROR: Node.js installation failed (exit code %errorlevel%^).
+    echo   This usually means the administrator prompt was declined or blocked
+    echo   by system policy. Please install Node.js manually from
+    echo   https://nodejs.org and run this script again.
     del /q "%TEMP%\node-installer.msi" > nul 2>&1
     pause
     exit /b 1
@@ -64,22 +72,22 @@ echo.
 
 :node_ok
 
-rem --- �஢�ઠ ������ Git ----------------------------------
+rem --- Check for Git -------------------------------------------
 where git > nul 2>&1
 if %errorlevel% neq 0 goto git_missing
 goto git_ok
 
 :git_missing
-echo   Git �� ������.
+echo   Git not found.
 echo.
-choice /C YN /M "��⠭����� Git ��⮬���᪨ �१ winget?"
+choice /C YN /M "Install Git automatically via winget?"
 if errorlevel 2 goto git_manual
 if errorlevel 1 goto git_autoinstall
 
 :git_manual
 echo.
-echo   ��⠭���� Git ������: https://git-scm.com/download/win
-echo   ��⥬ ������� start.bat ��� ࠧ.
+echo   Install Git manually: https://git-scm.com/download/win
+echo   Then run start.bat again.
 echo.
 pause
 exit /b 1
@@ -87,23 +95,23 @@ exit /b 1
 :git_autoinstall
 where winget > nul 2>&1
 if %errorlevel% neq 0 (
-    echo   winget ������㯥� �� �⮩ ��⥬�.
-    echo   ��⠭���� Git ������: https://git-scm.com/download/win
+    echo   winget is not available on this system.
+    echo   Install Git manually: https://git-scm.com/download/win
     pause
     exit /b 1
 )
-echo   ��⠭������� Git (����� ������ ����� UAC)...
+echo   Installing Git (a Windows administrator prompt may appear)...
 winget install --id Git.Git -e --source winget --accept-package-agreements --accept-source-agreements
-rem ������� ᢥ����⠭������� git ������ � ⥪�饩 ��ᨨ ��� ��१���᪠.
+rem Make the freshly installed git visible in this session without restarting the terminal.
 set PATH=%PATH%;%ProgramFiles%\Git\cmd
 where git > nul 2>&1
 if %errorlevel% neq 0 (
-    echo   Git ��⠭�����, �� �� ����� � �⮩ ��ᨨ.
-    echo   ��१������ start.bat ��� �ନ���.
+    echo   Git was installed but is not visible in this session.
+    echo   Please restart start.bat or your terminal and try again.
     pause
     exit /b 1
 )
-echo   Git ��⠭����� �ᯥ譮.
+echo   Git installed successfully.
 echo.
 
 :git_ok
@@ -155,4 +163,3 @@ echo.
 echo   Server stopped (code: %errorlevel%).
 echo.
 pause
-

@@ -1,10 +1,9 @@
 @echo off
-chcp 866 > nul
 cd /d "%~dp0"
 
 rem ============================================================
-rem  Sanguine System - загрузка/обновление релизной версии
-rem  Источник: ветка "test" репозитория на GitHub.
+rem  Sanguine System - download/update the release branch
+rem  Source: the "test" branch on GitHub.
 rem ============================================================
 
 set REPO_URL=https://github.com/Dominictm/Sanguine_System.git
@@ -13,26 +12,26 @@ set CLONE_DIR=Sanguine_System
 
 echo.
 echo  =============================================
-echo   Sanguine System - обновление (ветка %BRANCH%)
+echo   Sanguine System - update (branch %BRANCH%)
 echo  =============================================
 echo.
 
-rem --- 1. Проверка наличия Git -------------------------------
+rem --- 1. Check for Git ----------------------------------------
 where git > nul 2>&1
 if %errorlevel% neq 0 goto git_missing
 goto git_ok
 
 :git_missing
-echo   Git не найден.
+echo   Git not found.
 echo.
-choice /C YN /M "Установить Git автоматически через winget?"
+choice /C YN /M "Install Git automatically via winget?"
 if errorlevel 2 goto git_manual
 if errorlevel 1 goto git_autoinstall
 
 :git_manual
 echo.
-echo   Установите Git вручную: https://git-scm.com/download/win
-echo   Затем запустите update.bat ещё раз.
+echo   Install Git manually: https://git-scm.com/download/win
+echo   Then run update.bat again.
 echo.
 pause
 exit /b 1
@@ -40,101 +39,102 @@ exit /b 1
 :git_autoinstall
 where winget > nul 2>&1
 if %errorlevel% neq 0 (
-    echo   winget недоступен на этой системе.
-    echo   Установите Git вручную: https://git-scm.com/download/win
+    echo   winget is not available on this system.
+    echo   Install Git manually: https://git-scm.com/download/win
     pause
     exit /b 1
 )
-echo   Устанавливаю Git (может появиться запрос UAC)...
+echo   Installing Git (a Windows administrator prompt may appear)...
 winget install --id Git.Git -e --source winget --accept-package-agreements --accept-source-agreements
-rem Сделать свежеустановленный git видимым в текущей сессии без перезапуска.
+rem Make the freshly installed git visible in this session without restarting the terminal.
 set PATH=%PATH%;%ProgramFiles%\Git\cmd
 where git > nul 2>&1
 if %errorlevel% neq 0 (
-    echo   Git установлен, но не виден в этой сессии.
-    echo   Перезапустите update.bat или терминал.
+    echo   Git was installed but is not visible in this session.
+    echo   Please restart update.bat or your terminal and try again.
     pause
     exit /b 1
 )
-echo   Git установлен успешно.
+echo   Git installed successfully.
 echo.
 
 :git_ok
 
-rem --- 2. Свежий клон или обновление существующего? ----------
+rem --- 2. Fresh clone or update an existing checkout? -----------
 if exist ".git\" goto update_existing
 goto fresh_clone
 
-rem --- 3a. Свежая загрузка -----------------------------------
+rem --- 3a. Fresh clone -------------------------------------------
 :fresh_clone
-echo   Локальный репозиторий не найден.
-echo   Скачиваю свежую копию ветки "%BRANCH%" в папку "%CLONE_DIR%"...
+echo   No repository found here.
+echo   Cloning the "%BRANCH%" branch into "%CLONE_DIR%"...
 echo.
 if exist "%CLONE_DIR%\" (
-    echo   ERROR: папка "%CLONE_DIR%" уже существует. Удалите её или
-    echo   запустите update.bat из самой папки проекта для обновления.
+    echo   ERROR: Folder "%CLONE_DIR%" already exists. To avoid overwriting it,
+    echo   run update.bat from an empty folder or remove it first.
     pause
     exit /b 1
 )
 git clone --branch %BRANCH% --single-branch "%REPO_URL%" "%CLONE_DIR%"
 if %errorlevel% neq 0 (
     echo.
-    echo   ERROR: не удалось склонировать ветку "%BRANCH%".
-    echo   Возможно, ветка ещё не опубликована на GitHub.
+    echo   ERROR: Failed to clone branch "%BRANCH%".
+    echo   Check that you're connected to GitHub.
     pause
     exit /b 1
 )
 echo.
-echo   Готово. Проект в папке "%CLONE_DIR%".
-echo   Запуск приложения: %CLONE_DIR%\start.bat
+echo   Done. The project is in folder "%CLONE_DIR%".
+echo   Next time, run: %CLONE_DIR%\start.bat
 echo.
 pause
 exit /b 0
 
-rem --- 3b. Обновление существующей копии ---------------------
+rem --- 3b. Update an existing checkout -----------------------------
 :update_existing
 for /f "delims=" %%u in ('git config --get remote.origin.url') do set CURRENT_URL=%%u
 echo   origin: %CURRENT_URL%
-echo   Получаю изменения ветки "%BRANCH%" с GitHub...
+echo   Checking for updates on branch "%BRANCH%" from GitHub...
 echo.
 
 git fetch origin %BRANCH%
 if %errorlevel% neq 0 (
     echo.
-    echo   ERROR: не удалось получить ветку "%BRANCH%" с origin.
-    echo   Возможно, ветка ещё не опубликована на GitHub.
+    echo   ERROR: Failed to fetch branch "%BRANCH%" from origin.
+    echo   Check that you're connected to GitHub.
     pause
     exit /b 1
 )
 
-rem Переключиться на test (создать локальную ветку, если её нет).
+rem Switch to the branch (create a local tracking branch if none exists yet).
 git checkout %BRANCH% 2>nul || git checkout -b %BRANCH% origin/%BRANCH%
 if %errorlevel% neq 0 (
-    echo   ERROR: не удалось переключиться на ветку "%BRANCH%".
+    echo   ERROR: Failed to switch to branch "%BRANCH%".
     pause
     exit /b 1
 )
 
-rem Ветка "test" пересобирается заново при каждом релизе (см. tools/build_release.js
-rem и .github/workflows/release-test.yml) - её история всегда расходится с локальной
-rem копией, это не сигнал потери данных, поэтому сразу сбрасываем без вопросов.
-rem Города/персонажи лежат в cities/<город>/ и в этой ветке не отслеживаются git'ом,
-rem поэтому сброс их не затронет.
-echo   Обновляю релизную версию (ветка "test" пересобирается с каждым релизом).
-echo   Города и персонажи в cities/ не отслеживаются этой веткой и не пострадают.
+rem The "test" branch is rebuilt from scratch on every release (see
+rem tools/build_release.js and .github/workflows/release-test.yml) - its
+rem history always diverges from what you have locally, that's expected and
+rem not a sign anything is wrong, so a hard reset is the correct way to sync.
+rem Your own cities/<city>/ data isn't tracked by the "test" branch, so it's
+rem never touched by this reset.
+echo   Applying the release update (the "test" branch is rebuilt each release).
+echo   Your city/character data in cities/ isn't tracked by this branch and won't be touched.
 
 git reset --hard origin/%BRANCH%
 if %errorlevel% neq 0 (
-    echo   ERROR: сброс не удался.
+    echo   ERROR: Update failed.
     pause
     exit /b 1
 )
 
 echo.
-echo   Обновление завершено. Текущая версия:
+echo   Update complete. Now at:
 git --no-pager log -1 --format="   %%h  %%s"
 echo.
-echo   Запуск приложения: start.bat
+echo   Next time, run: start.bat
 echo.
 pause
 exit /b 0
