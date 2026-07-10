@@ -124,6 +124,31 @@ async function buildProseContext(city, valid) {
   return { diaryRules, litStyle, stubContents, charCards, eventsChunks };
 }
 
+// Прямые вызовы Anthropic SDK (claude-login / api-key) в отличие от OA-ветки
+// (OpenRouter/OpenAI) не имели повтора при 429 — единичный rate-limit от Claude.ai
+// OAuth сразу проваливал запрос. Повторяет с бэкоффом (учитывая Retry-After, если
+// он есть), прежде чем сдаться с тем же {rateLimited:true}, что и у OA-ветки.
+async function callAnthropicWithRetry(client, params, { attempts = 3, label = 'generation' } = {}) {
+  let lastErr;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await client.messages.create(params);
+    } catch (e) {
+      if (e.status !== 429) throw e;
+      lastErr = e;
+      if (i === attempts - 1) break;
+      const retryAfterSec = Number(e.headers?.['retry-after']) || 0;
+      const waitMs = retryAfterSec > 0 ? retryAfterSec * 1000 : 1000 * Math.pow(2, i);
+      console.warn(`[${label}] 429 от Anthropic, повтор через ${waitMs}мс (попытка ${i + 1}/${attempts})...`);
+      await new Promise(r => setTimeout(r, waitMs));
+    }
+  }
+  const err = new Error('Превышен лимит запросов Claude. Подождите минуту и попробуйте снова.');
+  err.status = 429;
+  err.rateLimited = true;
+  throw err;
+}
+
 // Фабрика: server.js передаёт AI-хелперы при монтировании.
 module.exports = function generationRouter({
   makeGenerationClient, isOA, oaCall, oaModels, validModels,
@@ -213,10 +238,10 @@ module.exports = function generationRouter({
           type: 'image', source: { type: 'base64', media_type: mime, data: buf.toString('base64') },
         }));
         const model = validModels().includes(req.body?.model) ? req.body.model : 'claude-opus-4-8';
-        const message = await gen.client.messages.create({
+        const message = await callAnthropicWithRetry(gen.client, {
           model, max_tokens: 300, system: systemPrompt,
           messages: [{ role: 'user', content: [...imgContents, { type: 'text', text: userPrompt }] }],
-        });
+        }, { label: 'generate-appearance' });
         appearance = message.content[0]?.text?.trim() || '';
       }
 
@@ -225,7 +250,7 @@ module.exports = function generationRouter({
       const status = e.status ?? 500;
       const msg    = e.error?.error?.message ?? e.message ?? String(e);
       console.error(`[generate-appearance] ${status}`, msg);
-      res.status(status >= 400 && status < 600 ? status : 500).json({ error: msg });
+      res.status(status >= 400 && status < 600 ? status : 500).json({ error: msg, ...(e.rateLimited ? { rateLimited: true } : {}) });
     }
   });
 
@@ -320,10 +345,10 @@ Requirements:
         }
       } else {
         const model = validModels().includes(req.body?.model) ? req.body.model : 'claude-haiku-4-5-20251001';
-        const message = await gen.client.messages.create({
+        const message = await callAnthropicWithRetry(gen.client, {
           model, max_tokens: 600, system: systemPrompt,
           messages: [{ role: 'user', content: userPrompt }],
-        });
+        }, { label: 'generate-prompt' });
         parseResult(message.content[0]?.text?.trim() || '');
       }
 
@@ -334,7 +359,7 @@ Requirements:
       const status = e?.status ?? 500;
       const msg    = e?.error?.error?.message ?? e?.message ?? String(e);
       console.error(`[generate-prompt] ${status}`, msg);
-      res.status(status >= 400 && status < 600 ? status : 500).json({ error: msg });
+      res.status(status >= 400 && status < 600 ? status : 500).json({ error: msg, ...(e.rateLimited ? { rateLimited: true } : {}) });
     }
   });
 
@@ -410,10 +435,10 @@ Requirements:
         }
       } else {
         const model = validModels().includes(req.body?.model) ? req.body.model : 'claude-haiku-4-5-20251001';
-        const message = await gen.client.messages.create({
+        const message = await callAnthropicWithRetry(gen.client, {
           model, max_tokens: 500, system: systemPrompt,
           messages: [{ role: 'user', content: userPrompt }],
-        });
+        }, { label: 'generate-personality' });
         parseResult(message.content[0]?.text?.trim() || '');
       }
 
@@ -424,7 +449,7 @@ Requirements:
       const status = e?.status ?? 500;
       const msg    = e?.error?.error?.message ?? e?.message ?? String(e);
       console.error(`[generate-personality] ${status}`, msg);
-      res.status(status >= 400 && status < 600 ? status : 500).json({ error: msg });
+      res.status(status >= 400 && status < 600 ? status : 500).json({ error: msg, ...(e.rateLimited ? { rateLimited: true } : {}) });
     }
   });
 
@@ -491,10 +516,10 @@ Requirements:
         }
       } else {
         const model = validModels().includes(req.body?.model) ? req.body.model : 'claude-haiku-4-5-20251001';
-        const message = await gen.client.messages.create({
+        const message = await callAnthropicWithRetry(gen.client, {
           model, max_tokens: 600, system: systemPrompt,
           messages: [{ role: 'user', content: userPrompt }],
-        });
+        }, { label: 'generate-biography' });
         biography = message.content[0]?.text?.trim() || '';
       }
 
@@ -505,7 +530,7 @@ Requirements:
       const status = e?.status ?? 500;
       const msg    = e?.error?.error?.message ?? e?.message ?? String(e);
       console.error(`[generate-biography] ${status}`, msg);
-      res.status(status >= 400 && status < 600 ? status : 500).json({ error: msg });
+      res.status(status >= 400 && status < 600 ? status : 500).json({ error: msg, ...(e.rateLimited ? { rateLimited: true } : {}) });
     }
   });
 
@@ -844,10 +869,10 @@ ${text}
       if (isOA(gen)) {
         raw = await oaCall(gen)(gen.model, systemPrompt, userPrompt, [], 75000, 1500);
       } else {
-        const m = await gen.client.messages.create({
+        const m = await callAnthropicWithRetry(gen.client, {
           model: gen.model, max_tokens: 1500, system: systemPrompt,
           messages: [{ role: 'user', content: userPrompt }],
-        });
+        }, { label: 'canon-check' });
         raw = m.content[0]?.text?.trim() || '';
       }
       let issues = [];
@@ -856,7 +881,7 @@ ${text}
       res.json({ ok: true, issues, checked: chars.length });
     } catch (e) {
       const status = e.status ?? 500;
-      res.status(status >= 400 && status < 600 ? status : 500).json({ ok: false, error: e.message ?? String(e) });
+      res.status(status >= 400 && status < 600 ? status : 500).json({ ok: false, error: e.message ?? String(e), ...(e.rateLimited ? { rateLimited: true } : {}) });
     }
   });
 
