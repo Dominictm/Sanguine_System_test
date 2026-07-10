@@ -116,6 +116,7 @@ function navigate(page) {
   if (page === 'threads')    loadThreads();
   if (page === 'locations')  loadLocations();
   if (page === 'library')    loadLibrary();
+  if (page === 'audio-library') loadAudioLibrary();
   if (page === 'factions')   loadFactions();
   if (page === 'rumors')     loadRumors();
   if (page === 'search')     loadSearch();
