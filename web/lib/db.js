@@ -12,7 +12,13 @@ const ROOT = path.join(__dirname, '..', '..');
 
 // ── City layer (cities/<city>/…) ───────────────────────────────────────────────
 const CITIES_DIR = path.join(ROOT, 'cities');
-function _firstCity() { try { return (require('fs').readdirSync(CITIES_DIR, { withFileTypes: true }).find(e => e.isDirectory() && !/^[._]/.test(e.name)) || {}).name || ''; } catch { return ''; } }
+// AUDIO_DIR — общая для всех городов звуковая библиотека (саундборд), см.
+// docs/superpowers/specs/2026-07-10-audio-library-design.md. Не город: должна
+// быть исключена из _firstCity() ниже, иначе при отсутствии CITY в окружении
+// сервер может подобрать "audio" как активный город (та же директория, без
+// ведущей точки/подчёркивания, иначе неотличима от настоящих городов).
+const AUDIO_DIR = path.join(CITIES_DIR, 'audio');
+function _firstCity() { try { return (require('fs').readdirSync(CITIES_DIR, { withFileTypes: true }).find(e => e.isDirectory() && !/^[._]/.test(e.name) && e.name !== 'audio') || {}).name || ''; } catch { return ''; } }
 const DEFAULT_CITY = process.env.CITY || _firstCity() || '';   // нейтрально: первый существующий город
 const cityDir       = c => path.join(CITIES_DIR, c || DEFAULT_CITY);
 const charsDir      = c => path.join(cityDir(c), 'characters');
@@ -499,7 +505,7 @@ function _setSheetHeaderCell(md, labelPrefix, value) {
 }
 
 module.exports = {
-  ROOT, CITIES_DIR, DEFAULT_CITY,
+  ROOT, CITIES_DIR, AUDIO_DIR, DEFAULT_CITY,
   cityDir, charsDir, locsDir, chroniclesDir, archiveDir,
   reqCity, listCities,
   writeFileAtomic,
