@@ -13,4 +13,5 @@ module.exports = {
   ...require('./scenario'),
   ...require('./threads'),
   ...require('./chronicle'),
+  ...require('./timeline'),
 };

@@ -247,6 +247,69 @@ describe('Parsers — unit', () => {
     });
   });
 
+  describe('parsers/timeline.js', () => {
+    const { parseTimelineMd, addTimelineEpoch, removeTimelineEpoch,
+            addTimelineRow, updateTimelineRow, removeTimelineRow } = require('../lib/parsers');
+    const fixture = [
+      '# 🕰️ Тест', '', '> intro', '', '---', '',
+      '## Условные обозначения', '',
+      '| Символ | Значение |', '|:------:|----------|', '| 🏰 | Средневековье |', '',
+      '---', '',
+      '## I. Эпоха первая', '',
+      '| Год | Тип | Событие | Источник | Связи |',
+      '|-----|:---:|---------|:--------:|-------|',
+      '| 1300 | 🏰 | Событие один | 📚 | [Перс](../characters/vampires/x/x.md) |',
+    ].join('\n') + '\n';
+
+    it('parseTimelineMd — легенда, эпоха, ссылки', () => {
+      const t = parseTimelineMd(fixture);
+      assert.equal(t.legend.length, 1);
+      assert.equal(t.legend[0].symbol, '🏰');
+      assert.equal(t.epochs.length, 1);
+      assert.equal(t.epochs[0].heading, 'I. Эпоха первая');
+      assert.equal(t.epochs[0].rows.length, 1);
+      assert.equal(t.epochs[0].rows[0].year, '1300');
+      assert.equal(t.epochs[0].rows[0].links[0].text, 'Перс');
+    });
+
+    it('addTimelineRow → parseTimelineMd видит новую строку, старая не тронута', () => {
+      const { raw, found } = addTimelineRow(fixture, 'I. Эпоха первая',
+        { year: '1350', type: '🎭', event: 'Новое', source: '🏙️', links: [] });
+      assert.ok(found);
+      const t = parseTimelineMd(raw);
+      assert.equal(t.epochs[0].rows.length, 2);
+      assert.equal(t.epochs[0].rows[0].event, 'Событие один');
+      assert.equal(t.epochs[0].rows[1].event, 'Новое');
+    });
+
+    it('updateTimelineRow — неверный индекс → indexValid:false', () => {
+      const r = updateTimelineRow(fixture, 'I. Эпоха первая', 5, { year: 'x', type: '', event: '', source: '', links: [] });
+      assert.equal(r.indexValid, false);
+    });
+
+    it('removeTimelineRow — удаляет ровно одну строку', () => {
+      const withTwo = addTimelineRow(fixture, 'I. Эпоха первая',
+        { year: '1350', type: '🎭', event: 'Новое', source: '🏙️', links: [] }).raw;
+      const { raw } = removeTimelineRow(withTwo, 'I. Эпоха первая', 0);
+      const t = parseTimelineMd(raw);
+      assert.equal(t.epochs[0].rows.length, 1);
+      assert.equal(t.epochs[0].rows[0].event, 'Новое');
+    });
+
+    it('addTimelineEpoch / removeTimelineEpoch — round-trip', () => {
+      const added = addTimelineEpoch(fixture, 'II. Эпоха вторая');
+      let t = parseTimelineMd(added);
+      assert.equal(t.epochs.length, 2);
+      assert.equal(t.epochs[1].heading, 'II. Эпоха вторая');
+      assert.equal(t.epochs[1].rows.length, 0);
+
+      const removed = removeTimelineEpoch(added, 'II. Эпоха вторая').raw;
+      t = parseTimelineMd(removed);
+      assert.equal(t.epochs.length, 1);
+      assert.equal(t.epochs[0].heading, 'I. Эпоха первая'); // первая эпоха не задета
+    });
+  });
+
   describe('cityScaffold — единый каркас города', () => {
     it('содержит все обязательные файлы каркаса', () => {
       const { files } = cityScaffold({ display: 'Берлин', year: '2010' });
