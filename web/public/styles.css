@@ -785,13 +785,13 @@ body {
 }
 
 .stat-card {
-  background: rgb(139 0 0 / 7%);
-  border: 5px solid var(--border);
+  background: var(--bg3);
+  border: 2px solid var(--border);
   border-radius: var(--r-xl);
   padding: 44px 25px;
   position: relative;
   overflow: hidden;
-  transition: border-color .25s;
+  transition: background .25s, border-color .25s;
   text-align: center;
 }
 
@@ -808,7 +808,7 @@ body {
 }
 
 .stat-card:hover {
-  background: rgb(139 0 0 / 15%);
+  background: rgb(139 0 0 / 12%);
   border-color: var(--border2);
   transform: translateY(-2px);
   box-shadow: 0 6px 20px rgba(139, 0, 0, .18);
