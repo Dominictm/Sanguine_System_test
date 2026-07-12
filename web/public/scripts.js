@@ -2189,7 +2189,7 @@ async function openChrDetail(slug, display, tab) {
   title.textContent   = display;
   metaEl.textContent  = '';
   body.innerHTML      = SPINNER;
-  modal.classList.add('open');
+  openModal('chr-detail-modal');
 
   // Sync tab buttons
   document.querySelectorAll('.chr-detail-tab').forEach(b =>
@@ -2361,11 +2361,11 @@ document.getElementById('chr-detail-body').addEventListener('click', e => {
 
 // Close detail modal
 document.getElementById('chr-detail-close').addEventListener('click', () => {
-  document.getElementById('chr-detail-modal').classList.remove('open');
+  closeModal('chr-detail-modal');
 });
 document.getElementById('chr-detail-modal').addEventListener('click', e => {
   if (e.target === document.getElementById('chr-detail-modal'))
-    document.getElementById('chr-detail-modal').classList.remove('open');
+    closeModal('chr-detail-modal');
 });
 
 // ── "Ранее в хронике…" — AI recap of recent events ────────────────────────────
@@ -2709,7 +2709,7 @@ async function openFillModal(chr, mod, title, fromModPage = false) {
   document.getElementById('mod-fill-content').value   = '';
   document.getElementById('mod-fill-error').style.display = 'none';
   document.getElementById('mod-fill-title').textContent = `🪄 Сгенерировать сценарий: ${title}`;
-  document.getElementById('mod-fill-modal').classList.add('open');
+  openModal('mod-fill-modal');
   _populateCharDatalist('mod-fill-pc-list', 'mod-fill-npc-list');
 }
 
@@ -2731,12 +2731,12 @@ document.getElementById('mod-fill-npc-input').addEventListener('keydown', e => {
 });
 
 document.getElementById('mod-fill-cancel').addEventListener('click', () => {
-  document.getElementById('mod-fill-modal').classList.remove('open');
+  closeModal('mod-fill-modal');
   _fillModTarget = null;
 });
 document.getElementById('mod-fill-modal').addEventListener('click', e => {
   if (e.target === document.getElementById('mod-fill-modal')) {
-    document.getElementById('mod-fill-modal').classList.remove('open');
+    closeModal('mod-fill-modal');
     _fillModTarget = null;
   }
 });
@@ -2762,7 +2762,7 @@ document.getElementById('mod-fill-generate').addEventListener('click', async () 
 
     if (!d.ok) { errEl.textContent = d.error || 'Ошибка генерации'; errEl.style.display = ''; return; }
 
-    document.getElementById('mod-fill-modal').classList.remove('open');
+    closeModal('mod-fill-modal');
     const fromMod = _fillFromModPage;
     _fillModTarget   = null;
     _fillFromModPage = false;
@@ -2801,16 +2801,16 @@ document.addEventListener('click', e => {
       </ul>
       Канонические персонажи <b>не затрагиваются</b>.
     </div>`;
-  document.getElementById('mod-delete-modal').classList.add('open');
+  openModal('mod-delete-modal');
 });
 
 document.getElementById('mod-delete-cancel').addEventListener('click', () => {
-  document.getElementById('mod-delete-modal').classList.remove('open');
+  closeModal('mod-delete-modal');
   _modDeleteTarget = null;
 });
 document.getElementById('mod-delete-modal').addEventListener('click', e => {
   if (e.target === document.getElementById('mod-delete-modal')) {
-    document.getElementById('mod-delete-modal').classList.remove('open');
+    closeModal('mod-delete-modal');
     _modDeleteTarget = null;
   }
 });
@@ -2831,7 +2831,7 @@ document.getElementById('mod-delete-confirm').addEventListener('click', async ()
     const cleaned = d.cleanedChars?.length ? `<br>Очищено дневников: ${d.cleanedChars.length}` : '';
     body.innerHTML = `<div style="color:var(--accent1)">✓ Модуль <b>${escHtml(mod)}</b> удалён.${cleaned}</div>`;
     setTimeout(() => {
-      document.getElementById('mod-delete-modal').classList.remove('open');
+      closeModal('mod-delete-modal');
       _modDeleteTarget = null;
       confirm.textContent = 'Удалить';
       if (_modDeleteSource === 'modules-page') {
@@ -2921,7 +2921,7 @@ document.addEventListener('click', async e => {
   const confirm = document.getElementById('chr-delete-confirm');
   _chrDeleteSlug = slug;
   confirm.disabled = true;
-  modal.classList.add('open');
+  openModal('chr-delete-modal');
   body.innerHTML = '<div class="loading-state" style="height:80px"><div class="spinner"></div>Анализ...</div>';
 
   try {
@@ -2948,12 +2948,12 @@ document.addEventListener('click', async e => {
 });
 
 document.getElementById('chr-delete-cancel').addEventListener('click', () => {
-  document.getElementById('chr-delete-modal').classList.remove('open');
+  closeModal('chr-delete-modal');
   _chrDeleteSlug = null;
 });
 document.getElementById('chr-delete-modal').addEventListener('click', e => {
   if (e.target === document.getElementById('chr-delete-modal')) {
-    document.getElementById('chr-delete-modal').classList.remove('open');
+    closeModal('chr-delete-modal');
     _chrDeleteSlug = null;
   }
 });
@@ -2976,7 +2976,7 @@ document.getElementById('chr-delete-confirm').addEventListener('click', async ()
       : '';
     body.innerHTML = `<div style="color:var(--accent1)">✓ Хроника <b>${escHtml(slug)}</b> удалена.${movedMsg}</div>`;
     setTimeout(() => {
-      document.getElementById('chr-delete-modal').classList.remove('open');
+      closeModal('chr-delete-modal');
       _chrDeleteSlug = null;
       confirm.textContent = 'Удалить';
       loadChroniclesPage();
@@ -3047,7 +3047,7 @@ async function openFinalePreview(chr, mod) {
   const title = document.getElementById('finale-preview-title');
   title.textContent = '📜 Финал';
   body.innerHTML = '<div class="loading-state"><div class="spinner"></div>Загрузка...</div>';
-  modal.classList.add('open');
+  openModal('finale-preview-modal');
   try {
     const data = await fetch(
       `/api/chronicles/${encodeURIComponent(chr)}/modules/${encodeURIComponent(mod)}/detail${window.location.search}`
@@ -3061,11 +3061,11 @@ async function openFinalePreview(chr, mod) {
   }
 }
 document.getElementById('finale-preview-close').addEventListener('click', () => {
-  document.getElementById('finale-preview-modal').classList.remove('open');
+  closeModal('finale-preview-modal');
 });
 document.getElementById('finale-preview-modal').addEventListener('click', e => {
   if (e.target === document.getElementById('finale-preview-modal'))
-    document.getElementById('finale-preview-modal').classList.remove('open');
+    closeModal('finale-preview-modal');
 });
 
 // ── Module Detail Page ───────────────────────────────────────────────────────
@@ -3074,7 +3074,7 @@ STATE.currentModule = null;
 
 function openModulePage(chronicle, name) {
   STATE.currentModule = { chronicle, name };
-  document.getElementById('chr-detail-modal').classList.remove('open');
+  closeModal('chr-detail-modal');
   navigate('module');
 }
 
@@ -4592,14 +4592,14 @@ document.getElementById('modp-close-btn').addEventListener('click', () => {
   const data = STATE.currentModuleData || {};
   document.getElementById('modp-close-nosessions').style.display = (data.sessions || []).length ? 'none' : '';
   document.getElementById('modp-close-diaries-check').checked = false;
-  document.getElementById('modp-close-modal').classList.add('open');
+  openModal('modp-close-modal');
 });
 document.getElementById('modp-close-cancel-btn').addEventListener('click', () => {
-  document.getElementById('modp-close-modal').classList.remove('open');
+  closeModal('modp-close-modal');
 });
 document.getElementById('modp-close-modal').addEventListener('click', e => {
   if (e.target === document.getElementById('modp-close-modal'))
-    document.getElementById('modp-close-modal').classList.remove('open');
+    closeModal('modp-close-modal');
 });
 
 // Месяц-название (РУ) → номер месяца — грубый эвристический разбор свободного
@@ -4658,7 +4658,7 @@ document.getElementById('modp-close-confirm-btn').addEventListener('click', asyn
   const { chronicle, name } = STATE.currentModule;
   const data = STATE.currentModuleData || {};
   const wantDiaries = document.getElementById('modp-close-diaries-check').checked;
-  document.getElementById('modp-close-modal').classList.remove('open');
+  closeModal('modp-close-modal');
 
   const btn = document.getElementById('modp-close-btn');
   btn.disabled = true; btn.textContent = '⏳ Закрытие...';
@@ -4732,11 +4732,11 @@ document.getElementById('modp-del-btn').addEventListener('click', async () => {
   };
 
   document.getElementById('modp-del-cancel-btn').onclick = () => {
-    document.getElementById('modp-delete-modal').classList.remove('open');
+    closeModal('modp-delete-modal');
   };
 
   document.getElementById('modp-del-confirm-btn').onclick = async () => {
-    document.getElementById('modp-delete-modal').classList.remove('open');
+    closeModal('modp-delete-modal');
     const delBtn = document.getElementById('modp-del-btn');
     if (delBtn) { delBtn.disabled = true; delBtn.textContent = '⏳ Удаление...'; }
     try {
@@ -4753,12 +4753,12 @@ document.getElementById('modp-del-btn').addEventListener('click', async () => {
     }
   };
 
-  document.getElementById('modp-delete-modal').classList.add('open');
+  openModal('modp-delete-modal');
 });
 
 document.getElementById('modp-delete-modal').addEventListener('click', e => {
   if (e.target === document.getElementById('modp-delete-modal'))
-    document.getElementById('modp-delete-modal').classList.remove('open');
+    closeModal('modp-delete-modal');
 });
 
 // Global click delegation for md-link-char / md-link-loc produced by resolveMdLink()
@@ -8073,11 +8073,11 @@ modalImgInput.addEventListener('change', () => {
 modalImgClear.addEventListener('click', () => resetModalImg());
 
 function openCharModal() {
-  charModal.classList.add('open');
+  openModal('char-modal');
   showModalStep(1);
 }
 function closeCharModal() {
-  charModal.classList.remove('open');
+  closeModal('char-modal');
   modalOut.style.display = 'none';
   modalOut.textContent = '';
 }
