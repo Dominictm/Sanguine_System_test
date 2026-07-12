@@ -5827,6 +5827,94 @@ button.chron-chip {
 }
 
 /* ═══════════════════════════════════════════════════════════════
+   Timeline / World-state structured forms (add/edit/delete rows & sections)
+   ═══════════════════════════════════════════════════════════════ */
+
+.tl-epoch-form,
+.ws-section-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin: 10px 0 20px;
+}
+.tl-epoch-form .form-control,
+.ws-section-form .form-control {
+  flex: 1 1 200px;
+}
+
+.tl-row-form,
+.ws-row-form {
+  margin: 10px 0;
+}
+
+.tl-form-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: var(--bg4);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  padding: 14px;
+}
+
+.tl-form-label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: var(--fs-lg);
+  color: var(--text3);
+}
+
+.tl-f-links {
+  position: relative;
+}
+
+.tl-link-suggest {
+  position: absolute;
+  z-index: var(--z-sticky, 10);
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: var(--bg3);
+  border: 1px solid var(--border2);
+  border-radius: var(--r-sm);
+  max-height: 220px;
+  overflow-y: auto;
+  margin-top: 2px;
+}
+
+.tl-link-suggest-item {
+  padding: 8px 12px;
+  font-size: var(--fs-base);
+  color: var(--text2);
+  cursor: pointer;
+}
+.tl-link-suggest-item:hover {
+  background: rgba(139, 0, 0, .12);
+  color: var(--text);
+}
+
+.tl-link-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+.tl-link-chips .chron-chip a.tl-link-remove {
+  color: var(--text3);
+  margin-left: 4px;
+  text-decoration: none;
+}
+.tl-link-chips .chron-chip a.tl-link-remove:hover {
+  color: var(--accent2);
+}
+
+.ws-note-view:empty {
+  display: none;
+}
+
+/* ═══════════════════════════════════════════════════════════════
    Module detail modal
    ═══════════════════════════════════════════════════════════════ */
 .module-card {

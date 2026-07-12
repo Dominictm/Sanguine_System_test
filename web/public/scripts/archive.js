@@ -793,7 +793,7 @@ function renderTimelineForm(data) {
     ${epochsHtml}
     <button class="chron-toggle" id="tl-add-epoch">+ Новая эпоха</button>
     <div class="tl-epoch-form" id="tl-new-epoch-form" hidden>
-      <input type="text" id="tl-new-epoch-heading" placeholder="Название эпохи">
+      <input type="text" class="form-control" id="tl-new-epoch-heading" placeholder="Название эпохи">
       <button class="chron-toggle" id="tl-new-epoch-save">Сохранить</button>
     </div>
     <button class="chron-toggle" id="tl-raw-edit-toggle" style="margin-top:20px">✏ Редактировать весь файл</button>
@@ -808,16 +808,16 @@ function _timelineRowFormHtml(epochHeading, rowIndex, row) {
   const linkChips = () => _pendingLinks.map((l, i) => `<span class="chron-chip" data-link-idx="${i}">${escHtml(l.text)} <a href="#" class="tl-link-remove" data-idx="${i}">✕</a></span>`).join('');
   return `
     <div class="tl-form-fields">
-      <input type="text" class="tl-f-year" placeholder="Год" value="${escHtml(row?.year || '')}">
-      <input type="text" class="tl-f-type" list="tl-legend-datalist" placeholder="Тип (эмодзи)" value="${escHtml(row?.type || '')}">
-      <textarea class="tl-f-event" placeholder="Событие">${escHtml(row?.event || '')}</textarea>
-      <select class="tl-f-source">
+      <input type="text" class="form-control tl-f-year" placeholder="Год" value="${escHtml(row?.year || '')}">
+      <input type="text" class="form-control tl-f-type" list="tl-legend-datalist" placeholder="Тип (эмодзи)" value="${escHtml(row?.type || '')}">
+      <textarea class="form-control tl-f-event" placeholder="Событие">${escHtml(row?.event || '')}</textarea>
+      <select class="form-control tl-f-source">
         <option value="📚" ${row?.source === '📚' ? 'selected' : ''}>📚 Канон WoD</option>
         <option value="🏙️" ${row?.source === '🏙️' ? 'selected' : ''}>🏙️ Установлено в проекте</option>
         <option value="❓" ${row?.source === '❓' ? 'selected' : ''}>❓ Канон неоднозначен</option>
       </select>
       <div class="tl-f-links">
-        <input type="text" class="tl-link-search" placeholder="Персонаж/локация...">
+        <input type="text" class="form-control tl-link-search" placeholder="Персонаж/локация...">
         <div class="tl-link-suggest" hidden></div>
         <div class="tl-link-chips">${linkChips()}</div>
       </div>
@@ -903,14 +903,14 @@ function renderWorldStateForm(ws) {
 
   return `
     <div class="ws-updated">Последнее обновление:
-      <input type="text" id="ws-last-update-input" value="${escHtml(ws.lastUpdate || '')}">
+      <input type="text" class="form-control" id="ws-last-update-input" value="${escHtml(ws.lastUpdate || '')}">
       <button class="chron-toggle" id="ws-last-update-save">Сохранить</button>
     </div>
     ${sectionsHtml}
     <button class="chron-toggle" id="ws-add-section">+ Новая секция</button>
     <div class="ws-section-form" id="ws-new-section-form" hidden>
-      <input type="text" id="ws-new-section-heading" placeholder="Заголовок секции">
-      <input type="text" id="ws-new-section-columns" placeholder="Колонки через запятую">
+      <input type="text" class="form-control" id="ws-new-section-heading" placeholder="Заголовок секции">
+      <input type="text" class="form-control" id="ws-new-section-columns" placeholder="Колонки через запятую">
       <button class="chron-toggle" id="ws-new-section-save">Сохранить</button>
     </div>
     <button class="chron-toggle" id="ws-raw-edit-toggle" style="margin-top:20px">✏ Редактировать блок целиком</button>
@@ -919,7 +919,7 @@ function renderWorldStateForm(ws) {
 
 function _worldStateRowFormHtml(heading, rowIndex, columns, cells) {
   const fields = columns.map((col, i) => `
-    <label>${escHtml(col)}<input type="text" class="ws-f-cell" data-col="${i}" value="${escHtml(cells?.[i] || '')}"></label>`).join('');
+    <label class="tl-form-label">${escHtml(col)}<input type="text" class="form-control ws-f-cell" data-col="${i}" value="${escHtml(cells?.[i] || '')}"></label>`).join('');
   return `
     <div class="tl-form-fields">
       ${fields}
@@ -1085,7 +1085,7 @@ document.getElementById('chronicle-content').addEventListener('click', e => {
   if (wsNoteEdit) {
     const section = _worldStateData.sections.find(s => s.heading === wsNoteEdit.dataset.wsSection);
     const view = document.querySelector(`[data-ws-section="${CSS.escape(wsNoteEdit.dataset.wsSection)}"] .ws-note-view`);
-    view.innerHTML = `<textarea class="ws-f-note">${escHtml(section.note)}</textarea>
+    view.innerHTML = `<textarea class="form-control ws-f-note">${escHtml(section.note)}</textarea>
       <button class="chron-toggle ws-note-save" data-ws-section="${escHtml(wsNoteEdit.dataset.wsSection)}">Сохранить</button>`;
     return;
   }
