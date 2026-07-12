@@ -235,11 +235,11 @@ describe('Parsers — unit', () => {
       assert.equal(keys.indexOf('factions'), keys.indexOf('locations') - 1);
     });
 
-    it('browser parity — public/scripts.js CITY_SECTION_DEFS зеркалит CITY_SECTIONS', () => {
+    it('browser parity — public/city.js CITY_SECTION_DEFS зеркалит CITY_SECTIONS', () => {
       const src = require('fs').readFileSync(
-        path.join(__dirname, '../public/scripts.js'), 'utf-8');
+        path.join(__dirname, '../public/city.js'), 'utf-8');
       const m = src.match(/const CITY_SECTION_DEFS\s*=\s*(\[[\s\S]*?\n\]);/);
-      assert.ok(m, 'CITY_SECTION_DEFS literal not found in scripts.js');
+      assert.ok(m, 'CITY_SECTION_DEFS literal not found in city.js');
       // eslint-disable-next-line no-new-func
       const browserDefs = (new Function(`return (${m[1]})`))();
       assert.deepEqual(browserDefs, CITY_SECTIONS,
