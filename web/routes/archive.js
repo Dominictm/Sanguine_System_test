@@ -7,10 +7,44 @@ const express = require('express');
 const path    = require('path');
 const fs      = require('fs').promises;
 const { serverError } = require('../lib/http');
-const { archiveDir, cityDir, reqCity, writeFileAtomic } = require('../lib/db');
-const { parsePoliticalFactions, setPoliticalFactionInfluence, parseCityMd } = require('../lib/parsers');
+const { archiveDir, cityDir, reqCity, writeFileAtomic, getAllCharacters, getAllLocations } = require('../lib/db');
+const {
+  parsePoliticalFactions, setPoliticalFactionInfluence, parseCityMd,
+  parseTimelineMd, addTimelineEpoch, removeTimelineEpoch,
+  addTimelineRow, updateTimelineRow, removeTimelineRow,
+  parseWorldStateBlock, replaceWorldStateBlock, setWorldStateLastUpdate,
+  addWorldStateSection, removeWorldStateSection, setWorldStateSectionNote,
+  addWorldStateRow, updateWorldStateRow, removeWorldStateRow,
+} = require('../lib/parsers');
 
 const router = express.Router();
+
+// Резолвит {kind, slug} → относительная markdown-ссылка от archive/timeline.md
+// (персонажи: ../characters/<lineageFolder>/<slug>/<slug>.md; локации:
+// ../locations/<dirRelPath>/<slug>.md, где dirRelPath уже содержит district_NN/<район>).
+async function _resolveTimelineLink(city, { kind, slug }) {
+  if (kind === 'character') {
+    const chars = await getAllCharacters(city);
+    const c = chars.find(x => x.slug === slug);
+    if (!c) return null;
+    return { text: c.name, href: `../characters/${c.lineageFolder}/${c.slug}/${c.slug}.md` };
+  }
+  if (kind === 'location') {
+    const locs = await getAllLocations(city);
+    const l = locs.find(x => x.slug === slug);
+    if (!l) return null;
+    return { text: l.name, href: `../locations/${l.dirRelPath}/${l.slug}.md` };
+  }
+  return null;
+}
+async function _resolveTimelineLinks(city, links) {
+  const out = [];
+  for (const l of (links || [])) {
+    const r = await _resolveTimelineLink(city, l);
+    if (r) out.push(r);
+  }
+  return out;
+}
 
 // Raw markdown archive docs — rendered client-side with the lore renderer.
 const archiveDoc = file => async (req, res) => {
@@ -62,6 +96,93 @@ router.put('/api/factions/influence', express.json(), async (req, res) => {
     await fs.mkdir(archiveDir(city), { recursive: true });
     await writeFileAtomic(file, updated, 'utf-8');
     res.json({ ok: true, factions: parsePoliticalFactions(updated) });
+  } catch (e) { serverError(res, e); }
+});
+
+// ── Хронология мира — структурированное редактирование (эпохи/строки) ────────
+router.get('/api/timeline/structured', async (req, res) => {
+  try {
+    const city = reqCity(req);
+    const raw = await fs.readFile(path.join(archiveDir(city), 'timeline.md'), 'utf-8').catch(() => '');
+    res.json(parseTimelineMd(raw));
+  } catch (e) { serverError(res, e); }
+});
+
+router.post('/api/timeline/epoch', express.json(), async (req, res) => {
+  try {
+    const city = reqCity(req);
+    const heading = String(req.body?.heading || '').trim();
+    if (!heading) return res.status(400).json({ error: 'Укажи название эпохи' });
+    const file = path.join(archiveDir(city), 'timeline.md');
+    const raw = await fs.readFile(file, 'utf-8').catch(() => '');
+    const updated = addTimelineEpoch(raw, heading);
+    await fs.mkdir(archiveDir(city), { recursive: true });
+    await writeFileAtomic(file, updated, 'utf-8');
+    res.json({ ok: true, ...parseTimelineMd(updated) });
+  } catch (e) { serverError(res, e); }
+});
+
+router.delete('/api/timeline/epoch/:heading', async (req, res) => {
+  try {
+    const city = reqCity(req);
+    const heading = decodeURIComponent(req.params.heading);
+    const file = path.join(archiveDir(city), 'timeline.md');
+    const raw = await fs.readFile(file, 'utf-8').catch(() => '');
+    const { raw: updated, found } = removeTimelineEpoch(raw, heading);
+    if (!found) return res.status(404).json({ error: `Эпоха «${heading}» не найдена` });
+    await writeFileAtomic(file, updated, 'utf-8');
+    res.json({ ok: true, ...parseTimelineMd(updated) });
+  } catch (e) { serverError(res, e); }
+});
+
+router.post('/api/timeline/epoch/:heading/row', express.json(), async (req, res) => {
+  try {
+    const city = reqCity(req);
+    const heading = decodeURIComponent(req.params.heading);
+    const { year, type, event, source, links } = req.body || {};
+    if (!String(event || '').trim()) return res.status(400).json({ error: 'Укажи текст события' });
+    const resolvedLinks = await _resolveTimelineLinks(city, links);
+    const file = path.join(archiveDir(city), 'timeline.md');
+    const raw = await fs.readFile(file, 'utf-8').catch(() => '');
+    const { raw: updated, found } = addTimelineRow(raw, heading,
+      { year: year || '', type: type || '', event: event.trim(), source: source || '', links: resolvedLinks });
+    if (!found) return res.status(404).json({ error: `Эпоха «${heading}» не найдена` });
+    await writeFileAtomic(file, updated, 'utf-8');
+    res.json({ ok: true, ...parseTimelineMd(updated) });
+  } catch (e) { serverError(res, e); }
+});
+
+router.put('/api/timeline/epoch/:heading/row/:index', express.json(), async (req, res) => {
+  try {
+    const city = reqCity(req);
+    const heading = decodeURIComponent(req.params.heading);
+    const index = Number(req.params.index);
+    const { year, type, event, source, links } = req.body || {};
+    if (!String(event || '').trim()) return res.status(400).json({ error: 'Укажи текст события' });
+    const resolvedLinks = await _resolveTimelineLinks(city, links);
+    const file = path.join(archiveDir(city), 'timeline.md');
+    const raw = await fs.readFile(file, 'utf-8').catch(() => '');
+    const { raw: updated, found, indexValid } = updateTimelineRow(raw, heading, index,
+      { year: year || '', type: type || '', event: event.trim(), source: source || '', links: resolvedLinks });
+    if (!found) return res.status(404).json({ error: `Эпоха «${heading}» не найдена` });
+    if (!indexValid) return res.status(409).json({ error: 'Данные изменились, обновите страницу' });
+    await writeFileAtomic(file, updated, 'utf-8');
+    res.json({ ok: true, ...parseTimelineMd(updated) });
+  } catch (e) { serverError(res, e); }
+});
+
+router.delete('/api/timeline/epoch/:heading/row/:index', async (req, res) => {
+  try {
+    const city = reqCity(req);
+    const heading = decodeURIComponent(req.params.heading);
+    const index = Number(req.params.index);
+    const file = path.join(archiveDir(city), 'timeline.md');
+    const raw = await fs.readFile(file, 'utf-8').catch(() => '');
+    const { raw: updated, found, indexValid } = removeTimelineRow(raw, heading, index);
+    if (!found) return res.status(404).json({ error: `Эпоха «${heading}» не найдена` });
+    if (!indexValid) return res.status(409).json({ error: 'Данные изменились, обновите страницу' });
+    await writeFileAtomic(file, updated, 'utf-8');
+    res.json({ ok: true, ...parseTimelineMd(updated) });
   } catch (e) { serverError(res, e); }
 });
 

@@ -2883,6 +2883,60 @@ describe('API — integration', () => {
     });
   });
 
+  describe('Timeline structured — CRUD', () => {
+    const tlFile = path.join(CITY_ROOT, 'archive', 'timeline.md');
+    let original = null;
+    before(async () => { original = await fs.readFile(tlFile, 'utf-8').catch(() => null); });
+    after(async () => { if (original !== null) await fs.writeFile(tlFile, original, 'utf-8'); });
+
+    it('GET /api/timeline/structured — реальный файл парсится, есть легенда и хотя бы одна эпоха', async () => {
+      const { status, body } = await apiJson(`/api/timeline/structured${CITY}`);
+      assert.equal(status, 200);
+      assert.ok(body.legend.length > 0);
+      assert.ok(body.epochs.length > 0);
+    });
+
+    it('POST /api/timeline/epoch — без heading → 400; с heading → 200 и новая пустая эпоха', async () => {
+      const bad = await apiJson(`/api/timeline/epoch${CITY}`, { method: 'POST', body: JSON.stringify({}) });
+      assert.equal(bad.status, 400);
+      const ok = await apiJson(`/api/timeline/epoch${CITY}`,
+        { method: 'POST', body: JSON.stringify({ heading: '__TEST_EPOCH__' }) });
+      assert.equal(ok.status, 200);
+      assert.ok(ok.body.epochs.some(e => e.heading === '__TEST_EPOCH__'));
+    });
+
+    it('POST row → PUT row → DELETE row — round-trip внутри тестовой эпохи', async () => {
+      await apiJson(`/api/timeline/epoch${CITY}`, { method: 'POST', body: JSON.stringify({ heading: '__TEST_EPOCH_2__' }) });
+      const added = await apiJson(`/api/timeline/epoch/${encodeURIComponent('__TEST_EPOCH_2__')}/row${CITY}`,
+        { method: 'POST', body: JSON.stringify({ year: '2000', type: '🧛', event: 'Тест', source: '🏙️', links: [] }) });
+      assert.equal(added.status, 200);
+      let epoch = added.body.epochs.find(e => e.heading === '__TEST_EPOCH_2__');
+      assert.equal(epoch.rows.length, 1);
+
+      const updated = await apiJson(`/api/timeline/epoch/${encodeURIComponent('__TEST_EPOCH_2__')}/row/0${CITY}`,
+        { method: 'PUT', body: JSON.stringify({ year: '2001', type: '🧛', event: 'Тест-правка', source: '🏙️', links: [] }) });
+      assert.equal(updated.status, 200);
+      epoch = updated.body.epochs.find(e => e.heading === '__TEST_EPOCH_2__');
+      assert.equal(epoch.rows[0].event, 'Тест-правка');
+
+      const removed = await apiJson(`/api/timeline/epoch/${encodeURIComponent('__TEST_EPOCH_2__')}/row/0${CITY}`, { method: 'DELETE' });
+      assert.equal(removed.status, 200);
+      epoch = removed.body.epochs.find(e => e.heading === '__TEST_EPOCH_2__');
+      assert.equal(epoch.rows.length, 0);
+    });
+
+    it('PUT row с несуществующим индексом → 409', async () => {
+      const { status } = await apiJson(`/api/timeline/epoch/${encodeURIComponent('__TEST_EPOCH__')}/row/99${CITY}`,
+        { method: 'PUT', body: JSON.stringify({ year: '', type: '', event: 'x', source: '', links: [] }) });
+      assert.equal(status, 409);
+    });
+
+    it('DELETE /api/timeline/epoch/:heading — неизвестная эпоха → 404', async () => {
+      const { status } = await apiJson(`/api/timeline/epoch/${encodeURIComponent('__NOPE__')}${CITY}`, { method: 'DELETE' });
+      assert.equal(status, 404);
+    });
+  });
+
   // ── Chronicles & modules — write guards ──────────────────────────────────────
   describe('Chronicles & modules — write guards', () => {
     it('GET delete-preview — unknown chronicle → 404', async () => {
