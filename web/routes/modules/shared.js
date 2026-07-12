@@ -5,7 +5,7 @@
 
 const path    = require('path');
 const fs      = require('fs').promises;
-const { serverError, aiRateLimit } = require('../../lib/http');
+const { serverError, aiRateLimit, _logAiCall, _logAiFail } = require('../../lib/http');
 const {
   ROOT, cityDir, charsDir, locsDir, chroniclesDir, archiveDir,
   reqCity, writeFileAtomic, invalidateChars,
@@ -546,10 +546,20 @@ async function _patchModuleMain(modDir, mod, firstLoc) {
   await writeFileAtomic(p, txt, 'utf-8');
 }
 
+// Захардкоженный model-оверрайд (дешёвая/быстрая модель вместо дефолтной) имеет
+// смысл только для Claude-источника — для openrouter/openai/gemini голый
+// Anthropic model ID не резолвится и роняет запрос 400-й ошибкой (_isOA/_oaCall
+// в server.js шлют его как есть, без валидации). Возвращает model только если
+// gen реально Claude (api-key или claude-login), иначе null → genTextWithRetry
+// использует gen.model, уже подобранный makeGenerationClient под провайдера.
+function _claudeOnlyModel(gen, model) {
+  return (gen && (gen.source === 'api-key' || gen.source === 'claude-login')) ? model : null;
+}
+
 // Фабрика: server.js передаёт AI-хелперы и character-sheet генерацию при монтировании.
 
 module.exports = {
-  path, fs, serverError, aiRateLimit,
+  path, fs, serverError, aiRateLimit, _logAiCall, _logAiFail,
   ROOT, cityDir, charsDir, locsDir, chroniclesDir, archiveDir,
   reqCity, writeFileAtomic, invalidateChars,
   getAllCharacters, getAllLocations, listModules, tableCell, LINEAGE_MAP,
@@ -563,5 +573,5 @@ module.exports = {
   _parseScenarioScenesDirect, _parseScenarioScenesLegacy, _parseScenarioScenes, _parseScenarioLocations,
   _parseModuleLocSlugs, _writeModuleLocSlugs, _parseSessions, _cleanNpcName, _npcCardHref,
   _parseNpcEntries, _findNpcMdSection, _removeNpcEntry, _parseNpcMdGroups, _renderSessionBlock,
-  _writeSessionsFile, _patchModuleMain,
+  _writeSessionsFile, _patchModuleMain, _claudeOnlyModel,
 };

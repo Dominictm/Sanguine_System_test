@@ -79,4 +79,19 @@ async function callAnthropicWithRetry(client, params, { attempts = 3, label = 'g
   throw err;
 }
 
-module.exports = { C, serverError, aiRateLimit, callAnthropicWithRetry };
+// ── AI-вызовы: провайдер/модель на успехе, статус+сообщение на ошибке ────────
+// До этого большинство `catch` вокруг генерации (fill.js, lifecycle.js,
+// scenario.js, locations.js и др.) логировали только `err.message` одной
+// строкой — не видно было, какой именно эндпойнт/шаг упал и через какого
+// провайдера. Из-за этого баг с захардкоженным Claude-ID модели, уходившим в
+// OpenRouter (см. коммит с исправлением _claudeOnlyModel), был совершенно
+// не виден в консоли сервера — просто пустой список локаций в ответе.
+function _logAiCall(label, gen) {
+  console.log(`${C.dim}[ai]${C.reset} ${label} → ${C.cyan}${gen?.source || '?'}${C.reset}${gen?.model ? ` (${gen.model})` : ''}`);
+}
+function _logAiFail(label, err, gen) {
+  const status = err?.status ?? err?.statusCode ?? '?';
+  console.warn(`${C.yellow}[ai-fail]${C.reset} ${label} — ${C.cyan}${gen?.source || '?'}${C.reset}${gen?.model ? ` (${gen.model})` : ''} — ${C.red}${status}${C.reset} ${err?.message || err}`);
+}
+
+module.exports = { C, serverError, aiRateLimit, callAnthropicWithRetry, _logAiCall, _logAiFail };

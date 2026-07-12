@@ -177,12 +177,12 @@ app.use((req, res, next) => {
     const methodColor = { GET: C.cyan, POST: C.green, PUT: C.yellow, DELETE: C.red }[req.method] || C.reset;
     const methodStr = `${methodColor}${req.method.padEnd(4)}${C.reset}`;
 
-    if (action) {
-      console.log(`${C.dim}[web]${C.reset} ${methodStr} ${codeStr} ${timeStr}  ${action}`);
-    } else if (code >= 400) {
-      console.log(`${C.dim}[web]${C.reset} ${methodStr} ${codeStr} ${timeStr}  ${C.dim}${req.path}${C.reset}`);
-    }
-    // 2xx for unknown routes — skip (noise)
+    // Раньше 2xx-запросы без записи в ACTION_MAP молчали вообще — не было
+    // видно, какой эндпойнт реально вызывался, если для него не завели
+    // человекочитаемое описание. Теперь логируется КАЖДЫЙ /api/*-вызов:
+    // с описанием, если оно есть в ACTION_MAP, иначе — метод + путь как есть.
+    const label = action || `${C.dim}${req.path}${C.reset}`;
+    console.log(`${C.dim}[web]${C.reset} ${methodStr} ${codeStr} ${timeStr}  ${label}`);
   });
 
   next();

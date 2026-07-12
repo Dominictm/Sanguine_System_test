@@ -16,7 +16,7 @@ const {
   _parseScenarioScenesDirect, _parseScenarioScenesLegacy, _parseScenarioScenes, _parseScenarioLocations,
   _parseModuleLocSlugs, _writeModuleLocSlugs, _parseSessions, _cleanNpcName, _npcCardHref,
   _parseNpcEntries, _findNpcMdSection, _removeNpcEntry, _parseNpcMdGroups, _renderSessionBlock,
-  _writeSessionsFile, _patchModuleMain,
+  _writeSessionsFile, _patchModuleMain, _claudeOnlyModel, _logAiCall, _logAiFail,
 } = require('./shared');
 
 module.exports = function lifecycleRouter({ makeGenerationClient, genTextWithRetry }) {
@@ -221,6 +221,7 @@ module.exports = function lifecycleRouter({ makeGenerationClient, genTextWithRet
 
       const gen = await makeGenerationClient(req.body?.source || null, req.body?.model || null).catch(() => null);
       if (!gen) return res.status(503).json({ ok: false, error: 'Нет доступного AI-провайдера. Настрой в Инструменты → Модели AI.' });
+      _logAiCall(`close/${chr}/${mod}`, gen);
 
       // Phase-C rules slice as context (MODULE-close, NOT chronicle-close)
       const phaseC = (moduleRules.match(/Фаза C[\s\S]{0,700}/)?.[0]) || '';
@@ -233,8 +234,13 @@ module.exports = function lifecycleRouter({ makeGenerationClient, genTextWithRet
   ${phaseC}`;
 
       const runGen = async (system, user, maxTokens) => {
-        const out = await genTextWithRetry(gen, { system, user, maxTokens, model: 'claude-opus-4-8' });
-        return out.text.trim();
+        try {
+          const out = await genTextWithRetry(gen, { system, user, maxTokens, model: _claudeOnlyModel(gen, 'claude-opus-4-8') });
+          return out.text.trim();
+        } catch (e) {
+          _logAiFail(`close/${chr}/${mod}`, e, gen);
+          throw e;
+        }
       };
 
       // 1. finale.md — literary finale by what actually happened in play

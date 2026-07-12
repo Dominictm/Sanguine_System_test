@@ -15,7 +15,7 @@ const {
   _parseScenarioScenesDirect, _parseScenarioScenesLegacy, _parseScenarioScenes, _parseScenarioLocations,
   _parseModuleLocSlugs, _writeModuleLocSlugs, _parseSessions, _cleanNpcName, _npcCardHref,
   _parseNpcEntries, _findNpcMdSection, _removeNpcEntry, _parseNpcMdGroups, _renderSessionBlock,
-  _writeSessionsFile, _patchModuleMain,
+  _writeSessionsFile, _patchModuleMain, _claudeOnlyModel, _logAiCall, _logAiFail,
 } = require('./shared');
 
 module.exports = function scenarioRouter({ makeGenerationClient, genTextWithRetry }) {
@@ -164,9 +164,16 @@ ${target.body}
 
       const gen = await makeGenerationClient().catch(() => null);
       if (!gen) return res.status(503).json({ ok: false, error: 'Нет доступного AI-провайдера. Настрой в Инструменты → Модели AI.' });
-      const newBody = (await genTextWithRetry(gen, {
-        system: systemPrompt, user: userPrompt, maxTokens: 2500, model: 'claude-opus-4-8',
-      })).text.trim();
+      _logAiCall(`scenario/${chr}/${mod}: раздел «${heading}»`, gen);
+      let newBody;
+      try {
+        newBody = (await genTextWithRetry(gen, {
+          system: systemPrompt, user: userPrompt, maxTokens: 2500, model: _claudeOnlyModel(gen, 'claude-opus-4-8'),
+        })).text.trim();
+      } catch (e) {
+        _logAiFail(`scenario/${chr}/${mod}: раздел «${heading}»`, e, gen);
+        throw e;
+      }
       if (!newBody) return res.status(500).json({ ok: false, error: 'AI вернул пустой ответ.' });
 
       const updated = replaceScenarioSection(raw, heading, newBody, parent);
@@ -258,9 +265,16 @@ ${currentBlockMd}
 
       const gen = await makeGenerationClient().catch(() => null);
       if (!gen) return res.status(503).json({ ok: false, error: 'Нет доступного AI-провайдера. Настрой в Инструменты → Модели AI.' });
-      const newBlockText = (await genTextWithRetry(gen, {
-        system: systemPrompt, user: userPrompt, maxTokens: 3000, model: 'claude-opus-4-8',
-      })).text.trim();
+      _logAiCall(`scenario/${chr}/${mod}: блок «${heading}»`, gen);
+      let newBlockText;
+      try {
+        newBlockText = (await genTextWithRetry(gen, {
+          system: systemPrompt, user: userPrompt, maxTokens: 3000, model: _claudeOnlyModel(gen, 'claude-opus-4-8'),
+        })).text.trim();
+      } catch (e) {
+        _logAiFail(`scenario/${chr}/${mod}: блок «${heading}»`, e, gen);
+        throw e;
+      }
       if (!newBlockText) return res.status(500).json({ ok: false, error: 'AI вернул пустой ответ.' });
 
       const { intro, children: newChildren } = splitH3Body(newBlockText);

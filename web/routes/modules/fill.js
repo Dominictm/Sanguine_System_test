@@ -15,7 +15,7 @@ const {
   _parseScenarioScenesDirect, _parseScenarioScenesLegacy, _parseScenarioScenes, _parseScenarioLocations,
   _parseModuleLocSlugs, _writeModuleLocSlugs, _parseSessions, _cleanNpcName, _npcCardHref,
   _parseNpcEntries, _findNpcMdSection, _removeNpcEntry, _parseNpcMdGroups, _renderSessionBlock,
-  _writeSessionsFile, _patchModuleMain,
+  _writeSessionsFile, _patchModuleMain, _claudeOnlyModel, _logAiCall, _logAiFail,
 } = require('./shared');
 
 module.exports = function fillRouter({ makeGenerationClient, genTextWithRetry }) {
@@ -145,10 +145,17 @@ module.exports = function fillRouter({ makeGenerationClient, genTextWithRetry })
       // Use makeGenerationClient (respects OpenRouter/Claude preference)
       const gen = await makeGenerationClient().catch(() => null);
       if (!gen) return res.status(503).json({ ok: false, error: 'Нет доступного AI-провайдера. Настрой в Инструменты → Модели AI.' });
+      _logAiCall(`fill/${chr}/${mod}: сценарий`, gen);
 
-      const scenarioText = (await genTextWithRetry(gen, {
-        system: systemPrompt, user: userPrompt, maxTokens: 4000, model: 'claude-opus-4-8',
-      })).text.trim();
+      let scenarioText;
+      try {
+        scenarioText = (await genTextWithRetry(gen, {
+          system: systemPrompt, user: userPrompt, maxTokens: 4000, model: _claudeOnlyModel(gen, 'claude-opus-4-8'),
+        })).text.trim();
+      } catch (scenErr) {
+        _logAiFail(`fill/${chr}/${mod}: сценарий`, scenErr, gen);
+        throw scenErr;
+      }
 
       if (!scenarioText) return res.status(500).json({ ok: false, error: 'AI вернул пустой ответ.' });
 
@@ -219,9 +226,11 @@ module.exports = function fillRouter({ makeGenerationClient, genTextWithRetry })
       const locSource = req.body?.locSource || null;
       const locModel  = req.body?.locModel  || null;
       const createdLocations = [];
+      let locGen = null;
       try {
         if (newLocNames.length > 0) {
-          const locGen = await makeGenerationClient(locSource, locModel).catch(() => null);
+          locGen = await makeGenerationClient(locSource, locModel).catch(() => null);
+          if (locGen) _logAiCall(`fill/${chr}/${mod}: локации (${newLocNames.length})`, locGen);
           const portretRules = await fs.readFile(path.join(ROOT, 'system', 'rules', 'portret.md'), 'utf-8').catch(() => '');
 
           const cardTemplate = (name) => {
@@ -279,7 +288,8 @@ module.exports = function fillRouter({ makeGenerationClient, genTextWithRetry })
   Язык: русский. Стиль: готический нуар VtM.`;
 
           const allLocsRaw = locGen ? (await genTextWithRetry(locGen, {
-            system: '', user: allCardsPrompt, maxTokens: newLocNames.length * 800 + 200, model: 'claude-haiku-4-5-20251001',
+            system: '', user: allCardsPrompt, maxTokens: newLocNames.length * 800 + 200,
+            model: _claudeOnlyModel(locGen, 'claude-haiku-4-5-20251001'),
           })).text : '';
 
           if (allLocsRaw) {
@@ -300,13 +310,14 @@ module.exports = function fillRouter({ makeGenerationClient, genTextWithRetry })
           }
         }
       } catch (locErr) {
-        console.warn('[fill-module] location generation failed:', locErr.message);
+        _logAiFail(`fill/${chr}/${mod}: локации`, locErr, locGen);
       }
 
       // ── Generate cards for NEW (modular) NPCs only (single AI call) ───────
       const createdNpcs = [];
       if (newNpcs.length > 0) {
         try {
+          if (gen) _logAiCall(`fill/${chr}/${mod}: НПС (${newNpcs.length})`, gen);
           const npcRules  = await fs.readFile(path.join(ROOT, 'system', 'rules', 'npcs_city.md'), 'utf-8').catch(() => '');
           const tmplM     = npcRules.match(/Шаблон Г[\s\S]*?```markdown\n([\s\S]*?)```/);
           const gTemplate = tmplM ? tmplM[1].trim() : '';
@@ -333,7 +344,8 @@ module.exports = function fillRouter({ makeGenerationClient, genTextWithRetry })
   Язык: русский. Стиль: готический нуар VtM.`;
 
           const npcRaw = gen ? (await genTextWithRetry(gen, {
-            system: '', user: npcPrompt, maxTokens: newNpcs.length * 900 + 300, model: 'claude-haiku-4-5-20251001',
+            system: '', user: npcPrompt, maxTokens: newNpcs.length * 900 + 300,
+            model: _claudeOnlyModel(gen, 'claude-haiku-4-5-20251001'),
           })).text : '';
 
           if (npcRaw) {
@@ -352,7 +364,7 @@ module.exports = function fillRouter({ makeGenerationClient, genTextWithRetry })
             }));
           }
         } catch (npcErr) {
-          console.warn('[fill-module] NPC generation failed:', npcErr.message);
+          _logAiFail(`fill/${chr}/${mod}: НПС`, npcErr, gen);
         }
       }
 

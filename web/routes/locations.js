@@ -7,7 +7,7 @@
 const express = require('express');
 const path    = require('path');
 const fs      = require('fs').promises;
-const { serverError, aiRateLimit } = require('../lib/http');
+const { serverError, aiRateLimit, _logAiCall, _logAiFail } = require('../lib/http');
 const {
   ROOT, reqCity, locsDir, writeFileAtomic, invalidateLocs,
   getAllLocations, findLocMdPath,
@@ -288,8 +288,11 @@ module.exports = function locationsRouter({ makeGenerationClient, genTextWithRet
       let content = _locCardTemplate(locName, district?.trim() || '');
 
       if (generate) {
+        let genForLog = null;
         try {
           const gen = await makeGenerationClient(source, modelOvr).catch(() => null);
+          genForLog = gen;
+          if (gen) _logAiCall(`locations/create: ${locName}`, gen);
           const portretRules = await fs.readFile(path.join(ROOT, 'system', 'rules', 'portret.md'), 'utf-8').catch(() => '');
           const prompt = `Создай карточку локации «${locName}» для Vampire: The Masquerade V20, ${city || 'Париж'} 2010.
 
@@ -308,7 +311,7 @@ ${_locCardTemplate(locName, district?.trim() || '')}
           const raw = gen ? (await genTextWithRetry(gen, { system: '', user: prompt, maxTokens: 1300 })).text : '';
           if (raw.trim()) content = raw.trim() + '\n';
         } catch (genErr) {
-          console.warn('[loc-create] generation failed:', genErr.message);
+          _logAiFail(`locations/create: ${locName}`, genErr, genForLog);
         }
       }
 
@@ -347,6 +350,7 @@ ${_locCardTemplate(locName, district?.trim() || '')}
       if (!locName) return res.status(400).json({ error: 'name или slug обязателен' });
 
       const gen = await makeGenerationClient(source, modelOvr);
+      _logAiCall(`locations/generate: ${locName}${field ? ` (${field})` : ''}`, gen);
       const portretRules = await fs.readFile(path.join(ROOT, 'system', 'rules', 'portret.md'), 'utf-8').catch(() => '');
 
       let prompt, maxTok;
