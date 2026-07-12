@@ -1302,7 +1302,7 @@ body {
   right: 0;
   top: 0;
   bottom: 0;
-  width: 550px;
+  width: min(550px, 100vw);
   background: var(--bg2);
   border-left: 1px solid var(--border);
   transform: translateX(100%);
