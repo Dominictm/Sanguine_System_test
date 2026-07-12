@@ -1,26 +1,10 @@
 'use strict';
-// Pure helpers shared between server.js and the test suite.
-// No file I/O, no Express — just string parsing and formatting.
+// chronicle events.md parsing + chronicle-event link classification.
+// Extracted from parsers.js during the 2026-07-12 decomposition.
+// Consumers: web/routes/chronicles.js, web/routes/modules/shared.js
+// (parseEvent is cross-domain - used by both).
 
-const {
-  RU_MONTHS_NOM, CYRILLIC_TR, LATIN_TR, slugify,
-  THREAD_STATUS, readPrompt, writePrompt, periodLabel,
-  mdExtractLinks, mdStripLinks, mdStripInline,
-} = require('./parsers/shared');
-const {
-  CITY_SECTIONS, CITY_DEFAULT_DESCRIPTION, buildCityMd, parseCityMd,
-  cityScaffold, parsePoliticalFactions, setPoliticalFactionInfluence,
-} = require('./parsers/city');
-const { parseDiary, categorizeRel, parseCharacter } = require('./parsers/character');
-const { parseLocation } = require('./parsers/location');
-const {
-  parseScenarioSections, splitH3Body, serializeScenarioSections,
-  replaceScenarioSection, findScenarioSectionIndex, replaceScenarioSections,
-  SCENE_ADDED_MARKER_RE, isFinaleHeading, hasManualSceneMarker,
-  addManualSceneMarker, clearManualSceneMarker, insertScenarioScene,
-  SCENARIO_REQUIRED_TOPICS, checkScenarioStructure,
-} = require('./parsers/scenario');
-const { threadStatusKey, parseThreadsContent } = require('./parsers/threads');
+const { mdExtractLinks, mdStripLinks, mdStripInline } = require('./shared');
 
 /**
  * @param {{text: string, href: string}} link
@@ -206,50 +190,9 @@ function parseChronicleParticipants(eventsText) {
   return [...names];
 }
 
+
 module.exports = {
-  RU_MONTHS_NOM,
-  THREAD_STATUS,
-  CYRILLIC_TR,
-  LATIN_TR,
-  slugify,
-  CITY_SECTIONS,
-  buildCityMd,
-  parseCityMd,
-  cityScaffold,
-  parseDiary,
-  readPrompt,
-  writePrompt,
-  periodLabel,
-  threadStatusKey,
-  parseThreadsContent,
-  // markdown helpers
-  mdExtractLinks,
-  mdStripLinks,
-  mdStripInline,
-  classifyChronicleLink,
-  // card & chronicle parsers
-  categorizeRel,
-  parseCharacter,
-  parseLocation,
-  parseChronicleLocation,
-  parseParticipant,
-  parseTable,
-  parseWorldState,
-  parseEvent,
-  parseChronicle,
+  classifyChronicleLink, parseChronicleLocation, parseParticipant,
+  parseTable, parseWorldState, parseEvent, parseChronicle,
   parseChronicleParticipants,
-  parseScenarioSections,
-  replaceScenarioSection,
-  splitH3Body,
-  serializeScenarioSections,
-  findScenarioSectionIndex,
-  replaceScenarioSections,
-  insertScenarioScene,
-  hasManualSceneMarker,
-  addManualSceneMarker,
-  clearManualSceneMarker,
-  isFinaleHeading,
-  checkScenarioStructure,
-  parsePoliticalFactions,
-  setPoliticalFactionInfluence,
 };
