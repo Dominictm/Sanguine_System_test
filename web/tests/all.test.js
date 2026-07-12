@@ -310,6 +310,66 @@ describe('Parsers — unit', () => {
     });
   });
 
+  describe('parsers/worldState.js', () => {
+    const {
+      parseWorldStateBlock, setWorldStateLastUpdate, addWorldStateSection,
+      removeWorldStateSection, addWorldStateRow, updateWorldStateRow,
+      removeWorldStateRow, setWorldStateSectionNote,
+    } = require('../lib/parsers');
+
+    const fixture = [
+      '# Тест', '', '## 🌍 Состояние мира', '',
+      '> Последнее обновление: **тест**.', '', '---', '',
+      '### 🏛️ Секция А', '',
+      '| Кол1 | Кол2 |', '|---|---|', '| a | b |', '',
+      '**Примечание:** заметка.', '', '---', '',
+      '## 📋 Хроника событий', '', 'не трогать',
+    ].join('\n') + '\n';
+
+    it('parseWorldStateBlock — секция, колонки, note, lastUpdate', () => {
+      const ws = parseWorldStateBlock(fixture);
+      assert.equal(ws.lastUpdate, 'тест');
+      assert.equal(ws.sections.length, 1);
+      assert.deepEqual(ws.sections[0].columns, ['Кол1', 'Кол2']);
+      assert.equal(ws.sections[0].rows.length, 1);
+      assert.match(ws.sections[0].note, /Примечание/);
+    });
+
+    it('addWorldStateRow / updateWorldStateRow / removeWorldStateRow — не трогают "## 📋 Хроника событий"', () => {
+      const added = addWorldStateRow(fixture, '🏛️ Секция А', ['c', 'd']).raw;
+      assert.match(added, /не трогать/);
+      let ws = parseWorldStateBlock(added);
+      assert.equal(ws.sections[0].rows.length, 2);
+
+      const updated = updateWorldStateRow(added, '🏛️ Секция А', 1, ['x', 'y']).raw;
+      ws = parseWorldStateBlock(updated);
+      assert.deepEqual(ws.sections[0].rows[1], ['x', 'y']);
+
+      const removed = removeWorldStateRow(updated, '🏛️ Секция А', 0).raw;
+      ws = parseWorldStateBlock(removed);
+      assert.equal(ws.sections[0].rows.length, 1);
+      assert.deepEqual(ws.sections[0].rows[0], ['x', 'y']);
+    });
+
+    it('addWorldStateSection / removeWorldStateSection', () => {
+      const added = addWorldStateSection(fixture, '🔥 Новая секция', ['Кол1', 'Кол2']).raw;
+      let ws = parseWorldStateBlock(added);
+      assert.equal(ws.sections.length, 2);
+      const removed = removeWorldStateSection(added, '🔥 Новая секция').raw;
+      ws = parseWorldStateBlock(removed);
+      assert.equal(ws.sections.length, 1);
+    });
+
+    it('setWorldStateLastUpdate / setWorldStateSectionNote', () => {
+      const r1 = setWorldStateLastUpdate(fixture, 'новое значение');
+      assert.ok(r1.found);
+      assert.equal(parseWorldStateBlock(r1.raw).lastUpdate, 'новое значение');
+
+      const r2 = setWorldStateSectionNote(fixture, '🏛️ Секция А', 'Новая заметка.');
+      assert.match(parseWorldStateBlock(r2.raw).sections[0].note, /Новая заметка/);
+    });
+  });
+
   describe('cityScaffold — единый каркас города', () => {
     it('содержит все обязательные файлы каркаса', () => {
       const { files } = cityScaffold({ display: 'Берлин', year: '2010' });
