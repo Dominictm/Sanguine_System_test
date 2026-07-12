@@ -589,7 +589,7 @@ body {
 }
 
 .ais-status.err {
-  color: var(--accent2);
+  color: var(--c-danger-text);
 }
 
 .ais-restart-section {
@@ -1125,7 +1125,7 @@ body {
 }
 
 .badge-vampire {
-  color: var(--accent);
+  color: var(--c-danger-text);
   border-color: rgba(180, 0, 0, .35);
   background: rgba(139, 0, 0, .08);
 }
@@ -1660,7 +1660,7 @@ select.form-control {
 }
 
 .badge-integrity.err {
-  color: var(--accent);
+  color: var(--c-danger-text);
   border-color: rgba(200, 40, 0, .4);
   background: rgba(139, 0, 0, .08);
 }
@@ -1746,7 +1746,7 @@ select.form-control {
 }
 
 .output-area .err {
-  color: var(--accent);
+  color: var(--c-danger-text);
 }
 
 /* ── Loading ── */
@@ -2096,7 +2096,7 @@ a:focus-visible {
 .btn-create-char {
   background: none;
   border: 1px solid var(--accent);
-  color: var(--accent2);
+  color: var(--c-danger-text);
   white-space: nowrap;
 }
 
@@ -2558,7 +2558,7 @@ a:focus-visible {
   z-index: var(--z-sticky);
   background: none;
   border: none;
-  color: var(--accent2);
+  color: var(--c-danger-text);
   font-size: var(--fs-xl);
   line-height: 1;
   padding: 4px 8px;
@@ -2683,7 +2683,7 @@ a:focus-visible {
   flex: 0 0 auto;
   background: none;
   border: 1px solid rgba(139, 0, 0, .40);
-  color: var(--accent2);
+  color: var(--c-danger-text);
   line-height: 1;
 }
 
@@ -3028,7 +3028,7 @@ a:focus-visible {
 }
 
 .chp-status-closed {
-  color: var(--accent2);
+  color: var(--c-danger-text);
   border-color: rgba(139, 0, 0, .35);
   background: rgba(139, 0, 0, .07);
 }
@@ -3052,7 +3052,7 @@ a:focus-visible {
 .city-del-btn {
   background: transparent;
   border: 1px solid rgba(139, 0, 0, .4);
-  color: var(--accent2);
+  color: var(--c-danger-text);
 }
 .city-del-btn:hover { background: rgba(139, 0, 0, .14); border-color: var(--c-danger); color: var(--c-danger-text); }
 
@@ -3074,7 +3074,7 @@ a:focus-visible {
   border-top: 1px solid var(--border);
 }
 .city-edit-footer .btn-submit { width: auto; margin: 0; }
-.city-edit-status { font-size: var(--fs-sm); color: var(--accent2); }
+.city-edit-status { font-size: var(--fs-sm); color: var(--c-danger-text); }
 
 .chp-status-paused {
   color: var(--gold);
@@ -3085,7 +3085,7 @@ a:focus-visible {
 .chr-delete-btn {
   background: transparent;
   border: 1px solid rgba(139, 0, 0, .4);
-  color: var(--accent2);
+  color: var(--c-danger-text);
   white-space: nowrap;
 }
 
@@ -3178,7 +3178,7 @@ a:focus-visible {
 }
 
 .chr-form-error {
-  color: var(--accent2);
+  color: var(--c-danger-text);
   font-size: var(--fs-md);
   margin-top: -8px;
   margin-bottom: 8px;
@@ -3497,7 +3497,7 @@ a:focus-visible {
   align-self: flex-end;
   background: transparent;
   border: 1px solid rgba(139, 0, 0, .40);
-  color: var(--accent2);
+  color: var(--c-danger-text);
   white-space: nowrap;
 }
 
@@ -3512,7 +3512,7 @@ a:focus-visible {
   right: 12px;
   background: transparent;
   border: 1px solid rgba(139, 0, 0, .40);
-  color: var(--accent2);
+  color: var(--c-danger-text);
   white-space: nowrap;
   z-index: 1;
   line-height: 1.4;
@@ -3946,7 +3946,7 @@ a:focus-visible {
 .chr-modal-btn.danger {
   background: rgba(139, 0, 0, .15);
   border-color: var(--accent);
-  color: var(--accent2);
+  color: var(--c-danger-text);
 }
 
 .chr-modal-btn.danger:hover:not(:disabled) {
@@ -4114,7 +4114,7 @@ a:focus-visible {
 }
 
 .priority-высокий {
-  color: var(--accent);
+  color: var(--c-danger-text);
   border-color: rgba(204, 34, 0, .35);
 }
 
@@ -4319,7 +4319,7 @@ a:focus-visible {
 }
 
 .badge-loc-danger {
-  color: var(--accent);
+  color: var(--c-danger-text);
   border-color: rgba(204, 34, 0, .35);
   background: rgba(139, 0, 0, .08);
 }
@@ -4344,7 +4344,7 @@ a:focus-visible {
 }
 
 .badge-masq-high {
-  color: var(--accent);
+  color: var(--c-danger-text);
   border-color: rgba(204, 34, 0, .35);
   background: rgba(139, 0, 0, .06);
 }
@@ -4363,7 +4363,7 @@ a:focus-visible {
 }
 
 .badge-danger-high {
-  color: var(--accent);
+  color: var(--c-danger-text);
   border-color: rgba(204, 34, 0, .35);
   background: rgba(139, 0, 0, .06);
 }
@@ -4852,7 +4852,7 @@ a:focus-visible {
 .hooks-del-btn {
   background: none;
   border: 1px solid rgba(139, 0, 0, .4);
-  color: var(--accent2);
+  color: var(--c-danger-text);
   width: 28px;
   height: 28px;
   border-radius: 2px;
@@ -6086,7 +6086,7 @@ a.md-link-loc:hover {
 
 .ls-del:hover {
   border-color: var(--accent2);
-  color: var(--accent2);
+  color: var(--c-danger-text);
   background: rgba(139, 0, 0, .12);
 }
 
@@ -6207,7 +6207,7 @@ a.md-link-loc:hover {
 }
 
 .ls-err {
-  color: var(--accent2);
+  color: var(--c-danger-text);
   background: rgba(139, 0, 0, .1);
   border: 1px solid var(--border2);
   border-radius: 3px;
@@ -6474,7 +6474,7 @@ a.md-link-loc:hover {
 .modp-del-btn {
   background: none;
   border: 1px solid rgba(139, 0, 0, .40);
-  color: var(--accent2);
+  color: var(--c-danger-text);
 }
 
 .modp-del-btn:hover {
@@ -6757,7 +6757,7 @@ a.md-link-loc:hover {
 .canon-issue-char {
   font-family: var(--f-head);
   font-size: var(--fs-sm);
-  color: var(--accent);
+  color: var(--c-danger-text);
   white-space: nowrap;
   padding-top: 1px;
 }
@@ -7722,7 +7722,7 @@ a.md-link-loc:hover {
 
 .v20-health-pen {
   font-size: var(--fs-md);
-  color: var(--accent2);
+  color: var(--c-danger-text);
   min-width: 22px;
   text-align: right;
 }
@@ -10063,7 +10063,7 @@ tr.rumor-told:hover .rumor-cb-cell {
 }
 
 .loc-edit-req {
-  color: var(--accent);
+  color: var(--c-danger-text);
 }
 
 .loc-edit-row2 {
