@@ -309,13 +309,13 @@ async function _audioPresetOpenModal(preset = null) {
   document.getElementById('audio-preset-err').style.display = 'none';
   await _audioPresetPopulateLocationSelect(preset ? (preset.locationSlug || '') : '');
   _audioPresetRenderTrackPicker(preset ? preset.tracks : []);
-  _audioPresetModal.classList.add('open');
+  openModal('audio-preset-modal', '#audio-preset-name');
 }
 
 document.getElementById('audio-preset-create-btn')?.addEventListener('click', () => _audioPresetOpenModal(null));
-document.getElementById('audio-preset-close')?.addEventListener('click', () => _audioPresetModal.classList.remove('open'));
-document.getElementById('audio-preset-cancel')?.addEventListener('click', () => _audioPresetModal.classList.remove('open'));
-_audioPresetModal?.addEventListener('click', e => { if (e.target === _audioPresetModal) _audioPresetModal.classList.remove('open'); });
+document.getElementById('audio-preset-close')?.addEventListener('click', () => closeModal('audio-preset-modal'));
+document.getElementById('audio-preset-cancel')?.addEventListener('click', () => closeModal('audio-preset-modal'));
+_audioPresetModal?.addEventListener('click', e => { if (e.target === _audioPresetModal) closeModal('audio-preset-modal'); });
 
 document.getElementById('audio-preset-form')?.addEventListener('submit', async e => {
   e.preventDefault();
@@ -352,7 +352,7 @@ document.getElementById('audio-preset-form')?.addEventListener('submit', async e
       });
     }
     await loadAudioPresets();
-    _audioPresetModal.classList.remove('open');
+    closeModal('audio-preset-modal');
     showToast(_audioPresetEditingId ? 'Пресет обновлён' : 'Пресет создан', 'success');
   } catch (e) {
     errEl.textContent = e.message; errEl.style.display = '';
@@ -552,11 +552,11 @@ const _audioUploadModal = document.getElementById('audio-upload-modal');
 document.getElementById('audio-lib-upload-btn')?.addEventListener('click', () => {
   document.getElementById('audio-upload-form').reset();
   document.getElementById('audio-upload-err').style.display = 'none';
-  _audioUploadModal.classList.add('open');
+  openModal('audio-upload-modal', '#audio-upload-title');
 });
-document.getElementById('audio-upload-close')?.addEventListener('click', () => _audioUploadModal.classList.remove('open'));
-document.getElementById('audio-upload-cancel')?.addEventListener('click', () => _audioUploadModal.classList.remove('open'));
-_audioUploadModal?.addEventListener('click', e => { if (e.target === _audioUploadModal) _audioUploadModal.classList.remove('open'); });
+document.getElementById('audio-upload-close')?.addEventListener('click', () => closeModal('audio-upload-modal'));
+document.getElementById('audio-upload-cancel')?.addEventListener('click', () => closeModal('audio-upload-modal'));
+_audioUploadModal?.addEventListener('click', e => { if (e.target === _audioUploadModal) closeModal('audio-upload-modal'); });
 
 const ALLOWED_AUDIO_MIME = ['audio/mpeg', 'audio/ogg', 'audio/wav', 'audio/x-wav'];
 const MAX_AUDIO_BYTES = 20 * 1024 * 1024;
@@ -594,7 +594,7 @@ document.getElementById('audio-upload-form')?.addEventListener('submit', async e
     });
     _audioLibCache.push(created);
     _audioLibRender();
-    _audioUploadModal.classList.remove('open');
+    closeModal('audio-upload-modal');
     showToast('Звук загружен', 'success');
   } catch (e) {
     errEl.textContent = e.message; errEl.style.display = '';

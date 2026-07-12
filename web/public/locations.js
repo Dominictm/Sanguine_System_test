@@ -478,7 +478,7 @@ function openLocDetail(slug, keepTab) {
       </div>
     </div>`;
 
-  document.getElementById('loc-detail-modal').classList.add('open');
+  openModal('loc-detail-modal');
   if (loc.imageUrl) initLocCarousel(slug);
 
   if (keepTab) {
@@ -528,11 +528,10 @@ document.getElementById('loc-filter-masq').addEventListener('change', e => {
 // Location modal close
 const locDetailModal = document.getElementById('loc-detail-modal');
 document.getElementById('loc-detail-close').addEventListener('click', () => {
-  locDetailModal.classList.remove('open');
+  closeModal('loc-detail-modal');
   if (_locCarouselTimer) { clearInterval(_locCarouselTimer); _locCarouselTimer = null; }
 });
-locDetailModal.addEventListener('click', e => { if (e.target === locDetailModal) locDetailModal.classList.remove('open'); });
-document.addEventListener('keydown', e => { if (e.key === 'Escape') locDetailModal.classList.remove('open'); });
+locDetailModal.addEventListener('click', e => { if (e.target === locDetailModal) closeModal('loc-detail-modal'); });
 
 // Tab switching + carousel + edit/save/cancel + upload in location modal
 document.getElementById('loc-detail-content').addEventListener('click', e => {
@@ -844,7 +843,6 @@ let _locEditSlug = null; // null = create, string = edit
 
 function openLocEditModal(slug) {
   _locEditSlug = slug || null;
-  const modal = document.getElementById('loc-edit-modal');
   const title = document.getElementById('loc-edit-title');
   const delBtn = document.getElementById('loc-edit-delete-btn');
   const errDiv = document.getElementById('loc-edit-error');
@@ -888,8 +886,7 @@ function openLocEditModal(slug) {
   // Populate factions datalist for the Control field
   _loadFactionsList();
 
-  modal.classList.add('open');
-  document.getElementById('loc-edit-name').focus();
+  openModal('loc-edit-modal', '#loc-edit-name');
 }
 
 async function _loadFactionsList() {
@@ -910,7 +907,7 @@ async function _loadFactionsList() {
 }
 
 function closeLocEditModal() {
-  document.getElementById('loc-edit-modal').classList.remove('open');
+  closeModal('loc-edit-modal');
   _locEditSlug = null;
 }
 
@@ -1005,7 +1002,7 @@ async function deleteLocCurrent() {
     if (!r.ok) throw new Error((await r.json()).error || r.statusText);
     closeLocEditModal();
     // Close detail modal if open for this slug
-    document.getElementById('loc-detail-modal').classList.remove('open');
+    closeModal('loc-detail-modal');
     STATE.locations = [];
     await loadLocations();
   } catch (e) {
@@ -1110,9 +1107,6 @@ async function runLocFullGen() {
   document.getElementById('loc-edit-gen-full-btn').addEventListener('click', runLocFullGen);
   document.getElementById('loc-edit-modal').addEventListener('click', e => {
     if (e.target === e.currentTarget) closeLocEditModal();
-  });
-  document.addEventListener('keydown', e => {
-    if (e.key === 'Escape' && document.getElementById('loc-edit-modal').classList.contains('open')) closeLocEditModal();
   });
   document.getElementById('loc-edit-modal').addEventListener('click', e => {
     const regenBtn = e.target.closest('.loc-edit-regen-btn');
