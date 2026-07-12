@@ -10246,6 +10246,15 @@ tr.rumor-told:hover .rumor-cb-cell {
 @media (pointer: coarse) {
   .modp-loc-card-unlink, .modp-npc-card-del { min-width: 44px; min-height: 44px; }
 }
+@media (pointer: coarse) {
+  .hooks-del-btn, .cdet-img-del-btn, .diary-item-del-btn,
+  .v20-row-remove-btn, .v20-disc-info-btn {
+    min-width: 44px;
+    min-height: 44px;
+  }
+  .cdet-carousel-btn { min-width: 44px; }
+  .locdet-carousel-btn { min-width: 44px; }
+}
 
 .modp-loc-card-unlink:hover,
 .modp-npc-card-del:hover {
