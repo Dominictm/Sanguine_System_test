@@ -1851,7 +1851,7 @@ async function openCityDetail(slug) {
   const modal   = document.getElementById('city-detail-modal');
   const content = document.getElementById('city-detail-content');
   content.innerHTML = `<div class="mod-loading">${SPINNER}</div>`;
-  modal.classList.add('open');
+  openModal('city-detail-modal');
 
   let d, chars = [], locs = [];
   try {
@@ -2094,7 +2094,7 @@ async function _deleteCity() {
   try {
     const r = await fetch(`/api/cities/${encodeURIComponent(d.slug)}`, { method: 'DELETE' }).then(r => r.json());
     if (!r.ok) { showToast('Ошибка удаления: ' + (r.error || 'неизвестная'), 'error'); return; }
-    document.getElementById('city-detail-modal').classList.remove('open');
+    closeModal('city-detail-modal');
     if (d.active) {
       // Удалили активный город — переключаемся на любой оставшийся.
       const { cities = [] } = await fetch('/api/cities').then(r => r.json());
@@ -2105,9 +2105,8 @@ async function _deleteCity() {
 }
 
 const cityDetailModal = document.getElementById('city-detail-modal');
-document.getElementById('city-detail-close').addEventListener('click', () => cityDetailModal.classList.remove('open'));
-cityDetailModal.addEventListener('click', e => { if (e.target === cityDetailModal) cityDetailModal.classList.remove('open'); });
-document.addEventListener('keydown', e => { if (e.key === 'Escape') cityDetailModal.classList.remove('open'); });
+document.getElementById('city-detail-close').addEventListener('click', () => closeModal('city-detail-modal'));
+cityDetailModal.addEventListener('click', e => { if (e.target === cityDetailModal) closeModal('city-detail-modal'); });
 
 // ═══════════════════════════════════════════════════════════════
 // Chronicle detail modal (modules list + create/delete module)
@@ -2608,8 +2607,7 @@ async function openModCreateModal(standalone) {
       chrRow.style.display = 'none';
     }
 
-    document.getElementById('mod-create-modal').classList.add('open');
-    setTimeout(() => document.getElementById('mod-create-name').focus(), 50);
+    openModal('mod-create-modal', '#mod-create-name');
     _populateCharDatalist('mod-create-pc-list', 'mod-create-npc-list');
   } finally {
     _modCreateOpening = false;
@@ -2640,11 +2638,11 @@ document.getElementById('mod-create-npc-input').addEventListener('keydown', e =>
 });
 
 document.getElementById('mod-create-cancel').addEventListener('click', () => {
-  document.getElementById('mod-create-modal').classList.remove('open');
+  closeModal('mod-create-modal');
 });
 document.getElementById('mod-create-modal').addEventListener('click', e => {
   if (e.target === document.getElementById('mod-create-modal'))
-    document.getElementById('mod-create-modal').classList.remove('open');
+    closeModal('mod-create-modal');
 });
 
 document.getElementById('mod-create-submit').addEventListener('click', async () => {
@@ -2680,7 +2678,7 @@ document.getElementById('mod-create-submit').addEventListener('click', async () 
 
     if (!d.ok) { errEl.textContent = d.error || 'Ошибка'; errEl.style.display = ''; return; }
 
-    document.getElementById('mod-create-modal').classList.remove('open');
+    closeModal('mod-create-modal');
     if (_modCreateStandalone) {
       loadModules();
     } else {
@@ -2691,10 +2689,6 @@ document.getElementById('mod-create-submit').addEventListener('click', async () 
   } finally {
     btn.disabled = false; btn.textContent = 'Создать';
   }
-});
-
-document.getElementById('mod-create-modal').addEventListener('keydown', e => {
-  if (e.key === 'Escape') document.getElementById('mod-create-modal').classList.remove('open');
 });
 
 // ── Generate scenario modal (for existing modules) ────────────────────────────
@@ -2864,8 +2858,7 @@ document.getElementById('btn-create-chronicle').addEventListener('click', () => 
   document.getElementById('chr-create-mood').value  = '';
   document.getElementById('chr-create-error').style.display = 'none';
   _slugEdited = false;
-  document.getElementById('chr-create-modal').classList.add('open');
-  setTimeout(() => document.getElementById('chr-create-name').focus(), 50);
+  openModal('chr-create-modal', '#chr-create-name');
 });
 
 document.getElementById('chr-create-name').addEventListener('input', e => {
@@ -2874,11 +2867,11 @@ document.getElementById('chr-create-name').addEventListener('input', e => {
 document.getElementById('chr-create-slug').addEventListener('input', () => { _slugEdited = true; });
 
 document.getElementById('chr-create-cancel').addEventListener('click', () => {
-  document.getElementById('chr-create-modal').classList.remove('open');
+  closeModal('chr-create-modal');
 });
 document.getElementById('chr-create-modal').addEventListener('click', e => {
   if (e.target === document.getElementById('chr-create-modal'))
-    document.getElementById('chr-create-modal').classList.remove('open');
+    closeModal('chr-create-modal');
 });
 
 document.getElementById('chr-create-submit').addEventListener('click', async () => {
@@ -2900,7 +2893,7 @@ document.getElementById('chr-create-submit').addEventListener('click', async () 
 
     if (!d.ok) { errEl.textContent = d.error || 'Ошибка'; errEl.style.display = ''; return; }
 
-    document.getElementById('chr-create-modal').classList.remove('open');
+    closeModal('chr-create-modal');
     loadChroniclesPage();
   } catch (e) {
     errEl.textContent = 'Ошибка соединения: ' + e.message; errEl.style.display = '';
@@ -2912,7 +2905,6 @@ document.getElementById('chr-create-submit').addEventListener('click', async () 
 // Enter submits form
 document.getElementById('chr-create-modal').addEventListener('keydown', e => {
   if (e.key === 'Enter') document.getElementById('chr-create-submit').click();
-  if (e.key === 'Escape') document.getElementById('chr-create-modal').classList.remove('open');
 });
 
 // ── Delete modal logic ────────────────────────────────────────────────────────
@@ -5576,7 +5568,7 @@ async function openModuleDetail(name, preferTab) {
   const modal   = document.getElementById('module-detail-modal');
   const content = document.getElementById('module-detail-content');
   content.innerHTML = `<div class="mod-loading">${SPINNER}</div>`;
-  modal.classList.add('open');
+  openModal('module-detail-modal');
 
   let d;
   try { d = await fetch(`/api/modules/${encodeURIComponent(name)}`).then(r => r.json()); }
@@ -5618,7 +5610,7 @@ document.getElementById('module-detail-content').addEventListener('click', e => 
   if (!genBtn) return;
   const mod = genBtn.dataset.mod;
   const chr = genBtn.dataset.chr || _chrDetailSlug || '';
-  document.getElementById('module-detail-modal').classList.remove('open');
+  closeModal('module-detail-modal');
   openFillModal(chr, mod, mod);
 });
 
@@ -5637,9 +5629,8 @@ document.getElementById('module-detail-content').addEventListener('click', e => 
 
 // Module modal close
 const moduleDetailModal = document.getElementById('module-detail-modal');
-document.getElementById('module-detail-close').addEventListener('click', () => moduleDetailModal.classList.remove('open'));
-moduleDetailModal.addEventListener('click', e => { if (e.target === moduleDetailModal) moduleDetailModal.classList.remove('open'); });
-document.addEventListener('keydown', e => { if (e.key === 'Escape') moduleDetailModal.classList.remove('open'); });
+document.getElementById('module-detail-close').addEventListener('click', () => closeModal('module-detail-modal'));
+moduleDetailModal.addEventListener('click', e => { if (e.target === moduleDetailModal) closeModal('module-detail-modal'); });
 
 // ═══════════════════════════════════════════════════════════════
 // Log Session (Tools → Сессия)
@@ -6458,7 +6449,7 @@ async function _confirmDeleteChar(name) {
         .then(r => r.json());
       if (!d.ok) throw new Error(d.error || 'Ошибка');
       close();
-      charDetailModal.classList.remove('open');
+      closeModal('char-detail-modal');
       STATE.graph.inited = false;
       fetch('/api/characters').then(r => r.json()).then(data => {
         STATE.characters = Array.isArray(data) ? data : [];
@@ -6664,7 +6655,7 @@ function openCharDetail(name) {
       </div>
     </div>`;
 
-  document.getElementById('char-detail-modal').classList.add('open');
+  openModal('char-detail-modal');
   if (c.imageUrl) initCarousel(c.name);
 }
 
@@ -6676,9 +6667,8 @@ document.getElementById('chars-grid').addEventListener('click', e => {
 });
 
 const charDetailModal = document.getElementById('char-detail-modal');
-document.getElementById('char-detail-close').addEventListener('click', () => charDetailModal.classList.remove('open'));
-charDetailModal.addEventListener('click', e => { if (e.target === charDetailModal) charDetailModal.classList.remove('open'); });
-document.addEventListener('keydown', e => { if (e.key === 'Escape') charDetailModal.classList.remove('open'); });
+document.getElementById('char-detail-close').addEventListener('click', () => closeModal('char-detail-modal'));
+charDetailModal.addEventListener('click', e => { if (e.target === charDetailModal) closeModal('char-detail-modal'); });
 
 // Tab switching & image upload — delegated on the persistent content container
 document.getElementById('char-detail-content').addEventListener('click', e => {
