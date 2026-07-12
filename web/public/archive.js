@@ -715,22 +715,19 @@ function renderTimeline(events) {
       .map(l => `<button class="chron-chip chip-loc" data-loc="${escHtml(l.slug)}">📍 ${escHtml(l.text)}</button>`)
       .join('');
 
-    // Footer links → module modal
-    const linkChips = (ev.links || []).map(l => {
-      const label = l.kind === 'finale' ? '📜 Финал'
-        : l.kind === 'module' ? '📖 Модуль'
-        : l.kind === 'npc' ? '👥 НПС' : escHtml(l.text);
-      const tab = l.kind === 'finale' ? 'finale' : l.kind === 'npc' ? 'npc' : 'overview';
-      return l.module
-        ? `<button class="chron-chip chip-mod" data-mod="${escHtml(l.module)}" data-chr="${escHtml(ev.chronicle || '')}" data-tab="${tab}">${label}</button>`
-        : `<span class="chron-chip">${label}</span>`;
-    }).join('');
+    // Модуль события — не показываем кнопки «Модуль»/«Финал» и т.п. (ev.links),
+    // но используем первую ссылку с известным слагом модуля, чтобы лениво
+    // подгрузить финал модуля отдельным блоком при раскрытии подробностей.
+    const modLink = (ev.links || []).find(l => l.module);
+    const finaleBlock = modLink
+      ? `<div class="chron-block-label">📜 Финал модуля</div><div class="chron-finale" data-finale-mod="${escHtml(modLink.module)}">${SPINNER}</div>`
+      : '';
 
     const body = [
       ev.eventsText ? `<div class="chron-block-label">📋 События</div><div class="md-body chron-md">${mdToHtmlBlock(ev.eventsText)}</div>` : '',
       ev.consequences.length ? `<div class="chron-block-label">⚖️ Последствия</div><ul class="chron-list">${ev.consequences.map(c => `<li>${mdInline(c)}</li>`).join('')}</ul>` : '',
       ev.worldChanges.length ? `<div class="chron-block-label">🌍 Изменения мира</div><ul class="chron-list">${ev.worldChanges.map(c => `<li>${mdInline(c)}</li>`).join('')}</ul>` : '',
-      linkChips ? `<div class="chron-block-label">🔗 Связанные файлы</div><div class="chron-chips">${linkChips}</div>` : '',
+      finaleBlock,
     ].filter(Boolean).join('');
 
     return `
@@ -764,8 +761,10 @@ document.getElementById('chronicle-content').addEventListener('click', e => {
     const body = document.querySelector(`.chron-event-body[data-body="${tog.dataset.id}"]`);
     if (body) {
       const open = body.hasAttribute('hidden');
-      if (open) { body.removeAttribute('hidden'); tog.textContent = 'Свернуть ▴'; }
-      else      { body.setAttribute('hidden', ''); tog.textContent = 'Подробнее ▾'; }
+      if (open) {
+        body.removeAttribute('hidden'); tog.textContent = 'Свернуть ▴';
+        _loadEventFinale(body);
+      } else { body.setAttribute('hidden', ''); tog.textContent = 'Подробнее ▾'; }
     }
     return;
   }
@@ -773,7 +772,21 @@ document.getElementById('chronicle-content').addEventListener('click', e => {
   if (cc) { openCharDetail(cc.dataset.char); return; }
   const lc = e.target.closest('.chip-loc');
   if (lc) { openLocDetail(lc.dataset.loc); return; }
-  const mc = e.target.closest('.chip-mod');
-  if (mc) { openModulePage(mc.dataset.chr || '', mc.dataset.mod); return; }
 });
+
+// Финал модуля подгружается один раз, при первом раскрытии подробностей
+// события (а не сразу для всех событий хроники — их может быть десятки).
+function _loadEventFinale(bodyEl) {
+  const finEl = bodyEl.querySelector('.chron-finale[data-finale-mod]');
+  if (!finEl || finEl.dataset.loaded) return;
+  finEl.dataset.loaded = '1';
+  fetch(`/api/modules/${encodeURIComponent(finEl.dataset.finaleMod)}`)
+    .then(r => r.json())
+    .then(d => {
+      finEl.innerHTML = d.finale
+        ? `<div class="md-body chron-md">${mdToHtmlPlain(d.finale)}</div>`
+        : '<div class="cdet-empty">Финал модуля ещё не написан</div>';
+    })
+    .catch(() => { finEl.innerHTML = '<div class="cdet-empty">Не удалось загрузить финал модуля</div>'; });
+}
 
