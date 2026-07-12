@@ -944,7 +944,7 @@ async function openFinalePreview(chr, mod) {
     ).then(r => r.json());
     title.textContent = `📜 Финал — ${data.title || mod}`;
     body.innerHTML = data.finale
-      ? mdToHtml(data.finale)
+      ? mdToHtmlPlain(data.finale)
       : '<div class="cdet-empty">Финал не найден.</div>';
   } catch {
     body.innerHTML = '<div class="cdet-empty">Не удалось загрузить финал.</div>';
@@ -1350,7 +1350,7 @@ function _renderScenarioPanel(data) {
             ${it.heading ? `<div class="modp-field-label">${escHtml(it.heading)}${_scenarioTooltipHtml(it.heading)}</div>` : '<div></div>'}
             <button class="modp-field-regen-btn" data-scensec-regen="${it.idx}" title="Перегенерировать только это поле">🔄</button>
           </div>
-          <div id="moddet-scensec${it.idx}-view" class="modp-md">${mdToHtml(it.body)}</div>
+          <div id="moddet-scensec${it.idx}-view" class="modp-md">${mdToHtmlPlain(it.body)}</div>
           <div id="moddet-scensec${it.idx}-edit" style="display:none">
             <textarea class="cdet-edit-textarea" id="moddet-scensec${it.idx}-ta" rows="10"
               style="width:100%;font-family:monospace;font-size:var(--fs-sm,12px)">${escHtml(it.body)}</textarea>
@@ -1375,7 +1375,7 @@ function _renderScenarioPanel(data) {
         <div class="modp-block-body">${itemsHtml}</div>
       </div>`;
       }).join('')
-    : (raw ? `<div class="modp-md">${mdToHtml(raw)}</div>` : `
+    : (raw ? `<div class="modp-md">${mdToHtmlPlain(raw)}</div>` : `
       <div class="cdet-empty">Сценарий не сгенерирован.</div>
       <div class="modp-scenario-empty-actions">
         <span class="cdet-empty">Нажми «🪄 Сгенерировать» вверху страницы для ИИ-генерации, или заполни каркас вручную:</span>
@@ -1495,7 +1495,7 @@ function renderModulePage(data) {
   // ── ФИНАЛ (finale.md — пишется при закрытии модуля, Фаза C) ──
   const finaleRaw = data.finale || '';
   const finaleViewHtml = finaleRaw
-    ? `<div class="modp-md">${mdToHtml(finaleRaw)}</div>`
+    ? `<div class="modp-md">${mdToHtmlPlain(finaleRaw)}</div>`
     : '<div class="modp-empty"><div class="modp-empty-icon">📜</div>Финал ещё не сгенерирован — появится при закрытии модуля («🔒 Закрыть модуль»).</div>';
   document.getElementById('modp-panel-finale').innerHTML = finaleRaw
     ? modPanel('finale', finaleViewHtml,
@@ -1515,7 +1515,7 @@ function renderModulePage(data) {
             <button class="modp-session-edit" data-sess-idx="${i}" title="Редактировать">✏️</button>
           </div>
           ${s.scenes ? `<div class="modp-session-scenes">🎬 Сыграно сцен: ${escHtml(s.scenes)}</div>` : ''}
-          ${s.body ? `<div class="modp-session-body">${mdToHtml(s.body)}</div>` : ''}
+          ${s.body ? `<div class="modp-session-body">${mdToHtmlPlain(s.body)}</div>` : ''}
         </div>`).join('')
     : '<div class="modp-empty"><div class="modp-empty-icon">🎲</div>Сессий пока нет — добавь первую запись выше</div>';
 
@@ -1600,7 +1600,7 @@ function renderModulePage(data) {
   if (data.npcGroups?.length) {
     npcPanel.innerHTML = _renderModuleNpcCards(data.npcGroups) + _renderModuleNpcGroups(data.npcGroups);
   } else if (data.npcContent) {
-    npcPanel.innerHTML = `<div class="modp-md">${mdToHtml(data.npcContent)}</div>`;
+    npcPanel.innerHTML = `<div class="modp-md">${mdToHtmlPlain(data.npcContent)}</div>`;
   } else if (data.npcs?.length) {
     npcPanel.innerHTML =
       `<div class="modp-char-list">${data.npcs.map(p => `
@@ -1651,12 +1651,12 @@ function renderModulePage(data) {
 
   // ── НИТИ ──
   document.getElementById('modp-panel-threads').innerHTML = data.openThreads
-    ? `<div class="modp-md">${mdToHtml(data.openThreads)}</div>`
+    ? `<div class="modp-md">${mdToHtmlPlain(data.openThreads)}</div>`
     : '<div class="modp-empty"><div class="modp-empty-icon">🧵</div>Открытые нити отсутствуют</div>';
 }
 
 // Minimal markdown → HTML converter
-function mdToHtml(md) {
+function mdToHtmlPlain(md) {
   if (!md) return '';
   // Extract code blocks before escaping
   const codeBlocks = [];

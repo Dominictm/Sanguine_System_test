@@ -1262,7 +1262,7 @@ function mdInline(s) {
     .replace(/`([^`]+)`/g, '<code>$1</code>')
     .replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, t, h) => resolveMdLink(t, h));
 }
-function mdToHtml(md) {
+function mdToHtmlBlock(md) {
   if (!md) return '';
   const lines = md.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
   let html = '', i = 0;
@@ -2286,7 +2286,7 @@ function renderTimeline(events) {
     }).join('');
 
     const body = [
-      ev.eventsText ? `<div class="chron-block-label">📋 События</div><div class="md-body chron-md">${mdToHtml(ev.eventsText)}</div>` : '',
+      ev.eventsText ? `<div class="chron-block-label">📋 События</div><div class="md-body chron-md">${mdToHtmlBlock(ev.eventsText)}</div>` : '',
       ev.consequences.length ? `<div class="chron-block-label">⚖️ Последствия</div><ul class="chron-list">${ev.consequences.map(c => `<li>${mdInline(c)}</li>`).join('')}</ul>` : '',
       ev.worldChanges.length ? `<div class="chron-block-label">🌍 Изменения мира</div><ul class="chron-list">${ev.worldChanges.map(c => `<li>${mdInline(c)}</li>`).join('')}</ul>` : '',
       linkChips ? `<div class="chron-block-label">🔗 Связанные файлы</div><div class="chron-chips">${linkChips}</div>` : '',
@@ -2375,7 +2375,7 @@ async function openModuleDetail(name, preferTab) {
         ${tabs.map(t => `<button class="cdet-tab ${t[0] === active ? 'active' : ''} ${t[0] === 'finale' ? 'tab-finale' : ''}" data-tab="${t[0]}">${escHtml(t[1])}</button>`).join('')}
       </div>
       <div class="cdet-panels">
-        ${tabs.map(t => `<div class="cdet-panel ${t[0] === active ? 'active' : ''}" data-panel="${t[0]}"><div class="md-body">${mdToHtml(t[2])}</div></div>`).join('')}
+        ${tabs.map(t => `<div class="cdet-panel ${t[0] === active ? 'active' : ''}" data-panel="${t[0]}"><div class="md-body">${mdToHtmlBlock(t[2])}</div></div>`).join('')}
       </div>
     </div>`;
 }

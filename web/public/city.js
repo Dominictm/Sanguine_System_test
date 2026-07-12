@@ -339,7 +339,7 @@ function _renderCityView() {
         </div>
       </div>
       <div class="cdet-panels">
-        <div class="cdet-panel active"><div class="md-body">${mdToHtml(body)}</div></div>
+        <div class="cdet-panel active"><div class="md-body">${mdToHtmlBlock(body)}</div></div>
       </div>
     </div>`;
 }
