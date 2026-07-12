@@ -169,7 +169,7 @@ describe('Parsers — unit', () => {
 
     it('browser parity — public/utils.js _NTR mirrors CYRILLIC_TR', () => {
       const src = require('fs').readFileSync(
-        path.join(__dirname, '../public/utils.js'), 'utf-8');
+        path.join(__dirname, '../public/scripts/utils.js'), 'utf-8');
       const m = src.match(/const _NTR\s*=\s*(\{[^}]*\})/);
       assert.ok(m, '_NTR literal not found in utils.js');
       // eslint-disable-next-line no-new-func
@@ -180,7 +180,7 @@ describe('Parsers — unit', () => {
 
     it('browser parity — public/utils.js _LATIN_TR mirrors LATIN_TR', () => {
       const src = require('fs').readFileSync(
-        path.join(__dirname, '../public/utils.js'), 'utf-8');
+        path.join(__dirname, '../public/scripts/utils.js'), 'utf-8');
       const m = src.match(/const _LATIN_TR\s*=\s*(\{[^}]*\})/);
       assert.ok(m, '_LATIN_TR literal not found in utils.js');
       // eslint-disable-next-line no-new-func
@@ -237,7 +237,7 @@ describe('Parsers — unit', () => {
 
     it('browser parity — public/city.js CITY_SECTION_DEFS зеркалит CITY_SECTIONS', () => {
       const src = require('fs').readFileSync(
-        path.join(__dirname, '../public/city.js'), 'utf-8');
+        path.join(__dirname, '../public/scripts/city.js'), 'utf-8');
       const m = src.match(/const CITY_SECTION_DEFS\s*=\s*(\[[\s\S]*?\n\]);/);
       assert.ok(m, 'CITY_SECTION_DEFS literal not found in city.js');
       // eslint-disable-next-line no-new-func
