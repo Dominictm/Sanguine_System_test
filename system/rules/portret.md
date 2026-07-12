@@ -141,7 +141,7 @@ daytime, sunlight, crowds of people, faces in foreground, modern post-2010 eleme
 
 > ⚠️ **Это референс СТИЛЯ, а не шаблон содержания.** Пример ниже намеренно обобщён («elegant ancient vampire aristocrat») и потому **нарушает 🔒-правило «никаких обобщений»** — копировать его как промт персонажа нельзя. Используй его только для тона/света/среды (Блок 2–3); описание персонажа (Блок 1) всегда строится из секции «Внешность» конкретной карточки.
 >
-> ⚠️ **Устаревшая по медиуму ссылка.** Лексика ниже («digital painting», «oil-paint brushstrokes», «concept art», «artstation») — старая формулировка, до перехода на фотореалистичный эталон (см. «Эталон стиля» и Блок 3 в разделе НПС выше). Бери отсюда только композицию/свет/настроение — медиум (живопись vs фотография) всегда берётся из актуального правила НПС, а не из этого блока.
+> ✅ **Медиум актуален.** Лексика ниже («digital painting», «oil-paint brushstrokes», «concept art», «artstation») — это и есть текущий эталон (см. «Эталон стиля» и Блок 3 в разделе НПС ниже, обновлено 2026-07-13). Живописный медиум — не устаревшая формулировка, а действующий стандарт.
 
 (референс тона для MidJourney, Stable Diffusion, Flux, DALL·E)
 
@@ -193,7 +193,7 @@ daytime, sunlight, crowds of people, faces in foreground, modern post-2010 eleme
 
 > heavy painterly texture, oil canvas strokes, textured pigments, old master brushwork
 >
-> ⚠️ Использовать умеренно (или не использовать для карточек НПС) — в избытке этот модификатор уводит результат в иллюстрацию и противоречит фотореалистичному эталону карточек персонажей (см. «Эталон стиля» выше).
+> ✅ Это и есть текущий эталон карточек персонажей (см. «Эталон стиля» выше, обновлено 2026-07-13) — использовать свободно, не ограничивать.
 
 ### Если нужно больше:
 
@@ -207,15 +207,15 @@ daytime, sunlight, crowds of people, faces in foreground, modern post-2010 eleme
 
 Главные элементы, создающие атмосферу:
 
-* pale grey skin + warm amber lighting
-* crimson-black background
-* photographically detailed skin and fabric, not flat illustration (см. «Эталон стиля» выше — заменяет прежний пункт «painterly brush texture»)
-* gothic luxury clothing
-* unsettling charisma
-* confident relaxed posture
-* cinematic chiaroscuro
-* subtle film grain instead of visible brushwork
-* supernatural elegance instead of horror
+* pale grey skin + warm amber lighting (или альтернативная цветовая доминанта под клан/образ — см. Блок 2 ниже)
+* crimson-black background (или другой единый цветовой замес под клан/образ)
+* visible painterly brushwork, oil-paint texture — sharp, deliberate detail on face and eyes, looser expressive strokes in background and fabric (см. «Эталон стиля» ниже, обновлено 2026-07-13)
+* gothic/dark-fashion clothing — aristocratic ИЛИ современный дарк-стрит/панк, по образу персонажа
+* unsettling charisma or coiled danger — под образ персонажа
+* confident, deliberate posture
+* cinematic chiaroscuro, single dramatic light source
+* rich, saturated painterly texture — not photographic grain
+* supernatural elegance or threat instead of explicit horror
 
 ---
 
@@ -242,9 +242,9 @@ daytime, sunlight, crowds of people, faces in foreground, modern post-2010 eleme
 
 ## Эталон стиля
 
-> ✅ **Хороший пример** — [`cities/paris/characters/vampires/verene_de_kyustin/art/verene_de_kyustin_01.png`](../../cities/paris/characters/vampires/verene_de_kyustin/art/verene_de_kyustin_01.png): выглядит как кадр из реальной фотосъёмки с тёмной кинематографичной цветокоррекцией — резкая, детализированная кожа и ткань, никаких видимых мазков кисти, фон — чистый абстрактный цветовой замес (красный/чёрный), без намёка на конкретное место.
+> **Обновлено 2026-07-13 — возврат к живописному медиуму.** Прежняя версия правил уводила карточки в фотореализм; решено вернуться к тёмному живописному стилю (visible brushstrokes, painterly realism), который лучше передаёт атмосферу WoD. Референсы нового эталона (переданы пользователем, сохранить как визуальный ориентир при следующей генерации): дракон-леди в красной коже с тонированными очками на дымчато-красном фоне; бледный персонаж в белом окровавленном пальто с ножом на тёмно-синем фоне; панк-девушка в футболке с волком на красно-чёрном фоне. Общее во всех трёх: **резкая, намеренная детализация лица и глаз** + **более свободные, экспрессивные мазки в фоне/одежде**, драматичный однонаправленный свет, единый доминирующий цвет фона без конкретных форм, современная или готическая мода (не только «аристократ» — уличный дарк-стиль тоже валиден).
 >
-> ❌ **Плохой пример** (тип ошибки, с которым нужно бороться) — портрет, где фон читается как **космос/туманность/энергетический портал** (а не плоский цветовой замес), а кожа имеет эффект **трещин камня/мрамора** вместо живой текстуры; общее ощущение — иллюстрация фэнтези-арта, а не фотография. Если результат тянет в эту сторону — промт нарушает правила ниже.
+> ❌ **Плохой пример** (тип ошибки, с которым нужно бороться) — портрет, где фон читается как **космос/туманность/энергетический портал** (а не плоский цветовой замес), а кожа имеет эффект **трещин камня/мрамора** вместо живой текстуры. Живописность — не повод для фэнтези-арта: фон и кожа всё равно должны читаться как замес цвета/пигмента, а не как отдельный «мир» или минерал.
 
 ## Размер изображения
 
@@ -253,7 +253,7 @@ daytime, sunlight, crowds of people, faces in foreground, modern post-2010 eleme
 ## Структура — три блока
 
 **Блок 1 — Персонаж:**
-Cinematic hyperrealistic portrait, [тип существа / роль], [ракурс], [внешность: волосы, кожа, глаза], [общий стиль одежды без конкретики предметов], [поза / язык тела], [выражение + психологический подтекст]
+Cinematic dark fantasy painterly portrait, [тип существа / роль], [ракурс], [внешность: волосы, кожа, глаза], [общий стиль одежды без конкретики предметов], [поза / язык тела], [выражение + психологический подтекст]
 
 **Блок 2 — Свет и фон:**
 [тип освещения], [рим-лайт: цвет и откуда], [тени], **abstract flat color-wash background, soft smoke-like gradient, single dominant hue, no shapes or forms within the background** (никогда — конкретное место, никогда — космос/туманность/энергия/портал), [атмосферные детали]
@@ -270,18 +270,19 @@ Cinematic hyperrealistic portrait, [тип существа / роль], [рак
 > Фон портрета — это **цвет и мягкий градиент**, не место и не явление. Если нужна сцена «персонаж в локации» — это отдельный тип промта (см. правила локаций выше), а не карточка персонажа.
 
 **Блок 3 — Стиль / Качество:**
-Hyperrealistic cinematic portrait photography, fashion-editorial color grading, sharp fine detail on skin texture and fabric, natural human skin (никогда — cracked/marble/stone skin texture), subtle gothic noir atmosphere, Vampire the Masquerade aesthetic, high-end editorial photography quality, masterpiece, 1023x1537
+Dark fantasy digital painting, visible painterly brushstrokes, oil-paint texture, sharp deliberate detail on face and eyes, expressive looser brushwork in fabric and background, cinematic dramatic lighting, gothic noir atmosphere, Vampire the Masquerade aesthetic, concept art quality, painterly realism, masterpiece, highly detailed, 1023x1537
 
-> Ключевой сдвиг от прежней версии правил: раньше Блок 3 требовал «digital painting / oil-paint effect / concept art / artstation» — это и уводило результат в сторону иллюстрации/фэнтези-арта. Эталонный стиль карточек — **фотография с кинематографичной цветокоррекцией**, не картина. Видимые мазки кисти, эффект масляной живописи, «concept art» / «artstation» лексика — больше не используются в Блоке 3 персонажей.
+> **Обновлено 2026-07-13:** возврат к живописному медиуму как эталону (см. «Эталон стиля» выше) — «digital painting», «oil-paint texture», «visible brushstrokes», «concept art» снова обязательные элементы Блока 3, а не запрещённая лексика. Это отменяет прежний фотореалистичный сдвиг.
 
 ## Что НЕ включать в промт карточки
 
 - ❌ «take pose from reference» — поза задаётся индивидуально при генерации
 - ❌ Название персонажа или имена собственные
 - ❌ Кровь, раны, увечья, явные признаки насилия — угроза и опасность передаются через взгляд, тень, позу, освещение, не через прямые образы жестокости
-- ❌ «digital painting», «oil-paint effect», «visible brushstrokes», «concept art», «artstation» — уводит результат в иллюстрацию вместо фотореализма (см. «Эталон стиля» выше)
+- ❌ «photorealistic», «photograph», «editorial photography», «hyperrealistic photo» — уводит результат в фотографию вместо живописи (см. «Эталон стиля» выше)
 - ❌ «nebula», «galaxy», «cosmic energy», «swirling portal», «cracked stone/marble skin» — фон/кожа не должны читаться как место/явление/камень
+- ❌ «anime», «cartoon», «flat illustration» — живописный реализм, не мультяшный стиль
 
 ## Негативный промт (стандартный для всех)
 
-> digital painting, illustration, anime, cartoon, oil painting, visible brushstrokes, concept art, watermark, text overlay, blurry, low quality, artifacts, deformed anatomy, extra limbs, oversaturated colors, bright white background, 3D render, CGI, cracked skin, marble skin, stone texture skin, nebula background, galaxy background, cosmic energy background, swirling portal background.
+> photorealistic photo, hyperrealistic photograph, anime, cartoon, flat illustration, plastic skin, 3D render, CGI, watermark, text overlay, blurry, low quality, artifacts, deformed anatomy, extra limbs, oversaturated colors, bright white background, cracked skin, marble skin, stone texture skin, nebula background, galaxy background, cosmic energy background, swirling portal background.
