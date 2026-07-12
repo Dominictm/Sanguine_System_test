@@ -2937,6 +2937,62 @@ describe('API — integration', () => {
     });
   });
 
+  describe('World-state structured — CRUD', () => {
+    const evFile = path.join(CITY_ROOT, 'archive', 'events.md');
+    let original = null;
+    before(async () => { original = await fs.readFile(evFile, 'utf-8').catch(() => null); });
+    after(async () => { if (original !== null) await fs.writeFile(evFile, original, 'utf-8'); });
+
+    it('GET /api/world-state/structured — реальный events.md парсится, есть секции', async () => {
+      const { status, body } = await apiJson(`/api/world-state/structured${CITY}`);
+      assert.equal(status, 200);
+      assert.ok(body.sections.length > 0);
+    });
+
+    it('POST /api/world-state/section — без columns → 400; с columns → создаёт пустую секцию', async () => {
+      const bad = await apiJson(`/api/world-state/section${CITY}`,
+        { method: 'POST', body: JSON.stringify({ heading: '__TEST_SECTION__' }) });
+      assert.equal(bad.status, 400);
+      const ok = await apiJson(`/api/world-state/section${CITY}`,
+        { method: 'POST', body: JSON.stringify({ heading: '__TEST_SECTION__', columns: ['A', 'B'] }) });
+      assert.equal(ok.status, 200);
+      assert.ok(ok.body.sections.some(s => s.heading === '__TEST_SECTION__'));
+    });
+
+    it('строки: POST → PUT → DELETE round-trip в тестовой секции', async () => {
+      const added = await apiJson(`/api/world-state/section/${encodeURIComponent('__TEST_SECTION__')}/row${CITY}`,
+        { method: 'POST', body: JSON.stringify({ cells: ['x', 'y'] }) });
+      assert.equal(added.status, 200);
+      let sec = added.body.sections.find(s => s.heading === '__TEST_SECTION__');
+      assert.equal(sec.rows.length, 1);
+
+      const updated = await apiJson(`/api/world-state/section/${encodeURIComponent('__TEST_SECTION__')}/row/0${CITY}`,
+        { method: 'PUT', body: JSON.stringify({ cells: ['x2', 'y2'] }) });
+      sec = updated.body.sections.find(s => s.heading === '__TEST_SECTION__');
+      assert.deepEqual(sec.rows[0], ['x2', 'y2']);
+
+      const removed = await apiJson(`/api/world-state/section/${encodeURIComponent('__TEST_SECTION__')}/row/0${CITY}`, { method: 'DELETE' });
+      sec = removed.body.sections.find(s => s.heading === '__TEST_SECTION__');
+      assert.equal(sec.rows.length, 0);
+    });
+
+    it('DELETE /api/world-state/section/:heading — очищает тестовую секцию (teardown внутри теста)', async () => {
+      const { status } = await apiJson(`/api/world-state/section/${encodeURIComponent('__TEST_SECTION__')}${CITY}`, { method: 'DELETE' });
+      assert.equal(status, 200);
+    });
+
+    it('PUT /api/world-state/last-update — round-trip', async () => {
+      const before = await apiJson(`/api/world-state/structured${CITY}`);
+      const put = await apiJson(`/api/world-state/last-update${CITY}`,
+        { method: 'PUT', body: JSON.stringify({ text: '__TEST_UPDATE__' }) });
+      assert.equal(put.status, 200);
+      assert.equal(put.body.lastUpdate, '__TEST_UPDATE__');
+      // восстановить, чтобы не оставить тестовый текст в реальном файле до after()
+      await apiJson(`/api/world-state/last-update${CITY}`,
+        { method: 'PUT', body: JSON.stringify({ text: before.body.lastUpdate }) });
+    });
+  });
+
   // ── Chronicles & modules — write guards ──────────────────────────────────────
   describe('Chronicles & modules — write guards', () => {
     it('GET delete-preview — unknown chronicle → 404', async () => {

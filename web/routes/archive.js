@@ -186,6 +186,146 @@ router.delete('/api/timeline/epoch/:heading/row/:index', async (req, res) => {
   } catch (e) { serverError(res, e); }
 });
 
+// ── Состояние мира — структурированное редактирование блока в events.md ──────
+// events.md живёт в archiveDir, не в chroniclesDir — тот же путь, что
+// findChronicleFile в routes/chronicles.js.
+const _eventsFile = city => path.join(archiveDir(city), 'events.md');
+
+router.get('/api/world-state/structured', async (req, res) => {
+  try {
+    const city = reqCity(req);
+    const raw = await fs.readFile(_eventsFile(city), 'utf-8').catch(() => null);
+    if (raw === null) return res.json({ lastUpdate: null, sections: [] });
+    res.json(parseWorldStateBlock(raw) || { lastUpdate: null, sections: [] });
+  } catch (e) { serverError(res, e); }
+});
+
+router.put('/api/world-state/last-update', express.json(), async (req, res) => {
+  try {
+    const city = reqCity(req);
+    const text = String(req.body?.text || '').trim();
+    if (!text) return res.status(400).json({ error: 'Укажи текст' });
+    const raw = await fs.readFile(_eventsFile(city), 'utf-8').catch(() => null);
+    if (raw === null) return res.status(404).json({ error: 'events.md не найден' });
+    const { raw: updated, found } = setWorldStateLastUpdate(raw, text);
+    if (!found) return res.status(404).json({ error: 'Блок «Состояние мира» не найден' });
+    await writeFileAtomic(_eventsFile(city), updated, 'utf-8');
+    res.json({ ok: true, ...parseWorldStateBlock(updated) });
+  } catch (e) { serverError(res, e); }
+});
+
+router.post('/api/world-state/section', express.json(), async (req, res) => {
+  try {
+    const city = reqCity(req);
+    const heading = String(req.body?.heading || '').trim();
+    const columns = Array.isArray(req.body?.columns) ? req.body.columns.map(c => String(c).trim()).filter(Boolean) : [];
+    if (!heading) return res.status(400).json({ error: 'Укажи заголовок секции' });
+    if (!columns.length) return res.status(400).json({ error: 'Укажи хотя бы одну колонку' });
+    const raw = await fs.readFile(_eventsFile(city), 'utf-8').catch(() => null);
+    if (raw === null) return res.status(404).json({ error: 'events.md не найден' });
+    const { raw: updated, found } = addWorldStateSection(raw, heading, columns);
+    if (!found) return res.status(404).json({ error: 'Блок «Состояние мира» не найден' });
+    await writeFileAtomic(_eventsFile(city), updated, 'utf-8');
+    res.json({ ok: true, ...parseWorldStateBlock(updated) });
+  } catch (e) { serverError(res, e); }
+});
+
+router.delete('/api/world-state/section/:heading', async (req, res) => {
+  try {
+    const city = reqCity(req);
+    const heading = decodeURIComponent(req.params.heading);
+    const raw = await fs.readFile(_eventsFile(city), 'utf-8').catch(() => null);
+    if (raw === null) return res.status(404).json({ error: 'events.md не найден' });
+    const { raw: updated, found } = removeWorldStateSection(raw, heading);
+    if (!found) return res.status(404).json({ error: `Секция «${heading}» не найдена` });
+    await writeFileAtomic(_eventsFile(city), updated, 'utf-8');
+    res.json({ ok: true, ...parseWorldStateBlock(updated) });
+  } catch (e) { serverError(res, e); }
+});
+
+router.put('/api/world-state/section/:heading/note', express.json(), async (req, res) => {
+  try {
+    const city = reqCity(req);
+    const heading = decodeURIComponent(req.params.heading);
+    const text = String(req.body?.text || '').trim();
+    const raw = await fs.readFile(_eventsFile(city), 'utf-8').catch(() => null);
+    if (raw === null) return res.status(404).json({ error: 'events.md не найден' });
+    const { raw: updated, found } = setWorldStateSectionNote(raw, heading, text);
+    if (!found) return res.status(404).json({ error: `Секция «${heading}» не найдена` });
+    await writeFileAtomic(_eventsFile(city), updated, 'utf-8');
+    res.json({ ok: true, ...parseWorldStateBlock(updated) });
+  } catch (e) { serverError(res, e); }
+});
+
+router.post('/api/world-state/section/:heading/row', express.json(), async (req, res) => {
+  try {
+    const city = reqCity(req);
+    const heading = decodeURIComponent(req.params.heading);
+    const cells = Array.isArray(req.body?.cells) ? req.body.cells.map(c => String(c || '')) : [];
+    const raw = await fs.readFile(_eventsFile(city), 'utf-8').catch(() => null);
+    if (raw === null) return res.status(404).json({ error: 'events.md не найден' });
+    const { raw: updated, found } = addWorldStateRow(raw, heading, cells);
+    if (!found) return res.status(404).json({ error: `Секция «${heading}» не найдена` });
+    await writeFileAtomic(_eventsFile(city), updated, 'utf-8');
+    res.json({ ok: true, ...parseWorldStateBlock(updated) });
+  } catch (e) { serverError(res, e); }
+});
+
+router.put('/api/world-state/section/:heading/row/:index', express.json(), async (req, res) => {
+  try {
+    const city = reqCity(req);
+    const heading = decodeURIComponent(req.params.heading);
+    const index = Number(req.params.index);
+    const cells = Array.isArray(req.body?.cells) ? req.body.cells.map(c => String(c || '')) : [];
+    const raw = await fs.readFile(_eventsFile(city), 'utf-8').catch(() => null);
+    if (raw === null) return res.status(404).json({ error: 'events.md не найден' });
+    const { raw: updated, found, indexValid } = updateWorldStateRow(raw, heading, index, cells);
+    if (!found) return res.status(404).json({ error: `Секция «${heading}» не найдена` });
+    if (!indexValid) return res.status(409).json({ error: 'Данные изменились, обновите страницу' });
+    await writeFileAtomic(_eventsFile(city), updated, 'utf-8');
+    res.json({ ok: true, ...parseWorldStateBlock(updated) });
+  } catch (e) { serverError(res, e); }
+});
+
+router.delete('/api/world-state/section/:heading/row/:index', async (req, res) => {
+  try {
+    const city = reqCity(req);
+    const heading = decodeURIComponent(req.params.heading);
+    const index = Number(req.params.index);
+    const raw = await fs.readFile(_eventsFile(city), 'utf-8').catch(() => null);
+    if (raw === null) return res.status(404).json({ error: 'events.md не найден' });
+    const { raw: updated, found, indexValid } = removeWorldStateRow(raw, heading, index);
+    if (!found) return res.status(404).json({ error: `Секция «${heading}» не найдена` });
+    if (!indexValid) return res.status(409).json({ error: 'Данные изменились, обновите страницу' });
+    await writeFileAtomic(_eventsFile(city), updated, 'utf-8');
+    res.json({ ok: true, ...parseWorldStateBlock(updated) });
+  } catch (e) { serverError(res, e); }
+});
+
+router.get('/api/world-state/raw', async (req, res) => {
+  try {
+    const city = reqCity(req);
+    const raw = await fs.readFile(_eventsFile(city), 'utf-8').catch(() => null);
+    if (raw === null) return res.json({ exists: false, content: '' });
+    const m = raw.match(/##\s*🌍[^\n]*\n([\s\S]*?)(?=\n##\s)/);
+    res.json({ exists: !!m, content: m ? m[1] : '' });
+  } catch (e) { serverError(res, e); }
+});
+
+router.put('/api/world-state/raw', express.json(), async (req, res) => {
+  try {
+    const city = reqCity(req);
+    const content = req.body?.content;
+    if (typeof content !== 'string') return res.status(400).json({ error: 'content required' });
+    const raw = await fs.readFile(_eventsFile(city), 'utf-8').catch(() => null);
+    if (raw === null) return res.status(404).json({ error: 'events.md не найден' });
+    const { raw: updated, found } = replaceWorldStateBlock(raw, content);
+    if (!found) return res.status(404).json({ error: 'Блок «Состояние мира» не найден' });
+    await writeFileAtomic(_eventsFile(city), updated, 'utf-8');
+    res.json({ ok: true });
+  } catch (e) { serverError(res, e); }
+});
+
 // C2 — rumor tables (Elysium d20 / Dreaming d20)
 router.get('/api/rumors', async (req, res) => {
   try {
