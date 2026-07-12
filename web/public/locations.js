@@ -150,11 +150,18 @@ function fitLocTitles() {
     const lh  = parseFloat(getComputedStyle(el).lineHeight) || fs * 1.2;
     const max = lh * 2 + 2; // 2 строки + 2px буфер
     if (el.scrollHeight <= max) return;
-    let size = fs;
-    while (el.scrollHeight > max && size > 13) {
-      size -= 0.5;
-      el.style.fontSize = size + 'px';
+
+    // Binary search the largest 0.5px-stepped size in [13, fs] that fits —
+    // same result as the old linear shrink loop, far fewer forced reflows
+    // (impeccable audit 2026-07-12: O(log n) reads instead of O(n) per card).
+    let lo = 13, hi = fs, best = 13;
+    while (hi - lo > 0.5) {
+      const mid = Math.round((lo + hi) / 2 * 2) / 2; // snap to .5px steps
+      el.style.fontSize = mid + 'px';
+      if (el.scrollHeight <= max) { best = mid; lo = mid; }
+      else { hi = mid; }
     }
+    el.style.fontSize = best + 'px';
   });
 }
 
