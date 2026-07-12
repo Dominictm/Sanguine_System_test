@@ -135,10 +135,22 @@ function openModal(id, focusSelector = null) {
   const prevFocus = document.activeElement;
   modal.classList.add('open');
 
-  const toFocus = (focusSelector && modal.querySelector(focusSelector)) || _modalFocusables(modal)[0];
-  toFocus?.focus();
+  // Most modals in this app are shown via a CSS `visibility: hidden -> visible`
+  // transition (not display:none -> block), so an element can report a
+  // non-null offsetParent (unaffected by visibility) while still being
+  // un-focusable the instant classList.add() runs, before the browser
+  // applies the new computed style. Deferring one frame fixes it reliably.
+  requestAnimationFrame(() => {
+    const toFocus = (focusSelector && modal.querySelector(focusSelector)) || _modalFocusables(modal)[0];
+    toFocus?.focus();
+  });
 
+  // Listens on `document` (not `modal`) so Escape/Tab work even in the brief
+  // window before focus actually lands inside the modal — a keydown handler
+  // on the modal element itself only fires once an event bubbles from a
+  // descendant that already has focus.
   const trapHandler = e => {
+    if (!modal.classList.contains('open')) return;
     if (e.key === 'Escape') { closeModal(id); return; }
     if (e.key !== 'Tab') return;
     const els = _modalFocusables(modal);
@@ -147,7 +159,7 @@ function openModal(id, focusSelector = null) {
     if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
     else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
   };
-  modal.addEventListener('keydown', trapHandler);
+  document.addEventListener('keydown', trapHandler);
   _modalState.set(id, { prevFocus, trapHandler });
 }
 
@@ -157,7 +169,7 @@ function closeModal(id) {
   modal.classList.remove('open');
   const state = _modalState.get(id);
   if (state) {
-    modal.removeEventListener('keydown', state.trapHandler);
+    document.removeEventListener('keydown', state.trapHandler);
     if (state.prevFocus && typeof state.prevFocus.focus === 'function') state.prevFocus.focus();
     _modalState.delete(id);
   }
