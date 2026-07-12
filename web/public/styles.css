@@ -104,6 +104,19 @@
   --ease: cubic-bezier(.4, 0, .2, 1);
   --dur-fast: .18s;
   --dur-base: .28s;
+  /* ── Radius scale (documented in DESIGN.md, materialized here 2026-07-12) ── */
+  --r-hairline: 1px;
+  --r-sm: 2px;
+  --r-md: 3px;
+  --r-lg: 6px;
+  --r-xl: 10px;
+  /* ── Spacing scale (documented in DESIGN.md, materialized here 2026-07-12) ── */
+  --sp-xs: 4px;
+  --sp-sm: 10px;
+  --sp-md: 16px;
+  --sp-lg: 20px;
+  --sp-xl: 28px;
+  --sp-xxl: 44px;
 }
 
 *, *::before, *::after {
@@ -136,7 +149,7 @@ body {
 
 ::-webkit-scrollbar-thumb {
   background: var(--accent);
-  border-radius: 3px;
+  border-radius: var(--r-md);
 }
 
 /* ── Layout ── */
@@ -442,7 +455,7 @@ body {
   background: var(--bg3);
   border: 1px solid var(--border);
   border-top: 2px solid var(--gold);
-  border-radius: 2px;
+  border-radius: var(--r-sm);
   padding: 20px 24px;
 }
 
@@ -488,7 +501,7 @@ body {
   color: var(--text);
   font-size: var(--fs-sm);
   padding: 7px 10px;
-  border-radius: 2px;
+  border-radius: var(--r-sm);
   outline: none;
   transition: border-color .15s;
 }
@@ -509,7 +522,7 @@ body {
   color: var(--text);
   font-size: var(--fs-sm);
   padding: 7px 10px;
-  border-radius: 2px;
+  border-radius: var(--r-sm);
   outline: none;
   cursor: pointer;
   transition: border-color .15s;
@@ -540,7 +553,7 @@ body {
   cursor: pointer;
   padding: 8px 12px;
   border: 1px solid var(--border);
-  border-radius: 2px;
+  border-radius: var(--r-sm);
   transition: border-color .15s, background .15s;
 }
 
@@ -611,7 +624,7 @@ body {
 .ais-feat-card {
   background: rgba(255, 255, 255, .03);
   border: 1px solid rgba(255, 255, 255, .07);
-  border-radius: 6px;
+  border-radius: var(--r-lg);
   padding: 12px 14px;
 }
 
@@ -774,7 +787,7 @@ body {
 .stat-card {
   background: rgb(139 0 0 / 7%);
   border: 5px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--r-xl);
   padding: 44px 25px;
   position: relative;
   overflow: hidden;
@@ -878,7 +891,7 @@ body {
   padding: 8px 14px;
   font-family: var(--f-body);
   font-size: var(--fs-xl);
-  border-radius: 2px;
+  border-radius: var(--r-sm);
   outline: none;
   transition: border-color .2s;
 }
@@ -901,7 +914,7 @@ body {
   font-size: var(--fs-xl);
   letter-spacing: .15em;
   text-transform: uppercase;
-  border-radius: 2px;
+  border-radius: var(--r-sm);
   outline: none;
   cursor: pointer;
   transition: border-color .2s;
@@ -937,7 +950,7 @@ body {
 .char-card {
   background: var(--bg3);
   border: 2px solid var(--border);
-  border-radius: 2px;
+  border-radius: var(--r-sm);
   padding: 18px;
   cursor: pointer;
   transition: border-color .2s var(--ease), background .2s var(--ease), transform .2s var(--ease);
@@ -1194,7 +1207,7 @@ body {
   font-size: var(--fs-xl);
   letter-spacing: .1em;
   text-transform: uppercase;
-  border-radius: 2px;
+  border-radius: var(--r-sm);
   cursor: pointer;
   transition: background .15s, border-color .15s, color .15s;
 }
@@ -1241,7 +1254,7 @@ body {
   letter-spacing: .1em;
   text-transform: uppercase;
   padding: 6px 12px;
-  border-radius: 2px;
+  border-radius: var(--r-sm);
   cursor: pointer;
   transition: background .15s, border-color .15s, color .15s;
 }
@@ -1268,7 +1281,7 @@ body {
 .legend-line {
   width: 20px;
   height: 2px;
-  border-radius: 1px;
+  border-radius: var(--r-hairline);
 }
 
 #graph-wrap {
@@ -1333,7 +1346,7 @@ body {
   object-fit: cover;
   object-position: top center;
   display: block;
-  border-radius: 3px;
+  border-radius: var(--r-md);
   margin-bottom: 12px;
   border: 1px solid var(--border2);
   box-shadow: 0 4px 24px rgba(0, 0, 0, .6);
@@ -1546,7 +1559,7 @@ body {
   padding: 10px 13px;
   background: var(--bg2);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--r-lg);
   color: var(--text2);
   font-size: var(--fs-sm, 12px);
   font-family: var(--f-body);
@@ -1579,7 +1592,7 @@ body {
   padding: 10px 14px;
   font-family: var(--f-body);
   font-size: var(--fs-xl);
-  border-radius: 2px;
+  border-radius: var(--r-sm);
   outline: none;
   transition: border-color .2s;
 }
@@ -1649,7 +1662,7 @@ select.form-control {
   letter-spacing: .16em;
   text-transform: uppercase;
   padding: 4px 12px;
-  border-radius: 2px;
+  border-radius: var(--r-sm);
   border: 1px solid;
 }
 
@@ -1688,7 +1701,7 @@ select.form-control {
   font-size: var(--fs-base);
   letter-spacing: .1em;
   text-transform: uppercase;
-  border-radius: 2px;
+  border-radius: var(--r-sm);
   cursor: pointer;
   transition: background .15s, border-color .15s, color .15s;
 }
@@ -1724,7 +1737,7 @@ select.form-control {
   margin-top: 20px;
   background: var(--pure-black);
   border: 1px solid var(--border);
-  border-radius: 2px;
+  border-radius: var(--r-sm);
   padding: 16px;
   font-family: var(--f-mono);
   font-size: var(--fs-xl);
@@ -1928,7 +1941,7 @@ a:focus-visible {
 .modal-box {
   background: var(--bg2);
   border: 1px solid var(--border2);
-  border-radius: 3px;
+  border-radius: var(--r-md);
   width: min(560px, 95vw);
   max-height: 90vh;
   overflow-y: auto;
@@ -1987,7 +2000,7 @@ a:focus-visible {
 .lineage-pick-btn {
   background: var(--bg3);
   border: 1px solid var(--border);
-  border-radius: 2px;
+  border-radius: var(--r-sm);
   padding: 22px 10px 18px;
   cursor: pointer;
   display: flex;
@@ -2046,7 +2059,7 @@ a:focus-visible {
   width: 100%;
   max-height: 180px;
   overflow: hidden;
-  border-radius: 6px;
+  border-radius: var(--r-lg);
   border: 1px solid var(--border);
   background: var(--bg3);
 }
@@ -2247,7 +2260,7 @@ a:focus-visible {
   align-items: center;
   justify-content: center;
   transition: background 0.2s, color 0.2s;
-  border-radius: 3px;
+  border-radius: var(--r-md);
   line-height: 1;
 }
 
@@ -2397,7 +2410,7 @@ a:focus-visible {
 
   padding: 10px 12px;
   resize: vertical;
-  border-radius: 2px;
+  border-radius: var(--r-sm);
   margin-top: 6px;
   margin-bottom: 20px;
 }
@@ -2460,7 +2473,7 @@ a:focus-visible {
   color: var(--text);
   background: var(--bg);
   border: 1px solid var(--gold);
-  border-radius: 2px;
+  border-radius: var(--r-sm);
   padding: 4px 10px;
   width: 100%;
   outline: none;
@@ -2587,7 +2600,7 @@ a:focus-visible {
   font-family: var(--f-body);
   font-size: var(--fs-base);
   line-height: 1.55;
-  border-radius: 2px;
+  border-radius: var(--r-sm);
   resize: vertical;
   outline: none;
   transition: border-color .15s;
@@ -2721,7 +2734,7 @@ a:focus-visible {
 .cdet-faction-chip {
   background: var(--bg);
   border: 1px solid var(--border);
-  border-radius: 2px;
+  border-radius: var(--r-sm);
   color: var(--text2);
   cursor: pointer;
   font-family: var(--f-body);
@@ -2772,7 +2785,7 @@ a:focus-visible {
   font-size: var(--fs-xl);
   font-style: normal;
   width: 100%;
-  border-radius: 2px;
+  border-radius: var(--r-sm);
   outline: none;
   transition: border-color .15s;
 }
@@ -2883,7 +2896,7 @@ a:focus-visible {
   height: 30px;
   background: transparent;
   border: 1px solid var(--border);
-  border-radius: 2px;
+  border-radius: var(--r-sm);
   color: var(--text3);
   font-size: var(--fs-base);
   line-height: 1;
@@ -2942,7 +2955,7 @@ a:focus-visible {
   overflow: hidden;
   background: var(--bg3);
   border: 2px solid var(--border);
-  border-radius: 2px;
+  border-radius: var(--r-sm);
   padding: 20px 22px;
   display: flex;
   flex-direction: column;
@@ -3015,7 +3028,7 @@ a:focus-visible {
 .chp-status {
   font-size: var(--fs-sm);
   padding: 3px 10px;
-  border-radius: 2px;
+  border-radius: var(--r-sm);
   border: 1px solid;
   white-space: nowrap;
   flex-shrink: 0;
@@ -3127,7 +3140,7 @@ a:focus-visible {
   color: var(--text);
   font-size: var(--fs-md);
   padding: 7px 10px;
-  border-radius: 2px;
+  border-radius: var(--r-sm);
   outline: none;
   transition: border-color .15s;
 }
@@ -3316,7 +3329,7 @@ a:focus-visible {
   letter-spacing: .1em;
   text-transform: uppercase;
   padding: 4px 12px;
-  border-radius: 2px;
+  border-radius: var(--r-sm);
   cursor: pointer;
   transition: background .15s, border-color .15s;
 }
@@ -3363,7 +3376,7 @@ a:focus-visible {
   color: var(--text-dim);
   font-size: var(--fs-xl);
   padding: 4px 10px;
-  border-radius: 2px;
+  border-radius: var(--r-sm);
   cursor: pointer;
 }
 
@@ -3429,7 +3442,7 @@ a:focus-visible {
   align-items: flex-start;
   background: var(--bg3);
   border: 1px solid var(--gold);
-  border-radius: 2px;
+  border-radius: var(--r-sm);
   padding: 12px 14px;
   gap: 10px;
 }
@@ -3465,7 +3478,7 @@ a:focus-visible {
   background: var(--bg2);
   border: 1px solid var(--border);
   padding: 1px 7px;
-  border-radius: 2px;
+  border-radius: var(--r-sm);
 }
 
 .chd-mod-files {
@@ -3533,7 +3546,7 @@ a:focus-visible {
 .chd-period-input {
   background: var(--bg3);
   border: 1px solid var(--border);
-  border-radius: 2px;
+  border-radius: var(--r-sm);
   color: var(--text);
   font-size: var(--fs-sm);
   padding: 4px 10px;
@@ -3573,7 +3586,7 @@ a:focus-visible {
 .chd-recap-panel {
   margin: 4px 0 14px;
   border: 1px solid rgba(184, 134, 11, .35);
-  border-radius: 3px;
+  border-radius: var(--r-md);
   background: linear-gradient(180deg, rgba(184, 134, 11, .06), rgba(0, 0, 0, .15));
   padding: 14px 16px;
 }
@@ -3617,7 +3630,7 @@ a:focus-visible {
   color: var(--text-dim);
   font-size: var(--fs-2xs);
   padding: 2px 8px;
-  border-radius: 2px;
+  border-radius: var(--r-sm);
   cursor: pointer;
 }
 
@@ -3649,7 +3662,7 @@ a:focus-visible {
   text-transform: uppercase;
   padding: 6px 14px;
   min-height: 32px;
-  border-radius: 2px;
+  border-radius: var(--r-sm);
   cursor: pointer;
   transition: border-color .15s, color .15s;
 }
@@ -3669,7 +3682,7 @@ a:focus-visible {
 .chd-director-panel {
   margin: 4px 0 14px;
   border: 1px solid rgba(139, 0, 0, .3);
-  border-radius: 3px;
+  border-radius: var(--r-md);
   background: linear-gradient(180deg, rgba(139, 0, 0, .06), rgba(0, 0, 0, .18));
   padding: 14px 16px;
 }
@@ -3703,7 +3716,7 @@ a:focus-visible {
   font-size: var(--fs-2xs);
   padding: 2px 8px;
   min-height: 24px;
-  border-radius: 2px;
+  border-radius: var(--r-sm);
   cursor: pointer;
   margin-left: auto;
 }
@@ -3723,7 +3736,7 @@ a:focus-visible {
 .chd-dir-phase {
   display: inline-block;
   padding: 2px 10px;
-  border-radius: 2px;
+  border-radius: var(--r-sm);
   font-family: var(--f-mono);
   font-size: var(--fs-2xs);
   letter-spacing: .1em;
@@ -3755,13 +3768,13 @@ a:focus-visible {
   flex: 1;
   height: 3px;
   background: rgba(255,255,255,.07);
-  border-radius: 2px;
+  border-radius: var(--r-sm);
   overflow: hidden;
 }
 .chd-dir-tension-fill {
   width: 100%;
   height: 100%;
-  border-radius: 2px;
+  border-radius: var(--r-sm);
   transform-origin: left center;
   transition: transform .4s cubic-bezier(0,.7,.3,1);
 }
@@ -3788,7 +3801,7 @@ a:focus-visible {
 .chd-dir-scene {
   background: var(--bg3);
   border: 1px solid var(--border);
-  border-radius: 2px;
+  border-radius: var(--r-sm);
   padding: 10px 12px;
 }
 .chd-dir-scene-title {
@@ -3826,7 +3839,7 @@ a:focus-visible {
   font-size: var(--fs-2xs);
   font-family: var(--f-mono);
   padding: 2px 8px;
-  border-radius: 2px;
+  border-radius: var(--r-sm);
 }
 
 .chd-dir-disclaimer {
@@ -3866,7 +3879,7 @@ a:focus-visible {
   background: var(--bg2);
   border: 1px solid var(--border);
   border-top: 2px solid var(--accent);
-  border-radius: 2px;
+  border-radius: var(--r-sm);
   padding: 28px 32px;
   /* never exceed the viewport — confirm/create modals were forced to 1000px
      before, which overflowed any screen < 1000px and overrode child max-widths */
@@ -3901,7 +3914,7 @@ a:focus-visible {
   padding: 8px 10px;
   background: rgba(184, 134, 11, .07);
   border: 1px solid rgba(184, 134, 11, .3);
-  border-radius: 2px;
+  border-radius: var(--r-sm);
 }
 
 .chr-modal-section {
@@ -3961,7 +3974,7 @@ a:focus-visible {
 .module-card {
   background: var(--bg3);
   border: 1px solid var(--gold);
-  border-radius: 2px;
+  border-radius: var(--r-sm);
   padding: 22px 26px 44px;
   position: relative;
   transition: border-color .2s var(--ease), background .2s var(--ease), transform .2s var(--ease);
@@ -4005,7 +4018,7 @@ a:focus-visible {
   color: var(--text3);
   border: 1px solid var(--border);
   padding: 2px 8px;
-  border-radius: 1px;
+  border-radius: var(--r-hairline);
 }
 
 .module-tag.mod-type {
@@ -4104,7 +4117,7 @@ a:focus-visible {
   letter-spacing: .12em;
   text-transform: uppercase;
   padding: 3px 8px;
-  border-radius: 1px;
+  border-radius: var(--r-hairline);
   border: 1px solid var(--border);
   color: var(--text3);
   white-space: nowrap;
@@ -4146,7 +4159,7 @@ a:focus-visible {
   background: var(--bg2);
   color: var(--text2);
   border: 1px solid var(--border);
-  border-radius: 2px;
+  border-radius: var(--r-sm);
   font-family: var(--f-mono);
   font-size: var(--fs-xs);
   padding: 3px 6px;
@@ -4161,7 +4174,7 @@ a:focus-visible {
 .thread-form {
   background: var(--bg2);
   border: 1px solid var(--border);
-  border-radius: 3px;
+  border-radius: var(--r-md);
   padding: 16px 18px;
   margin-bottom: 18px;
 }
@@ -4180,7 +4193,7 @@ a:focus-visible {
 .loc-card {
   background: var(--bg3);
   border: 2px solid var(--border);
-  border-radius: 2px;
+  border-radius: var(--r-sm);
   padding: 16px;
   cursor: pointer;
   transition: border-color .2s var(--ease), background .2s var(--ease), transform .2s var(--ease), box-shadow .2s var(--ease);
@@ -4507,7 +4520,7 @@ a:focus-visible {
   color: var(--text);
   width: 28px;
   height: 44px;
-  border-radius: 2px;
+  border-radius: var(--r-sm);
   cursor: pointer;
   font-size: var(--fs-xl);
   line-height: 1;
@@ -4564,7 +4577,7 @@ a:focus-visible {
   object-fit: contain;
   border: 1px solid rgba(255, 255, 255, .1);
   box-shadow: 0 8px 48px rgba(0, 0, 0, .8);
-  border-radius: 2px;
+  border-radius: var(--r-sm);
   display: block;
   transition: opacity .15s;
 }
@@ -4596,7 +4609,7 @@ a:focus-visible {
   color: rgba(255, 255, 255, .7);
   width: 44px;
   height: 70px;
-  border-radius: 2px;
+  border-radius: var(--r-sm);
   font-size: 32px;
   cursor: pointer;
   display: flex;
@@ -4664,7 +4677,7 @@ a:focus-visible {
   width: 90px;
   height: 68px;
   object-fit: cover;
-  border-radius: 2px;
+  border-radius: var(--r-sm);
   border: 1px solid var(--border);
   cursor: pointer;
   transition: border-color .15s, transform .15s;
@@ -4834,7 +4847,7 @@ a:focus-visible {
   font-family: var(--f-body);
   font-size: var(--fs-base);
   line-height: 1.45;
-  border-radius: 2px;
+  border-radius: var(--r-sm);
   outline: none;
   transition: border-color .15s;
 }
@@ -4855,7 +4868,7 @@ a:focus-visible {
   color: var(--c-danger-text);
   width: 28px;
   height: 28px;
-  border-radius: 2px;
+  border-radius: var(--r-sm);
   cursor: pointer;
   font-size: var(--fs-sm);
   flex-shrink: 0;
@@ -4905,7 +4918,7 @@ a:focus-visible {
   object-fit: cover;
   border: 1px solid var(--border2);
   display: block;
-  border-radius: 2px;
+  border-radius: var(--r-sm);
   transition: border-color .15s;
 }
 
@@ -4934,7 +4947,7 @@ a:focus-visible {
   color: rgba(220, 100, 100, .9);
   width: 24px;
   height: 24px;
-  border-radius: 2px;
+  border-radius: var(--r-sm);
   cursor: pointer;
   font-size: var(--fs-xs);
   display: flex;
@@ -4967,7 +4980,7 @@ a:focus-visible {
   padding: 14px;
   background: var(--bg2);
   border: 1px solid var(--border);
-  border-radius: 3px;
+  border-radius: var(--r-md);
 }
 
 .diary-form .form-row {
@@ -4988,7 +5001,7 @@ a:focus-visible {
 .cdet-presence {
   background: var(--bg2);
   border: 1px solid var(--gold);
-  border-radius: 2px;
+  border-radius: var(--r-sm);
   padding: 9px 12px;
   margin-bottom: 10px;
   font-size: var(--fs-md);
@@ -5006,7 +5019,7 @@ a:focus-visible {
   padding: 13px 16px;
   background: var(--bg3);
   border: 1px solid var(--border);
-  border-radius: 2px;
+  border-radius: var(--r-sm);
   cursor: pointer;
   transition: background .18s var(--ease), border-color .18s var(--ease);
 }
@@ -5048,7 +5061,7 @@ a:focus-visible {
   color: rgba(220, 100, 100, .9);
   width: 26px;
   height: 26px;
-  border-radius: 2px;
+  border-radius: var(--r-sm);
   cursor: pointer;
   font-size: var(--fs-xs);
   display: flex;
@@ -5375,7 +5388,7 @@ a:focus-visible {
   position: relative;
   background: var(--bg3);
   border: 1px solid var(--accent);
-  border-radius: 2px;
+  border-radius: var(--r-sm);
   padding: 18px 22px 20px;
   margin-bottom: 18px;
   margin-left: 14px;
@@ -5421,7 +5434,7 @@ a:focus-visible {
   text-transform: uppercase;
   color: var(--gold-muted);
   border: 1px solid rgba(184, 134, 11, .4);
-  border-radius: 2px;
+  border-radius: var(--r-sm);
   padding: 2px 7px;
 }
 
@@ -5459,7 +5472,7 @@ a:focus-visible {
   color: var(--text2);
   background: var(--bg4);
   border: 1px solid var(--border);
-  border-radius: 2px;
+  border-radius: var(--r-sm);
   padding: 3px 9px;
   white-space: nowrap;
   max-width: 100%;
@@ -5503,7 +5516,7 @@ button.chron-chip {
   letter-spacing: .1em;
   text-transform: uppercase;
   padding: 5px 14px;
-  border-radius: 2px;
+  border-radius: var(--r-sm);
   cursor: pointer;
   margin-top: 4px;
   transition: border-color .15s var(--ease), color .15s var(--ease);
@@ -5634,7 +5647,7 @@ button.chron-chip {
   text-transform: uppercase;
   color: var(--text3);
   border: 1px solid var(--border);
-  border-radius: 2px;
+  border-radius: var(--r-sm);
   padding: 3px 8px;
 }
 
@@ -5779,7 +5792,7 @@ button.chron-chip {
   font-size: .85em;
   background: var(--bg4);
   padding: 1px 5px;
-  border-radius: 2px;
+  border-radius: var(--r-sm);
   color: var(--gold2);
 }
 
@@ -5833,7 +5846,7 @@ a.md-link-loc:hover {
   margin-top: 28px;
   background: var(--bg2);
   border: 1px solid var(--border);
-  border-radius: 3px;
+  border-radius: var(--r-md);
   overflow: hidden;
 }
 
@@ -5868,7 +5881,7 @@ a.md-link-loc:hover {
   letter-spacing: .1em;
   color: var(--gold);
   border: 1px solid rgba(184, 134, 11, .4);
-  border-radius: 2px;
+  border-radius: var(--r-sm);
   padding: 3px 12px;
 }
 
@@ -5998,7 +6011,7 @@ a.md-link-loc:hover {
 .ls-section {
   background: var(--bg2);
   border: 1px solid var(--border);
-  border-radius: 3px;
+  border-radius: var(--r-md);
   padding: 16px 20px;
   margin-bottom: 16px;
 }
@@ -6024,7 +6037,7 @@ a.md-link-loc:hover {
   letter-spacing: .1em;
   text-transform: uppercase;
   padding: 3px 12px;
-  border-radius: 2px;
+  border-radius: var(--r-sm);
   cursor: pointer;
   transition: border-color .15s, color .15s;
 }
@@ -6079,7 +6092,7 @@ a.md-link-loc:hover {
   color: var(--text3);
   width: 30px;
   height: 30px;
-  border-radius: 2px;
+  border-radius: var(--r-sm);
   cursor: pointer;
   transition: background .15s, border-color .15s, color .15s;
 }
@@ -6137,7 +6150,7 @@ a.md-link-loc:hover {
   letter-spacing: .14em;
   color: var(--gold);
   border: 1px solid rgba(184, 134, 11, .4);
-  border-radius: 2px;
+  border-radius: var(--r-sm);
   padding: 2px 8px;
   margin-right: 8px;
 }
@@ -6210,7 +6223,7 @@ a.md-link-loc:hover {
   color: var(--c-danger-text);
   background: rgba(139, 0, 0, .1);
   border: 1px solid var(--border2);
-  border-radius: 3px;
+  border-radius: var(--r-md);
 }
 
 .ls-err ul, .ls-stubs ul {
@@ -6241,7 +6254,7 @@ a.md-link-loc:hover {
   padding: 10px 14px;
   background: var(--bg4);
   border: 1px solid var(--gold);
-  border-radius: 2px;
+  border-radius: var(--r-sm);
   font-style: italic;
   font-size: var(--fs-lg);
   color: var(--text);
@@ -6354,7 +6367,7 @@ a.md-link-loc:hover {
   background: transparent;
   color: var(--gold);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--r-lg);
   font-size: var(--fs-md);
   line-height: 1;
   cursor: pointer;
@@ -6370,7 +6383,7 @@ a.md-link-loc:hover {
   background: var(--bg);
   color: var(--text);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--r-lg);
   padding: 7px 9px;
   font-size: var(--fs-xl);
   font-family: var(--f-body);
@@ -6531,7 +6544,7 @@ a.md-link-loc:hover {
   font-size: var(--fs-md);
   letter-spacing: 1.5px;
   text-transform: uppercase;
-  border-radius: 2px;
+  border-radius: var(--r-sm);
 }
 
 /* Tab bar */
@@ -6615,7 +6628,7 @@ a.md-link-loc:hover {
   gap: 10px;
   background: rgb(139 0 0 / 7%);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--r-lg);
   padding: 16px 18px;
   margin-bottom: 24px;
 }
@@ -6681,7 +6694,7 @@ a.md-link-loc:hover {
 .cdet-sheet-btn,
 .sheet-btn {
   padding: 7px 14px;
-  border-radius: 2px;
+  border-radius: var(--r-sm);
   cursor: pointer;
   font-family: var(--f-heading);
   font-size: var(--fs-2xs);
@@ -6825,7 +6838,7 @@ a.md-link-loc:hover {
   letter-spacing: .1em;
   text-transform: uppercase;
   padding: 6px 14px;
-  border-radius: 2px;
+  border-radius: var(--r-sm);
   cursor: pointer;
   transition: background .15s, border-color .15s;
 }
@@ -6926,7 +6939,7 @@ a.md-link-loc:hover {
   background: none;
   border: 1px solid var(--border);
   color: var(--muted);
-  border-radius: 2px;
+  border-radius: var(--r-sm);
   padding: 3px 8px;
   font-size: var(--fs-xs);
   cursor: pointer;
@@ -6943,7 +6956,7 @@ a.md-link-loc:hover {
   background: none;
   border: 1px solid var(--border);
   color: var(--muted);
-  border-radius: 2px;
+  border-radius: var(--r-sm);
   padding: 3px 8px;
   font-size: var(--fs-xs);
   cursor: pointer;
@@ -7043,7 +7056,7 @@ a.md-link-loc:hover {
   border: 1px solid rgba(184, 134, 11, 0.45);
   color: var(--gold);
   padding: 5px 11px;
-  border-radius: 2px;
+  border-radius: var(--r-sm);
   cursor: pointer;
   font-family: var(--f-heading);
   font-size: var(--fs-2xs);
@@ -7131,7 +7144,7 @@ a.md-link-loc:hover {
   backdrop-filter: blur(4px);
   border: 1px solid var(--border);
   border-top: 3px solid var(--accent);
-  border-radius: 6px;
+  border-radius: var(--r-lg);
   width: min(820px, 96vw);
   max-height: 92vh;
   display: flex;
@@ -7302,7 +7315,7 @@ a.md-link-loc:hover {
   border: 1px dashed rgba(184, 134, 11, 0.4);
   color: var(--gold);
   padding: 7px 10px;
-  border-radius: 3px;
+  border-radius: var(--r-md);
   cursor: pointer;
   font-family: var(--f-heading);
   font-size: var(--fs-2xs);
@@ -7329,7 +7342,7 @@ a.md-link-loc:hover {
   box-sizing: border-box;
   background: var(--bg2);
   border: 1px solid var(--border);
-  border-radius: 3px;
+  border-radius: var(--r-md);
   color: var(--text);
   font-size: var(--fs-sm);
   padding: 6px 8px;
@@ -7352,7 +7365,7 @@ a.md-link-loc:hover {
   width: 100%;
   background: none;
   border: 1px solid transparent;
-  border-radius: 3px;
+  border-radius: var(--r-md);
   padding: 6px 8px;
   cursor: pointer;
   text-align: left;
@@ -7399,7 +7412,7 @@ a.md-link-loc:hover {
   box-sizing: border-box;
   background: var(--bg2);
   border: 1px solid var(--border);
-  border-radius: 3px;
+  border-radius: var(--r-md);
   color: var(--text);
   font-size: var(--fs-sm);
   padding: 6px 8px;
@@ -7422,7 +7435,7 @@ a.md-link-loc:hover {
   width: 100%;
   background: none;
   border: 1px solid transparent;
-  border-radius: 3px;
+  border-radius: var(--r-md);
   padding: 6px 8px;
   cursor: pointer;
   text-align: left;
@@ -7625,7 +7638,7 @@ a.md-link-loc:hover {
   width: 14px;
   height: 14px;
   border: 1.5px solid var(--accent2);
-  border-radius: 2px;
+  border-radius: var(--r-sm);
   background: transparent;
   cursor: pointer;
   flex-shrink: 0;
@@ -7752,7 +7765,7 @@ a.md-link-loc:hover {
   margin-left: 6px;
   padding: 1px 7px;
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--r-xl);
   background: transparent;
   font-family: var(--f-mono);
   font-size: var(--fs-3xs);
@@ -7769,7 +7782,7 @@ a.md-link-loc:hover {
   margin-left: 6px;
   padding: 1px 7px;
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--r-xl);
   background: transparent;
   font-family: var(--f-mono);
   font-size: var(--fs-3xs);
@@ -7821,7 +7834,7 @@ a.md-link-loc:hover {
   margin-bottom: 8px;
   padding: 12px 14px;
   border: 1px solid var(--border);
-  border-radius: 2px;
+  border-radius: var(--r-sm);
   background: var(--bg2);
 }
 .v20-val-report.open { display: block; }
@@ -7922,7 +7935,7 @@ a.md-link-loc:hover {
   position: relative;
   background: var(--bg2);
   border: 1px solid var(--border);
-  border-radius: 2px;
+  border-radius: var(--r-sm);
   width: min(1100px, 92vw);
   max-height: 82vh;
   overflow-y: auto;
@@ -7964,7 +7977,7 @@ a.md-link-loc:hover {
   text-align: left;
   background: var(--bg3);
   border: 1px solid var(--border);
-  border-radius: 2px;
+  border-radius: var(--r-sm);
   color: var(--text);
   padding: 8px 12px;
   font-size: var(--fs-base);
@@ -7997,7 +8010,7 @@ a.md-link-loc:hover {
   height: 200px;
   background: var(--bg3);
   border: 2px solid var(--border);
-  border-radius: 2px;
+  border-radius: var(--r-sm);
   padding: 18px;
   text-align: left;
   cursor: pointer;
@@ -8127,7 +8140,7 @@ a.md-link-loc:hover {
   border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
   color: var(--gold);
   padding: 2px 8px;
-  border-radius: 2px;
+  border-radius: var(--r-sm);
   font-size: var(--fs-3xs);
   letter-spacing: .05em;
   text-transform: uppercase;
@@ -8192,7 +8205,7 @@ a.md-link-loc:hover {
   max-height: 260px;
   overflow-y: auto;
   border: 1px solid var(--border2);
-  border-radius: 2px;
+  border-radius: var(--r-sm);
   padding: 8px;
 }
 
@@ -8247,7 +8260,7 @@ a.md-link-loc:hover {
   min-height: 160px;
   background: var(--bg3);
   border: 2px solid var(--border);
-  border-radius: 2px;
+  border-radius: var(--r-sm);
   overflow: hidden;
   transition: border-color .2s var(--ease), background .2s var(--ease);
 }
@@ -8348,7 +8361,7 @@ a.md-link-loc:hover {
   min-height: 160px;
   background: var(--bg3);
   border: 2px solid var(--border);
-  border-radius: 2px;
+  border-radius: var(--r-sm);
   padding: 14px;
   display: flex;
   flex-direction: column;
@@ -8374,7 +8387,7 @@ a.md-link-loc:hover {
   color: var(--text);
   background: var(--bg2);
   border: 1px solid var(--border2);
-  border-radius: 2px;
+  border-radius: var(--r-sm);
   padding: 3px 6px;
   width: 100%;
 }
@@ -8618,7 +8631,7 @@ a.md-link-loc:hover {
 .v20-roll-field select {
   background: var(--bg3);
   border: 1px solid var(--border);
-  border-radius: 2px;
+  border-radius: var(--r-sm);
   color: var(--text);
   font-family: var(--f-body);
   font-size: var(--fs-base);
@@ -8667,7 +8680,7 @@ a.md-link-loc:hover {
   width: 28px;
   height: 28px;
   border: 1.5px solid var(--border2);
-  border-radius: 2px;
+  border-radius: var(--r-sm);
   font-family: var(--f-mono);
   font-size: var(--fs-sm);
   color: var(--text2);
@@ -8785,7 +8798,7 @@ a.md-link-loc:hover {
 .modp-session {
   background: var(--bg-panel);
   border: 1px solid var(--crimson);
-  border-radius: 2px;
+  border-radius: var(--r-sm);
   padding: 14px 18px;
 }
 
@@ -8813,7 +8826,7 @@ a.md-link-loc:hover {
   margin-left: auto;
   background: none;
   border: 1px solid var(--border);
-  border-radius: 2px;
+  border-radius: var(--r-sm);
   color: var(--gold);
   cursor: pointer;
   font-size: var(--fs-base);
@@ -8853,7 +8866,7 @@ a.md-link-loc:hover {
   background: rgba(139, 0, 0, 0.07);
   border: 1px solid var(--crimson);
   padding: 14px 16px;
-  border-radius: 2px;
+  border-radius: var(--r-sm);
 }
 
 .modp-info-label {
@@ -8902,7 +8915,7 @@ a.md-link-loc:hover {
   background: rgba(139, 0, 0, 0.05);
   border: 1px solid var(--gold);
   padding: 10px 14px;
-  border-radius: 1px;
+  border-radius: var(--r-hairline);
   display: flex;
   align-items: baseline;
   gap: 10px;
@@ -8997,7 +9010,7 @@ a.md-link-loc:hover {
 .modp-md code {
   background: rgba(139, 0, 0, 0.12);
   padding: 2px 6px;
-  border-radius: 3px;
+  border-radius: var(--r-md);
   font-family: var(--f-mono);
   font-size: var(--fs-xs);
 }
@@ -9022,7 +9035,7 @@ a.md-link-loc:hover {
     background: rgb(139 0 0 / 7%);
   padding: 14px 18px;
   margin-bottom: 12px;
-  border-radius: 2px;
+  border-radius: var(--r-sm);
   transition: border-color 0.2s;
 }
 
@@ -9061,7 +9074,7 @@ a.md-link-loc:hover {
   background: rgba(184, 134, 11, 0.04);
   padding: 14px 18px;
   margin-bottom: 12px;
-  border-radius: 2px;
+  border-radius: var(--r-sm);
 }
 
 .modp-location-name {
@@ -9107,7 +9120,7 @@ a.md-link-loc:hover {
   border: 1px solid var(--border);
   color: var(--accent);
   padding: 2px 10px;
-  border-radius: 2px;
+  border-radius: var(--r-sm);
   font-size: var(--fs-sm);
   cursor: pointer;
   margin-bottom: 6px;
@@ -9125,7 +9138,7 @@ a.md-link-loc:hover {
   color: var(--pure-white);
   border: none;
   padding: 4px 14px;
-  border-radius: 2px;
+  border-radius: var(--r-sm);
   font-size: var(--fs-sm);
   cursor: pointer;
 }
@@ -9135,7 +9148,7 @@ a.md-link-loc:hover {
   border: 1px solid var(--border);
   color: var(--text2);
   padding: 4px 12px;
-  border-radius: 2px;
+  border-radius: var(--r-sm);
   font-size: var(--fs-sm);
   cursor: pointer;
 }
@@ -9181,7 +9194,7 @@ a.md-link-loc:hover {
 .moddet-add-row { display: flex; gap: 6px; margin-top: 4px; }
 .moddet-add-input {
   flex: 1; padding: 4px 10px; border: 1px solid var(--border);
-  border-radius: 3px; background: var(--bg3);
+  border-radius: var(--r-md); background: var(--bg3);
   color: var(--text); font-size: var(--fs-sm);
 }
 
@@ -9203,7 +9216,7 @@ a.md-link-loc:hover {
 .modp-scenario-block {
   background: rgb(139 0 0 / 7%);
   border: 1px solid var(--border);
-  border-radius: 2px;
+  border-radius: var(--r-sm);
   padding: 14px 16px;
   margin-bottom: 14px;
   transition: border-color .2s var(--ease), box-shadow .2s var(--ease);
@@ -9257,7 +9270,7 @@ a.md-link-loc:hover {
 .modp-field-regen-btn {
   background: none;
   border: 1px solid var(--border);
-  border-radius: 2px;
+  border-radius: var(--r-sm);
   color: var(--text2);
   font-size: var(--fs-sm, 12px);
   line-height: 1;
@@ -9276,7 +9289,7 @@ a.md-link-loc:hover {
   font-size: var(--fs-xs, 10px);
   color: var(--c-error, #e87070);
   border: 1px solid currentColor;
-  border-radius: 3px;
+  border-radius: var(--r-md);
   padding: 1px 5px;
   margin-left: 8px;
   vertical-align: middle;
@@ -9288,7 +9301,7 @@ a.md-link-loc:hover {
 .faction-inf-panel {
   background: rgb(74 31 13 / 27%);
   border: 1px solid var(--border);
-  border-radius: 3px;
+  border-radius: var(--r-md);
   padding: 16px;
   margin-bottom: 16px;
 }
@@ -9349,7 +9362,7 @@ a.md-link-loc:hover {
   flex-shrink: 0;
   background: var(--bg4);
   border: 1px solid var(--border);
-  border-radius: 3px;
+  border-radius: var(--r-md);
   color: var(--text);
   font-size: var(--fs-sm);
   text-align: center;
@@ -9376,7 +9389,7 @@ a.md-link-loc:hover {
   letter-spacing: .1em;
   text-transform: uppercase;
   cursor: pointer;
-  border-radius: 2px;
+  border-radius: var(--r-sm);
   transition: border-color .15s, color .15s;
 }
 
@@ -9395,7 +9408,7 @@ a.md-link-loc:hover {
   letter-spacing: .1em;
   text-transform: uppercase;
   cursor: pointer;
-  border-radius: 2px;
+  border-radius: var(--r-sm);
   transition: background .15s, border-color .15s;
 }
 
@@ -9437,7 +9450,7 @@ a.md-link-loc:hover {
   width: 14px;
   height: 14px;
   border: 1px solid var(--border2);
-  border-radius: 2px;
+  border-radius: var(--r-sm);
   background: var(--bg);
   cursor: pointer;
   margin-left: 6px;
@@ -9544,7 +9557,7 @@ tr.rumor-told:hover .rumor-cb-cell {
 
 .rumors-arch-session {
   border: 1px solid var(--border);
-  border-radius: 2px;
+  border-radius: var(--r-sm);
   margin-bottom: 6px;
   overflow: hidden;
 }
@@ -9664,7 +9677,7 @@ tr.rumor-told:hover .rumor-cb-cell {
   padding: 14px;
   resize: vertical;
   outline: none;
-  border-radius: 2px;
+  border-radius: var(--r-sm);
 }
 
 .archive-textarea:focus {
@@ -9718,7 +9731,7 @@ tr.rumor-told:hover .rumor-cb-cell {
   flex: 1;
   background: var(--bg3);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--r-lg);
   padding: 11px 16px;
   color: var(--text);
   font-family: var(--f-body);
@@ -9735,7 +9748,7 @@ tr.rumor-told:hover .rumor-cb-cell {
 .srch-btn {
   background: var(--accent);
   border: none;
-  border-radius: 6px;
+  border-radius: var(--r-lg);
   padding: 0 20px;
   color: var(--pure-white);
   font-size: var(--fs-base);
@@ -9777,7 +9790,7 @@ tr.rumor-told:hover .rumor-cb-cell {
 .srch-sec-count {
   background: var(--bg3);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--r-xl);
   padding: 1px 8px;
   font-size: var(--fs-2xs);
   color: var(--gold);
@@ -9788,7 +9801,7 @@ tr.rumor-told:hover .rumor-cb-cell {
   align-items: flex-start;
   gap: 12px;
   padding: 12px 14px;
-  border-radius: 6px;
+  border-radius: var(--r-lg);
   border: 1px solid transparent;
   transition: background .15s, border-color .15s;
   cursor: default;
@@ -9843,7 +9856,7 @@ tr.rumor-told:hover .rumor-cb-cell {
 .srch-hl {
   background: rgba(184, 134, 11, .3);
   color: var(--gold2);
-  border-radius: 2px;
+  border-radius: var(--r-sm);
   padding: 0 2px;
   font-style: normal;
 }
@@ -9903,7 +9916,7 @@ tr.rumor-told:hover .rumor-cb-cell {
 #tour-spotlight {
   position: fixed;
   z-index: var(--z-tour);
-  border-radius: 3px;
+  border-radius: var(--r-md);
   pointer-events: none;
   box-shadow: 0 0 0 9999px rgba(0, 0, 0, .82);
   transition: top var(--dur-base) var(--ease), left var(--dur-base) var(--ease),
@@ -9925,7 +9938,7 @@ tr.rumor-told:hover .rumor-cb-cell {
   width: min(340px, calc(100vw - 32px));
   background: var(--bg2);
   border: 1px solid var(--gold);
-  border-radius: 3px;
+  border-radius: var(--r-md);
   padding: 22px 24px 20px;
   box-shadow: 0 0 60px rgba(0, 0, 0, .7), 0 0 0 1px rgba(184, 134, 11, .15);
   animation: tour-card-in var(--dur-base) var(--ease);
@@ -9985,7 +9998,7 @@ tr.rumor-told:hover .rumor-cb-cell {
   letter-spacing: .1em;
   text-transform: uppercase;
   padding: 8px 16px;
-  border-radius: 2px;
+  border-radius: var(--r-sm);
   cursor: pointer;
   white-space: nowrap;
   transition: background var(--dur-fast) var(--ease),
@@ -10140,7 +10153,7 @@ tr.rumor-told:hover .rumor-cb-cell {
   background: rgba(139, 0, 0, .1);
   border: 1px solid var(--accent);
   color: var(--accent);
-  border-radius: 2px;
+  border-radius: var(--r-sm);
   padding: 5px 12px;
   font-size: var(--fs-sm);
   cursor: pointer;
@@ -10220,7 +10233,7 @@ tr.rumor-told:hover .rumor-cb-cell {
   color: var(--text);
   cursor: pointer;
   padding: 2px 4px;
-  border-radius: 2px;
+  border-radius: var(--r-sm);
   font-size: var(--fs-sm);
   line-height: 1;
   min-width: 24px;
@@ -10267,7 +10280,7 @@ tr.rumor-told:hover .rumor-cb-cell {
 
 .modp-loc-attach-item {
   padding: 5px 8px;
-  border-radius: 3px;
+  border-radius: var(--r-md);
   cursor: pointer;
   font-size: var(--fs-sm);
   color: var(--text);
@@ -10320,7 +10333,7 @@ tr.rumor-told:hover .rumor-cb-cell {
 .modp-locs-attach-btn, .modp-locs-create-btn {
   background: none; border: 1px solid var(--border, #444);
   color: var(--accent, #8b0000); padding: 2px 10px;
-  border-radius: 3px; font-size: var(--fs-sm, 12px); cursor: pointer;
+  border-radius: var(--r-md); font-size: var(--fs-sm, 12px); cursor: pointer;
   white-space: nowrap; flex-shrink: 0;
 }
 .modp-locs-attach-btn:hover, .modp-locs-create-btn:hover { background: rgba(139,0,0,.12); }
@@ -10331,7 +10344,7 @@ tr.rumor-told:hover .rumor-cb-cell {
 .modp-gen-result-inner {
   background: var(--bg3);
   border: 1px solid var(--c-success);
-  border-radius: 6px;
+  border-radius: var(--r-lg);
   padding: 10px 14px;
   font-size: var(--fs-sm);
   display: flex;
@@ -10381,7 +10394,7 @@ tr.rumor-told:hover .rumor-cb-cell {
 }
 .toast {
   min-width: 240px; max-width: 400px;
-  padding: 10px 16px; border-radius: 6px;
+  padding: 10px 16px; border-radius: var(--r-lg);
   font-size: var(--fs-sm); line-height: 1.4;
   pointer-events: auto;
   animation: toast-in 0.2s ease;
