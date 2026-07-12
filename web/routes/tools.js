@@ -737,7 +737,13 @@ module.exports = function toolsRouter({
       res.json({ ok: true, dryRun: false, written, stubs: plan.stubs, warnings: plan.warnings,
         notes: plan.notes, summary: plan.summary });
     } catch (e) {
-      res.status(500).json({ ok: false, errors: [e.message] });
+      // Не serverError() напрямую — этот эндпоинт (и его фронтенд-обработчик,
+      // scripts.js lsRunWrite()) читает {ok, errors:[...]}, а не {error: '...'};
+      // serverError() дал бы пустой список ошибок в UI. Тот же принцип
+      // (не течь e.message клиенту, логировать полный стек на сервере) —
+      // просто в форме, которую реально читает вызывающий код.
+      console.error('[error]', e?.stack || e?.message || e);
+      res.status(500).json({ ok: false, errors: ['Внутренняя ошибка сервера — подробности в логе сервера.'] });
     }
   });
 
