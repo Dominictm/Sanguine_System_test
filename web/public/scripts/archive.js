@@ -173,13 +173,12 @@ function renderChronicle() {
 
   if (st.tab === 'world') {
     sub.textContent = 'Состояние мира';
-    el.innerHTML = renderWorldState(data.worldState);
+    loadWorldStateForm();
     return;
   }
   if (st.tab === 'lore') {
     sub.textContent = 'Хронология мира · timeline.md';
-    _loadArchiveEditable('/api/timeline', '/api/timeline', 'chronicle-content',
-      'timeline.md не найден для этого города');
+    loadTimelineForm();
     return;
   }
   sub.textContent = `${evCount} событий`;
@@ -746,6 +745,189 @@ function renderTimeline(events) {
   }).join('');
 }
 
+function _cityQS() {
+  return window.location.search || '';
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Хронология мира — структурированная форма (замена raw-textarea для timeline.md)
+// ═══════════════════════════════════════════════════════════════
+
+let _timelineData = null; // {intro, legend, epochs} — кэш последнего /structured
+let _pendingLinks = [];   // {kind, slug, text}[] — собирается пикером связей в открытой форме строки
+
+async function loadTimelineForm() {
+  const el = document.getElementById('chronicle-content');
+  el.innerHTML = SPINNER;
+  await Promise.all([ensureCharsLoaded(), ensureLocsLoaded()]);
+  try {
+    _timelineData = await fetch('/api/timeline/structured' + _cityQS()).then(r => r.json());
+    el.innerHTML = renderTimelineForm(_timelineData);
+  } catch {
+    el.innerHTML = '<div class="loading-state" style="color:var(--accent3)">⚠ Не удалось загрузить хронологию</div>';
+  }
+}
+
+function renderTimelineForm(data) {
+  const legendOptions = data.legend.map(l => `<option value="${escHtml(l.symbol)}">${escHtml(l.symbol)} — ${escHtml(l.meaning)}</option>`).join('');
+  const epochsHtml = data.epochs.map(ep => `
+    <section class="chron-event" data-epoch="${escHtml(ep.heading)}">
+      <div class="chron-event-head">
+        <div class="chron-event-title">${escHtml(ep.heading)}</div>
+        <button class="chron-toggle" data-epoch-del="${escHtml(ep.heading)}" title="Удалить эпоху">🗑</button>
+      </div>
+      <table class="ws-table"><thead><tr><th>Год</th><th>Тип</th><th>Событие</th><th>Источник</th><th>Связи</th><th></th></tr></thead>
+      <tbody>${ep.rows.map((r, i) => `
+        <tr data-epoch="${escHtml(ep.heading)}" data-row="${i}">
+          <td>${escHtml(r.year)}</td><td>${escHtml(r.type)}</td><td>${mdInline(r.event)}</td>
+          <td>${escHtml(r.source)}</td>
+          <td>${r.links.map(l => escHtml(l.text)).join(', ')}</td>
+          <td><button class="chron-toggle tl-row-edit" data-epoch="${escHtml(ep.heading)}" data-row="${i}">✏</button>
+              <button class="chron-toggle tl-row-del" data-epoch="${escHtml(ep.heading)}" data-row="${i}">🗑</button></td>
+        </tr>`).join('')}</tbody></table>
+      <button class="chron-toggle tl-row-add" data-epoch="${escHtml(ep.heading)}">+ Добавить запись</button>
+      <div class="tl-row-form" data-epoch-form="${escHtml(ep.heading)}" hidden></div>
+    </section>`).join('');
+
+  return `
+    ${epochsHtml}
+    <button class="chron-toggle" id="tl-add-epoch">+ Новая эпоха</button>
+    <div class="tl-epoch-form" id="tl-new-epoch-form" hidden>
+      <input type="text" id="tl-new-epoch-heading" placeholder="Название эпохи">
+      <button class="chron-toggle" id="tl-new-epoch-save">Сохранить</button>
+    </div>
+    <button class="chron-toggle" id="tl-raw-edit-toggle" style="margin-top:20px">✏ Редактировать весь файл</button>
+    <div id="tl-raw-edit-container"></div>
+    <datalist id="tl-legend-datalist">${legendOptions}</datalist>`;
+}
+
+// Форма add/edit одной записи хронологии — переиспользуется и для новой
+// строки (row=null), и для правки существующей.
+function _timelineRowFormHtml(epochHeading, rowIndex, row) {
+  _pendingLinks = (row?.links || []).map(l => ({ kind: l.kind || null, slug: l.slug || null, text: l.text }));
+  const linkChips = () => _pendingLinks.map((l, i) => `<span class="chron-chip" data-link-idx="${i}">${escHtml(l.text)} <a href="#" class="tl-link-remove" data-idx="${i}">✕</a></span>`).join('');
+  return `
+    <div class="tl-form-fields">
+      <input type="text" class="tl-f-year" placeholder="Год" value="${escHtml(row?.year || '')}">
+      <input type="text" class="tl-f-type" list="tl-legend-datalist" placeholder="Тип (эмодзи)" value="${escHtml(row?.type || '')}">
+      <textarea class="tl-f-event" placeholder="Событие">${escHtml(row?.event || '')}</textarea>
+      <select class="tl-f-source">
+        <option value="📚" ${row?.source === '📚' ? 'selected' : ''}>📚 Канон WoD</option>
+        <option value="🏙️" ${row?.source === '🏙️' ? 'selected' : ''}>🏙️ Установлено в проекте</option>
+        <option value="❓" ${row?.source === '❓' ? 'selected' : ''}>❓ Канон неоднозначен</option>
+      </select>
+      <div class="tl-f-links">
+        <input type="text" class="tl-link-search" placeholder="Персонаж/локация...">
+        <div class="tl-link-suggest" hidden></div>
+        <div class="tl-link-chips">${linkChips()}</div>
+      </div>
+      <button class="chron-toggle tl-row-save" data-epoch="${escHtml(epochHeading)}" data-row="${rowIndex ?? ''}">Сохранить</button>
+      <button class="chron-toggle tl-row-cancel">Отмена</button>
+    </div>`;
+}
+
+function _renderLinkChipsInto(container) {
+  const chipsEl = container.querySelector('.tl-link-chips');
+  if (!chipsEl) return;
+  chipsEl.innerHTML = _pendingLinks.map((l, i) => `<span class="chron-chip" data-link-idx="${i}">${escHtml(l.text)} <a href="#" class="tl-link-remove" data-idx="${i}">✕</a></span>`).join('');
+}
+
+// Пикер связей: ищет по уже загруженным STATE.characters/STATE.locations,
+// первые 8 совпадений по имени; выбор добавляет {kind, slug, text} в _pendingLinks.
+document.getElementById('chronicle-content').addEventListener('input', e => {
+  if (!e.target.classList.contains('tl-link-search')) return;
+  const q = e.target.value.trim().toLowerCase();
+  const suggestEl = e.target.parentElement.querySelector('.tl-link-suggest');
+  if (!q) { suggestEl.hidden = true; suggestEl.innerHTML = ''; return; }
+  const chars = (STATE.characters || []).filter(c => c.name).map(c => ({ kind: 'character', slug: c.slug, text: c.name }));
+  const locs = (STATE.locations || []).filter(l => l.name).map(l => ({ kind: 'location', slug: l.slug, text: l.name }));
+  const matches = [...chars, ...locs].filter(x => x.text.toLowerCase().includes(q)).slice(0, 8);
+  suggestEl.innerHTML = matches.map((m, i) => `<div class="tl-link-suggest-item" data-kind="${m.kind}" data-slug="${escHtml(m.slug)}" data-text="${escHtml(m.text)}">${m.kind === 'character' ? '👤' : '📍'} ${escHtml(m.text)}</div>`).join('');
+  suggestEl.hidden = matches.length === 0;
+});
+document.getElementById('chronicle-content').addEventListener('click', e => {
+  const item = e.target.closest('.tl-link-suggest-item');
+  if (item) {
+    _pendingLinks.push({ kind: item.dataset.kind, slug: item.dataset.slug, text: item.dataset.text });
+    const form = item.closest('.tl-f-links');
+    form.querySelector('.tl-link-search').value = '';
+    form.querySelector('.tl-link-suggest').hidden = true;
+    _renderLinkChipsInto(form);
+    return;
+  }
+  const linkRemove = e.target.closest('.tl-link-remove');
+  if (linkRemove) {
+    e.preventDefault();
+    _pendingLinks.splice(Number(linkRemove.dataset.idx), 1);
+    _renderLinkChipsInto(linkRemove.closest('.tl-f-links'));
+    return;
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════
+// Состояние мира — структурированная форма (замена read-only рендера)
+// ═══════════════════════════════════════════════════════════════
+
+let _worldStateData = null;
+
+async function loadWorldStateForm() {
+  const el = document.getElementById('chronicle-content');
+  el.innerHTML = SPINNER;
+  try {
+    const ws = await fetch('/api/world-state/structured' + _cityQS()).then(r => r.json());
+    _worldStateData = ws;
+    el.innerHTML = renderWorldStateForm(ws);
+  } catch {
+    el.innerHTML = '<div class="loading-state" style="color:var(--accent3)">⚠ Не удалось загрузить состояние мира</div>';
+  }
+}
+
+function renderWorldStateForm(ws) {
+  const sectionsHtml = (ws.sections || []).map(s => `
+    <section class="ws-section" data-ws-section="${escHtml(s.heading)}">
+      <div class="ws-heading">${escHtml(s.heading)}
+        <button class="chron-toggle" data-ws-section-del="${escHtml(s.heading)}" title="Удалить секцию">🗑</button>
+      </div>
+      <table class="ws-table"><thead><tr>${s.columns.map(c => `<th>${escHtml(c)}</th>`).join('')}<th></th></tr></thead>
+      <tbody>${s.rows.map((row, i) => `
+        <tr data-ws-section="${escHtml(s.heading)}" data-row="${i}">
+          ${row.map(c => `<td>${mdInline(c)}</td>`).join('')}
+          <td><button class="chron-toggle ws-row-edit" data-ws-section="${escHtml(s.heading)}" data-row="${i}">✏</button>
+              <button class="chron-toggle ws-row-del" data-ws-section="${escHtml(s.heading)}" data-row="${i}">🗑</button></td>
+        </tr>`).join('')}</tbody></table>
+      <button class="chron-toggle ws-row-add" data-ws-section="${escHtml(s.heading)}">+ Строка</button>
+      <div class="ws-row-form" data-ws-section-form="${escHtml(s.heading)}" hidden></div>
+      <div class="ws-prose ws-note-view">${s.note ? mdInline(s.note) : ''}</div>
+      <button class="chron-toggle ws-note-edit" data-ws-section="${escHtml(s.heading)}">✏ Примечание</button>
+    </section>`).join('');
+
+  return `
+    <div class="ws-updated">Последнее обновление:
+      <input type="text" id="ws-last-update-input" value="${escHtml(ws.lastUpdate || '')}">
+      <button class="chron-toggle" id="ws-last-update-save">Сохранить</button>
+    </div>
+    ${sectionsHtml}
+    <button class="chron-toggle" id="ws-add-section">+ Новая секция</button>
+    <div class="ws-section-form" id="ws-new-section-form" hidden>
+      <input type="text" id="ws-new-section-heading" placeholder="Заголовок секции">
+      <input type="text" id="ws-new-section-columns" placeholder="Колонки через запятую">
+      <button class="chron-toggle" id="ws-new-section-save">Сохранить</button>
+    </div>
+    <button class="chron-toggle" id="ws-raw-edit-toggle" style="margin-top:20px">✏ Редактировать блок целиком</button>
+    <div id="ws-raw-edit-container"></div>`;
+}
+
+function _worldStateRowFormHtml(heading, rowIndex, columns, cells) {
+  const fields = columns.map((col, i) => `
+    <label>${escHtml(col)}<input type="text" class="ws-f-cell" data-col="${i}" value="${escHtml(cells?.[i] || '')}"></label>`).join('');
+  return `
+    <div class="tl-form-fields">
+      ${fields}
+      <button class="chron-toggle ws-row-save" data-ws-section="${escHtml(heading)}" data-row="${rowIndex ?? ''}">Сохранить</button>
+      <button class="chron-toggle ws-row-cancel">Отмена</button>
+    </div>`;
+}
+
 // Chronicle tab switching
 document.querySelectorAll('.chron-tab').forEach(b => b.addEventListener('click', () => {
   if (!STATE.chronicle) { STATE.chronicle = { data: null, tab: b.dataset.chronTab }; }
@@ -754,8 +936,172 @@ document.querySelectorAll('.chron-tab').forEach(b => b.addEventListener('click',
   if (STATE.chronicle.data) renderChronicle();
 }));
 
-// Chronicle delegated clicks: toggle bodies, open char/loc/module
+// Chronicle delegated clicks: toggle bodies, open char/loc/module,
+// Хронология/Состояние мира формы. Ветки tl-*/ws-* стоят ПЕРЕД общей
+// `.chron-toggle`-веткой ниже — их кнопки тоже носят класс chron-toggle
+// (ради единого стиля), поэтому должны быть проверены первыми.
 document.getElementById('chronicle-content').addEventListener('click', e => {
+  if (e.target.id === 'tl-add-epoch') {
+    document.getElementById('tl-new-epoch-form').hidden = false;
+    return;
+  }
+  if (e.target.id === 'tl-new-epoch-save') {
+    const heading = document.getElementById('tl-new-epoch-heading').value.trim();
+    if (!heading) return;
+    fetch('/api/timeline/epoch' + _cityQS(), {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ heading }),
+    }).then(r => r.json()).then(d => { if (d.ok !== false) loadTimelineForm(); });
+    return;
+  }
+  const epochDel = e.target.closest('[data-epoch-del]');
+  if (epochDel) {
+    if (!confirm(`Удалить эпоху «${epochDel.dataset.epochDel}»?`)) return;
+    fetch(`/api/timeline/epoch/${encodeURIComponent(epochDel.dataset.epochDel)}${_cityQS()}`, { method: 'DELETE' })
+      .then(() => loadTimelineForm());
+    return;
+  }
+  const rowAdd = e.target.closest('.tl-row-add');
+  if (rowAdd) {
+    const container = document.querySelector(`[data-epoch-form="${CSS.escape(rowAdd.dataset.epoch)}"]`);
+    container.innerHTML = _timelineRowFormHtml(rowAdd.dataset.epoch, null, null);
+    container.hidden = false;
+    return;
+  }
+  const rowEdit = e.target.closest('.tl-row-edit');
+  if (rowEdit) {
+    const epoch = _timelineData.epochs.find(x => x.heading === rowEdit.dataset.epoch);
+    const row = epoch.rows[Number(rowEdit.dataset.row)];
+    const container = document.querySelector(`[data-epoch-form="${CSS.escape(rowEdit.dataset.epoch)}"]`);
+    container.innerHTML = _timelineRowFormHtml(rowEdit.dataset.epoch, Number(rowEdit.dataset.row), row);
+    container.hidden = false;
+    return;
+  }
+  if (e.target.classList.contains('tl-row-cancel')) {
+    e.target.closest('.tl-row-form').hidden = true;
+    return;
+  }
+  const rowSave = e.target.closest('.tl-row-save');
+  if (rowSave) {
+    const form = rowSave.closest('.tl-form-fields');
+    const body = JSON.stringify({
+      year: form.querySelector('.tl-f-year').value,
+      type: form.querySelector('.tl-f-type').value,
+      event: form.querySelector('.tl-f-event').value,
+      source: form.querySelector('.tl-f-source').value,
+      links: _pendingLinks,
+    });
+    const epoch = encodeURIComponent(rowSave.dataset.epoch);
+    const idx = rowSave.dataset.row;
+    const url = idx === '' ? `/api/timeline/epoch/${epoch}/row${_cityQS()}` : `/api/timeline/epoch/${epoch}/row/${idx}${_cityQS()}`;
+    fetch(url, { method: idx === '' ? 'POST' : 'PUT', headers: { 'Content-Type': 'application/json' }, body })
+      .then(r => r.json()).then(d => {
+        if (d.error) alert(d.error);
+        loadTimelineForm();
+      });
+    return;
+  }
+  const rowDel = e.target.closest('.tl-row-del');
+  if (rowDel) {
+    const epoch = encodeURIComponent(rowDel.dataset.epoch);
+    fetch(`/api/timeline/epoch/${epoch}/row/${rowDel.dataset.row}${_cityQS()}`, { method: 'DELETE' })
+      .then(r => r.json()).then(d => { if (d.error) alert(d.error); loadTimelineForm(); });
+    return;
+  }
+  if (e.target.id === 'tl-raw-edit-toggle') {
+    _loadArchiveEditable('/api/timeline', '/api/timeline', 'tl-raw-edit-container', 'timeline.md не найден');
+    return;
+  }
+
+  if (e.target.id === 'ws-last-update-save') {
+    const text = document.getElementById('ws-last-update-input').value.trim();
+    fetch('/api/world-state/last-update' + _cityQS(), {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text }),
+    }).then(() => loadWorldStateForm());
+    return;
+  }
+  if (e.target.id === 'ws-add-section') {
+    document.getElementById('ws-new-section-form').hidden = false;
+    return;
+  }
+  if (e.target.id === 'ws-new-section-save') {
+    const heading = document.getElementById('ws-new-section-heading').value.trim();
+    const columns = document.getElementById('ws-new-section-columns').value.split(',').map(s => s.trim()).filter(Boolean);
+    if (!heading || !columns.length) return;
+    fetch('/api/world-state/section' + _cityQS(), {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ heading, columns }),
+    }).then(r => r.json()).then(d => { if (d.error) alert(d.error); loadWorldStateForm(); });
+    return;
+  }
+  const wsSectionDel = e.target.closest('[data-ws-section-del]');
+  if (wsSectionDel) {
+    if (!confirm(`Удалить секцию «${wsSectionDel.dataset.wsSectionDel}»?`)) return;
+    fetch(`/api/world-state/section/${encodeURIComponent(wsSectionDel.dataset.wsSectionDel)}${_cityQS()}`, { method: 'DELETE' })
+      .then(() => loadWorldStateForm());
+    return;
+  }
+  const wsRowAdd = e.target.closest('.ws-row-add');
+  if (wsRowAdd) {
+    const section = _worldStateData.sections.find(s => s.heading === wsRowAdd.dataset.wsSection);
+    const container = document.querySelector(`[data-ws-section-form="${CSS.escape(wsRowAdd.dataset.wsSection)}"]`);
+    container.innerHTML = _worldStateRowFormHtml(wsRowAdd.dataset.wsSection, null, section.columns, null);
+    container.hidden = false;
+    return;
+  }
+  const wsRowEdit = e.target.closest('.ws-row-edit');
+  if (wsRowEdit) {
+    const section = _worldStateData.sections.find(s => s.heading === wsRowEdit.dataset.wsSection);
+    const cells = section.rows[Number(wsRowEdit.dataset.row)];
+    const container = document.querySelector(`[data-ws-section-form="${CSS.escape(wsRowEdit.dataset.wsSection)}"]`);
+    container.innerHTML = _worldStateRowFormHtml(wsRowEdit.dataset.wsSection, Number(wsRowEdit.dataset.row), section.columns, cells);
+    container.hidden = false;
+    return;
+  }
+  if (e.target.classList.contains('ws-row-cancel')) {
+    e.target.closest('.ws-row-form').hidden = true;
+    return;
+  }
+  const wsRowSave = e.target.closest('.ws-row-save');
+  if (wsRowSave) {
+    const form = wsRowSave.closest('.tl-form-fields');
+    const cells = Array.from(form.querySelectorAll('.ws-f-cell'))
+      .sort((a, b) => Number(a.dataset.col) - Number(b.dataset.col))
+      .map(inp => inp.value);
+    const section = encodeURIComponent(wsRowSave.dataset.wsSection);
+    const idx = wsRowSave.dataset.row;
+    const url = idx === '' ? `/api/world-state/section/${section}/row${_cityQS()}` : `/api/world-state/section/${section}/row/${idx}${_cityQS()}`;
+    fetch(url, { method: idx === '' ? 'POST' : 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cells }) })
+      .then(r => r.json()).then(d => { if (d.error) alert(d.error); loadWorldStateForm(); });
+    return;
+  }
+  const wsRowDel = e.target.closest('.ws-row-del');
+  if (wsRowDel) {
+    const section = encodeURIComponent(wsRowDel.dataset.wsSection);
+    fetch(`/api/world-state/section/${section}/row/${wsRowDel.dataset.row}${_cityQS()}`, { method: 'DELETE' })
+      .then(r => r.json()).then(d => { if (d.error) alert(d.error); loadWorldStateForm(); });
+    return;
+  }
+  const wsNoteEdit = e.target.closest('.ws-note-edit');
+  if (wsNoteEdit) {
+    const section = _worldStateData.sections.find(s => s.heading === wsNoteEdit.dataset.wsSection);
+    const view = document.querySelector(`[data-ws-section="${CSS.escape(wsNoteEdit.dataset.wsSection)}"] .ws-note-view`);
+    view.innerHTML = `<textarea class="ws-f-note">${escHtml(section.note)}</textarea>
+      <button class="chron-toggle ws-note-save" data-ws-section="${escHtml(wsNoteEdit.dataset.wsSection)}">Сохранить</button>`;
+    return;
+  }
+  const wsNoteSave = e.target.closest('.ws-note-save');
+  if (wsNoteSave) {
+    const text = wsNoteSave.parentElement.querySelector('.ws-f-note').value.trim();
+    fetch(`/api/world-state/section/${encodeURIComponent(wsNoteSave.dataset.wsSection)}/note${_cityQS()}`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text }),
+    }).then(() => loadWorldStateForm());
+    return;
+  }
+  if (e.target.id === 'ws-raw-edit-toggle') {
+    _loadArchiveEditable('/api/world-state/raw', '/api/world-state/raw', 'ws-raw-edit-container', 'Блок «Состояние мира» не найден');
+    return;
+  }
+
   const tog = e.target.closest('.chron-toggle');
   if (tog) {
     const body = document.querySelector(`.chron-event-body[data-body="${tog.dataset.id}"]`);
