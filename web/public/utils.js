@@ -132,6 +132,10 @@ function _modalFocusables(modal) {
 function openModal(id, focusSelector = null) {
   const modal = document.getElementById(id);
   if (!modal) return;
+  // A redundant open (e.g. two rapid clicks before the prior open settles)
+  // must not leak the previous trapHandler off of `document`.
+  const existing = _modalState.get(id);
+  if (existing) document.removeEventListener('keydown', existing.trapHandler);
   const prevFocus = document.activeElement;
   modal.classList.add('open');
 
