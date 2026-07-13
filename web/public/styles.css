@@ -1311,14 +1311,39 @@ body {
   padding: 0 2px;
 }
 
+/* Вердикт броска — единственный момент, где система «отвечает» GM случайностью;
+   подан церемониально: печать Cinzel + кровяное сияние (критика 2026-07-13). */
 .dice-verdict {
-  font-family: var(--f-body);
-  font-size: var(--fs-md);
+  display: inline-block;
+  font-family: var(--f-heading);
+  font-size: var(--fs-xl);
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  animation: dice-verdict-reveal var(--dur-base) var(--ease);
 }
 
-.dice-verdict.ok    { color: var(--c-success); }
-.dice-verdict.fail  { color: var(--text3); }
-.dice-verdict.botch { color: var(--accent); }
+@keyframes dice-verdict-reveal {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dice-verdict { animation: none; }
+}
+
+.dice-verdict.ok {
+  color: var(--gold2);
+  text-shadow: 0 0 14px var(--glow);
+}
+
+.dice-verdict.fail {
+  color: var(--text3);
+}
+
+.dice-verdict.botch {
+  color: var(--crimson);
+  text-shadow: 0 0 18px var(--glow), 0 0 40px var(--glow);
+}
 
 #dice-history {
   margin-top: 10px;
