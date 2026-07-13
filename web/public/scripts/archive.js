@@ -908,10 +908,17 @@ async function openTimelineAddModal(prefill) {
       ? [{ kind: null, slug: null, text: prefill.linkText || prefill.title, href: prefill.linkHref }]
       : [];
     const defType = data.legend.some(l => l.symbol === '🏛️') ? '🏛️' : ((data.legend[0] || {}).symbol || '');
+    // Эпоха по умолчанию — последняя «настоящая» (в строках которой Год содержит
+    // цифру): в конце файла бывают служебные секции («📎 Связи», шпаргалки),
+    // которые парсер тоже отдаёт как эпохи.
+    let defEpoch = data.epochs.length - 1;
+    for (let i = data.epochs.length - 1; i >= 0; i--) {
+      if (data.epochs[i].rows.some(r => /\d/.test(r.year))) { defEpoch = i; break; }
+    }
     body.innerHTML = `
       <div class="tl-form-fields">
         <select class="form-control" id="tl-add-epoch-sel">
-          ${data.epochs.map((ep, i) => `<option value="${escHtml(ep.heading)}" ${i === data.epochs.length - 1 ? 'selected' : ''}>${escHtml(ep.heading)}</option>`).join('')}
+          ${data.epochs.map((ep, i) => `<option value="${escHtml(ep.heading)}" ${i === defEpoch ? 'selected' : ''}>${escHtml(ep.heading)}</option>`).join('')}
         </select>
         <input type="text" class="form-control tl-f-year" placeholder="Год" value="${escHtml(year)}">
         <select class="form-control tl-f-type">
@@ -1232,7 +1239,7 @@ function _loadEventFinale(bodyEl) {
   const finEl = bodyEl.querySelector('.chron-finale[data-finale-mod]');
   if (!finEl || finEl.dataset.loaded) return;
   finEl.dataset.loaded = '1';
-  fetch(`/api/modules/${encodeURIComponent(finEl.dataset.finaleMod)}`)
+  fetch(`/api/modules/${encodeURIComponent(finEl.dataset.finaleMod)}${_cityQS()}`)
     .then(r => r.json())
     .then(d => {
       finEl.innerHTML = d.finale

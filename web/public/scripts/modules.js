@@ -238,7 +238,11 @@ document.getElementById('chr-detail-body').addEventListener('click', e => {
   if (toggle) {
     const id = toggle.dataset.id;
     const bodyEl = document.querySelector(`[data-body="${id}"]`);
-    if (bodyEl) { bodyEl.hidden = !bodyEl.hidden; toggle.textContent = bodyEl.hidden ? 'Подробнее ▾' : 'Свернуть ▴'; }
+    if (bodyEl) {
+      bodyEl.hidden = !bodyEl.hidden;
+      toggle.textContent = bodyEl.hidden ? 'Подробнее ▾' : 'Свернуть ▴';
+      if (!bodyEl.hidden) _loadEventFinale(bodyEl); // финал модуля — лениво, как на странице хроники
+    }
     return;
   }
   const modCard = e.target.closest('.chd-mod-card');
