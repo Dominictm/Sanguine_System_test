@@ -85,6 +85,7 @@ function openCharDetail(name) {
         <button class="cdet-tab" data-tab="diaries">Дневники${c.diaries?.length ? ` (${c.diaries.length})` : ''}</button>
         <button class="cdet-tab" data-tab="sheet" data-char="${escHtml(c.name)}">Лист V20</button>
         <button class="cdet-tab" data-tab="desc">Описание</button>
+        <button class="cdet-tab" data-tab="history" data-char="${escHtml(c.name)}">История</button>
       </div>
       <div class="cdet-panels">
         <div class="cdet-panel active" data-panel="info">
@@ -187,6 +188,7 @@ function openCharDetail(name) {
             <div id="cdet-dlg-result" class="cdet-dialogue-result" style="display:none"></div>
           </div>
         </div>
+        <div class="cdet-panel" data-panel="history" id="cdet-history-panel"></div>
       </div>
     </div>`;
 
@@ -217,8 +219,12 @@ document.getElementById('char-detail-content').addEventListener('click', e => {
     const panels = col.querySelector('.cdet-panels');
     if (panels) panels.scrollTop = 0;
     if (tab.dataset.tab === 'sheet') _loadCharSheet(tab.dataset.char);
+    if (tab.dataset.tab === 'history') _loadCharHistory(tab.dataset.char);
     return;
   }
+  // История: клик по коммиту раскрывает/сворачивает дифф (лениво)
+  const histRow = e.target.closest('[data-hist-hash]');
+  if (histRow) { _toggleHistDiff(histRow); return; }
   if (e.target.closest('#cdet-carousel-prev')) { _carouselGoTo(_carouselIdx - 1, true); return; }
   if (e.target.closest('#cdet-carousel-next')) { _carouselGoTo(_carouselIdx + 1, true); return; }
   if (e.target.closest('#cdet-delete-btn'))  { _confirmDeleteChar(e.target.closest('#cdet-delete-btn').dataset.char); return; }
@@ -1398,5 +1404,60 @@ async function _reloadModulePage() {
       document.querySelectorAll('.modp-panel').forEach(p =>
         p.classList.toggle('active', p.id === `modp-panel-${activeTab}`));
     }
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Вкладка «История» — git-история файла карточки (только чтение)
+// ═══════════════════════════════════════════════════════════════
+
+async function _loadCharHistory(charName) {
+  const panel = document.getElementById('cdet-history-panel');
+  if (!panel || panel.dataset.loaded) return;
+  panel.dataset.loaded = '1';
+  panel.innerHTML = '<div class="loading-state"><div class="spinner"></div>Загрузка истории…</div>';
+  const slug = _charSlug(charName);
+  let d;
+  try {
+    d = await fetch(`/api/characters/${encodeURIComponent(slug)}/history${location.search}`).then(r => r.json());
+  } catch {
+    panel.innerHTML = '<div class="cdet-empty">⚠ Не удалось загрузить историю</div>';
+    return;
+  }
+  if (!d.available || !d.commits.length) {
+    panel.innerHTML = '<div class="cdet-empty">История недоступна (файл вне git) или изменений не зафиксировано.</div>';
+    return;
+  }
+  panel.innerHTML = d.commits.map(c => `
+    <div class="cdet-hist-item">
+      <button class="cdet-hist-row" data-hist-hash="${escHtml(c.hash)}" data-hist-slug="${escHtml(slug)}">
+        <span class="cdet-hist-date">${escHtml(c.date)}</span>
+        <span class="cdet-hist-subj">${escHtml(c.subject)}</span>
+      </button>
+      <div class="cdet-hist-diff" data-hist-diff="${escHtml(c.hash)}" hidden></div>
+    </div>`).join('');
+}
+
+async function _toggleHistDiff(rowBtn) {
+  const hash = rowBtn.dataset.histHash;
+  const diffEl = rowBtn.parentElement.querySelector(`[data-hist-diff="${CSS.escape(hash)}"]`);
+  if (!diffEl.hidden) { diffEl.hidden = true; return; }
+  if (!diffEl.dataset.loaded) {
+    diffEl.dataset.loaded = '1';
+    diffEl.innerHTML = '<div class="loading-state"><div class="spinner"></div></div>';
+    diffEl.hidden = false;
+    try {
+      const d = await fetch(`/api/characters/${encodeURIComponent(rowBtn.dataset.histSlug)}/history/${encodeURIComponent(hash)}${location.search}`).then(r => r.json());
+      const lines = (d.diff || '').split('\n').map(l => {
+        const cls = l.startsWith('+') && !l.startsWith('+++') ? 'hist-add'
+          : l.startsWith('-') && !l.startsWith('---') ? 'hist-del' : '';
+        return `<span class="${cls}">${escHtml(l)}</span>`;
+      }).join('\n');
+      diffEl.innerHTML = `<pre class="cdet-hist-pre">${lines}</pre>`;
+    } catch {
+      diffEl.innerHTML = '<div class="cdet-empty">⚠ Не удалось загрузить дифф</div>';
+    }
+  } else {
+    diffEl.hidden = false;
   }
 }

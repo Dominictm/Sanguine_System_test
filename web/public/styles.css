@@ -982,6 +982,63 @@ body {
   .dash-stale-row { min-height: 44px; }
 }
 
+/* ── История карточки (git) ── */
+.cdet-hist-item {
+  border-bottom: 1px solid var(--border);
+}
+
+.cdet-hist-row {
+  display: flex;
+  gap: 12px;
+  align-items: baseline;
+  width: 100%;
+  min-height: 36px;
+  padding: 8px 6px;
+  background: none;
+  border: none;
+  color: var(--text);
+  font-family: var(--f-body);
+  font-size: var(--fs-base);
+  text-align: left;
+  cursor: pointer;
+}
+
+.cdet-hist-row:hover {
+  background: var(--bg4);
+}
+
+.cdet-hist-date {
+  color: var(--text3);
+  flex-shrink: 0;
+  font-size: var(--fs-sm);
+}
+
+.cdet-hist-subj {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cdet-hist-pre {
+  margin: 0 0 10px;
+  padding: 10px;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  overflow-x: auto;
+  font-size: var(--fs-sm);
+  line-height: 1.45;
+  color: var(--text2);
+}
+
+.cdet-hist-pre .hist-add { color: var(--c-success); }
+.cdet-hist-pre .hist-del { color: var(--accent2); }
+
+@media (pointer: coarse) {
+  .cdet-hist-row { min-height: 44px; }
+}
+
 /* ── Экран сессии ── */
 .sess-picker {
   display: flex;
