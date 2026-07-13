@@ -146,9 +146,12 @@ async function loadDashboard() {
   const el = document.getElementById('dash-content');
   el.innerHTML = '<div class="loading-state"><div class="spinner"></div>Загрузка...</div>';
   try {
-    const stats = await fetch('/api/status').then(r => r.json());
+    const [stats, threads] = await Promise.all([
+      fetch('/api/status').then(r => r.json()),
+      fetch('/api/threads' + (window.location.search || '')).then(r => r.json()).catch(() => null),
+    ]);
     document.getElementById('domain-label').innerHTML = `<span>${stats.domain || 'Домен'}</span>`;
-    renderDashboard(stats, el);
+    renderDashboard(stats, el, threads);
     loadIntegrity();
   } catch {
     el.innerHTML = '<div class="loading-state" style="color:var(--accent3)">⚠ Сервер недоступен</div>';
@@ -166,7 +169,26 @@ function animateValue(el, target, dur = 900) {
   requestAnimationFrame(step);
 }
 
-function renderDashboard(s, container) {
+function renderDashboard(s, container, threads) {
+  // «Висящие нити» — незакрытые нити, дольше всех не двигавшиеся в игровом
+  // времени (staleMonths считает сервер от самой свежей нити города).
+  const staleThreads = (Array.isArray(threads) ? threads : [])
+    .filter(t => (t.status === 'active' || t.status === 'background') && t.staleMonths >= 1)
+    .sort((a, b) => b.staleMonths - a.staleMonths)
+    .slice(0, 5);
+  const ruMonths = n => n % 10 === 1 && n % 100 !== 11 ? 'месяц'
+    : (n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 12 || n % 100 > 14) ? 'месяца' : 'месяцев');
+  const staleBlock = staleThreads.length ? `
+    <div class="dash-stale-threads">
+      <div class="dash-stale-title">🧵 Висящие нити</div>
+      ${staleThreads.map(t => `
+        <button class="dash-stale-row stat-clickable" data-nav="threads" title="${escHtml(t.description || t.title)}">
+          <span class="dash-stale-dot ${t.status}"></span>
+          <span class="dash-stale-name">${escHtml(t.title)}</span>
+          <span class="dash-stale-age">${t.staleMonths} ${ruMonths(t.staleMonths)} без движения</span>
+        </button>`).join('')}
+    </div>` : '';
+
   // Broken links badge
   const blCount = s.brokenLinks;
   const blBadge = blCount === null || blCount === undefined
@@ -226,6 +248,7 @@ function renderDashboard(s, container) {
         <span>${s.torpor || 0} в торпоре</span>
       </div>
     </div>
+    ${staleBlock}
     <div class="integrity-row">${blBadge}</div>
     <div id="integrity-panel" class="integrity-panel"></div>`;
 
