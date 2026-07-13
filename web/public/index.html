@@ -54,6 +54,9 @@
       <a class="nav-item" data-page="modules" title="Модули" aria-label="Модули">
         <span class="nav-icon">📖</span><span>Модули</span>
       </a>
+      <a class="nav-item" data-page="session" title="Сессия" aria-label="Сессия">
+        <span class="nav-icon">🎬</span><span>Сессия</span>
+      </a>
       <a class="nav-item" data-page="threads" title="Нити" aria-label="Нити">
         <span class="nav-icon">🧵</span><span>Нити</span>
       </a>
@@ -562,6 +565,33 @@
         </div>
       </div>
     </div>
+
+    <!-- Session screen (session-screen.js) -->
+    <section id="page-session" class="page">
+      <div class="page-header">
+        <h1 class="page-title">Сессия</h1>
+        <span class="page-sub">Режим живой игры</span>
+      </div>
+      <div class="sess-picker">
+        <select class="form-control" id="sess-chr-sel"><option value="">— хроника —</option></select>
+        <select class="form-control" id="sess-mod-sel" disabled><option value="">— модуль —</option></select>
+      </div>
+      <div class="sess-grid">
+        <div class="sess-main">
+          <div class="sess-scene-nav" id="sess-scene-nav" hidden>
+            <button class="chr-modal-btn" id="sess-prev">← Сцена</button>
+            <span id="sess-scene-label"></span>
+            <button class="chr-modal-btn" id="sess-next">Сцена →</button>
+          </div>
+          <div id="sess-scenario"><div class="cdet-empty">Выбери хронику и модуль</div></div>
+        </div>
+        <aside class="sess-side">
+          <div id="sess-npcs"></div>
+          <div id="sess-audio"></div>
+          <div id="sess-notes-wrap"></div>
+        </aside>
+      </div>
+    </section>
 
     <!-- Threads -->
     <section id="page-threads" class="page">
@@ -1410,6 +1440,7 @@
 <script src="scripts/v20-sheet.js"></script>
 <script src="scripts/audio-library.js"></script>
 <script src="scripts/dice.js"></script>
+<script src="scripts/session-screen.js"></script>
 <script src="scripts/scripts.js"></script>
 <script src="scripts/char-detail.js"></script>
 <script src="scripts/archive.js"></script>

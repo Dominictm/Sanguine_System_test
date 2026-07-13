@@ -982,6 +982,110 @@ body {
   .dash-stale-row { min-height: 44px; }
 }
 
+/* ── Экран сессии ── */
+.sess-picker {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 18px;
+  flex-wrap: wrap;
+}
+
+.sess-picker select {
+  min-width: 220px;
+  flex: 1;
+  max-width: 340px;
+}
+
+.sess-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: 20px;
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .sess-grid { grid-template-columns: 1fr; }
+}
+
+.sess-scene-nav {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+#sess-scene-label {
+  color: var(--text3);
+  font-size: var(--fs-base);
+}
+
+.sess-block {
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  margin-bottom: 8px;
+  background: var(--bg3);
+}
+
+.sess-block-head {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  color: var(--text2);
+  font-family: var(--f-body);
+  font-size: var(--fs-lg);
+  padding: 10px 14px;
+  min-height: 44px;
+  cursor: pointer;
+}
+
+.sess-block.open .sess-block-head {
+  color: var(--text);
+}
+
+.sess-block-body {
+  padding: 0 14px 14px;
+}
+
+.sess-side-title {
+  font-family: var(--f-body);
+  font-size: var(--fs-lg);
+  color: var(--text2);
+  margin: 14px 0 8px;
+}
+
+.sess-npc-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.sess-preset {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 0;
+}
+
+.sess-preset.playing .sess-preset-name {
+  color: var(--c-success);
+}
+
+.sess-preset-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--fs-base);
+}
+
+#sess-notes {
+  width: 100%;
+  margin-bottom: 8px;
+}
+
 /* ── Дайс-роллер V20 ── */
 #dice-fab {
   position: fixed;

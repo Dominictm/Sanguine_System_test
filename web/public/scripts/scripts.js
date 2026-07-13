@@ -113,6 +113,7 @@ function navigate(page) {
   if (page === 'chronicles-page') loadChroniclesPage();
   if (page === 'modules')         loadModules();
   if (page === 'module')          loadModulePage();
+  if (page === 'session')    loadSessionScreen();
   if (page === 'threads')    loadThreads();
   if (page === 'locations')  loadLocations();
   if (page === 'library')    loadLibrary();
