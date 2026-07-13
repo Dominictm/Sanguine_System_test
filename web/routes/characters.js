@@ -431,6 +431,46 @@ module.exports = function charactersRouter({
     }
   });
 
+  // ── История изменений карточки (git, только чтение) ─────────────────────────
+  // Graceful: git недоступен или файл вне репо (релизная версия — cities/
+  // пользователя не отслеживается) → {available:false}, HTTP 200, не 500.
+  const { execFile } = require('child_process');
+  const _gitRun = args => new Promise(resolve => {
+    execFile('git', args, { cwd: ROOT, maxBuffer: 4 * 1024 * 1024 }, (err, stdout) =>
+      resolve(err ? null : stdout));
+  });
+  function _charCardRel(city, char) {
+    return path.relative(ROOT, path.join(charsDir(city), char.lineageFolder, char.slug, `${char.slug}.md`));
+  }
+
+  router.get('/api/characters/:slug/history', async (req, res) => {
+    try {
+      const city = reqCity(req);
+      const char = await _resolveChar(city, decodeURIComponent(req.params.slug));
+      if (!char) return res.status(404).json({ error: 'Персонаж не найден' });
+      const out = await _gitRun(['log', '--follow', '-n', '50', '--format=%h%x09%cs%x09%s', '--', _charCardRel(city, char)]);
+      if (out === null) return res.json({ available: false, commits: [] });
+      const commits = out.split('\n').filter(Boolean).map(line => {
+        const [hash, date, ...rest] = line.split('\t');
+        return { hash, date, subject: rest.join('\t') };
+      });
+      res.json({ available: commits.length > 0, commits });
+    } catch (e) { serverError(res, e); }
+  });
+
+  router.get('/api/characters/:slug/history/:hash', async (req, res) => {
+    try {
+      const city = reqCity(req);
+      if (!/^[0-9a-f]{7,40}$/i.test(req.params.hash))
+        return res.status(400).json({ error: 'Некорректный hash коммита' });
+      const char = await _resolveChar(city, decodeURIComponent(req.params.slug));
+      if (!char) return res.status(404).json({ error: 'Персонаж не найден' });
+      const out = await _gitRun(['show', '--format=%h %cs %s', req.params.hash, '--', _charCardRel(city, char)]);
+      if (out === null) return res.status(404).json({ error: 'Коммит не найден' });
+      res.json({ diff: out });
+    } catch (e) { serverError(res, e); }
+  });
+
   router.get('/api/characters/:slug/delete-preview', async (req, res) => {
     try {
       const city = reqCity(req);

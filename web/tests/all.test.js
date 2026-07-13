@@ -1654,6 +1654,28 @@ describe('API — integration', () => {
       assert.equal(typeof body, 'object');
       assert.ok(!Array.isArray(body));
     });
+    it('GET /:slug/history — git-история карточки: available + commits', async () => {
+      const { status, body } = await apiJson(`/api/characters/${CHAR_GERSON}/history${CITY}`);
+      assert.equal(status, 200);
+      assert.equal(body.available, true);
+      assert.ok(Array.isArray(body.commits) && body.commits.length > 0);
+      const c = body.commits[0];
+      assert.match(c.hash, /^[0-9a-f]{7,40}$/i);
+      assert.ok(c.date); assert.ok('subject' in c);
+    });
+    it('GET /:slug/history — несуществующий персонаж → 404', async () => {
+      const { status } = await apiJson(`/api/characters/__nope__/history${CITY}`);
+      assert.equal(status, 404);
+    });
+    it('GET /:slug/history/:hash — дифф валидного коммита содержит diff --git; кривой hash → 400', async () => {
+      const { body } = await apiJson(`/api/characters/${CHAR_GERSON}/history${CITY}`);
+      const hash = body.commits[0].hash;
+      const ok = await apiJson(`/api/characters/${CHAR_GERSON}/history/${hash}${CITY}`);
+      assert.equal(ok.status, 200);
+      assert.ok(ok.body.diff.includes('diff --git'));
+      const bad = await apiJson(`/api/characters/${CHAR_GERSON}/history/nothex!${CITY}`);
+      assert.equal(bad.status, 400);
+    });
     it('GET /:name/sheet — no sheet → {exists: false}', async () => {
       const { status, body } = await apiJson(`/api/characters/${CHAR_GERSON}/sheet${CITY}`);
       assert.equal(status, 200);
