@@ -826,6 +826,21 @@ function _timelineRowFormHtml(epochHeading, rowIndex, row) {
     </div>`;
 }
 
+// Правка существующей строки — форма вставляется прямо ПОД редактируемой
+// строкой таблицы (не внизу блока эпохи/секции). Добавление новой строки
+// по-прежнему использует контейнер под таблицей.
+function _openInlineRowForm(tr, formHtml) {
+  const table = tr.closest('table');
+  table.querySelectorAll('.tl-inline-form-tr').forEach(x => x.remove());
+  const formTr = document.createElement('tr');
+  formTr.className = 'tl-inline-form-tr';
+  const td = document.createElement('td');
+  td.colSpan = tr.children.length;
+  td.innerHTML = `<div class="tl-row-form">${formHtml}</div>`;
+  formTr.appendChild(td);
+  tr.after(formTr);
+}
+
 function _renderLinkChipsInto(container) {
   const chipsEl = container.querySelector('.tl-link-chips');
   if (!chipsEl) return;
@@ -1085,13 +1100,14 @@ document.getElementById('chronicle-content').addEventListener('click', e => {
   if (rowEdit) {
     const epoch = _timelineData.epochs.find(x => x.heading === rowEdit.dataset.epoch);
     const row = epoch.rows[Number(rowEdit.dataset.row)];
-    const container = document.querySelector(`[data-epoch-form="${CSS.escape(rowEdit.dataset.epoch)}"]`);
-    container.innerHTML = _timelineRowFormHtml(rowEdit.dataset.epoch, Number(rowEdit.dataset.row), row);
-    container.hidden = false;
+    _openInlineRowForm(rowEdit.closest('tr'),
+      _timelineRowFormHtml(rowEdit.dataset.epoch, Number(rowEdit.dataset.row), row));
     return;
   }
   if (e.target.classList.contains('tl-row-cancel')) {
-    e.target.closest('.tl-row-form').hidden = true;
+    const inlineTr = e.target.closest('.tl-inline-form-tr');
+    if (inlineTr) inlineTr.remove();
+    else e.target.closest('.tl-row-form').hidden = true;
     return;
   }
   const rowSave = e.target.closest('.tl-row-save');
@@ -1165,13 +1181,14 @@ document.getElementById('chronicle-content').addEventListener('click', e => {
   if (wsRowEdit) {
     const section = _worldStateData.sections.find(s => s.heading === wsRowEdit.dataset.wsSection);
     const cells = section.rows[Number(wsRowEdit.dataset.row)];
-    const container = document.querySelector(`[data-ws-section-form="${CSS.escape(wsRowEdit.dataset.wsSection)}"]`);
-    container.innerHTML = _worldStateRowFormHtml(wsRowEdit.dataset.wsSection, Number(wsRowEdit.dataset.row), section.columns, cells);
-    container.hidden = false;
+    _openInlineRowForm(wsRowEdit.closest('tr'),
+      _worldStateRowFormHtml(wsRowEdit.dataset.wsSection, Number(wsRowEdit.dataset.row), section.columns, cells));
     return;
   }
   if (e.target.classList.contains('ws-row-cancel')) {
-    e.target.closest('.ws-row-form').hidden = true;
+    const inlineTr = e.target.closest('.tl-inline-form-tr');
+    if (inlineTr) inlineTr.remove();
+    else e.target.closest('.ws-row-form').hidden = true;
     return;
   }
   const wsRowSave = e.target.closest('.ws-row-save');

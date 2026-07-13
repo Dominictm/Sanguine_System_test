@@ -982,6 +982,15 @@ body {
   .dash-stale-row { min-height: 44px; }
 }
 
+/* Инлайн-форма правки строки хронологии/состояния мира — внутри таблицы */
+.tl-inline-form-tr > td {
+  padding: 0;
+}
+
+.tl-inline-form-tr .tl-row-form {
+  margin: 6px 0 10px;
+}
+
 /* ── История карточки (git) ── */
 .cdet-hist-item {
   border-bottom: 1px solid var(--border);
