@@ -74,6 +74,9 @@
   --f-head: 'Cinzel', serif;
   --f-body: 'Cormorant Garamond', Georgia, serif;
   --f-mono: 'Share Tech Mono', 'Courier New', monospace;
+  /* Тёмная схема для UA-виджетов (нативные контролы, скроллбары, автозаполнение) —
+     без неё браузер рисует светлые дефолты, слепящие в тёмной комнате. */
+  color-scheme: dark;
   /* ── Type scale (monotonic: 10→11→12→13→14→16→19→25→35→48→64) ──
      --fs-base (16px) = base UI chrome
      --fs-lg  (19px) = elevated UI elements, badges, logos
@@ -879,7 +882,16 @@ body {
 }
 
 .stat-value.accent {
-  color: var(--accent);
+  color: var(--crimson); /* был --accent #8B0000 — 1.9:1 на тёмном, не читался */
+}
+
+.stat-lin-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 8px;
+  vertical-align: middle;
 }
 
 .stat-value.gold {
@@ -4466,10 +4478,10 @@ a:focus-visible {
 }
 
 .chr-modal-title {
-  font-family: Inkulinati-Regular;
+  font-family: 'Inkulinati', 'Cinzel', serif;
   font-size: var(--fs-display-3);
   letter-spacing: .08em;
-  color: var(--accent2);
+  color: var(--crimson);
   margin-bottom: 18px;
 }
 
@@ -4513,8 +4525,17 @@ a:focus-visible {
   justify-content: flex-end;
 }
 
+/* Базовый вид без модификатора — раньше кнопка наследовала белые UA-дефолты
+   (ни фона, ни цвета), слепя в тёмной теме; критика 2026-07-13, P0. */
 .chr-modal-btn {
-  border: 1px solid;
+  border: 1px solid var(--border2);
+  background: var(--bg3);
+  color: var(--text2);
+}
+
+.chr-modal-btn:hover:not(:disabled) {
+  border-color: var(--accent2);
+  color: var(--text);
 }
 
 .chr-modal-btn.cancel {

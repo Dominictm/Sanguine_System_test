@@ -209,10 +209,12 @@ function renderDashboard(s, container, threads) {
 
   const activeLineages = LINEAGES.filter(l => (s[l.key] || 0) > 0);
 
+  // Цифры — читаемым пергаментом (кровь #8B0000 на тёмном давала 1.9:1);
+  // цвет линейки сохранён как тонкий маркер у ярлыка (решение пользователя).
   const lineageCards = activeLineages.map(l => `
       <div class="stat-card">
-        <div class="stat-label">${l.label}</div>
-        <div class="stat-value" id="sv-${l.key}" style="color:${l.color}">0</div>
+        <div class="stat-label"><span class="stat-lin-dot" style="background:${l.color}"></span>${l.label}</div>
+        <div class="stat-value" id="sv-${l.key}">0</div>
       </div>`).join('');
 
   container.innerHTML = `

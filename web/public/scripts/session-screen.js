@@ -76,7 +76,9 @@ async function _sessLoadModule(chr, mod) {
   _sessBlocks = raw.trim()
     ? raw.split(/\n(?=##\s+)/).map(part => {
         const m = part.match(/^##\s+(.+)\n?([\s\S]*)$/);
-        return m ? { heading: m[1].trim(), body: m[2] } : { heading: '', body: part };
+        // Преамбула до первого ##-заголовка (шапка/breadcrumb сценария) —
+        // не «Без заголовка», а вступление.
+        return m ? { heading: m[1].trim(), body: m[2] } : { heading: 'Вступление', body: part };
       }).filter(b => b.heading || b.body.trim())
     : [];
   const saved = _sessStore();
@@ -122,7 +124,12 @@ function _sessGoScene(idx) {
 function _sessRenderNpcs() {
   const el = document.getElementById('sess-npcs');
   const people = [...(_sessDetail?.pcs || []), ...(_sessDetail?.npcs || [])];
-  if (!people.length) { el.innerHTML = ''; return; }
+  if (!people.length) {
+    el.innerHTML = `
+      <div class="sess-side-title">👥 Персонажи модуля</div>
+      <div class="cdet-empty">В карточке модуля не указаны участники</div>`;
+    return;
+  }
   el.innerHTML = `
     <div class="sess-side-title">👥 Персонажи модуля</div>
     <div class="sess-npc-list">
