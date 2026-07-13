@@ -2170,6 +2170,23 @@ describe('API — integration', () => {
     });
   });
 
+  describe('Chronicle book-data', () => {
+    it('GET /api/chronicles/:slug/book-data — display, chronicleMd, modules с finale', async () => {
+      const { status, body } = await apiJson(`/api/chronicles/zimniy_parizh_2010/book-data${CITY}`);
+      assert.equal(status, 200);
+      assert.ok(body.display);
+      assert.ok(body.chronicleMd.length > 0);
+      assert.ok(Array.isArray(body.modules) && body.modules.length > 0);
+      const withFinale = body.modules.find(m => m.name === 'koshki_i_myshki');
+      assert.ok(withFinale && withFinale.finale.length > 0, 'у закрытого модуля должен быть finale');
+      assert.ok(withFinale.title);
+    });
+    it('GET book-data несуществующей хроники → 404', async () => {
+      const { status } = await apiJson(`/api/chronicles/__nope__/book-data${CITY}`);
+      assert.equal(status, 404);
+    });
+  });
+
   // ── Threads — read ─────────────────────────────────────────────────────────
   describe('Threads — read', () => {
     let threads;

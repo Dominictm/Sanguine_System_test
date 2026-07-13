@@ -359,6 +359,35 @@ ${digest}`;
     }
   });
 
+  // ── Книга хроники — сырьё для клиентской сборки (только чтение) ─────────────
+  // { display, chronicleMd, modules: [{name, title, finale}] }; события клиент
+  // берёт существующим GET /api/chronicles/:slug/events.
+  router.get('/api/chronicles/:slug/book-data', async (req, res) => {
+    try {
+      const city   = reqCity(req);
+      const chrDir = path.join(chroniclesDir(city), req.params.slug);
+      const chronicleMd = await fs.readFile(path.join(chrDir, 'chronicle.md'), 'utf-8').catch(() => null);
+      if (chronicleMd === null) return res.status(404).json({ error: 'Хроника не найдена' });
+      const h1 = chronicleMd.match(/^#\s+(.+)$/m);
+      const display = h1 ? h1[1].replace(/[*[\]]/g, '').trim() : req.params.slug;
+
+      const modules = [];
+      let entries; try { entries = await fs.readdir(path.join(chrDir, 'modules'), { withFileTypes: true }); } catch { entries = []; }
+      for (const e of entries) {
+        if (!e.isDirectory() || e.name.startsWith('.')) continue;
+        const modDir = path.join(chrDir, 'modules', e.name);
+        const main   = await fs.readFile(path.join(modDir, `${e.name}.md`), 'utf-8').catch(() => '');
+        const hm     = main.match(/^#\s+(.+)$/m);
+        modules.push({
+          name: e.name,
+          title: hm ? hm[1].replace(/[*[\]]/g, '').trim() : e.name,
+          finale: await fs.readFile(path.join(modDir, 'finale.md'), 'utf-8').catch(() => ''),
+        });
+      }
+      res.json({ display, chronicleMd, modules });
+    } catch (e) { serverError(res, e); }
+  });
+
   router.get('/api/chronicle', async (req, res) => {
     try {
       const city = reqCity(req);
