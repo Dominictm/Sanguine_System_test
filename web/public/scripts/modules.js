@@ -935,7 +935,9 @@ async function openFinalePreview(chr, mod) {
   const modal = document.getElementById('finale-preview-modal');
   const body  = document.getElementById('finale-preview-body');
   const title = document.getElementById('finale-preview-title');
+  const tlBtn = document.getElementById('finale-preview-to-timeline');
   title.textContent = '📜 Финал';
+  tlBtn.style.display = 'none';
   body.innerHTML = '<div class="loading-state"><div class="spinner"></div>Загрузка...</div>';
   openModal('finale-preview-modal');
   try {
@@ -946,10 +948,29 @@ async function openFinalePreview(chr, mod) {
     body.innerHTML = data.finale
       ? mdToHtmlPlain(data.finale)
       : '<div class="cdet-empty">Финал не найден.</div>';
+    if (data.finale) {
+      tlBtn.style.display = '';
+      tlBtn.dataset.chr = chr; tlBtn.dataset.mod = mod;
+      tlBtn.dataset.title = data.title || mod;
+    }
   } catch {
     body.innerHTML = '<div class="cdet-empty">Не удалось загрузить финал.</div>';
   }
 }
+// «🕰️ В хронологию» в шапке модалки хроники — итог всей хроники одной строкой.
+document.getElementById('chd-to-timeline').addEventListener('click', () => {
+  if (!_chrDetailSlug) return;
+  openTimelineAddModal({
+    title: _chrDetailDisplay || _chrDetailSlug,
+    linkText: _chrDetailDisplay || _chrDetailSlug,
+    linkHref: `../chronicles/${_chrDetailSlug}/chronicle.md`,
+  });
+});
+document.getElementById('finale-preview-to-timeline').addEventListener('click', e => {
+  const { chr, mod, title } = e.currentTarget.dataset;
+  closeModal('finale-preview-modal');
+  openTimelineAddModal({ title, linkText: title, linkHref: `../chronicles/${chr}/modules/${mod}/${mod}.md` });
+});
 document.getElementById('finale-preview-close').addEventListener('click', () => {
   closeModal('finale-preview-modal');
 });

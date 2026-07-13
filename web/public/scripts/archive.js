@@ -1236,9 +1236,23 @@ function _loadEventFinale(bodyEl) {
     .then(r => r.json())
     .then(d => {
       finEl.innerHTML = d.finale
-        ? `<div class="md-body chron-md">${mdToHtmlPlain(d.finale)}</div>`
+        ? `<div class="md-body chron-md">${mdToHtmlPlain(d.finale)}</div>
+           <button class="chron-toggle tl-finale-to-timeline" data-chr="${escHtml(d.chronicle || '')}" data-mod="${escHtml(finEl.dataset.finaleMod)}" data-title="${escHtml(d.title || '')}">🕰️ В хронологию мира</button>`
         : '<div class="cdet-empty">Финал модуля ещё не написан</div>';
     })
     .catch(() => { finEl.innerHTML = '<div class="cdet-empty">Не удалось загрузить финал модуля</div>'; });
 }
+
+// Кнопка «В хронологию мира» из блока финала — делегат на document: блок
+// рендерится и в #chronicle-content (события хроники), и в #chr-detail-body
+// (модалка хроники), класс уникальный.
+document.addEventListener('click', e => {
+  const btn = e.target.closest('.tl-finale-to-timeline');
+  if (!btn) return;
+  const { chr, mod, title } = btn.dataset;
+  openTimelineAddModal({
+    title: title || mod, linkText: title || mod,
+    linkHref: chr ? `../chronicles/${chr}/modules/${mod}/${mod}.md` : null,
+  });
+});
 
