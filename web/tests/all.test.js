@@ -2175,7 +2175,7 @@ describe('API — integration', () => {
       const { status, body } = await apiJson(`/api/chronicles/zimniy_parizh_2010/book-data${CITY}`);
       assert.equal(status, 200);
       assert.ok(body.display);
-      assert.ok(body.chronicleMd.length > 0);
+      assert.equal(typeof body.chronicleMd, 'string'); // может быть пустым: старые хроники без chronicle.md
       assert.ok(Array.isArray(body.modules) && body.modules.length > 0);
       const withFinale = body.modules.find(m => m.name === 'koshki_i_myshki');
       assert.ok(withFinale && withFinale.finale.length > 0, 'у закрытого модуля должен быть finale');

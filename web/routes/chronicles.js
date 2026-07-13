@@ -366,9 +366,12 @@ ${digest}`;
     try {
       const city   = reqCity(req);
       const chrDir = path.join(chroniclesDir(city), req.params.slug);
-      const chronicleMd = await fs.readFile(path.join(chrDir, 'chronicle.md'), 'utf-8').catch(() => null);
-      if (chronicleMd === null) return res.status(404).json({ error: 'Хроника не найдена' });
-      const h1 = chronicleMd.match(/^#\s+(.+)$/m);
+      const stat = await fs.stat(chrDir).catch(() => null);
+      if (!stat || !stat.isDirectory()) return res.status(404).json({ error: 'Хроника не найдена' });
+      // chronicle.md опционален — старые хроники хранят только events.md + модули.
+      const chronicleMd = await fs.readFile(path.join(chrDir, 'chronicle.md'), 'utf-8').catch(() => '');
+      const eventsMd    = chronicleMd ? '' : await fs.readFile(path.join(chrDir, 'events.md'), 'utf-8').catch(() => '');
+      const h1 = chronicleMd.match(/^#\s+(.+)$/m) || eventsMd.match(/^#\s+(.+)$/m);
       const display = h1 ? h1[1].replace(/[*[\]]/g, '').trim() : req.params.slug;
 
       const modules = [];
