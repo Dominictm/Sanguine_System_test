@@ -834,7 +834,9 @@ function _renderLinkChipsInto(container) {
 
 // Пикер связей: ищет по уже загруженным STATE.characters/STATE.locations,
 // первые 8 совпадений по имени; выбор добавляет {kind, slug, text} в _pendingLinks.
-document.getElementById('chronicle-content').addEventListener('input', e => {
+// Привязан к обоим контейнерам с формами связей: вкладке хронологии
+// (#chronicle-content) и модалке быстрого добавления (#timeline-add-modal).
+function _tlLinkPickerInput(e) {
   if (!e.target.classList.contains('tl-link-search')) return;
   const q = e.target.value.trim().toLowerCase();
   const suggestEl = e.target.parentElement.querySelector('.tl-link-suggest');
@@ -844,8 +846,8 @@ document.getElementById('chronicle-content').addEventListener('input', e => {
   const matches = [...chars, ...locs].filter(x => x.text.toLowerCase().includes(q)).slice(0, 8);
   suggestEl.innerHTML = matches.map((m, i) => `<div class="tl-link-suggest-item" data-kind="${m.kind}" data-slug="${escHtml(m.slug)}" data-text="${escHtml(m.text)}">${m.kind === 'character' ? '👤' : '📍'} ${escHtml(m.text)}</div>`).join('');
   suggestEl.hidden = matches.length === 0;
-});
-document.getElementById('chronicle-content').addEventListener('click', e => {
+}
+function _tlLinkPickerClick(e) {
   const item = e.target.closest('.tl-link-suggest-item');
   if (item) {
     _pendingLinks.push({ kind: item.dataset.kind, slug: item.dataset.slug, text: item.dataset.text });
@@ -862,6 +864,110 @@ document.getElementById('chronicle-content').addEventListener('click', e => {
     _renderLinkChipsInto(linkRemove.closest('.tl-f-links'));
     return;
   }
+}
+document.getElementById('chronicle-content').addEventListener('input', _tlLinkPickerInput);
+document.getElementById('chronicle-content').addEventListener('click', _tlLinkPickerClick);
+document.getElementById('timeline-add-modal').addEventListener('input', _tlLinkPickerInput);
+document.getElementById('timeline-add-modal').addEventListener('click', _tlLinkPickerClick);
+
+// ═══════════════════════════════════════════════════════════════
+// Быстрое добавление в хронологию мира из финала модуля/хроники
+// ═══════════════════════════════════════════════════════════════
+
+let _cityYearCache; // год активного города из /api/cities/summary (undefined = ещё не загружен)
+
+async function _cityYear() {
+  if (_cityYearCache !== undefined) return _cityYearCache;
+  try {
+    const list = await fetch('/api/cities/summary').then(r => r.json());
+    const city = new URLSearchParams(window.location.search).get('city') || 'paris';
+    _cityYearCache = (list.find(c => c.slug === city) || {}).year || '';
+  } catch { _cityYearCache = ''; }
+  return _cityYearCache;
+}
+
+// Открывает модалку с предзаполненной строкой эпохи.
+// prefill = { title, linkText, linkHref } — заголовок модуля/хроники и
+// относительная (от archive/timeline.md) ссылка на его файл.
+async function openTimelineAddModal(prefill) {
+  const body = document.getElementById('timeline-add-body');
+  const save = document.getElementById('timeline-add-save');
+  body.innerHTML = SPINNER;
+  save.style.display = 'none';
+  openModal('timeline-add-modal');
+  try {
+    const [data, year] = await Promise.all([
+      fetch('/api/timeline/structured' + _cityQS()).then(r => r.json()),
+      _cityYear(), ensureCharsLoaded(), ensureLocsLoaded(),
+    ]);
+    if (!data.epochs || !data.epochs.length) {
+      body.innerHTML = '<div class="cdet-empty">Сначала создайте эпоху на вкладке «Хронология мира».</div>';
+      return;
+    }
+    _pendingLinks = prefill.linkHref
+      ? [{ kind: null, slug: null, text: prefill.linkText || prefill.title, href: prefill.linkHref }]
+      : [];
+    const defType = data.legend.some(l => l.symbol === '🏛️') ? '🏛️' : ((data.legend[0] || {}).symbol || '');
+    body.innerHTML = `
+      <div class="tl-form-fields">
+        <select class="form-control" id="tl-add-epoch-sel">
+          ${data.epochs.map((ep, i) => `<option value="${escHtml(ep.heading)}" ${i === data.epochs.length - 1 ? 'selected' : ''}>${escHtml(ep.heading)}</option>`).join('')}
+        </select>
+        <input type="text" class="form-control tl-f-year" placeholder="Год" value="${escHtml(year)}">
+        <select class="form-control tl-f-type">
+          ${data.legend.map(l => `<option value="${escHtml(l.symbol)}" ${l.symbol === defType ? 'selected' : ''}>${escHtml(l.symbol)} — ${escHtml(l.meaning)}</option>`).join('')}
+        </select>
+        <textarea class="form-control tl-f-event" placeholder="Событие">**${escHtml(prefill.title || '')}.** </textarea>
+        <select class="form-control tl-f-source">
+          <option value="📚">📚 Канон WoD</option>
+          <option value="🏙️" selected>🏙️ Установлено в проекте</option>
+          <option value="❓">❓ Канон неоднозначен</option>
+        </select>
+        <div class="tl-f-links">
+          <input type="text" class="form-control tl-link-search" placeholder="Персонаж/локация...">
+          <div class="tl-link-suggest" hidden></div>
+          <div class="tl-link-chips"></div>
+        </div>
+        <div id="tl-add-error" style="color:var(--accent3)"></div>
+      </div>`;
+    _renderLinkChipsInto(body.querySelector('.tl-f-links'));
+    save.style.display = '';
+    const ta = body.querySelector('.tl-f-event');
+    ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length);
+  } catch {
+    body.innerHTML = '<div class="cdet-empty">⚠ Не удалось загрузить хронологию.</div>';
+  }
+}
+
+document.getElementById('timeline-add-save').addEventListener('click', async () => {
+  const body  = document.getElementById('timeline-add-body');
+  const errEl = document.getElementById('tl-add-error');
+  const year  = body.querySelector('.tl-f-year').value.trim();
+  const event = body.querySelector('.tl-f-event').value.trim();
+  if (!year || !event) { errEl.textContent = 'Заполните год и событие.'; return; }
+  const heading = document.getElementById('tl-add-epoch-sel').value;
+  const btn = document.getElementById('timeline-add-save');
+  btn.disabled = true; errEl.textContent = '';
+  try {
+    const r = await fetch(`/api/timeline/epoch/${encodeURIComponent(heading)}/row${_cityQS()}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        year, event,
+        type: body.querySelector('.tl-f-type').value,
+        source: body.querySelector('.tl-f-source').value,
+        links: _pendingLinks,
+      }),
+    });
+    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || `HTTP ${r.status}`);
+    showToast('Строка добавлена в хронологию мира', 'success');
+    closeModal('timeline-add-modal');
+  } catch (e) {
+    errEl.textContent = 'Ошибка: ' + e.message;
+  } finally { btn.disabled = false; }
+});
+document.getElementById('timeline-add-close').addEventListener('click', () => closeModal('timeline-add-modal'));
+document.getElementById('timeline-add-modal').addEventListener('click', e => {
+  if (e.target === document.getElementById('timeline-add-modal')) closeModal('timeline-add-modal');
 });
 
 // ═══════════════════════════════════════════════════════════════
