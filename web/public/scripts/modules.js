@@ -961,6 +961,78 @@ async function openFinalePreview(chr, mod) {
     body.innerHTML = '<div class="cdet-empty">Не удалось загрузить финал.</div>';
   }
 }
+// ── «📕 Книга» — компиляция хроники в самодостаточный HTML-документ ──────────
+// Сборка на клиенте (серверного MD-рендерера нет): book-data + events →
+// новая вкладка с инлайн-CSS (тёмная тема + светлая печать). Ссылки на .md
+// в отдельном документе мертвы — упрощаются до текста.
+function _bookMd(md) {
+  return mdToHtmlBlock((md || '').replace(/\[([^\]]+)\]\([^)]*\.md[^)]*\)/g, '$1'));
+}
+
+async function _chrBuildBook() {
+  if (!_chrDetailSlug) return;
+  const qs = window.location.search;
+  let data, events;
+  try {
+    [data, events] = await Promise.all([
+      fetch(`/api/chronicles/${encodeURIComponent(_chrDetailSlug)}/book-data${qs}`).then(r => r.json()),
+      fetch(`/api/chronicles/${encodeURIComponent(_chrDetailSlug)}/events${qs}`).then(r => r.json()),
+    ]);
+  } catch { showToast('Не удалось собрать книгу', 'error'); return; }
+  if (data.error) { showToast(data.error, 'error'); return; }
+
+  const eventsHtml = (Array.isArray(events) ? events : []).map(ev => `
+    <article class="book-event">
+      <h3>📅 ${escHtml(ev.date || '')}${ev.title ? ` — ${escHtml(ev.title)}` : ''}</h3>
+      ${ev.location?.text ? `<p class="book-loc">📍 ${escHtml(ev.location.text)}</p>` : ''}
+      ${ev.eventsText ? _bookMd(ev.eventsText) : ''}
+      ${ev.consequences?.length ? `<h4>Последствия</h4><ul>${ev.consequences.map(c => `<li>${escHtml(c)}</li>`).join('')}</ul>` : ''}
+    </article>`).join('');
+
+  const finalesHtml = (data.modules || []).filter(m => m.finale && m.finale.trim()).map(m => `
+    <section class="book-section">
+      <h2>📜 ${escHtml(m.title)}</h2>
+      ${_bookMd(m.finale)}
+    </section>`).join('');
+
+  const html = `<!DOCTYPE html><html lang="ru"><head><meta charset="utf-8">
+<title>${escHtml(data.display)}</title>
+<style>
+  body { background: #0d0a12; color: #d8d2c8; font: 16px/1.65 Georgia, 'Times New Roman', serif;
+         max-width: 72ch; margin: 0 auto; padding: 48px 24px; }
+  h1, h2, h3, h4 { font-family: Georgia, serif; color: #e8e2d8; line-height: 1.25; }
+  h1 { font-size: 2rem; } h2 { font-size: 1.5rem; margin-top: 2.2em; } h3 { font-size: 1.15rem; margin-top: 1.6em; }
+  .book-title { text-align: center; margin-bottom: 3em; }
+  .book-title .sub { color: #8a8378; }
+  .book-section, .book-event { margin-bottom: 1.6em; }
+  .book-loc { color: #8a8378; margin-top: -0.4em; }
+  blockquote { border-left: 2px solid #5a4a4a; margin-left: 0; padding-left: 1em; color: #b0a898; }
+  hr { border: none; border-top: 1px solid #3a3340; margin: 2em 0; }
+  a { color: inherit; text-decoration: none; pointer-events: none; }
+  @media print {
+    body { background: #fff; color: #1a1a1a; padding: 0; }
+    h1, h2, h3, h4 { color: #000; }
+    .book-section, .book-event { break-inside: avoid; }
+    h2 { break-before: page; }
+    .book-title h2 { break-before: auto; }
+  }
+</style></head><body>
+  <div class="book-title">
+    <h1>${escHtml(data.display)}</h1>
+    <p class="sub">Sanguine System · собрано ${escHtml(new Date().toLocaleDateString('ru-RU'))}</p>
+  </div>
+  ${data.chronicleMd ? `<section class="book-section">${_bookMd(data.chronicleMd)}</section>` : ''}
+  ${eventsHtml ? `<section class="book-section"><h2>📅 События</h2>${eventsHtml}</section>` : ''}
+  ${finalesHtml ? `<h2>📜 Финалы модулей</h2>${finalesHtml}` : ''}
+</body></html>`;
+
+  const win = window.open('', '_blank');
+  if (!win) { showToast('Браузер заблокировал всплывающее окно', 'error'); return; }
+  win.document.write(html);
+  win.document.close();
+}
+document.getElementById('chd-book').addEventListener('click', _chrBuildBook);
+
 // «🕰️ В хронологию» в шапке модалки хроники — итог всей хроники одной строкой.
 document.getElementById('chd-to-timeline').addEventListener('click', () => {
   if (!_chrDetailSlug) return;
