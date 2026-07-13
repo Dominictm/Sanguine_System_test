@@ -1082,14 +1082,25 @@ body {
 }
 
 @media (max-width: 900px) {
-  .sess-grid { grid-template-columns: 1fr; }
+  /* minmax(0,1fr), не 1fr: auto-минимум трека распирала строка кнопок сцен —
+     на 375px контент вылезал за viewport на ~50px (критика 2026-07-13). */
+  .sess-grid { grid-template-columns: minmax(0, 1fr); }
+}
+
+.sess-main {
+  min-width: 0;
 }
 
 .sess-scene-nav {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 12px;
   margin-bottom: 12px;
+}
+
+.sess-scene-nav .chr-modal-btn {
+  padding: 8px 16px;
 }
 
 #sess-scene-label {
@@ -1218,12 +1229,13 @@ body {
 
 .dice-sheet-row {
   display: flex;
+  flex-direction: column; /* селекты в столбик: в 300px-панели рядом они обрезали «— атрибут —» */
   gap: 8px;
   margin-bottom: 10px;
 }
 
 .dice-sheet-row select {
-  flex: 1;
+  width: 100%;
   min-width: 0;
 }
 
@@ -2311,7 +2323,8 @@ select.form-control {
   .chp-create-btn, .btn-create-char, .filter-select, .filter-input,
   .form-control, .ais-input, .ais-select, .chr-form-input,
   .city-edit-btn, .city-del-btn, .mod-gen-scenario-btn, .nav-item,
-  .cdet-faction-chip, .modp-edit-btn {
+  .cdet-faction-chip, .modp-edit-btn,
+  .tour-replay-btn, .city-switch-add, .chd-dir-btn, button.chron-chip {
     min-height: 44px;
   }
 
@@ -6066,7 +6079,7 @@ a:focus-visible {
   background: var(--bg4);
   border: 1px solid var(--border);
   border-radius: var(--r-sm);
-  padding: 3px 9px;
+  padding: 5px 12px; /* было 3px 9px — тесно для 25px-текста (детектор: cramped-padding) */
   white-space: nowrap;
   max-width: 100%;
   overflow: hidden;
