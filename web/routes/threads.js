@@ -8,7 +8,7 @@ const path    = require('path');
 const fs      = require('fs').promises;
 const { serverError } = require('../lib/http');
 const { DEFAULT_CITY, cityDir, chroniclesDir, reqCity, writeFileAtomic } = require('../lib/db');
-const { THREAD_STATUS, parseThreadsContent } = require('../lib/parsers');
+const { THREAD_STATUS, parseThreadsContent, threadSourceDate } = require('../lib/parsers');
 
 const router = express.Router();
 
@@ -25,6 +25,15 @@ async function readThreadsStructured(city = DEFAULT_CITY) {
     const raw = await fs.readFile(path.join(cityDir(city), rel), 'utf-8').catch(() => null);
     if (raw) threads.push(...parseThreadsContent(raw, rel));
   }
+  // Игровая давность: месяцы от даты источника нити до самой свежей даты
+  // среди нитей города (не реальное время и не git-дата файла).
+  const dates = threads.map(t => threadSourceDate(t.source));
+  const keys  = dates.filter(Boolean).map(d => d.year * 12 + d.month);
+  const ref   = keys.length ? Math.max(...keys) : null;
+  threads.forEach((t, i) => {
+    t.sourceDate  = dates[i];
+    t.staleMonths = (ref !== null && dates[i]) ? ref - (dates[i].year * 12 + dates[i].month) : null;
+  });
   return threads;
 }
 

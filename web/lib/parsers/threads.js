@@ -38,4 +38,31 @@ function parseThreadsContent(content, file) {
   return out;
 }
 
-module.exports = { threadStatusKey, parseThreadsContent };
+// ── Игровая дата источника нити ────────────────────────────────────────────────
+// Колонка «Источник» обычно кончается игровой датой упоминания
+// («Кошки и мышки», ноябрь 2010). Стемы отсортированы по убыванию длины,
+// чтобы матч был однозначным («сент» раньше «сен»).
+const RU_MONTH_STEMS = [
+  ['сент', 9], ['нояб', 11], ['март', 3],
+  ['янв', 1], ['фев', 2], ['мар', 3], ['апр', 4], ['мая', 5], ['май', 5],
+  ['июн', 6], ['июл', 7], ['авг', 8], ['сен', 9], ['окт', 10], ['ноя', 11], ['дек', 12],
+];
+
+/**
+ * Последняя пара «месяц год» в тексте источника нити.
+ * @param {string} source — ячейка «Источник» из open_threads.md
+ * @returns {{year: number, month: number} | null}
+ */
+function threadSourceDate(source) {
+  let last = null;
+  const re = /([а-яё]+)\s+(\d{4})/gi;
+  let m;
+  while ((m = re.exec(source || '')) !== null) {
+    const word = m[1].toLowerCase();
+    const hit = RU_MONTH_STEMS.find(([stem]) => word.startsWith(stem));
+    if (hit) last = { year: parseInt(m[2]), month: hit[1] };
+  }
+  return last;
+}
+
+module.exports = { threadStatusKey, parseThreadsContent, threadSourceDate };

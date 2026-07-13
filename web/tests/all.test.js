@@ -247,6 +247,21 @@ describe('Parsers — unit', () => {
     });
   });
 
+  describe('parsers/threads.js — threadSourceDate', () => {
+    const { threadSourceDate } = require('../lib/parsers');
+    it('извлекает месяц+год из хвоста источника', () => {
+      assert.deepEqual(threadSourceDate('«Кошки и мышки», ноябрь 2010'), { year: 2010, month: 11 });
+      assert.deepEqual(threadSourceDate('«Деньги не проблема», январь 2011 ⟨котерия ДНП⟩'), { year: 2011, month: 1 });
+    });
+    it('при нескольких датах берёт последнюю', () => {
+      assert.deepEqual(threadSourceDate('Карточка; «Цирк», сентябрь 2009; финал, декабрь 2010'), { year: 2010, month: 12 });
+    });
+    it('без даты или только год → null', () => {
+      assert.equal(threadSourceDate('Карточка Верене; «Кошки и мышки»'), null);
+      assert.equal(threadSourceDate('архив 2010'), null);
+    });
+  });
+
   describe('parsers/timeline.js', () => {
     const { parseTimelineMd, addTimelineEpoch, removeTimelineEpoch,
             addTimelineRow, updateTimelineRow, removeTimelineRow } = require('../lib/parsers');
@@ -2112,6 +2127,12 @@ describe('API — integration', () => {
         assert.equal(typeof t.id, 'number');
         assert.ok(t.title); assert.ok(t.status); assert.ok(t.file);
       }
+    });
+    it('элементы имеют staleMonths (игровая давность) относительно самой свежей нити', () => {
+      const dated = threads.filter(t => t.staleMonths !== null && t.staleMonths !== undefined);
+      assert.ok(dated.length > 0, 'ни у одной нити не распознана дата источника');
+      assert.ok(dated.some(t => t.staleMonths === 0), 'нет нити с давностью 0 (самой свежей)');
+      assert.ok(dated.every(t => t.staleMonths >= 0));
     });
     it('file paths match whitelist pattern', () => {
       const re = /^(archive\/open_threads\.md|chronicles\/[^/]+\/open_threads\.md)$/;
