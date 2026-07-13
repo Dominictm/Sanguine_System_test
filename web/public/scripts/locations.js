@@ -1329,7 +1329,7 @@ function _fillAttachList(linkedSlugs, query = '') {
           ${escHtml(title)}${meta ? ` <span style="color:var(--muted);font-size:var(--fs-xs)">(${escHtml(meta)})</span>` : ''}
         </div>`;
       }).join('')
-    : '<div style="padding:6px;color:var(--muted);font-size:var(--fs-sm)">Локации не найдены</div>';
+    : '<div style="padding:6px;color:var(--muted);font-size:var(--fs-lg)">Локации не найдены</div>';
 
   listEl.querySelectorAll('.modp-loc-attach-item:not(.already-linked)').forEach(el => {
     el.addEventListener('click', () => {

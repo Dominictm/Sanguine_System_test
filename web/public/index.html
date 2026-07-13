@@ -152,10 +152,10 @@
         </div>
         <!-- impeccable-variants-end c906fd2d -->
         <button class="btn-create-char" id="btn-open-create-char">+ Создать</button>
-        <a class="chr-modal-btn" id="btn-export-chars" href="#" style="padding:5px 12px;font-size:var(--fs-sm)">⇩ Экспорт</a>
-        <a class="chr-modal-btn" id="btn-import-chars" href="#" style="padding:5px 12px;font-size:var(--fs-sm)">⇧ Импорт</a>
-        <button class="chr-modal-btn" id="btn-export-foundry-bulk" style="padding:5px 12px;font-size:var(--fs-sm)">🜏 Экспорт в Foundry</button>
-        <button class="chr-modal-btn cancel" id="btn-export-foundry-cancel" style="padding:5px 12px;font-size:var(--fs-sm);display:none">✕ Отмена</button>
+        <a class="chr-modal-btn" id="btn-export-chars" href="#" style="padding:5px 12px;font-size:var(--fs-lg)">⇩ Экспорт</a>
+        <a class="chr-modal-btn" id="btn-import-chars" href="#" style="padding:5px 12px;font-size:var(--fs-lg)">⇧ Импорт</a>
+        <button class="chr-modal-btn" id="btn-export-foundry-bulk" style="padding:5px 12px;font-size:var(--fs-lg)">🜏 Экспорт в Foundry</button>
+        <button class="chr-modal-btn cancel" id="btn-export-foundry-cancel" style="padding:5px 12px;font-size:var(--fs-lg);display:none">✕ Отмена</button>
         <input type="file" id="import-chars-file" accept="application/json,.json" style="display:none">
         <input type="file" id="import-foundry-file" accept="application/json,.json" style="display:none">
       </div>
@@ -515,7 +515,7 @@
       <div class="chr-modal" style="max-width:440px">
         <div class="chr-modal-title" id="modp-delete-title">🗑 Удалить модуль?</div>
         <div id="modp-del-preview" class="chr-modal-body"></div>
-        <div style="margin:8px 16px;font-size:var(--fs-sm);color:var(--text2)">
+        <div style="margin:8px 16px;font-size:var(--fs-lg);color:var(--text2)">
           <label>
             <input type="checkbox" id="modp-del-unlock-check"> Я понимаю последствия
           </label>
@@ -534,7 +534,7 @@
         <div class="chr-modal-body">
           <div class="chr-modal-warn">Будут сгенерированы финал и каноничное событие в хронику. Действие пишет канон и необратимо.</div>
           <div id="modp-close-nosessions" class="chr-modal-section" style="display:none">⚠️ У модуля нет записей сессий — финал/событие будут собраны из сценария.</div>
-          <label style="display:flex;align-items:center;gap:8px;margin-top:10px;font-size:var(--fs-sm)">
+          <label style="display:flex;align-items:center;gap:8px;margin-top:10px;font-size:var(--fs-lg)">
             <input type="checkbox" id="modp-close-diaries-check">
             Также сгенерировать дневники участников (по дате модуля)
           </label>
@@ -692,9 +692,9 @@
           <option value="high">🔴 Высокий</option>
         </select>
       </div>
-      <button class="chr-modal-btn create" id="loc-page-create-btn" style=" margin-bottom: 10px; padding:5px 12px;font-size:var(--fs-sm)">+ Создать локацию</button>
-      <a class="chr-modal-btn" id="btn-export-locs" href="#" style="margin-bottom:10px;margin-left:8px;padding:5px 12px;font-size:var(--fs-sm)">⇩ Экспорт</a>
-      <a class="chr-modal-btn" id="btn-import-locs" href="#" style="margin-bottom:10px;margin-left:8px;padding:5px 12px;font-size:var(--fs-sm)">⇧ Импорт</a>
+      <button class="chr-modal-btn create" id="loc-page-create-btn" style=" margin-bottom: 10px; padding:5px 12px;font-size:var(--fs-lg)">+ Создать локацию</button>
+      <a class="chr-modal-btn" id="btn-export-locs" href="#" style="margin-bottom:10px;margin-left:8px;padding:5px 12px;font-size:var(--fs-lg)">⇩ Экспорт</a>
+      <a class="chr-modal-btn" id="btn-import-locs" href="#" style="margin-bottom:10px;margin-left:8px;padding:5px 12px;font-size:var(--fs-lg)">⇧ Импорт</a>
       <input type="file" id="import-locs-file" accept="application/json,.json" style="display:none">
       <div id="locs-grid" class="locs-grid">
         <div class="loading-state"><div class="spinner"></div>Загрузка...</div>
