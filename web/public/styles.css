@@ -232,6 +232,23 @@ body {
   text-transform: uppercase;
 }
 
+/* Ярлык группы навигации (Мир / Игра / Архив) — печать Cinzel, шепчет в покое */
+.nav-group-label {
+  font-family: var(--f-heading);
+  font-size: var(--fs-3xs);
+  letter-spacing: .28em;
+  text-transform: uppercase;
+  color: var(--text3);
+  padding: 14px 18px 4px;
+  border-top: 1px solid var(--border);
+  margin-top: 8px;
+}
+
+.nav-group-label:first-child {
+  border-top: none;
+  margin-top: 0;
+}
+
 .nav-menu {
   flex: 1;
   /* #sidebar is overflow:hidden (so its decorative ::before glow never
