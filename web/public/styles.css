@@ -982,6 +982,143 @@ body {
   .dash-stale-row { min-height: 44px; }
 }
 
+/* ── Дайс-роллер V20 ── */
+#dice-fab {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  border: 1px solid var(--border2);
+  background: var(--bg4);
+  font-size: var(--fs-xl);
+  cursor: pointer;
+  z-index: var(--z-sticky);
+}
+
+#dice-fab:hover {
+  border-color: var(--accent2);
+}
+
+#dice-panel {
+  position: fixed;
+  right: 20px;
+  bottom: 76px;
+  width: 300px;
+  max-width: calc(100vw - 40px);
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  padding: 14px;
+  z-index: var(--z-sticky);
+}
+
+.dice-panel-title {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-family: var(--f-body);
+  font-size: var(--fs-lg);
+  color: var(--text2);
+  margin-bottom: 10px;
+}
+
+.dice-panel-title button {
+  background: none;
+  border: none;
+  color: var(--text3);
+  cursor: pointer;
+  font-size: var(--fs-lg);
+  min-width: 32px;
+  min-height: 32px;
+}
+
+.dice-sheet-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.dice-sheet-row select {
+  flex: 1;
+  min-width: 0;
+}
+
+.dice-inputs {
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+  margin-bottom: 10px;
+}
+
+.dice-inputs label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: var(--fs-sm);
+  color: var(--text3);
+  flex: 1;
+}
+
+.dice-dice {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.dice-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--border);
+  color: var(--text3);
+  font-size: var(--fs-base);
+}
+
+.dice-chip.hit {
+  color: var(--text);
+  border-color: var(--border2);
+  background: var(--bg4);
+}
+
+.dice-chip.ten  { border-color: var(--gold); color: var(--gold); }
+.dice-chip.one  { border-color: var(--accent); color: var(--accent); }
+.dice-chip.reroll { opacity: 0.75; }
+
+.dice-sep {
+  color: var(--text3);
+  padding: 0 2px;
+}
+
+.dice-verdict {
+  font-family: var(--f-body);
+  font-size: var(--fs-lg);
+}
+
+.dice-verdict.ok    { color: var(--c-success); }
+.dice-verdict.fail  { color: var(--text3); }
+.dice-verdict.botch { color: var(--accent); }
+
+#dice-history {
+  margin-top: 10px;
+  border-top: 1px solid var(--border);
+  padding-top: 6px;
+  max-height: 140px;
+  overflow-y: auto;
+}
+
+.dice-hist-row {
+  font-size: var(--fs-sm);
+  color: var(--text3);
+  padding: 2px 0;
+}
+
 /* ── Character cards ── */
 .filter-bar {
   display: flex;

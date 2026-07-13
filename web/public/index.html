@@ -1384,6 +1384,23 @@
   <div class="lightbox-counter" id="lightbox-counter"></div>
 </div>
 
+<!-- ── Дайс-роллер V20 (dice.js) ── -->
+<button id="dice-fab" title="Дайс-роллер V20" aria-label="Дайс-роллер V20">🎲</button>
+<div id="dice-panel" hidden>
+  <div class="dice-panel-title">🎲 Бросок V20 <button id="dice-close" aria-label="Закрыть">✕</button></div>
+  <div class="dice-sheet-row" id="dice-sheet-row" hidden>
+    <select class="form-control" id="dice-attr-sel"><option value="">— атрибут —</option></select>
+    <select class="form-control" id="dice-abil-sel"><option value="">— способность —</option></select>
+  </div>
+  <div class="dice-inputs">
+    <label>Пул <input class="form-control" id="dice-pool" type="number" min="1" max="20" value="5"></label>
+    <label>Сложность <input class="form-control" id="dice-diff" type="number" min="2" max="10" value="6"></label>
+    <button class="chr-modal-btn" id="dice-roll">Бросить</button>
+  </div>
+  <div id="dice-result"></div>
+  <div id="dice-history"></div>
+</div>
+
 <div id="toast-container" aria-live="polite" aria-atomic="false"></div>
 
 <script src="scripts/rules-v20.js"></script>
@@ -1392,6 +1409,7 @@
 <script src="scripts/locations.js"></script>
 <script src="scripts/v20-sheet.js"></script>
 <script src="scripts/audio-library.js"></script>
+<script src="scripts/dice.js"></script>
 <script src="scripts/scripts.js"></script>
 <script src="scripts/char-detail.js"></script>
 <script src="scripts/archive.js"></script>
