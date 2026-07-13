@@ -2925,6 +2925,25 @@ describe('API — integration', () => {
       assert.equal(epoch.rows.length, 0);
     });
 
+    it('POST/PUT row: сырые ссылки {text, href} проходят без kind и не теряются при правке', async () => {
+      await apiJson(`/api/timeline/epoch${CITY}`, { method: 'POST', body: JSON.stringify({ heading: '__TEST_EPOCH_3__' }) });
+      const rawLink = { text: 'Модуль-тест', href: '../chronicles/x/modules/y/y.md' };
+      const added = await apiJson(`/api/timeline/epoch/${encodeURIComponent('__TEST_EPOCH_3__')}/row${CITY}`,
+        { method: 'POST', body: JSON.stringify({ year: '2010', type: '🏛️', event: 'Сырая ссылка', source: '🏙️', links: [rawLink] }) });
+      assert.equal(added.status, 200);
+      let epoch = added.body.epochs.find(e => e.heading === '__TEST_EPOCH_3__');
+      assert.deepEqual(epoch.rows[0].links, [rawLink]);
+
+      // PUT со связями в том виде, в каком их отдаёт парсер ({text, href}, без kind) —
+      // регресс: раньше такие связи молча отбрасывались при правке строки.
+      const updated = await apiJson(`/api/timeline/epoch/${encodeURIComponent('__TEST_EPOCH_3__')}/row/0${CITY}`,
+        { method: 'PUT', body: JSON.stringify({ ...epoch.rows[0], event: 'Сырая ссылка (правка)' }) });
+      assert.equal(updated.status, 200);
+      epoch = updated.body.epochs.find(e => e.heading === '__TEST_EPOCH_3__');
+      assert.equal(epoch.rows[0].event, 'Сырая ссылка (правка)');
+      assert.deepEqual(epoch.rows[0].links, [rawLink]);
+    });
+
     it('PUT row с несуществующим индексом → 409', async () => {
       const { status } = await apiJson(`/api/timeline/epoch/${encodeURIComponent('__TEST_EPOCH__')}/row/99${CITY}`,
         { method: 'PUT', body: JSON.stringify({ year: '', type: '', event: 'x', source: '', links: [] }) });

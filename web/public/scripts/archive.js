@@ -804,7 +804,7 @@ function renderTimelineForm(data) {
 // Форма add/edit одной записи хронологии — переиспользуется и для новой
 // строки (row=null), и для правки существующей.
 function _timelineRowFormHtml(epochHeading, rowIndex, row) {
-  _pendingLinks = (row?.links || []).map(l => ({ kind: l.kind || null, slug: l.slug || null, text: l.text }));
+  _pendingLinks = (row?.links || []).map(l => ({ kind: l.kind || null, slug: l.slug || null, text: l.text, href: l.href || null }));
   const linkChips = () => _pendingLinks.map((l, i) => `<span class="chron-chip" data-link-idx="${i}">${escHtml(l.text)} <a href="#" class="tl-link-remove" data-idx="${i}">✕</a></span>`).join('');
   return `
     <div class="tl-form-fields">

@@ -22,7 +22,8 @@ const router = express.Router();
 // Резолвит {kind, slug} → относительная markdown-ссылка от archive/timeline.md
 // (персонажи: ../characters/<lineageFolder>/<slug>/<slug>.md; локации:
 // ../locations/<dirRelPath>/<slug>.md, где dirRelPath уже содержит district_NN/<район>).
-async function _resolveTimelineLink(city, { kind, slug }) {
+async function _resolveTimelineLink(city, l) {
+  const { kind, slug } = l || {};
   if (kind === 'character') {
     const chars = await getAllCharacters(city);
     const c = chars.find(x => x.slug === slug);
@@ -31,10 +32,13 @@ async function _resolveTimelineLink(city, { kind, slug }) {
   }
   if (kind === 'location') {
     const locs = await getAllLocations(city);
-    const l = locs.find(x => x.slug === slug);
-    if (!l) return null;
-    return { text: l.name, href: `../locations/${l.dirRelPath}/${l.slug}.md` };
+    const loc = locs.find(x => x.slug === slug);
+    if (!loc) return null;
+    return { text: loc.name, href: `../locations/${loc.dirRelPath}/${loc.slug}.md` };
   }
+  // Готовая ссылка ({text, href} без kind) — модуль/хроника/журнал или связи
+  // существующей строки, которые парсер отдаёт без kind/slug. Пропускаем как есть.
+  if (l && l.text && l.href) return { text: String(l.text), href: String(l.href) };
   return null;
 }
 async function _resolveTimelineLinks(city, links) {
