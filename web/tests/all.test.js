@@ -247,6 +247,40 @@ describe('Parsers — unit', () => {
     });
   });
 
+  describe('dice.js — rollV20Pool', () => {
+    const { rollV20Pool } = require('../public/scripts/dice.js');
+    // rng-заглушка: выдаёт ровно заданную последовательность кубиков
+    const seq = arr => { let i = 0; return () => (arr[i++ % arr.length] - 0.5) / 10; };
+    it('успехи и вычет единиц', () => {
+      const r = rollV20Pool({ pool: 5, difficulty: 6, rng: seq([7, 8, 3, 1, 6]) });
+      assert.deepEqual(r.dice, [7, 8, 3, 1, 6]);
+      assert.equal(r.successes, 3); assert.equal(r.ones, 1); assert.equal(r.net, 2);
+      assert.equal(r.result, 'success');
+    });
+    it('ботч: 0 успехов до вычета + единица', () => {
+      const r = rollV20Pool({ pool: 3, difficulty: 6, rng: seq([1, 3, 5]) });
+      assert.equal(r.result, 'botch');
+    });
+    it('не ботч, если успех был, но единицы съели всё', () => {
+      const r = rollV20Pool({ pool: 3, difficulty: 6, rng: seq([7, 1, 1]) });
+      assert.equal(r.net, 0); assert.equal(r.result, 'failure');
+    });
+    it('10-again: десятка даёт успех и перебрасывается; переброс может успеть', () => {
+      const r = rollV20Pool({ pool: 2, difficulty: 6, rng: seq([10, 3, 8]) });
+      assert.deepEqual(r.dice, [10, 3]); assert.deepEqual(r.rerolls, [8]);
+      assert.equal(r.net, 2);
+    });
+    it('единица на перебросе не вычитает и не ботчит', () => {
+      const r = rollV20Pool({ pool: 1, difficulty: 6, rng: seq([10, 1]) });
+      assert.equal(r.net, 1); assert.equal(r.result, 'success');
+    });
+    it('цепочка десяток взрывается дальше, но конечна', () => {
+      const r = rollV20Pool({ pool: 1, difficulty: 6, rng: seq([10, 10, 4]) });
+      assert.deepEqual(r.rerolls, [10, 4]);
+      assert.equal(r.net, 2);
+    });
+  });
+
   describe('parsers/threads.js — threadSourceDate', () => {
     const { threadSourceDate } = require('../lib/parsers');
     it('извлекает месяц+год из хвоста источника', () => {
