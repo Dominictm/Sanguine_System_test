@@ -9,7 +9,7 @@ const fs      = require('fs').promises;
 const { serverError } = require('../lib/http');
 const { archiveDir, cityDir, reqCity, writeFileAtomic, getAllCharacters, getAllLocations } = require('../lib/db');
 const {
-  parsePoliticalFactions, setPoliticalFactionInfluence, parseCityMd,
+  parsePoliticalFactions, setPoliticalFactionInfluence, removePoliticalFaction, parseCityMd,
   parseTimelineMd, addTimelineEpoch, removeTimelineEpoch,
   addTimelineRow, updateTimelineRow, removeTimelineRow,
   parseWorldStateBlock, replaceWorldStateBlock, setWorldStateLastUpdate,
@@ -98,6 +98,20 @@ router.put('/api/factions/influence', express.json(), async (req, res) => {
     const raw  = await fs.readFile(file, 'utf-8').catch(() => '');
     const updated = setPoliticalFactionInfluence(raw, name, influence);
     await fs.mkdir(archiveDir(city), { recursive: true });
+    await writeFileAtomic(file, updated, 'utf-8');
+    res.json({ ok: true, factions: parsePoliticalFactions(updated) });
+  } catch (e) { serverError(res, e); }
+});
+
+router.delete('/api/factions/influence/:name', async (req, res) => {
+  try {
+    const city = reqCity(req);
+    const name = decodeURIComponent(req.params.name).trim();
+    if (!name) return res.status(400).json({ error: 'Укажи название фракции' });
+    const file = path.join(archiveDir(city), 'political_state.md');
+    const raw  = await fs.readFile(file, 'utf-8').catch(() => '');
+    const { updated, found } = removePoliticalFaction(raw, name);
+    if (!found) return res.status(404).json({ error: `Фракция «${name}» не найдена` });
     await writeFileAtomic(file, updated, 'utf-8');
     res.json({ ok: true, factions: parsePoliticalFactions(updated) });
   } catch (e) { serverError(res, e); }

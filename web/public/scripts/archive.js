@@ -418,6 +418,7 @@ async function loadFactionsInfluence() {
         <div class="faction-inf-bar-fill" style="width:${f.influence}%"></div>
       </div>
       <input type="number" class="faction-inf-input" min="0" max="100" step="5" value="${f.influence}">
+      <button class="chron-toggle faction-inf-del" title="Удалить фракцию «${escAttr(f.name)}»" aria-label="Удалить фракцию ${escAttr(f.name)}">🗑</button>
     </div>`).join('');
 
   panel.innerHTML = `
@@ -446,6 +447,22 @@ async function loadFactionsInfluence() {
         if (!r.ok) throw new Error(r.error || 'Ошибка');
         row.querySelector('.faction-inf-bar-fill').style.width = val + '%';
       } catch (e) { showToast('Не удалось сохранить влияние: ' + e.message, 'error'); }
+    });
+  });
+
+  panel.querySelectorAll('.faction-inf-del').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const name = btn.closest('.faction-inf-row').dataset.faction;
+      const ok = typeof showConfirm === 'function'
+        ? await showConfirm(`Удалить фракцию «${name}» из карты влияний?`, { confirmText: 'Удалить' })
+        : window.confirm(`Удалить фракцию «${name}»?`);
+      if (!ok) return;
+      try {
+        const r = await fetch(`/api/factions/influence/${encodeURIComponent(name)}${window.location.search}`,
+          { method: 'DELETE' }).then(r => r.json());
+        if (!r.ok) throw new Error(r.error || 'Ошибка');
+        await loadFactionsInfluence();
+      } catch (e) { showToast('Не удалось удалить фракцию: ' + e.message, 'error'); }
     });
   });
 

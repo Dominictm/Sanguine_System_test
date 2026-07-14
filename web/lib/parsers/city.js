@@ -292,7 +292,29 @@ function setPoliticalFactionInfluence(raw, name, influence) {
   return lines.join('\n');
 }
 
+/**
+ * Удаляет строку фракции из таблицы «Баланс сил — обзор», не трогая остальное.
+ * @param {string} raw — содержимое political_state.md
+ * @param {string} name — точное название фракции
+ * @returns {{updated: string, found: boolean}}
+ */
+function removePoliticalFaction(raw, name) {
+  const text = String(raw == null ? '' : raw).replace(/^﻿/, '').replace(/\r\n/g, '\n');
+  const lines = text.split('\n');
+  const headerIdx = lines.findIndex(l => _POLFAC_HEADER_RE.test(l));
+  if (headerIdx === -1) return { updated: text, found: false };
+  let i = headerIdx + 2;
+  while (i < lines.length && /^\s*\|/.test(lines[i])) {
+    if (_polFacRow(lines[i])[0] === name) {
+      lines.splice(i, 1);
+      return { updated: lines.join('\n'), found: true };
+    }
+    i++;
+  }
+  return { updated: text, found: false };
+}
+
 module.exports = {
   CITY_SECTIONS, CITY_DEFAULT_DESCRIPTION, buildCityMd, parseCityMd,
-  cityScaffold, parsePoliticalFactions, setPoliticalFactionInfluence,
+  cityScaffold, parsePoliticalFactions, setPoliticalFactionInfluence, removePoliticalFaction,
 };

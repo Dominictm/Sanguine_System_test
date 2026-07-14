@@ -2885,6 +2885,16 @@ describe('API — integration', () => {
       assert.equal(badVal.status, 400);
     });
 
+    it('DELETE /api/factions/influence/:name — удаляет фракцию; неизвестная → 404', async () => {
+      await apiJson(`/api/factions/influence${CITY}`,
+        { method: 'PUT', body: JSON.stringify({ name: '__DEL_TEST__', influence: 20 }) });
+      const del = await apiJson(`/api/factions/influence/${encodeURIComponent('__DEL_TEST__')}${CITY}`, { method: 'DELETE' });
+      assert.equal(del.status, 200);
+      assert.ok(!del.body.factions.some(f => f.name === '__DEL_TEST__'));
+      const gone = await apiJson(`/api/factions/influence/${encodeURIComponent('__DEL_TEST__')}${CITY}`, { method: 'DELETE' });
+      assert.equal(gone.status, 404);
+    });
+
     it('PUT /api/factions/influence — round-trip: обновляет существующую фракцию, не трогая остальные', async () => {
       const before = await apiJson(`/api/factions/influence${CITY}`);
       const target = before.body.factions[0];
