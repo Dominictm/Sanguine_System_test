@@ -20,12 +20,14 @@
     "social": {
       "charisma": 3,
       "manipulation": 3,
-      "appearance": 3
+      "appearance": 3,
+      "composure": 1
     },
     "mental": {
       "perception": 4,
       "intelligence": 3,
-      "wits": 3
+      "wits": 3,
+      "resolve": 1
     }
   },
   "abilities": {
@@ -82,11 +84,13 @@
       },
       {
         "name": "",
-        "val": 0
+        "val": 0,
+        "fixed": false
       },
       {
         "name": "",
-        "val": 0
+        "val": 0,
+        "fixed": false
       }
     ],
     "skills": [
@@ -142,11 +146,13 @@
       },
       {
         "name": "",
-        "val": 0
+        "val": 0,
+        "fixed": false
       },
       {
         "name": "",
-        "val": 0
+        "val": 0,
+        "fixed": false
       }
     ],
     "knowledges": [
@@ -202,40 +208,18 @@
       },
       {
         "name": "",
-        "val": 0
+        "val": 0,
+        "fixed": false
       },
       {
         "name": "",
-        "val": 0
+        "val": 0,
+        "fixed": false
       }
     ]
   },
-  "disciplines": [
-    {
-      "name": "",
-      "val": 0
-    },
-    {
-      "name": "",
-      "val": 0
-    },
-    {
-      "name": "",
-      "val": 0
-    },
-    {
-      "name": "",
-      "val": 0
-    },
-    {
-      "name": "",
-      "val": 0
-    },
-    {
-      "name": "",
-      "val": 0
-    }
-  ],
+  "disciplines": [],
+  "psychicPowers": [],
   "backgrounds": [
     {
       "name": "Контакты",
@@ -244,22 +228,6 @@
     {
       "name": "Ресурсы",
       "val": 2
-    },
-    {
-      "name": "",
-      "val": 0
-    },
-    {
-      "name": "",
-      "val": 0
-    },
-    {
-      "name": "",
-      "val": 0
-    },
-    {
-      "name": "",
-      "val": 0
     }
   ],
   "virtues": {
@@ -267,11 +235,17 @@
     "selfcontrol": 5,
     "courage": 3
   },
-  "meritsFlaws": "",
+  "meritsFlaws": [
+    {
+      "name": "Амбидекстр",
+      "points": 1,
+      "kind": "merit"
+    }
+  ],
   "humanity": 5,
   "path": "Человечность",
   "willpower": {
-    "permanent": 2,
+    "permanent": 3,
     "temp": [
       true,
       true,
@@ -307,6 +281,7 @@
     false,
     false
   ],
+  "bloodPoolCount": 0,
   "bloodPerTurn": 1,
   "health": {
     "bruised": false,
@@ -349,58 +324,8 @@
       "spec": ""
     }
   ],
-  "otherTraits": [
-    {
-      "name": "",
-      "val": 0
-    },
-    {
-      "name": "",
-      "val": 0
-    },
-    {
-      "name": "",
-      "val": 0
-    },
-    {
-      "name": "",
-      "val": 0
-    },
-    {
-      "name": "",
-      "val": 0
-    },
-    {
-      "name": "",
-      "val": 0
-    }
-  ],
-  "rituals": [
-    {
-      "name": "",
-      "level": ""
-    },
-    {
-      "name": "",
-      "level": ""
-    },
-    {
-      "name": "",
-      "level": ""
-    },
-    {
-      "name": "",
-      "level": ""
-    },
-    {
-      "name": "",
-      "level": ""
-    },
-    {
-      "name": "",
-      "level": ""
-    }
-  ],
+  "otherTraits": [],
+  "rituals": [],
   "history": "Джуди родилась в 1995 году. С раннего возраста обнаружила в себе парапсихические способности, которые заставили её искать ответы за пределами обычного мира. Став журналистом, она использует свою профессию как легальный прикрытия для расследований природы сверхъестественного. В её облике сочетается строгость профессионала и скрытая тяга к опасным, «темным» играм.",
   "goals": "Раскрыть тайны города Балмонт, систематизировать знания об оккультном мире.",
   "description": {

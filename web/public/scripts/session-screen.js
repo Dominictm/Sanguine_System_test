@@ -23,11 +23,14 @@ function _sessSave(patch) {
 async function loadSessionScreen() {
   const chrSel = document.getElementById('sess-chr-sel');
   const saved  = _sessStore();
+  // include_hidden=1: скрытые хроники тоже играются — как в селектах создания
+  // модуля (modules.js), помечаем их 📂.
+  const qs = window.location.search;
   let chrs;
-  try { chrs = await fetch('/api/chronicles' + (window.location.search || '')).then(r => r.json()); }
+  try { chrs = await fetch('/api/chronicles' + (qs ? qs + '&include_hidden=1' : '?include_hidden=1')).then(r => r.json()); }
   catch { chrs = []; }
   chrSel.innerHTML = '<option value="">— хроника —</option>' +
-    (chrs || []).map(c => `<option value="${escHtml(c.slug)}">${escHtml(c.display || c.slug)}${c.status === 'closed' ? ' (закрыта)' : ''}</option>`).join('');
+    (chrs || []).map(c => `<option value="${escHtml(c.slug)}">${escHtml((c.hidden ? '📂 ' : '') + (c.display || c.slug))}${c.status === 'closed' ? ' (закрыта)' : ''}</option>`).join('');
   if (saved.chr && chrs.some(c => c.slug === saved.chr)) {
     chrSel.value = saved.chr;
     await _sessLoadModules(saved.chr, saved.mod);
