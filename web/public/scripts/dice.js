@@ -105,7 +105,9 @@ if (typeof document !== 'undefined' && document.getElementById('dice-fab')) {
     attrSel.innerHTML = '<option value="">…</option>';
     try {
       const d = await fetch(`/api/characters/${encodeURIComponent(_charSlug(name))}/sheet-data${location.search}`).then(r => r.json());
-      _diceFillFromModel(d.exists ? d.data : null);
+      // _v20ModelFrom (v20-sheet.js) понимает оба источника: JSON-модель и
+      // AI-markdown (source:'md' — сырой d.data пуст, модель парсится из md).
+      _diceFillFromModel(d.exists ? _v20ModelFrom(d) : null);
     } catch { _diceFillFromModel(null); }
   });
 
