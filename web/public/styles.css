@@ -1262,6 +1262,7 @@ body {
 
 .dice-inputs {
   display: flex;
+  flex-wrap: wrap; /* кнопка «Бросить» — своей строкой: в один ряд она сжимала поле «Пул» в ноль */
   gap: 8px;
   align-items: flex-end;
   margin-bottom: 10px;
@@ -1273,7 +1274,17 @@ body {
   gap: 4px;
   font-size: var(--fs-lg);
   color: var(--text3);
-  flex: 1;
+  flex: 1 1 90px;
+  min-width: 0;
+}
+
+.dice-inputs input {
+  width: 100%;
+  min-width: 0;
+}
+
+#dice-roll {
+  flex: 1 1 100%;
 }
 
 .dice-dice {

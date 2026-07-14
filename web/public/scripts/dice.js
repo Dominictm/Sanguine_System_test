@@ -49,13 +49,21 @@ if (typeof document !== 'undefined' && document.getElementById('dice-fab')) {
   const histEl  = document.getElementById('dice-history');
   const attrSel = document.getElementById('dice-attr-sel');
   const abilSel = document.getElementById('dice-abil-sel');
+  const charSel = document.getElementById('dice-char-sel');
   const _history = []; // последние 10 бросков, в памяти сессии
+  let _diceModel = null; // модель листа выбранного персонажа
 
-  // Селекты «Атрибут/Способность» — только когда открыт V20-лист (_v20Model).
-  function _diceFillSheetSelects() {
-    const row = document.getElementById('dice-sheet-row');
-    const m = (typeof _v20Model !== 'undefined' && _v20Model) ? _v20Model : null;
-    if (!m || !m.attributes) { row.hidden = true; return; }
+  // Пул из листа: выбор персонажа прямо в панели (лист открывать не нужно) →
+  // fetch sheet-data → селекты «Атрибут/Способность». Если V20-лист уже
+  // открыт в модалке, его модель подставляется сразу.
+  function _diceFillFromModel(m) {
+    _diceModel = m;
+    if (!m || !m.attributes) {
+      attrSel.disabled = abilSel.disabled = true;
+      attrSel.innerHTML = '<option value="">— атрибут —</option>';
+      abilSel.innerHTML = '<option value="">— способность —</option>';
+      return;
+    }
     const attrs = [];
     for (const [group, list] of Object.entries(typeof V20_ATTRS !== 'undefined' ? V20_ATTRS : {})) {
       for (const [key, label] of list) attrs.push({ label, val: (m.attributes[group] || {})[key] || 0 });
@@ -64,13 +72,42 @@ if (typeof document !== 'undefined' && document.getElementById('dice-fab')) {
     for (const group of Object.keys(m.abilities || {})) {
       for (const slot of m.abilities[group]) if (slot.name) abils.push({ label: slot.name, val: slot.val || 0 });
     }
-    if (!attrs.length) { row.hidden = true; return; }
     attrSel.innerHTML = '<option value="">— атрибут —</option>' +
       attrs.map(a => `<option value="${a.val}">${escHtml(a.label)} (${a.val})</option>`).join('');
     abilSel.innerHTML = '<option value="">— способность —</option>' +
       abils.map(a => `<option value="${a.val}">${escHtml(a.label)} (${a.val})</option>`).join('');
-    row.hidden = false;
+    attrSel.disabled = abilSel.disabled = false;
   }
+
+  async function _diceFillCharSelect() {
+    if (typeof ensureCharsLoaded === 'function') await ensureCharsLoaded();
+    const chars = (typeof STATE !== 'undefined' && STATE.characters || []).filter(c => c.hasSheet && c.name);
+    const openName = (typeof _v20Model !== 'undefined' && _v20Model && typeof _v20Ctx !== 'undefined' && _v20Ctx) ? _v20Ctx.name : null;
+    const current = charSel.value;
+    charSel.innerHTML = '<option value="">— персонаж —</option>' +
+      chars.map(c => `<option value="${escHtml(c.name)}">${escHtml(c.name)}</option>`).join('');
+    if (openName && chars.some(c => c.name === openName)) {
+      charSel.value = openName;
+      _diceFillFromModel(_v20Model);
+    } else if (current && chars.some(c => c.name === current)) {
+      charSel.value = current; // сохранить выбор между открытиями панели
+    }
+  }
+
+  charSel.addEventListener('change', async () => {
+    const name = charSel.value;
+    if (!name) { _diceFillFromModel(null); return; }
+    // Лист этого персонажа уже открыт в модалке — модель свежее, чем на диске.
+    if (typeof _v20Model !== 'undefined' && _v20Model && typeof _v20Ctx !== 'undefined' && _v20Ctx?.name === name) {
+      _diceFillFromModel(_v20Model);
+      return;
+    }
+    attrSel.innerHTML = '<option value="">…</option>';
+    try {
+      const d = await fetch(`/api/characters/${encodeURIComponent(_charSlug(name))}/sheet-data${location.search}`).then(r => r.json());
+      _diceFillFromModel(d.exists ? d.data : null);
+    } catch { _diceFillFromModel(null); }
+  });
 
   function _diceApplySheetPool() {
     const a = parseInt(attrSel.value) || 0;
@@ -82,7 +119,7 @@ if (typeof document !== 'undefined' && document.getElementById('dice-fab')) {
 
   fab.addEventListener('click', () => {
     panel.hidden = !panel.hidden;
-    if (!panel.hidden) _diceFillSheetSelects();
+    if (!panel.hidden) _diceFillCharSelect();
   });
   document.getElementById('dice-close').addEventListener('click', () => { panel.hidden = true; });
 
