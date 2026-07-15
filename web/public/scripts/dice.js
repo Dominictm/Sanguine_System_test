@@ -126,8 +126,9 @@ if (typeof document !== 'undefined' && document.getElementById('dice-fab')) {
   document.getElementById('dice-close').addEventListener('click', () => { panel.hidden = true; });
 
   function _diceChips(r, difficulty) {
+    let i = 0; // индекс для каскада появления (CSS --i)
     const chip = (d, reroll) =>
-      `<span class="dice-chip${d >= difficulty ? ' hit' : ''}${d === 10 ? ' ten' : ''}${d === 1 && !reroll ? ' one' : ''}${reroll ? ' reroll' : ''}">${d}</span>`;
+      `<span class="dice-chip${d >= difficulty ? ' hit' : ''}${d === 10 ? ' ten' : ''}${d === 1 && !reroll ? ' one' : ''}${reroll ? ' reroll' : ''}" style="--i:${i++}">${d}</span>`;
     return r.dice.map(d => chip(d, false)).join('') +
       (r.rerolls.length ? `<span class="dice-sep">↻</span>` + r.rerolls.map(d => chip(d, true)).join('') : '');
   }

@@ -1031,6 +1031,40 @@ body {
   margin: 6px 0 10px;
 }
 
+/* ── Motion pass (фаза A, план 2026-07-15) ──────────────────────────────
+   Движение передаёт состояние (переход/раскрытие/появление), 150–280мс,
+   только transform/opacity. Reduced-motion гасится глобальным блоком выше. */
+
+@keyframes page-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.page.active {
+  animation: page-in var(--dur-fast) var(--ease);
+}
+
+@keyframes fade-rise {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Аккордеоны и раскрываемые блоки: анимация срабатывает при снятии hidden
+   (display none → block перезапускает animation) и при вставке в DOM. */
+.chron-event-body:not([hidden]),
+.sess-block-body,
+.tl-inline-form-tr .tl-row-form,
+.tl-row-form:not([hidden]),
+.ws-row-form:not([hidden]) {
+  animation: fade-rise var(--dur-fast) var(--ease);
+}
+
+/* Кубики броска: каскад появления (индекс задаёт dice.js через --i) */
+.dice-chip {
+  animation: fade-rise .15s var(--ease) backwards;
+  animation-delay: calc(var(--i, 0) * 30ms);
+}
+
 /* ── Страница города (фаза C): бейдж домена в сайдбаре кликабелен ── */
 .domain-badge {
   cursor: pointer;
@@ -3476,6 +3510,7 @@ a:focus-visible {
 
 .chp-card,
 .city-card {
+  animation: card-reveal var(--dur-base) var(--ease) backwards;
   position: relative;
   overflow: hidden;
   background: var(--bg3);
@@ -9178,6 +9213,7 @@ a.md-link-loc:hover {
    Цветовая база — общая с остальной библиотекой; ширина не фиксирована —
    карточка заполняет свою колонку в .audio-lib-columns. ── */
 .audio-card {
+  animation: card-reveal var(--dur-base) var(--ease) backwards;
   min-height: 160px;
   background: var(--bg3);
   border: 2px solid var(--border);
