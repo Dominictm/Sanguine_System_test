@@ -19,16 +19,21 @@ const fs = require('fs'), path = require('path');
 
 function loadMigrations(migrationsDir) {
   if (!fs.existsSync(migrationsDir)) return [];
-  return fs.readdirSync(migrationsDir)
-    .filter(f => /^\d+_.+\.js$/.test(f))
-    .sort()
-    .map(f => {
+  const out = [];
+  for (const f of fs.readdirSync(migrationsDir).filter(f => /^\d+_.+\.js$/.test(f)).sort()) {
+    // Сломанный модуль миграции не должен ронять сервер целиком —
+    // логируем и пропускаем (остальные миграции применяются).
+    try {
       const mod = require(path.join(migrationsDir, f));
       if (typeof mod.test !== 'function' || typeof mod.migrate !== 'function') {
-        throw new Error(`tools/migrations/${f}: должен экспортировать { test(text), migrate(text) }`);
+        throw new Error('должен экспортировать { test(text), migrate(text) }');
       }
-      return { id: f.replace(/\.js$/, ''), ...mod };
-    });
+      out.push({ id: f.replace(/\.js$/, ''), ...mod });
+    } catch (e) {
+      console.error(`[migrations] tools/migrations/${f} пропущена: ${e.message}`);
+    }
+  }
+  return out;
 }
 
 function walkMarkdown(dir) {

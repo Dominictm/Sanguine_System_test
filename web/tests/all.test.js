@@ -203,7 +203,16 @@ describe('Parsers — unit', () => {
         description: 'Тёмный индустриальный город под вечным дождём.',
         political: 'Камарилья держит центр\nКнязь: Маркус',
         factions: 'Камарилья\nДжованни',
+        districts: '12 районов\nЦентр — Камарилья',
+        landmarks: 'Собор\nСтарый вокзал',
         locations: 'Небоскрёб в центре\nЭлизиум: Опера',
+        hunting: 'Портовые бары — свободные угодья',
+        edicts: 'Становление — только с разрешения Князя',
+        mortals: 'Комиссариат №3 куплен Джованни',
+        calendar: 'Фестиваль огней — октябрь',
+        tech: 'Камеры в центре плотные',
+        limits: 'Элизиумов не больше 2\nВ районе не более 4 станций метро',
+        naming: 'Мужские: Марк, Анри\nФамилии: Дюваль',
         leitmotif: 'Дождь и преступность',
         specifics: 'Уточнять сезон',
         avoid: 'Канонических старейшин',
@@ -228,11 +237,17 @@ describe('Parsers — unit', () => {
       assert.equal(parsed.sections.factions, '');  // «- …» отфильтровывается в пустую строку
     });
 
-    it('факции-секция канонична (между political и locations)', () => {
+    it('факции-секция канонична (сразу после political, до locations)', () => {
       const keys = CITY_SECTIONS.map(([k]) => k);
       assert.ok(keys.includes('factions'), 'есть ключ factions');
       assert.equal(keys.indexOf('factions'), keys.indexOf('political') + 1);
-      assert.equal(keys.indexOf('factions'), keys.indexOf('locations') - 1);
+      assert.ok(keys.indexOf('factions') < keys.indexOf('locations'));
+    });
+
+    it('секции «живого города» присутствуют (D1, план 2026-07-15)', () => {
+      const keys = CITY_SECTIONS.map(([k]) => k);
+      for (const k of ['districts', 'landmarks', 'hunting', 'edicts', 'mortals', 'calendar', 'tech', 'limits', 'naming'])
+        assert.ok(keys.includes(k), `нет секции ${k}`);
     });
 
     it('browser parity — public/city.js CITY_SECTION_DEFS зеркалит CITY_SECTIONS', () => {
@@ -244,6 +259,38 @@ describe('Parsers — unit', () => {
       const browserDefs = (new Function(`return (${m[1]})`))();
       assert.deepEqual(browserDefs, CITY_SECTIONS,
         'browser CITY_SECTION_DEFS диверговал от CITY_SECTIONS — держите в синхроне');
+    });
+  });
+
+  describe('миграция 001 — секции «живого города» в city.md', () => {
+    const mig = require('../../tools/migrations/001_city_liveliness_sections.js');
+    const oldCityMd = [
+      '# Балмонт, 2024 — сеттинг города', '',
+      '> Тёмный город.', '',
+      '## Политический ландшафт', '- Камарилья держит центр', '',
+      '## Фракции', '- Камарилья', '',
+      '## Источники', '- …', '',
+    ].join('\n');
+
+    it('test() узнаёт старый city.md и не трогает прочие файлы', () => {
+      assert.equal(mig.test(oldCityMd), true);
+      assert.equal(mig.test('# 🧛 Персонаж\n- **Слаг:** x\n## 🖼️ Изображения\n'), false);
+      assert.equal(mig.test('## Баланс сил — обзор\n| Фракция | Сила |\n'), false);
+    });
+
+    it('migrate() добавляет недостающие секции; идемпотентно', () => {
+      const migrated = mig.migrate(oldCityMd);
+      for (const h of ['## Районы', '## Значимые места', '## Охотничьи угодья', '## Законы домена',
+                       '## Смертные институции', '## Календарь города', '## Технологии и Маскарад',
+                       '## Ограничения генерации', '## Именник и фактура'])
+        assert.ok(migrated.includes(h), `нет ${h}`);
+      assert.equal(mig.test(migrated), false, 'после миграции test() должен быть false');
+      assert.equal(mig.migrate(migrated), migrated, 'повторный migrate — no-op');
+      // мигрированный файл валидно парсится
+      const { parseCityMd } = require('../lib/parsers');
+      const parsed = parseCityMd(migrated);
+      assert.equal(parsed.sections.political, 'Камарилья держит центр');
+      assert.equal(parsed.sections.limits, '');
     });
   });
 
