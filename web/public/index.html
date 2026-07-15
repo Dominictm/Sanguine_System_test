@@ -27,7 +27,7 @@
     <div class="city-switch">
       <div class="city-switch-head">
         <label for="city-select">🏙️ Город</label>
-        <button type="button" class="city-switch-add" id="btn-city-add" title="Новый город" data-nav="tools" data-tab="new-city">+</button>
+        <button type="button" class="city-switch-add" id="btn-city-add" title="Новый город" data-nav="city-new" data-tab="">+</button>
       </div>
       <select id="city-select"></select>
     </div>
@@ -77,6 +77,9 @@
       </a>
       <a class="nav-item" data-page="tools" title="Инструменты" aria-label="Инструменты">
         <span class="nav-icon">⚙️</span><span>Инструменты</span>
+      </a>
+      <a class="nav-item" data-page="city-new" title="Новый город" aria-label="Новый город">
+        <span class="nav-icon">🏙️</span><span>Новый город</span>
       </a>
       <a class="nav-item" data-page="search" title="Поиск" aria-label="Поиск">
         <span class="nav-icon">🔍</span><span>Поиск</span>
@@ -797,30 +800,12 @@
       </div>
     </section>
 
-    <!-- Tools -->
-    <section id="page-tools" class="page">
+    <!-- Новый город (city.js, фаза B плана 2026-07-15) -->
+    <section id="page-city-new" class="page">
       <div class="page-header">
-        <h1 class="page-title">Инструменты</h1>
-        <span class="page-sub">запуск скриптов</span>
+        <h1 class="page-title">Новый город</h1>
+        <span class="page-sub">Создание домена</span>
       </div>
-
-      <div class="tab-bar">
-        <button class="tab-btn active" data-tab="new-city">Домены</button>
-        <button class="tab-btn" data-tab="new-npc">Новый НПС</button>
-        <button class="tab-btn" data-tab="new-module">Модуль</button>
-        <button class="tab-btn" data-tab="log-session">📓 Сессия</button>
-        <button class="tab-btn" data-tab="more">🛠 Ещё</button>
-        <button class="tab-btn" data-tab="validate">Проверка</button>
-        <button class="tab-btn" data-tab="ai-settings">🤖 Модели AI</button>
-      </div>
-
-      <!-- Cities -->
-      <div class="tab-panel active" id="tab-new-city">
-        <div id="cities-grid" class="cities-grid">
-          <div class="loading-state"><div class="spinner"></div>Загрузка...</div>
-        </div>
-
-        <h2 class="tools-section-title">Создать новый домен</h2>
         <div class="form-row">
           <div class="form-group">
             <label class="form-label" for="city-name">Город *<span class="field-tip" tabindex="0" data-tip="Название города на русском — станет заголовком city.md. Папка cities/&lt;slug&gt;/ создаётся автоматически транслитерацией названия.">ⓘ</span></label>
@@ -868,7 +853,33 @@
         </div>
         <button class="btn-submit" id="btn-new-city">Создать домен</button>
         <pre class="output-area" id="out-new-city"></pre>
+
+    </section>
+    <!-- Tools -->
+    <section id="page-tools" class="page">
+      <div class="page-header">
+        <h1 class="page-title">Инструменты</h1>
+        <span class="page-sub">запуск скриптов</span>
       </div>
+
+      <div class="tab-bar">
+        <button class="tab-btn active" data-tab="new-city">Домены</button>
+        <button class="tab-btn" data-tab="new-npc">Новый НПС</button>
+        <button class="tab-btn" data-tab="new-module">Модуль</button>
+        <button class="tab-btn" data-tab="log-session">📓 Сессия</button>
+        <button class="tab-btn" data-tab="more">🛠 Ещё</button>
+        <button class="tab-btn" data-tab="validate">Проверка</button>
+        <button class="tab-btn" data-tab="ai-settings">🤖 Модели AI</button>
+      </div>
+
+      <!-- Cities -->
+      <div class="tab-panel active" id="tab-new-city">
+        <div id="cities-grid" class="cities-grid">
+          <div class="loading-state"><div class="spinner"></div>Загрузка...</div>
+        </div>
+
+      </div>
+
 
       <!-- New NPC -->
       <div class="tab-panel" id="tab-new-npc">
