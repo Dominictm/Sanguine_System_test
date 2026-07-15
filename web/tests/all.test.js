@@ -293,6 +293,21 @@ describe('Parsers — unit', () => {
       assert.equal(buildCityConstraints('__no_such_city__'), '');
     });
 
+    it('buildCityNaming: именник города собирается; пусто — без шума (F)', async () => {
+      const { buildCityNaming } = require('../lib/context_builder');
+      await fs.writeFile(path.join(tmpCity, 'city.md'), [
+        '# Тестбург, 2010 — сеттинг города', '',
+        '## Политический ландшафт', '- x', '',
+        '## Именник и фактура', '- Мужские: Марк, Анри', '- Фамилии: Дюваль, Леруа', '',
+      ].join('\n'), 'utf-8');
+      const block = buildCityNaming('__ctest__');
+      assert.ok(block.includes('ИМЕННИК'));
+      assert.ok(block.includes('Дюваль'));
+      assert.equal(buildCityNaming('__no_such_city__'), '');
+      const fill = require('fs').readFileSync(path.join(__dirname, '../routes/modules/fill.js'), 'utf-8');
+      assert.ok(fill.includes('buildCityNaming'), 'fill.js не использует buildCityNaming');
+    });
+
     it('source-guard: генерация сценария и локаций подмешивает buildCityConstraints', () => {
       const fill = require('fs').readFileSync(path.join(__dirname, '../routes/modules/fill.js'), 'utf-8');
       const locs = require('fs').readFileSync(path.join(__dirname, '../routes/locations.js'), 'utf-8');

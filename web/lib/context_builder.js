@@ -279,6 +279,20 @@ function buildThreatClocks(city) {
   return `# ЧАСЫ УГРОЗ ГОРОДА — назревающие процессы (прогресс N/M). Учитывай их как фон сцен; пробитые часы уже разразились\n${lines.join('\n')}`;
 }
 
+// ── Именник города (F, план 2026-07-15) ───────────────────────────────────────
+// Секция «Именник и фактура» city.md: банк имён по слоям общества, клановые
+// конвенции, фактура эпохи. Против англицизмов и повторов в AI-именах НПС.
+function buildCityNaming(city) {
+  const { parseCityMd } = require('./parsers');
+  let parsed;
+  try {
+    parsed = parseCityMd(fs.readFileSync(path.join(ROOT, 'cities', city, 'city.md'), 'utf8'));
+  } catch { return ''; }
+  const v = ((parsed.sections || {}).naming || '').trim();
+  if (!v) return '';
+  return `# ИМЕННИК И ФАКТУРА ГОРОДА — имена новых НПС выбирай отсюда (или в этом же духе), не повторяя имён существующих персонажей города; фактуру используй для достоверности деталей\n${v}`;
+}
+
 module.exports = {
   loadLiteraryStyle,
   loadDiaryStyleRules,
@@ -290,4 +304,5 @@ module.exports = {
   buildNarrativeContext,
   buildCityConstraints,
   buildThreatClocks,
+  buildCityNaming,
 };

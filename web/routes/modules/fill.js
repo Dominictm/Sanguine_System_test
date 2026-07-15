@@ -17,7 +17,7 @@ const {
   _parseNpcEntries, _findNpcMdSection, _removeNpcEntry, _parseNpcMdGroups, _renderSessionBlock,
   _writeSessionsFile, _patchModuleMain, _claudeOnlyModel, _logAiCall, _logAiFail,
 } = require('./shared');
-const { buildCityConstraints, buildThreatClocks } = require('../../lib/context_builder');
+const { buildCityConstraints, buildThreatClocks, buildCityNaming } = require('../../lib/context_builder');
 
 module.exports = function fillRouter({ makeGenerationClient, genTextWithRetry }) {
   const router = express.Router();
@@ -100,6 +100,8 @@ module.exports = function fillRouter({ makeGenerationClient, genTextWithRetry })
   ${buildCityConstraints(city)}
 
   ${buildThreatClocks(city)}
+
+  ${buildCityNaming(city)}
 
   # УЧАСТНИКИ МОДУЛЯ
   ${charCards.join('\n\n') || '(не указаны)'}
@@ -335,6 +337,8 @@ module.exports = function fillRouter({ makeGenerationClient, genTextWithRetry })
 
   Сценарий (выдержка):
   ${scenarioText.slice(0, 1200)}
+
+  ${buildCityNaming(city)}
 
   Для КАЖДОГО из ${newNpcs.length} НПС ниже создай карточку строго по шаблону.
   Заполни характеристики разумными значениями уровня НПС, роль в модуле, внешность (2–3 маркера) и промт для генерации изображения (на английском, 3 блока: Персонаж → Свет/Атмосфера → Стиль).
