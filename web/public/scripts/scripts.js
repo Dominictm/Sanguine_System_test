@@ -114,6 +114,7 @@ function navigate(page) {
   if (page === 'modules')         loadModules();
   if (page === 'module')          loadModulePage();
   if (page === 'session')    loadSessionScreen();
+  if (page === 'city')       loadCityPage();
   if (page === 'threads')    loadThreads();
   if (page === 'locations')  loadLocations();
   if (page === 'library')    loadLibrary();

@@ -1031,6 +1031,15 @@ body {
   margin: 6px 0 10px;
 }
 
+/* ── Страница города (фаза C): бейдж домена в сайдбаре кликабелен ── */
+.domain-badge {
+  cursor: pointer;
+}
+
+.domain-badge:hover {
+  color: var(--gold2);
+}
+
 /* ── Экран сессии ── */
 .sess-picker {
   display: flex;

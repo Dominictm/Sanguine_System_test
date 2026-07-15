@@ -297,11 +297,17 @@ function _collectLocationRows() {
   return [...narrativeLines, ...recordLines].join('\n');
 }
 
-async function openCityDetail(slug) {
-  const modal   = document.getElementById('city-detail-modal');
+// Страничный вид города (фаза C, план 2026-07-15): открытие = навигация на
+// #page-city, загрузка — loadCityPage() из navigate() (паттерн openModulePage).
+function openCityDetail(slug) {
+  STATE.currentCitySlug = slug;
+  navigate('city');
+}
+
+async function loadCityPage() {
+  const slug = STATE.currentCitySlug || CITY;
   const content = document.getElementById('city-detail-content');
   content.innerHTML = `<div class="mod-loading">${SPINNER}</div>`;
-  openModal('city-detail-modal');
 
   let d, chars = [], locs = [];
   try {
@@ -363,6 +369,16 @@ const CITY_FIELD_TIPS = {
   'Специфика ответа': 'Язык общения НПС, имена Князей и других ключевых фигур, местные обычаи и сленг.',
   'Чего избегать': 'Табу и нежелательные клише именно для этого домена.',
   'Источники': 'На какие книги или материалы опираться при сверке канона для этого домена.',
+  // Секции «живого города» (D1, план 2026-07-15)
+  'Районы': 'Округа/районы города: сколько их, чем живут, кто держит какой. Один район на строку.',
+  'Значимые места': 'Знаковые точки города — то, что нельзя перепутать с другим городом. По строке на место.',
+  'Охотничьи угодья': 'Где кормиться разрешено, где чьё, где запрещено эдиктом. Главный источник конфликтов неонатов.',
+  'Законы домена': 'Местные эдикты поверх шести Традиций: правила Становления, нейтральные зоны, запретные территории.',
+  'Смертные институции': 'Полиция, морг, пресса, криминал, мэрия — и кем они куплены. Готовые ответы на «что будет, если труп найдут».',
+  'Календарь города': 'Фестивали, матчи, годовщины — готовые крючки сцен и причина, почему улицы выглядят по-разному.',
+  'Технологии и Маскарад': 'Камеры, соцсети, риски эпохи: где вампира снимут на телефон. Учитывается генерацией сценариев.',
+  'Ограничения генерации': 'Жёсткие лимиты для AI: «Элизиумов не больше 2», «в районе не более 4 станций метро». Генерация не создаёт локации сверх этих правил.',
+  'Именник и фактура': 'Банк имён по слоям общества, клановые конвенции, фактура эпохи (цены, транспорт, сленг). AI берёт имена новых НПС отсюда.',
 };
 
 function _renderCityEdit() {
@@ -544,7 +560,7 @@ async function _deleteCity() {
   try {
     const r = await fetch(`/api/cities/${encodeURIComponent(d.slug)}`, { method: 'DELETE' }).then(r => r.json());
     if (!r.ok) { showToast('Ошибка удаления: ' + (r.error || 'неизвестная'), 'error'); return; }
-    closeModal('city-detail-modal');
+    navigate('tools');
     if (d.active) {
       // Удалили активный город — переключаемся на любой оставшийся.
       const { cities = [] } = await fetch('/api/cities').then(r => r.json());
@@ -554,7 +570,7 @@ async function _deleteCity() {
   } catch (err) { showToast('Ошибка удаления: ' + err.message, 'error'); }
 }
 
-const cityDetailModal = document.getElementById('city-detail-modal');
-document.getElementById('city-detail-close').addEventListener('click', () => closeModal('city-detail-modal'));
-cityDetailModal.addEventListener('click', e => { if (e.target === cityDetailModal) closeModal('city-detail-modal'); });
+document.getElementById('city-page-back').addEventListener('click', () => navigate('tools'));
+// Клик по бейджу активного домена в сайдбаре — открыть страницу города.
+document.getElementById('domain-label').addEventListener('click', () => openCityDetail(CITY));
 
