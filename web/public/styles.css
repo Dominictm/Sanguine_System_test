@@ -1013,6 +1013,15 @@ body {
   .dash-stale-row { min-height: 44px; }
 }
 
+/* Часы угроз: пробитые часы — угроза разразилась */
+.ws-clock-full td {
+  color: var(--crimson);
+}
+
+.ws-clock-hit {
+  margin-right: 4px;
+}
+
 /* Инлайн-форма правки строки хронологии/состояния мира — внутри таблицы */
 .tl-inline-form-tr > td {
   padding: 0;

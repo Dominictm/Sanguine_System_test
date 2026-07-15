@@ -18,6 +18,7 @@ const {
   _parseNpcEntries, _findNpcMdSection, _removeNpcEntry, _parseNpcMdGroups, _renderSessionBlock,
   _writeSessionsFile, _patchModuleMain, _claudeOnlyModel, _logAiCall, _logAiFail,
 } = require('./shared');
+const { buildThreatClocks } = require('../../lib/context_builder');
 
 module.exports = function lifecycleRouter({ makeGenerationClient, genTextWithRetry }) {
   const router = express.Router();
@@ -254,7 +255,9 @@ module.exports = function lifecycleRouter({ makeGenerationClient, genTextWithRet
   Что реально произошло в игре (журнал сессий):
   ${playLog}
 
-  Напиши цельный литературный финал ПО ФАКТАМ ИГРЫ (если игра отступила от сценария — следуй игре). Русский, готический нуар. Верни только текст финала, без метаданных.`, 2500).catch(() => '');
+  ${buildThreatClocks(city)}
+
+  Напиши цельный литературный финал ПО ФАКТАМ ИГРЫ (если игра отступила от сценария — следуй игре). Русский, готический нуар. Верни только текст финала, без метаданных.${buildThreatClocks(city) ? '\n\n  В самом конце финала добавь короткий служебный блок «> ⏱ Часы: …» — одной-двумя строками предложи, какие из часов угроз города продвинулись из-за событий модуля (только предложение Рассказчику; сами часы он тикает вручную на вкладке «Состояние мира»).' : ''}`, 2500).catch(() => '');
       if (finaleText) {
         const header = `# ${modTitle} — Литературный финал\n\n> 🔗 [Модуль](${mod}.md) | [Хроника](../../events.md)\n\n---\n\n`;
         await writeFileAtomic(path.join(modDir, 'finale.md'), header + finaleText + '\n', 'utf-8');

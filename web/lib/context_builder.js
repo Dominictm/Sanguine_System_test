@@ -260,6 +260,25 @@ function buildCityConstraints(city) {
   return `# ОГРАНИЧЕНИЯ ГОРОДА — соблюдай строго: не создавай локации и сущности сверх этих лимитов; при конфликте переиспользуй существующие\n${parts.join('\n\n')}`;
 }
 
+// ── Часы угроз (E1, план 2026-07-15) ──────────────────────────────────────────
+// Секция «⏱️ Часы угроз» в блоке «Состояние мира» (events.md): таблица
+// Угроза | Прогресс N/M | Заметка. Тикает Рассказчик руками (кнопка в UI);
+// генерация получает часы фоном — назревающие процессы города.
+function buildThreatClocks(city) {
+  const { parseWorldStateBlock } = require('./parsers');
+  let ws;
+  try {
+    ws = parseWorldStateBlock(fs.readFileSync(path.join(ROOT, 'cities', city, 'archive', 'events.md'), 'utf8'));
+  } catch { return ''; }
+  const sec = (ws.sections || []).find(s => /часы угроз/i.test(s.heading));
+  if (!sec || !sec.rows.length) return '';
+  const lines = sec.rows.map(cells => {
+    const full = cells.some(c => { const m = String(c).trim().match(/^(\d+)\s*\/\s*(\d+)$/); return m && +m[1] >= +m[2]; });
+    return `- ${cells.filter(Boolean).join(' — ')}${full ? ' [ПРОБИЛО — угроза разразилась]' : ''}`;
+  });
+  return `# ЧАСЫ УГРОЗ ГОРОДА — назревающие процессы (прогресс N/M). Учитывай их как фон сцен; пробитые часы уже разразились\n${lines.join('\n')}`;
+}
+
 module.exports = {
   loadLiteraryStyle,
   loadDiaryStyleRules,
@@ -270,4 +289,5 @@ module.exports = {
   parseEventsText,
   buildNarrativeContext,
   buildCityConstraints,
+  buildThreatClocks,
 };

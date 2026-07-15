@@ -1027,24 +1027,42 @@ async function loadWorldStateForm() {
   }
 }
 
+// Часы угроз (E1): ячейка прогресса «N/M» в секции «⏱️ Часы угроз».
+const _WS_CLOCK_RE = /^(\d+)\s*\/\s*(\d+)$/;
+function _wsClockCell(row) {
+  for (let i = 0; i < row.length; i++) {
+    const m = String(row[i]).trim().match(_WS_CLOCK_RE);
+    if (m) return { idx: i, n: +m[1], max: +m[2] };
+  }
+  return null;
+}
+
 function renderWorldStateForm(ws) {
-  const sectionsHtml = (ws.sections || []).map(s => `
+  const sectionsHtml = (ws.sections || []).map(s => {
+    const isClocks = /часы угроз/i.test(s.heading);
+    return `
     <section class="ws-section" data-ws-section="${escHtml(s.heading)}">
       <div class="ws-heading">${escHtml(s.heading)}
         <button class="chron-toggle" data-ws-section-del="${escHtml(s.heading)}" title="Удалить секцию">🗑</button>
       </div>
       <table class="ws-table"><thead><tr>${s.columns.map(c => `<th>${escHtml(c)}</th>`).join('')}<th></th></tr></thead>
-      <tbody>${s.rows.map((row, i) => `
-        <tr data-ws-section="${escHtml(s.heading)}" data-row="${i}">
+      <tbody>${s.rows.map((row, i) => {
+        const clock = isClocks ? _wsClockCell(row) : null;
+        const full  = clock && clock.n >= clock.max;
+        return `
+        <tr data-ws-section="${escHtml(s.heading)}" data-row="${i}"${full ? ' class="ws-clock-full"' : ''}>
           ${row.map(c => `<td>${mdInline(c)}</td>`).join('')}
-          <td><button class="chron-toggle ws-row-edit" data-ws-section="${escHtml(s.heading)}" data-row="${i}">✏</button>
+          <td>${clock && !full ? `<button class="chron-toggle ws-clock-tick" data-ws-section="${escHtml(s.heading)}" data-row="${i}" title="Продвинуть часы на один тик">⏱ +1</button>` : ''}${full ? '<span class="ws-clock-hit" title="Часы пробило — угроза разразилась">🔥</span>' : ''}
+              <button class="chron-toggle ws-row-edit" data-ws-section="${escHtml(s.heading)}" data-row="${i}">✏</button>
               <button class="chron-toggle ws-row-del" data-ws-section="${escHtml(s.heading)}" data-row="${i}">🗑</button></td>
-        </tr>`).join('')}</tbody></table>
+        </tr>`;
+      }).join('')}</tbody></table>
       <button class="chron-toggle ws-row-add" data-ws-section="${escHtml(s.heading)}">+ Строка</button>
       <div class="ws-row-form" data-ws-section-form="${escHtml(s.heading)}" hidden></div>
       <div class="ws-prose ws-note-view">${s.note ? mdInline(s.note) : ''}</div>
       <button class="chron-toggle ws-note-edit" data-ws-section="${escHtml(s.heading)}">✏ Примечание</button>
-    </section>`).join('');
+    </section>`;
+  }).join('');
 
   return `
     <div class="ws-updated">Последнее обновление:
@@ -1192,6 +1210,23 @@ document.getElementById('chronicle-content').addEventListener('click', e => {
     const container = document.querySelector(`[data-ws-section-form="${CSS.escape(wsRowAdd.dataset.wsSection)}"]`);
     container.innerHTML = _worldStateRowFormHtml(wsRowAdd.dataset.wsSection, null, section.columns, null);
     container.hidden = false;
+    return;
+  }
+  const wsTick = e.target.closest('.ws-clock-tick');
+  if (wsTick) {
+    const section = _worldStateData.sections.find(s => s.heading === wsTick.dataset.wsSection);
+    const idx = Number(wsTick.dataset.row);
+    const cells = section.rows[idx].slice();
+    const clock = _wsClockCell(cells);
+    if (!clock || clock.n >= clock.max) return;
+    cells[clock.idx] = `${clock.n + 1}/${clock.max}`;
+    wsTick.disabled = true;
+    fetch(`/api/world-state/section/${encodeURIComponent(section.heading)}/row/${idx}${_cityQS()}`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cells }),
+    }).then(r => r.json())
+      .then(d => { if (d.error) throw new Error(d.error); loadWorldStateForm(); })
+      .catch(err => { showToast('Не удалось тикнуть часы: ' + err.message, 'error'); wsTick.disabled = false; });
     return;
   }
   const wsRowEdit = e.target.closest('.ws-row-edit');

@@ -17,7 +17,7 @@ const {
   _parseNpcEntries, _findNpcMdSection, _removeNpcEntry, _parseNpcMdGroups, _renderSessionBlock,
   _writeSessionsFile, _patchModuleMain, _claudeOnlyModel, _logAiCall, _logAiFail,
 } = require('./shared');
-const { buildCityConstraints } = require('../../lib/context_builder');
+const { buildCityConstraints, buildThreatClocks } = require('../../lib/context_builder');
 
 module.exports = function fillRouter({ makeGenerationClient, genTextWithRetry }) {
   const router = express.Router();
@@ -98,6 +98,8 @@ module.exports = function fillRouter({ makeGenerationClient, genTextWithRetry })
   ${cityMd.slice(0, 2000)}
 
   ${buildCityConstraints(city)}
+
+  ${buildThreatClocks(city)}
 
   # УЧАСТНИКИ МОДУЛЯ
   ${charCards.join('\n\n') || '(не указаны)'}

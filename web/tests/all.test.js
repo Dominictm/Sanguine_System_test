@@ -301,6 +301,46 @@ describe('Parsers — unit', () => {
     });
   });
 
+  describe('buildThreatClocks — часы угроз в промтах (E1)', () => {
+    const { buildThreatClocks } = require('../lib/context_builder');
+    const tmpCity = path.join(__dirname, '../../cities/__clocktest__');
+    before(async () => {
+      await fs.mkdir(path.join(tmpCity, 'archive'), { recursive: true });
+      await fs.writeFile(path.join(tmpCity, 'archive', 'events.md'), [
+        '# 🕯 События', '',
+        '## 🌍 Состояние мира', '',
+        '**Последнее обновление:** тест', '',
+        '### ⏱️ Часы угроз', '',
+        '| Угроза | Прогресс | Заметка |',
+        '|---|---|---|',
+        '| Шабаш готовит прорыв | 2/6 | с северо-востока |',
+        '| Расследование журналистки | 6/6 | пробило |', '',
+        '### Другая секция', '',
+        '| Кол | Кол2 |', '|---|---|', '| а | б |', '',
+      ].join('\n'), 'utf-8');
+    });
+    after(async () => { await fs.rm(tmpCity, { recursive: true, force: true }); });
+
+    it('собирает блок из секции «Часы угроз», помечая пробитые', () => {
+      const block = buildThreatClocks('__clocktest__');
+      assert.ok(block.includes('ЧАСЫ УГРОЗ'));
+      assert.ok(block.includes('Шабаш готовит прорыв'));
+      assert.ok(block.includes('2/6'));
+      assert.ok(/6\/6/.test(block));
+    });
+
+    it('города без часов → пустая строка', () => {
+      assert.equal(buildThreatClocks('__no_such_city__'), '');
+    });
+
+    it('source-guard: fill.js и lifecycle.js подмешивают часы', () => {
+      const fill = require('fs').readFileSync(path.join(__dirname, '../routes/modules/fill.js'), 'utf-8');
+      const life = require('fs').readFileSync(path.join(__dirname, '../routes/modules/lifecycle.js'), 'utf-8');
+      assert.ok(fill.includes('buildThreatClocks'), 'fill.js не использует buildThreatClocks');
+      assert.ok(life.includes('buildThreatClocks'), 'lifecycle.js не использует buildThreatClocks');
+    });
+  });
+
   describe('миграция 001 — секции «живого города» в city.md', () => {
     const mig = require('../../tools/migrations/001_city_liveliness_sections.js');
     const oldCityMd = [
