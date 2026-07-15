@@ -1689,6 +1689,9 @@ const INFO_FIELDS_BY_LINEAGE = {
     ['demeanor',     'Маска'],
     ['concept',      'Амплуа'],
     ['belonging',    'Принадлежность'],
+    ['want',       'Хочет'],
+    ['fear',       'Боится'],
+    ['leverage',   'Рычаг'],
   ],
   fairy: [
     ['status',     'Статус'],
@@ -1705,6 +1708,9 @@ const INFO_FIELDS_BY_LINEAGE = {
     ['nature',     'Натура'],
     ['demeanor',   'Маска'],
     ['belonging',  'Принадлежность'],
+    ['want',       'Хочет'],
+    ['fear',       'Боится'],
+    ['leverage',   'Рычаг'],
   ],
   mortal: [
     ['status',     'Статус'],
@@ -1719,6 +1725,9 @@ const INFO_FIELDS_BY_LINEAGE = {
     ['nature',     'Натура'],
     ['demeanor',   'Маска'],
     ['belonging',  'Принадлежность'],
+    ['want',       'Хочет'],
+    ['fear',       'Боится'],
+    ['leverage',   'Рычаг'],
   ],
 };
 // Оборотни / маги / охотники: пока нет выделенного набора — общий минимум.
@@ -1732,6 +1741,9 @@ const INFO_FIELDS_GENERIC = [
   ['hierarchy', 'Иерархия'],
   ['role',      'Роль'],
   ['belonging', 'Принадлежность'],
+    ['want',       'Хочет'],
+    ['fear',       'Боится'],
+    ['leverage',   'Рычаг'],
 ];
 function infoFieldsFor(lineage) {
   return INFO_FIELDS_BY_LINEAGE[lineage] || INFO_FIELDS_GENERIC;

@@ -3818,6 +3818,42 @@ describe('API — integration', () => {
     });
   });
 
+  // ── E2: мотивация НПС — Хочет/Боится/Рычаг (опциональные поля карточки) ──────
+  describe('Character fields — мотивация (want/fear/leverage)', () => {
+    it('PUT fields пишет Хочет/Боится/Рычаг в карточку, parseCharacter читает обратно', async () => {
+      const name = `Тест Мотив ${Date.now()}`;
+      const slug = slugify(name);
+      const create = await apiJson(`/api/characters${CITY}`, {
+        method: 'POST', body: JSON.stringify({ name, lineage: 'vampire', gender: 'Мужской', clan: 'Носферату', sect: 'Камарилья' }),
+      });
+      assert.equal(create.status, 200);
+      const put = await apiJson(`/api/characters/${encodeURIComponent(slug)}/fields${CITY}`, {
+        method: 'PUT', body: JSON.stringify({ fields: {
+          want: 'Место в Совете Примогенов', fear: 'Раскрытие старого предательства', leverage: 'Долг перед Шерифом',
+        } }),
+      });
+      assert.equal(put.status, 200);
+      const raw = await fs.readFile(path.join(CITY_ROOT, 'characters', 'vampires', slug, `${slug}.md`), 'utf-8');
+      assert.match(raw, /\*\*Хочет:\*\*\s*Место в Совете Примогенов/);
+      assert.match(raw, /\*\*Боится:\*\*\s*Раскрытие старого предательства/);
+      assert.match(raw, /\*\*Рычаг:\*\*\s*Долг перед Шерифом/);
+      const { body: chars } = await apiJson(`/api/characters${CITY}`);
+      const char = (Array.isArray(chars) ? chars : []).find(c => c.slug === slug);
+      assert.equal(char.want, 'Место в Совете Примогенов');
+      assert.equal(char.fear, 'Раскрытие старого предательства');
+      assert.equal(char.leverage, 'Долг перед Шерифом');
+      await apiJson(`/api/characters/${encodeURIComponent(slug)}${CITY}`, { method: 'DELETE' });
+      await fs.rm(path.join(CITY_ROOT, 'characters', '_deleted', slug), { recursive: true, force: true });
+    });
+
+    it('source-guard: диалоги и генерация НПС модуля знают о мотивации', () => {
+      const dlg = require('fs').readFileSync(path.join(__dirname, '../routes/characters.js'), 'utf-8');
+      const fill = require('fs').readFileSync(path.join(__dirname, '../routes/modules/fill.js'), 'utf-8');
+      assert.ok(/Хочет\/Боится\/Рычаг|Хочет, Боится, Рычаг/.test(dlg), 'dialogue-промт без инструкции о мотивации');
+      assert.ok(/Хочет|Боится|Рычаг/.test(fill), 'fill.js без инструкции о мотивации');
+    });
+  });
+
   // ── Character fields — статус теперь редактируемый (дропдаун) ────────────────
   describe('Character fields — status/statusDetails', () => {
     it('PUT /api/characters/:slug/fields — status и statusDetails пишутся в карточку и читаются обратно', async () => {

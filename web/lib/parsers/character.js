@@ -138,6 +138,10 @@ function parseCharacter(rawContent, folderName, lineage) {
     if (k === 'Принадлежность')                 c.belonging     = v;
     if (k === 'Присутствие')                    c.presence      = v;   // появления в других городах
     if (k === 'Алиасы')                         c.aliases       = v;
+    // ── Мотивация (E2, план 2026-07-15) — НПС проактивен в генерации ──
+    if (k === 'Хочет')                          c.want          = v;
+    if (k === 'Боится')                         c.fear          = v;
+    if (k === 'Рычаг')                          c.leverage      = v;
     // ── Линейко-специфичные поля (феи/смертные/иное) ──
     if (k === 'Раса')                           c.race          = v;   // фейри: кит/раса
     if (k === 'Род')                            c.kith          = v;   // фейри: род (отд. от clan-fallback выше)
