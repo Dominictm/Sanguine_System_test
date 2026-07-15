@@ -262,6 +262,45 @@ describe('Parsers — unit', () => {
     });
   });
 
+  describe('buildCityConstraints — ограничения города для промтов генерации (D2)', () => {
+    const { buildCityConstraints } = require('../lib/context_builder');
+    const tmpCity = path.join(__dirname, '../../cities/__ctest__');
+    before(async () => {
+      await fs.mkdir(tmpCity, { recursive: true });
+      await fs.writeFile(path.join(tmpCity, 'city.md'), [
+        '# Тестбург, 2010 — сеттинг города', '',
+        '## Политический ландшафт', '- Камарилья', '',
+        '## Ограничения генерации', '- Элизиумов не больше 2', '- В районе не более 4 станций метро', '',
+        '## Законы домена', '- Становление только с разрешения Князя', '',
+        '## Охотничьи угодья', '- …', '',
+        '## Технологии и Маскарад', '- …', '',
+      ].join('\n'), 'utf-8');
+    });
+    after(async () => { await fs.rm(tmpCity, { recursive: true, force: true }); });
+
+    it('собирает только заполненные секции, плейсхолдеры пропускает', () => {
+      const block = buildCityConstraints('__ctest__');
+      assert.ok(block.includes('ОГРАНИЧЕНИЯ ГОРОДА'));
+      assert.ok(block.includes('Элизиумов не больше 2'));
+      assert.ok(block.includes('Становление только с разрешения Князя'));
+      assert.ok(!block.includes('Охотничьи угодья'), 'пустая секция (плейсхолдер) не включается');
+    });
+
+    it('город без заполненных ограничений → пустая строка (не шумим в промте)', async () => {
+      await fs.writeFile(path.join(tmpCity, 'city.md'),
+        '# Т, 2010 — сеттинг города\n\n## Политический ландшафт\n- x\n', 'utf-8');
+      assert.equal(buildCityConstraints('__ctest__'), '');
+      assert.equal(buildCityConstraints('__no_such_city__'), '');
+    });
+
+    it('source-guard: генерация сценария и локаций подмешивает buildCityConstraints', () => {
+      const fill = require('fs').readFileSync(path.join(__dirname, '../routes/modules/fill.js'), 'utf-8');
+      const locs = require('fs').readFileSync(path.join(__dirname, '../routes/locations.js'), 'utf-8');
+      assert.ok(fill.includes('buildCityConstraints'), 'fill.js не использует buildCityConstraints');
+      assert.ok(locs.includes('buildCityConstraints'), 'locations.js не использует buildCityConstraints');
+    });
+  });
+
   describe('миграция 001 — секции «живого города» в city.md', () => {
     const mig = require('../../tools/migrations/001_city_liveliness_sections.js');
     const oldCityMd = [

@@ -13,6 +13,7 @@ const {
   getAllLocations, findLocMdPath,
 } = require('../lib/db');
 const { slugify, writePrompt, parseLocation } = require('../lib/parsers');
+const { buildCityConstraints } = require('../lib/context_builder');
 
 // ── Location card template (standalone) ──────────────────────────────────────
 function _locCardTemplate(name, district) {
@@ -296,6 +297,8 @@ module.exports = function locationsRouter({ makeGenerationClient, genTextWithRet
           const portretRules = await fs.readFile(path.join(ROOT, 'system', 'rules', 'portret.md'), 'utf-8').catch(() => '');
           const prompt = `Создай карточку локации «${locName}» для Vampire: The Masquerade V20, ${city || 'Париж'} 2010.
 
+${buildCityConstraints(city)}
+
 Контекст сцены: ${context || '(без контекста)'}
 Район: ${district?.trim() || '(не указан)'}
 
@@ -373,6 +376,8 @@ ${_locCardTemplate(locName, district?.trim() || '')}
           return mdPath ? fs.readFile(mdPath, 'utf-8').catch(() => '') : '';
         })() : '');
         prompt = `Создай${currentCard ? ' улучшенную версию' : ''} карточку локации «${locName}» для Vampire: The Masquerade V20, ${city || 'Париж'} 2010.
+
+${buildCityConstraints(city)}
 
 Контекст: ${context || '(нет)'}
 

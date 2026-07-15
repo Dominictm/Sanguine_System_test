@@ -232,6 +232,34 @@ function parseEventsText(raw = '') {
   });
 }
 
+// ── Ограничения города для промтов генерации (D2, план 2026-07-15) ────────────
+// Секции city.md, которые генерация обязана соблюдать. Живут в конце файла и
+// не попадают в cityMd.slice(0, 2000) — поэтому извлекаются явно.
+const CITY_CONSTRAINT_SECTIONS = [
+  ['limits', 'Ограничения генерации'],
+  ['edicts', 'Законы домена'],
+  ['hunting', 'Охотничьи угодья'],
+  ['tech', 'Технологии и Маскарад'],
+];
+
+// Блок «ОГРАНИЧЕНИЯ ГОРОДА» для system-промтов генерации сценариев/локаций.
+// Пустые секции (плейсхолдер «- …» парсится в '') пропускаются; если не
+// заполнено ничего — возвращает '' (в промт не попадает).
+function buildCityConstraints(city) {
+  const { parseCityMd } = require('./parsers');
+  let parsed;
+  try {
+    parsed = parseCityMd(fs.readFileSync(path.join(ROOT, 'cities', city, 'city.md'), 'utf8'));
+  } catch { return ''; }
+  const parts = [];
+  for (const [key, heading] of CITY_CONSTRAINT_SECTIONS) {
+    const v = ((parsed.sections || {})[key] || '').trim();
+    if (v) parts.push(`## ${heading}\n${v}`);
+  }
+  if (!parts.length) return '';
+  return `# ОГРАНИЧЕНИЯ ГОРОДА — соблюдай строго: не создавай локации и сущности сверх этих лимитов; при конфликте переиспользуй существующие\n${parts.join('\n\n')}`;
+}
+
 module.exports = {
   loadLiteraryStyle,
   loadDiaryStyleRules,
@@ -241,4 +269,5 @@ module.exports = {
   compressChronicleEvents,
   parseEventsText,
   buildNarrativeContext,
+  buildCityConstraints,
 };
