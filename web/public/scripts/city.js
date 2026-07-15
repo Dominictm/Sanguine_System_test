@@ -560,7 +560,7 @@ async function _deleteCity() {
   try {
     const r = await fetch(`/api/cities/${encodeURIComponent(d.slug)}`, { method: 'DELETE' }).then(r => r.json());
     if (!r.ok) { showToast('Ошибка удаления: ' + (r.error || 'неизвестная'), 'error'); return; }
-    navigate('tools');
+    navigate('city-new');
     if (d.active) {
       // Удалили активный город — переключаемся на любой оставшийся.
       const { cities = [] } = await fetch('/api/cities').then(r => r.json());
@@ -570,7 +570,7 @@ async function _deleteCity() {
   } catch (err) { showToast('Ошибка удаления: ' + err.message, 'error'); }
 }
 
-document.getElementById('city-page-back').addEventListener('click', () => navigate('tools'));
+document.getElementById('city-page-back').addEventListener('click', () => navigate('city-new'));
 // Клик по бейджу активного домена в сайдбаре — открыть страницу города.
 document.getElementById('domain-label').addEventListener('click', () => openCityDetail(CITY));
 

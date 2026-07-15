@@ -78,8 +78,8 @@
       <a class="nav-item" data-page="tools" title="Инструменты" aria-label="Инструменты">
         <span class="nav-icon">⚙️</span><span>Инструменты</span>
       </a>
-      <a class="nav-item" data-page="city-new" title="Новый город" aria-label="Новый город">
-        <span class="nav-icon">🏙️</span><span>Новый город</span>
+      <a class="nav-item" data-page="city-new" title="Города" aria-label="Города">
+        <span class="nav-icon">🏙️</span><span>Города</span>
       </a>
       <a class="nav-item" data-page="search" title="Поиск" aria-label="Поиск">
         <span class="nav-icon">🔍</span><span>Поиск</span>
@@ -805,17 +805,24 @@
       <div class="page-header">
         <h1 class="page-title">Город</h1>
         <span class="page-sub">Карточка домена</span>
-        <button class="cdet-edit-btn" id="city-page-back" style="margin-left:auto">← К доменам</button>
+        <button class="cdet-edit-btn" id="city-page-back" style="margin-left:auto">← К городам</button>
       </div>
       <div id="city-detail-content"></div>
     </section>
 
-    <!-- Новый город (city.js, фаза B плана 2026-07-15) -->
+    <!-- Города: карточки доменов + создание (city.js) -->
     <section id="page-city-new" class="page">
       <div class="page-header">
-        <h1 class="page-title">Новый город</h1>
-        <span class="page-sub">Создание домена</span>
+        <h1 class="page-title">Города</h1>
+        <span class="page-sub">Домены хроники</span>
       </div>
+
+      <div id="cities-grid" class="cities-grid">
+        <div class="loading-state"><div class="spinner"></div>Загрузка...</div>
+      </div>
+
+      <details class="city-create-spoiler" id="city-create-spoiler">
+        <summary>+ Создать новый домен</summary>
         <div class="form-row">
           <div class="form-group">
             <label class="form-label" for="city-name">Город *<span class="field-tip" tabindex="0" data-tip="Название города на русском — станет заголовком city.md. Папка cities/&lt;slug&gt;/ создаётся автоматически транслитерацией названия.">ⓘ</span></label>
@@ -863,7 +870,7 @@
         </div>
         <button class="btn-submit" id="btn-new-city">Создать домен</button>
         <pre class="output-area" id="out-new-city"></pre>
-
+      </details>
     </section>
     <!-- Tools -->
     <section id="page-tools" class="page">
@@ -873,8 +880,7 @@
       </div>
 
       <div class="tab-bar">
-        <button class="tab-btn active" data-tab="new-city">Домены</button>
-        <button class="tab-btn" data-tab="new-npc">Новый НПС</button>
+        <button class="tab-btn active" data-tab="new-npc">Новый НПС</button>
         <button class="tab-btn" data-tab="new-module">Модуль</button>
         <button class="tab-btn" data-tab="log-session">📓 Сессия</button>
         <button class="tab-btn" data-tab="more">🛠 Ещё</button>
@@ -882,17 +888,8 @@
         <button class="tab-btn" data-tab="ai-settings">🤖 Модели AI</button>
       </div>
 
-      <!-- Cities -->
-      <div class="tab-panel active" id="tab-new-city">
-        <div id="cities-grid" class="cities-grid">
-          <div class="loading-state"><div class="spinner"></div>Загрузка...</div>
-        </div>
-
-      </div>
-
-
       <!-- New NPC -->
-      <div class="tab-panel" id="tab-new-npc">
+      <div class="tab-panel active" id="tab-new-npc">
         <div class="form-row">
           <div class="form-group">
             <label class="form-label" for="npc-name">Имя *</label>

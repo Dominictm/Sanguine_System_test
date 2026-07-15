@@ -122,7 +122,7 @@ function navigate(page) {
   if (page === 'factions')   loadFactions();
   if (page === 'rumors')     loadRumors();
   if (page === 'search')     loadSearch();
-  if (page === 'tools')      loadCitiesGrid();
+  if (page === 'city-new')   loadCitiesGrid();
 }
 
 document.querySelectorAll('[data-page]').forEach(el => {
@@ -285,7 +285,6 @@ document.addEventListener('click', e => {
     document.querySelectorAll(`#page-${page} .tab-panel`).forEach(p =>
       p.classList.toggle('active', p.id === `tab-${tab}`));
     if (tab === 'ai-settings') loadAiSettings();
-    if (tab === 'new-city')    loadCitiesGrid();
   }
 });
 
@@ -631,7 +630,6 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
     document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.id === `tab-${tab}`));
     if (tab === 'ai-settings')     loadAiSettings();
-    if (tab === 'new-city')        loadCitiesGrid();
     if (tab === 'lib-disciplines') loadLibrary();
     if (tab === 'lib-psychics')    loadPsychicsLibrary();
     if (tab === 'lib-merits')      loadMeritsLibrary('physical');

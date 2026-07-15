@@ -1982,11 +1982,62 @@ body {
       color-mix(in srgb, var(--accent) 35%, transparent) 100%);
 }
 
+/* Карточки городов — горизонтальная линия (страница «Города»).
+   loadCitiesGrid рендерит вложенный .chp-grid — переопределяем его сетку. */
 .cities-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 16px;
   margin-bottom: 28px;
+}
+
+.cities-grid .chp-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.cities-grid .city-card {
+  flex: 0 1 300px;
+  min-width: 240px;
+}
+
+/* Спойлер формы создания домена */
+.city-create-spoiler {
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--bg2);
+  padding: 0 18px;
+  margin-top: 8px;
+}
+
+.city-create-spoiler > summary {
+  font-family: var(--f-heading);
+  font-size: var(--fs-base);
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--gold);
+  padding: 14px 0;
+  cursor: pointer;
+  list-style: none;
+}
+
+.city-create-spoiler > summary::-webkit-details-marker {
+  display: none;
+}
+
+.city-create-spoiler > summary::before {
+  content: '▸ ';
+  color: var(--text3);
+}
+
+.city-create-spoiler[open] > summary::before {
+  content: '▾ ';
+}
+
+.city-create-spoiler[open] {
+  padding-bottom: 18px;
+}
+
+.city-create-spoiler > summary:hover {
+  color: var(--gold2);
 }
 
 .tools-section-title {
