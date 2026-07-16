@@ -135,13 +135,17 @@ function navigate(page) {
       if (on) el.setAttribute('aria-current', 'page');
       else    el.removeAttribute('aria-current');
     });
+    // page-in-fwd/page-in-back снимаются здесь с ВСЕХ разделов (не только с
+    // next) перед добавлением нужного варианта — а не по animationend после
+    // проигрывания. Снятие класса по animationend роняло специфичность
+    // обратно на голое «.page.active» (у него своя, отдельно объявленная
+    // анимация page-in) — смена значения animation-name заставляла браузер
+    // проиграть её заново, и раздел ещё раз мигал фейдом сразу после слайда.
+    document.querySelectorAll('.page.page-in-fwd, .page.page-in-back')
+      .forEach(el => el.classList.remove('page-in-fwd', 'page-in-back'));
     document.querySelectorAll('.page').forEach(el =>
       el.classList.toggle('active', el.id === `page-${page}`));
-    if (next && dir && !reduced) {
-      const inClass = dir === 'fwd' ? 'page-in-fwd' : 'page-in-back';
-      next.classList.add(inClass);
-      next.addEventListener('animationend', () => next.classList.remove(inClass), { once: true });
-    }
+    if (next && dir && !reduced) next.classList.add(dir === 'fwd' ? 'page-in-fwd' : 'page-in-back');
 
     if (page === 'dashboard')  loadDashboard();
     if (page === 'chronicle')  loadChronicle();
