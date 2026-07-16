@@ -406,6 +406,22 @@ body {
   --page-bg-layers: linear-gradient(180deg, rgba(7, 5, 10, .82), rgba(7, 5, 10, .30)), url('img/backgrounds/module.png') center / cover no-repeat;
 }
 
+#page-session {
+  --page-bg-layers: linear-gradient(180deg, rgba(7, 5, 10, .82), rgba(7, 5, 10, .30)), url('img/backgrounds/session.png') center / cover no-repeat;
+}
+
+#page-city {
+  --page-bg-layers: linear-gradient(180deg, rgba(7, 5, 10, .82), rgba(7, 5, 10, .30)), url('img/backgrounds/city.png') center / cover no-repeat;
+}
+
+#page-city-new {
+  --page-bg-layers: linear-gradient(180deg, rgba(7, 5, 10, .82), rgba(7, 5, 10, .30)), url('img/backgrounds/city-new.png') center / cover no-repeat;
+}
+
+#page-audio-library {
+  --page-bg-layers: linear-gradient(180deg, rgba(7, 5, 10, .82), rgba(7, 5, 10, .30)), url('img/backgrounds/audio-library.png') center / cover no-repeat;
+}
+
 #page-graph {
   padding: 0;
   overflow: hidden;
