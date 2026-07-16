@@ -1766,6 +1766,37 @@ body {
   align-items: center;
 }
 
+/* Фильтр по линейке WoD на графе связей (фаза G, план 2026-07-16) */
+.graph-lineage-filter {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.graph-lineage-chip {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 32px;
+  font-family: var(--f-heading);
+  font-size: var(--fs-2xs);
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--text2);
+  cursor: pointer;
+  user-select: none;
+}
+
+.graph-lineage-chip input {
+  accent-color: var(--accent2);
+  cursor: pointer;
+}
+
+@media (pointer: coarse) {
+  .graph-lineage-chip { min-height: 44px; }
+}
+
 .legend-item {
   display: flex;
   align-items: center;

@@ -108,7 +108,43 @@ async function loadGraph() {
   STATE.graph.data = data;
   buildLegend();
   renderGraph(data);
+  buildLineageFilter();
 }
+
+// ── Фильтр по линейке WoD (фаза G, план 2026-07-16) ────────────────────────────
+// Чекбоксы строятся только для линеек, реально присутствующих среди узлов —
+// без «Оборотней»/«Магов»/«Охотников» в городе, где таких персонажей нет.
+// Все включены по умолчанию; STATE.graph.lineageFilter переживает toggle
+// без повторного запроса /api/graph (данные уже загружены, скрываем/показываем
+// существующие узлы/связи).
+function buildLineageFilter() {
+  const present = new Set((STATE.graph.data?.nodes || []).map(n => n.lineage).filter(Boolean));
+  const keys = Object.keys(LINEAGE_LABELS).filter(k => present.has(k));
+  STATE.graph.lineageFilter = new Set(keys);
+  document.getElementById('graph-lineage-filter').innerHTML = keys.map(k => `
+    <label class="graph-lineage-chip">
+      <input type="checkbox" data-lineage-filter="${k}" checked>
+      ${LINEAGE_LABELS[k]}
+    </label>`).join('');
+}
+
+// Ребро видимо только если видимы ОБА конца — иначе связь «в никуда» повисает на экране.
+function applyLineageFilter() {
+  const nodeG = STATE.graph.nodes, link = STATE.graph.links;
+  if (!nodeG || !link) return;
+  const active = STATE.graph.lineageFilter;
+  nodeG.style('display', d => active.has(d.lineage) ? null : 'none');
+  link.style('display', l => (active.has(l.source.lineage) && active.has(l.target.lineage)) ? null : 'none');
+}
+
+document.getElementById('graph-lineage-filter').addEventListener('change', e => {
+  const cb = e.target.closest('[data-lineage-filter]');
+  if (!cb) return;
+  const key = cb.dataset.lineageFilter;
+  if (cb.checked) STATE.graph.lineageFilter.add(key);
+  else STATE.graph.lineageFilter.delete(key);
+  applyLineageFilter();
+});
 
 function buildLegend() {
   const types = ['family','sire','ally','enemy','loyalty','acquaintance','secret','neutral'];
@@ -405,4 +441,10 @@ document.getElementById('btn-reset').addEventListener('click', () => {
   if (!STATE.graph.svg) return;
   STATE.graph.svg.transition().duration(500).call(
     STATE.graph.zoom.transform, d3.zoomIdentity);
+  // Сброс снимает и фильтр линеек (план 2026-07-16, фаза G).
+  document.querySelectorAll('#graph-lineage-filter [data-lineage-filter]').forEach(cb => { cb.checked = true; });
+  if (STATE.graph.lineageFilter) {
+    Object.keys(LINEAGE_LABELS).forEach(k => STATE.graph.lineageFilter.add(k));
+    applyLineageFilter();
+  }
 });
