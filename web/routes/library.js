@@ -94,51 +94,61 @@ router.get('/api/library/psychics', async (_req, res) => {
   catch (e) { serverError(res, e); }
 });
 
+// Набор PNG-файлов в web/public/img/system/library/<section>/ (генерирует
+// tools/generate_library_art.js) — читается на каждый запрос (каталог
+// маленький, кэш не нужен), т.к. hasArt считается отдельно от кэша
+// getMerits/getFlaws/getBackgrounds — иначе появление нового арта без
+// рестарта сервера не отражалось бы в ответе (эти три лоадера кэшируют
+// сами записи бессрочно, см. web/lib/merits-loader.js).
+async function _artFileSet(section) {
+  const dir = path.join(__dirname, '..', 'public', 'img', 'system', 'library', section);
+  const files = await fs.readdir(dir).catch(() => []);
+  return new Set(files);
+}
+const _withArt = (list, art) => list.map(x => ({ ...x, hasArt: art.has(x.slug + '.png') }));
+
 // ── Библиотека: справочник достоинств (system/library/merits/*.json) ──────────
 // JSON-based merits library (physical, social, mental, supernatural)
-router.get('/api/library/merits/:category', (_req, res) => {
+router.get('/api/library/merits/:category', async (req, res) => {
   try {
-    const category = _req.params.category;
-    const merits = getMerits(category);
-    res.json(merits);
+    const merits = getMerits(req.params.category);
+    res.json(_withArt(merits, await _artFileSet('merits')));
   } catch (e) { serverError(res, e); }
 });
 
 // ── Библиотека: справочник недостатков (system/library/flaws/*.json) ──────────
 // JSON-based flaws library (физические, умственные, социальные, сверхъестественные)
-router.get('/api/library/flaws/:category', (_req, res) => {
+router.get('/api/library/flaws/:category', async (req, res) => {
   try {
-    const category = _req.params.category;
-    const flaws = getFlaws(category);
-    res.json(flaws);
+    const flaws = getFlaws(req.params.category);
+    res.json(_withArt(flaws, await _artFileSet('flaws')));
   } catch (e) { serverError(res, e); }
 });
 
 // ── Библиотека: объединённые списки достоинств/недостатков (все категории слиты) ──
 // Для пикера в листе персонажа (см. web/public/scripts.js: _v20LoadLibrary) — не нужно
 // отдельно грузить 4+4 эндпоинта по категориям на клиенте.
-router.get('/api/library/merits', (_req, res) => {
-  try { res.json(Object.values(getAllMerits()).flat()); }
+router.get('/api/library/merits', async (_req, res) => {
+  try { res.json(_withArt(Object.values(getAllMerits()).flat(), await _artFileSet('merits'))); }
   catch (e) { serverError(res, e); }
 });
 
-router.get('/api/library/flaws', (_req, res) => {
-  try { res.json(Object.values(getAllFlaws()).flat()); }
+router.get('/api/library/flaws', async (_req, res) => {
+  try { res.json(_withArt(Object.values(getAllFlaws()).flat(), await _artFileSet('flaws'))); }
   catch (e) { serverError(res, e); }
 });
 
 // ── Библиотека: справочник фактов биографии (system/library/backgrounds/*.json) ──
 // JSON-based backgrounds library (general, vampire, ghoul, mage, changeling)
-router.get('/api/library/backgrounds/:category', (_req, res) => {
+router.get('/api/library/backgrounds/:category', async (req, res) => {
   try {
-    const category = _req.params.category;
-    const backgrounds = getBackgrounds(category);
-    res.json(backgrounds);
+    const backgrounds = getBackgrounds(req.params.category);
+    res.json(_withArt(backgrounds, await _artFileSet('backgrounds')));
   } catch (e) { serverError(res, e); }
 });
 
-router.get('/api/library/backgrounds', (_req, res) => {
-  try { res.json(Object.values(getAllBackgrounds()).flat()); }
+router.get('/api/library/backgrounds', async (_req, res) => {
+  try { res.json(_withArt(Object.values(getAllBackgrounds()).flat(), await _artFileSet('backgrounds'))); }
   catch (e) { serverError(res, e); }
 });
 

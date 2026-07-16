@@ -2133,6 +2133,31 @@ describe('API — integration', () => {
       assert.ok(body.length > 0);
       for (const p of body) assert.equal(typeof p.hasArt, 'boolean');
     });
+    it('GET /api/library/merits(/flaws|/backgrounds) → hasArt отражает наличие PNG в web/public/img/system/library/<раздел>/', async () => {
+      // Достоинства/недостатки/факты биографии хранятся как JSON-массивы (не
+      // по файлу на запись, как дисциплины) — фикстуру создаём через уже
+      // существующий CRUD (POST .../merits), а не прямой записью в канон.
+      const name = '__TEST_HASART_MERIT__';
+      const create = await apiJson('/api/library/merits', {
+        method: 'POST', body: JSON.stringify({ category: 'physical', name, points: 1, description: 'x' }),
+      });
+      assert.equal(create.status, 200);
+      const slug = create.body.slug;
+      const imgDir = path.join(__dirname, '../public/img/system/library/merits');
+      await fs.mkdir(imgDir, { recursive: true });
+      const pngPath = path.join(imgDir, slug + '.png');
+      await fs.writeFile(pngPath, Buffer.from([0]));
+      try {
+        const listed = (await apiJson('/api/library/merits/physical')).body.find(m => m.slug === slug);
+        assert.ok(listed);
+        assert.equal(listed.hasArt, true);
+        const listedAll = (await apiJson('/api/library/merits')).body.find(m => m.slug === slug);
+        assert.equal(listedAll.hasArt, true);
+      } finally {
+        await fs.rm(pngPath, { force: true });
+        await apiJson(`/api/library/merits/physical/${slug}`, { method: 'DELETE' });
+      }
+    });
   });
 
   // ── Library — авторские элементы (фаза I) ─────────────────────────────────

@@ -26,5 +26,17 @@
   { "section": "psychics", "slug": "psychic_healing",      "scene": "two hands cupped around a soft glowing light mending a wound" },
   { "section": "psychics", "slug": "empathic_healing",     "scene": "two linked hands, one glowing with healing light, the other marked with shared pain" },
   { "section": "psychics", "slug": "synergy",              "scene": "two clasped hands merging together in a shared radiant aura" },
-  { "section": "psychics", "slug": "psychic_vampirism",    "scene": "a spectral hand draining a wisp of glowing life-force from a shadowy figure" }
+  { "section": "psychics", "slug": "psychic_vampirism",    "scene": "a spectral hand draining a wisp of glowing life-force from a shadowy figure" },
+  { "section": "merits", "slug": "ambidekstr",     "scene": "two identical curved daggers crossed in perfect mirror symmetry, held steady by unseen hands" },
+  { "section": "merits", "slug": "vnsitel-tip",     "scene": "a broad hulking silhouette looming in a doorway, fists like stone, quiet menace radiating outward" },
+  { "section": "merits", "slug": "zhavoronok",      "scene": "a solitary lark silhouette rising against a pale crack of dawn breaking through storm clouds" },
+  { "section": "merits", "slug": "znakomoe-lico",   "scene": "a blank featureless oval mask, its edges dissolving into faint duplicate echoes of itself" },
+  { "section": "merits", "slug": "kosache-ravnoves", "scene": "a black cat padding along a narrow rooftop ledge in perfect silent balance" },
+  { "section": "merits", "slug": "ostre-chuvstva",  "scene": "an owl's alert ear tuft catching a faint distant sound, delicate ripples in the night air" },
+  { "section": "merits", "slug": "poglosh-pishchi", "scene": "an ornate chalice with a coiling serpent recoiling harmlessly from its rim" },
+  { "section": "merits", "slug": "pysh-zdorov",     "scene": "a gnarled ancient oak standing unshaken, roots deep, against a raging storm" },
+  { "section": "merits", "slug": "charuy-golos",    "scene": "a single glowing crimson ribbon of sound curling and winding through darkness" },
+  { "section": "merits", "slug": "sorvigolova",     "scene": "a lone flame held steady in an open palm, unflinching despite a fierce gale" },
+  { "section": "merits", "slug": "effekt-usvoen",   "scene": "an hourglass with sand flowing impossibly upward, wounds knitting closed in reverse" },
+  { "section": "merits", "slug": "ogromnyj-razmer", "scene": "an oversized empty coat draped over a modest chair, its scale dwarfing the room around it" }
 ]
