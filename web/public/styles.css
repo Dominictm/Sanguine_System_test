@@ -6231,7 +6231,7 @@ a:focus-visible {
 
 .chron-event {
   position: relative;
-  background: var(--bg3);
+  background: #120f1882;
   border: 1px solid var(--accent);
   border-radius: var(--r-sm);
   padding: 18px 22px 20px;

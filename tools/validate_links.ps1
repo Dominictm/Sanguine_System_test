@@ -30,9 +30,11 @@ foreach ($file in $mdFiles) {
     if ($null -eq $content) { continue }   # empty file — Get-Content -Raw returns $null, not ""
     $dir     = $file.DirectoryName
 
-    # Strip fenced code blocks — example snippets (e.g. in docs/superpowers/plans/)
-    # often contain markdown-link-looking syntax as literal example text, not real links.
+    # Strip fenced code blocks and inline code spans — example snippets (e.g. in
+    # docs/superpowers/plans/) often contain markdown-link-looking syntax as
+    # literal example text (e.g. `[text](path.md)`), not real links.
     $content = [regex]::Replace($content, '(?s)```.*?```', '')
+    $content = [regex]::Replace($content, '`[^`\n]*`', '')
 
     $links = @()
     # angle-bracket links: [text](<url>)

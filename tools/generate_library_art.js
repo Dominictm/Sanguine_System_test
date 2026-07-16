@@ -10,6 +10,7 @@ const COMFY_HOST = 'http://127.0.0.1:8188';
 const COMFY_DIR  = process.env.COMFY_DIR || 'D:\\AIImage\\ComfyUI\\ComfyUI_windows_portable';
 const ROOT       = path.join(__dirname, '..');
 const MANIFEST   = require('./library-art-manifest.json');
+const { compressPngViaSquoosh } = require('./lib/squoosh_compress');
 
 const POSITIVE_TMPL = scene => "solid pure black background, jet black background filling the entire square canvas, "
   + "dark gothic emblem, circular ornate medallion badge floating on black, " + scene + ", "
@@ -135,6 +136,14 @@ async function main() {
     const outputPath = await generateOne(entry);
     resizeTo400(outputPath, destPath);
     console.log('saved:', destPath);
+
+    try {
+      const { originalSize, compressedSize } = await compressPngViaSquoosh(destPath);
+      const pct = Math.round((1 - compressedSize / originalSize) * 100);
+      console.log(`  squoosh: ${originalSize} -> ${compressedSize} bytes (-${pct}%)`);
+    } catch (e) {
+      console.warn('  squoosh compress failed, keeping uncompressed PNG:', e.message);
+    }
   }
   console.log('Done.');
 }

@@ -104,11 +104,10 @@
 
 ## V. Что помнит кто — быстрая шпаргалка
 
-> Для проверки: «был ли NPC в городе в тот период?»
 
 | Персонаж | Помнит | Не помнит / Отсутствовал |
-|----------|--------|--------------------------|
-| [Вийон](../characters/vampires/fransua_viyon/fransua_viyon.md) | Всё — от Двора Любви до 2010 | — |
+| --- | --- | --- |
+| [Вийон](../characters/vampires/fransua_viyon/fransua_viyon.md) | Всё — от Двора Любви до 2010 | — | 📚 |  |
 | [Катерина Сфорца](../characters/vampires/katerina_sfortsa/katerina_sfortsa.md) | Революцию, обе войны, Коммуну | Личность до 1990-х под вопросом (слух #4) |
 | [Ален Дюбуа](../characters/vampires/alen_dyubua/alen_dyubua.md) | Обращён: уточнить в карточке | — |
 | [Филиппа де Россет](../characters/vampires/filippa_de_rosset/filippa_de_rosset.md) | Средневековье, 1313+; где была 1609–2010 — неизвестно | В Париже 1609–2010: отсутствовала |
@@ -124,9 +123,14 @@
 
 ---
 
-## 📎 Связи
+## __TEST_EPOCH_REPRO__
 
-- Карта фракций: [factions_paris.md](political_state.md)
-- Открытые нити: [open_threads.md](open_threads.md)
-- Слухи Элизиума: [rumors_elysium.md](rumors_elysium.md)
-- Персонажи: [characters/characters_ALL.md](characters_index.md)
+| Год | Тип | Событие | Источник | Связи |
+| --- | --- | --- | --- | --- |
+
+---
+
+## __REAL_CLICK_EPOCH__
+
+| Год | Тип | Событие | Источник | Связи |
+| --- | --- | --- | --- | --- |

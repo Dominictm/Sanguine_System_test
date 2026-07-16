@@ -1110,11 +1110,11 @@ document.getElementById('chronicle-content').addEventListener('click', e => {
   }
   if (e.target.id === 'tl-new-epoch-save') {
     const heading = document.getElementById('tl-new-epoch-heading').value.trim();
-    if (!heading) return;
+    if (!heading) { alert('Укажи название эпохи'); return; }
     fetch('/api/timeline/epoch' + _cityQS(), {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ heading }),
-    }).then(r => r.json()).then(d => { if (d.ok !== false) loadTimelineForm(); });
+    }).then(r => r.json()).then(d => { if (d.error) alert(d.error); loadTimelineForm(); });
     return;
   }
   const epochDel = e.target.closest('[data-epoch-del]');

@@ -168,6 +168,14 @@ function navigate(page) {
 
   const outClass = dir === 'fwd' ? 'page-out-fwd' : dir === 'back' ? 'page-out-back' : 'page-out';
   if (prev && next && prev !== next && !reduced) {
+    // prev может ещё нести page-in-fwd/page-in-back со своего собственного
+    // въезда (снимается только в начале applyPage() СЛЕДУЮЩЕГО перехода,
+    // то есть позже, чем нужно здесь). .page.active.page-in-* специфичнее
+    // .page.page-out-* (3 класса против 2) — если не снять его сейчас,
+    // добавление outClass ничего не меняет в animation-name, animationend
+    // не срабатывает, и navigate() дальше не отрабатывает вообще (зависшая
+    // навигация после первого клика).
+    prev.classList.remove('page-in-fwd', 'page-in-back');
     prev.classList.add(outClass);
     prev.addEventListener('animationend', () => {
       prev.classList.remove(outClass);
