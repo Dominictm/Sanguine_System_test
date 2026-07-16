@@ -6462,10 +6462,67 @@ button.chron-chip {
 }
 
 #module-detail-content,
+/* Страница города — по образцу #page-module: сама страница становится
+   фиксированной flex-колонкой (padding:0, overflow:hidden ниже), внутри —
+   один скроллящийся регион (.city-page-body), без вложенного второго
+   скролла и без декоративной модальной шапки (фаза J, план 2026-07-16). */
+#page-city {
+  padding: 0;
+  overflow: hidden;
+}
+
+#page-city.active {
+  display: flex;
+  flex-direction: column;
+}
+
 #city-detail-content {
   display: flex;
+  flex-direction: column;
   width: 100%;
-  height: 100%;
+  flex: 1;
+  min-height: 0;
+}
+
+.city-page-header {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 14px;
+  padding: 16px 28px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg2);
+  flex-shrink: 0;
+}
+
+.city-page-title-wrap {
+  flex: 1;
+  min-width: 200px;
+}
+
+.city-page-title {
+  font-family: var(--f-heading);
+  font-size: var(--fs-xl);
+  letter-spacing: .05em;
+  color: var(--text);
+  line-height: 1.2;
+}
+
+.city-page-header .city-detail-actions,
+.city-page-header .city-edit-tabs {
+  margin-top: 0;
+}
+
+.city-page-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  /* Без паддинга здесь — его несут .city-page-prose (просмотр) или
+     .city-edit-panel/.city-edit-footer (редактирование), уже со своими. */
+}
+
+.city-page-prose {
+  padding: 22px 28px 28px;
 }
 
 .mod-info-col {

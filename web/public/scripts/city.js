@@ -339,23 +339,22 @@ function _renderCityView() {
   ].filter(Boolean).join('');
 
   content.innerHTML = `
-    <div class="cdet-info-col mod-info-col">
-      <div class="cdet-sticky-header">
-        <div class="cdet-name">${escHtml(display)}</div>
-        <div class="mod-modal-slug-row">
-          ${meta ? `<div class="chp-card-meta">${meta}</div>` : ''}
-          ${d.active
-            ? '<span class="chp-status chp-status-active">Активен</span>'
-            : `<button class="mod-gen-scenario-btn" data-switch-city="${escHtml(d.slug)}">Переключиться на этот город</button>`}
-        </div>
-        <div class="city-detail-actions">
-          <button class="city-edit-btn" data-city-edit>✏ Редактировать</button>
-          <button class="city-del-btn" data-city-delete title="Удалить домен">🗑 Удалить</button>
-        </div>
+    <div class="city-page-header">
+      <button class="modp-back-btn" data-city-back>← К городам</button>
+      <div class="city-page-title-wrap">
+        <div class="city-page-title">${escHtml(display)}</div>
+        ${meta ? `<div class="chp-card-meta">${meta}</div>` : ''}
       </div>
-      <div class="cdet-panels">
-        <div class="cdet-panel active"><div class="md-body">${mdToHtmlBlock(body)}</div></div>
+      ${d.active
+        ? '<span class="chp-status chp-status-active">Активен</span>'
+        : `<button class="mod-gen-scenario-btn" data-switch-city="${escHtml(d.slug)}">Переключиться на этот город</button>`}
+      <div class="city-detail-actions">
+        <button class="city-edit-btn" data-city-edit>✏ Редактировать</button>
+        <button class="city-del-btn" data-city-delete title="Удалить домен">🗑 Удалить</button>
       </div>
+    </div>
+    <div class="city-page-body city-page-prose">
+      <div class="md-body">${mdToHtmlBlock(body)}</div>
     </div>`;
 }
 
@@ -400,37 +399,38 @@ function _renderCityEdit() {
   }).join('');
 
   content.innerHTML = `
-    <div class="cdet-info-col mod-info-col">
-      <div class="cdet-sticky-header">
-        <div class="cdet-name">Редактирование: ${escHtml((d.parsed && d.parsed.display) || d.slug)}</div>
-        <div class="cdet-tab-bar city-edit-tabs">
-          <button class="cdet-tab ${custom ? '' : 'active'}" data-city-tab="fields" ${custom ? 'disabled title="У города есть кастомные секции — правьте через Markdown, иначе они потеряются"' : ''}>Поля</button>
-          <button class="cdet-tab ${custom ? 'active' : ''}" data-city-tab="markdown">Markdown</button>
-        </div>
+    <div class="city-page-header">
+      <button class="modp-back-btn" data-city-back>← К городам</button>
+      <div class="city-page-title-wrap">
+        <div class="city-page-title">Редактирование: ${escHtml((d.parsed && d.parsed.display) || d.slug)}</div>
       </div>
-      <div class="cdet-panels">
-        <div class="cdet-panel city-edit-panel ${custom ? '' : 'active'}" data-city-pane="fields">
-          <div class="form-row">
-            <div class="form-group">
-              <label class="form-label">Название *${fieldTip(CITY_FIELD_TIPS['Название'])}</label>
-              <input class="form-control" data-city-field="display" type="text" value="${escAttr((d.parsed && d.parsed.display) || '')}">
-            </div>
-            <div class="form-group">
-              <label class="form-label">Год${fieldTip(CITY_FIELD_TIPS['Год'])}</label>
-              <input class="form-control" data-city-field="year" type="text" maxlength="9" value="${escAttr((d.parsed && d.parsed.year) || '')}">
-            </div>
+      <div class="cdet-tab-bar city-edit-tabs">
+        <button class="cdet-tab ${custom ? '' : 'active'}" data-city-tab="fields" ${custom ? 'disabled title="У города есть кастомные секции — правьте через Markdown, иначе они потеряются"' : ''}>Поля</button>
+        <button class="cdet-tab ${custom ? 'active' : ''}" data-city-tab="markdown">Markdown</button>
+      </div>
+    </div>
+    <div class="city-page-body">
+      <div class="cdet-panel city-edit-panel ${custom ? '' : 'active'}" data-city-pane="fields">
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Название *${fieldTip(CITY_FIELD_TIPS['Название'])}</label>
+            <input class="form-control" data-city-field="display" type="text" value="${escAttr((d.parsed && d.parsed.display) || '')}">
           </div>
           <div class="form-group">
-            <label class="form-label">Сеттинг${fieldTip(CITY_FIELD_TIPS['Сеттинг'])}</label>
-            <textarea class="form-control" data-city-field="description" rows="3"
-              placeholder="Общее описание города — эпоха, тон, в рамках какого канона разворачиваются сцены…">${escHtml((d.parsed && d.parsed.description) || '')}</textarea>
+            <label class="form-label">Год${fieldTip(CITY_FIELD_TIPS['Год'])}</label>
+            <input class="form-control" data-city-field="year" type="text" maxlength="9" value="${escAttr((d.parsed && d.parsed.year) || '')}">
           </div>
-          ${fieldRows}
         </div>
-        <div class="cdet-panel city-edit-panel ${custom ? 'active' : ''}" data-city-pane="markdown">
-          ${custom ? '<div class="canon-warn" style="margin-bottom:10px">У этого города есть нестандартные секции — редактируйте полный markdown, чтобы ничего не потерять.</div>' : ''}
-          <textarea class="form-control city-md-editor" data-city-field="cityMd" rows="20" spellcheck="false">${escHtml(d.cityMd)}</textarea>
+        <div class="form-group">
+          <label class="form-label">Сеттинг${fieldTip(CITY_FIELD_TIPS['Сеттинг'])}</label>
+          <textarea class="form-control" data-city-field="description" rows="3"
+            placeholder="Общее описание города — эпоха, тон, в рамках какого канона разворачиваются сцены…">${escHtml((d.parsed && d.parsed.description) || '')}</textarea>
         </div>
+        ${fieldRows}
+      </div>
+      <div class="cdet-panel city-edit-panel ${custom ? 'active' : ''}" data-city-pane="markdown">
+        ${custom ? '<div class="canon-warn" style="margin-bottom:10px">У этого города есть нестандартные секции — редактируйте полный markdown, чтобы ничего не потерять.</div>' : ''}
+        <textarea class="form-control city-md-editor" data-city-field="cityMd" rows="20" spellcheck="false">${escHtml(d.cityMd)}</textarea>
       </div>
       <div class="city-edit-footer">
         <button class="btn-submit" data-city-save>✓ Сохранить</button>
@@ -450,6 +450,8 @@ document.addEventListener('click', e => {
 });
 
 document.getElementById('city-detail-content').addEventListener('click', async e => {
+  if (e.target.closest('[data-city-back]')) { navigate('city-new'); return; }
+
   const sw = e.target.closest('[data-switch-city]');
   if (sw) { location.search = 'city=' + encodeURIComponent(sw.dataset.switchCity); return; }
 
@@ -570,7 +572,6 @@ async function _deleteCity() {
   } catch (err) { showToast('Ошибка удаления: ' + err.message, 'error'); }
 }
 
-document.getElementById('city-page-back').addEventListener('click', () => navigate('city-new'));
 // Клик по бейджу активного домена в сайдбаре — открыть страницу города.
 document.getElementById('domain-label').addEventListener('click', () => openCityDetail(CITY));
 

@@ -800,13 +800,11 @@
       </div>
     </section>
 
-    <!-- Город — страничный вид (city.js, фаза C плана 2026-07-15) -->
+    <!-- Город — страничный вид (city.js). Собственная тонкая шапка рендерится
+         в city.js (по образцу #page-module) — без обёртки .page-header, чтобы
+         не дублировать заголовок и не создавать двойной скролл (фаза J,
+         план 2026-07-16). -->
     <section id="page-city" class="page">
-      <div class="page-header">
-        <h1 class="page-title">Город</h1>
-        <span class="page-sub">Карточка домена</span>
-        <button class="cdet-edit-btn" id="city-page-back" style="margin-left:auto">← К городам</button>
-      </div>
       <div id="city-detail-content"></div>
     </section>
 
