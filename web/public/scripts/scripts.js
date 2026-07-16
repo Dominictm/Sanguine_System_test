@@ -88,7 +88,7 @@ const VAMPIRE_GENERATIONS = ['14-е', '13-е', '12-е', '11-е', '10-е', '9-е'
 const STATE = {
   page: 'dashboard',
   characters: [],
-  filter: { lineage: 'all', status: 'all', search: '' },
+  filter: { lineage: 'all', status: 'all', search: '', belonging: 'all' },
   graph: { data: null, svg: null, zoom: null, sim: null, nodes: null, links: null, inited: false },
   selectedNode: null,
   locations: [],
@@ -394,11 +394,12 @@ async function loadCharacters() {
 }
 
 function renderChars() {
-  const { lineage, status, search } = STATE.filter;
+  const { lineage, status, search, belonging } = STATE.filter;
   let list = STATE.characters;
-  if (lineage !== 'all') list = list.filter(c => c.lineage === lineage);
-  if (status  !== 'all') list = list.filter(c => c.statusType === status);
-  if (search)            list = list.filter(c => c.name.toLowerCase().includes(search.toLowerCase()));
+  if (lineage !== 'all')      list = list.filter(c => c.lineage === lineage);
+  if (status  !== 'all')      list = list.filter(c => c.statusType === status);
+  if (belonging === 'episodic') list = list.filter(c => c.belonging === 'Эпизодический персонаж');
+  if (search)                 list = list.filter(c => c.name.toLowerCase().includes(search.toLowerCase()));
 
   document.getElementById('chars-count-label').textContent = `${list.length} персонажей`;
 
@@ -605,6 +606,15 @@ function _advanceCard(name) {
     }, 300);
   }, 2100);
 }
+
+// Все / Эпизодические — переключатель по «Принадлежности» (фаза H).
+document.querySelectorAll('[data-belonging-tab]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('[data-belonging-tab]').forEach(b => b.classList.toggle('active', b === btn));
+    STATE.filter.belonging = btn.dataset.belongingTab;
+    if (STATE.characters.length) { renderChars(); _injectGridDims(); }
+  });
+});
 
 document.getElementById('filter-lineage').addEventListener('change', e => {
   STATE.filter.lineage = e.target.value;
@@ -2351,6 +2361,20 @@ document.querySelectorAll('.lineage-pick-btn').forEach(btn => {
         ${datalist}
       </div>`;
     }).join('');
+    // «Принадлежность» — общее поле для всех линеек (не входит в per-lineage
+    // fields[], иначе пришлось бы дублировать в 6 массивах). Если открыто со
+    // вкладки «🎭 Эпизодические» — по умолчанию подставляется «Эпизодический
+    // персонаж» (фаза H, план 2026-07-16).
+    const belongingDefault = STATE.filter.belonging === 'episodic' ? 'Эпизодический персонаж' : 'Персонаж мастера';
+    modalFields.insertAdjacentHTML('beforeend', `
+      <div class="form-group">
+        <label class="form-label">Принадлежность${fieldTip(CHAR_FIELD_TIPS['Принадлежность'])}</label>
+        <select class="form-control" data-param="belonging">
+          <option value="Персонаж мастера" ${belongingDefault === 'Персонаж мастера' ? 'selected' : ''}>Персонаж мастера</option>
+          <option value="Персонаж игрока">Персонаж игрока</option>
+          <option value="Эпизодический персонаж" ${belongingDefault === 'Эпизодический персонаж' ? 'selected' : ''}>Эпизодический персонаж</option>
+        </select>
+      </div>`);
     showModalStep(2);
     const firstField = modalFields.querySelector('input, textarea');
     if (firstField) firstField.focus();
@@ -2414,6 +2438,7 @@ modalSubmit.addEventListener('click', async () => {
         seeming: params.seeming || '', court: params.court || '', house: params.house || '',
         role: params.role || '',
         biography: params.biography || '', appearance: params.appearance || '',
+        belonging: params.belonging || '',
       };
       const d = await fetch('/api/characters' + qs, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -2428,7 +2453,7 @@ modalSubmit.addEventListener('click', async () => {
         werewolf: 'werewolves', mage: 'mages', hunter: 'hunters'
       };
       const folder = TYPE_TO_LINEAGE[def.type] || 'mortals';
-      const npcArgs = [CITY, folder, params.Name, params.Gender, params.Clan || '', params.Sect || '', params.Role || ''];
+      const npcArgs = [CITY, folder, params.Name, params.Gender, params.Clan || '', params.Sect || '', params.Role || '', params.belonging || ''];
       const d = await fetch('/api/tool/new_npc', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ args: npcArgs })

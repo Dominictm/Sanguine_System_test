@@ -3946,6 +3946,48 @@ describe('API — integration', () => {
     });
   });
 
+  // ── H: «Эпизодические персонажи» — cross-lineage фильтр по «Принадлежности»,
+  // не отдельная папка/линейка (поле и его enum уже существовали в схеме
+  // карточки — «Эпизодический персонаж» как значение «Принадлежность») ────────
+  describe('Персонажи — belonging «Эпизодический персонаж» (фаза H)', () => {
+    it('POST /api/characters с belonging=«Эпизодический персонаж» пишет поле в карточку и отдаёт его в списке', async () => {
+      const name = `Тест Эпизод ${Date.now()}`;
+      const slug = slugify(name);
+      const create = await apiJson(`/api/characters${CITY}`, {
+        method: 'POST',
+        body: JSON.stringify({ name, lineage: 'vampire', gender: 'Мужской', clan: 'Тореадор', sect: 'Камарилья', belonging: 'Эпизодический персонаж' }),
+      });
+      assert.equal(create.status, 200);
+      const raw = await fs.readFile(path.join(CITY_ROOT, 'characters', 'vampires', slug, `${slug}.md`), 'utf-8');
+      assert.match(raw, /\*\*Принадлежность:\*\*\s*Эпизодический персонаж/);
+      const { body: chars } = await apiJson(`/api/characters${CITY}`);
+      const char = (Array.isArray(chars) ? chars : []).find(c => c.slug === slug);
+      assert.ok(char, 'персонаж должен быть найден после создания');
+      assert.equal(char.belonging, 'Эпизодический персонаж');
+      await apiJson(`/api/characters/${encodeURIComponent(slug)}${CITY}`, { method: 'DELETE' });
+      await fs.rm(path.join(CITY_ROOT, 'characters', '_deleted', slug), { recursive: true, force: true });
+    });
+
+    it('без belonging в теле запроса — прежнее поведение (по умолчанию «Персонаж мастера»)', async () => {
+      const name = `Тест Дефолт Принадлежность ${Date.now()}`;
+      const slug = slugify(name);
+      const create = await apiJson(`/api/characters${CITY}`, {
+        method: 'POST', body: JSON.stringify({ name, lineage: 'mortal', gender: 'Женский' }),
+      });
+      assert.equal(create.status, 200);
+      const raw = await fs.readFile(path.join(CITY_ROOT, 'characters', 'mortals', slug, `${slug}.md`), 'utf-8');
+      assert.match(raw, /\*\*Принадлежность:\*\*\s*Персонаж мастера/);
+      await apiJson(`/api/characters/${encodeURIComponent(slug)}${CITY}`, { method: 'DELETE' });
+      await fs.rm(path.join(CITY_ROOT, 'characters', '_deleted', slug), { recursive: true, force: true });
+    });
+
+    it('source-guard: страница «Персонажи» фильтрует по belonging (не по новой линейке)', () => {
+      const src = require('fs').readFileSync(path.join(__dirname, '../public/scripts/scripts.js'), 'utf-8');
+      assert.ok(src.includes("belonging === 'episodic'"), 'renderChars не фильтрует по belonging');
+      assert.ok(src.includes('data-belonging-tab'), 'нет обработчика вкладок Все/Эпизодические');
+    });
+  });
+
   // ── Character fields — статус теперь редактируемый (дропдаун) ────────────────
   describe('Character fields — status/statusDetails', () => {
     it('PUT /api/characters/:slug/fields — status и statusDetails пишутся в карточку и читаются обратно', async () => {

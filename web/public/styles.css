@@ -1426,6 +1426,15 @@ body {
   max-width: 120px;
 }
 
+/* Все / Эпизодические — переключатель по полю «Принадлежность» (фаза H,
+   план 2026-07-16), не по линейке WoD; переиспользует .chron-tab. */
+.chars-belonging-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+}
+
 .chars-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(min(260px, calc((100% - 28px) / 3)), 1fr));
