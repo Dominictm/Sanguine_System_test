@@ -1051,14 +1051,47 @@ body {
 
 /* Уходящий раздел навигации остаётся на экране (display:block через .active)
    до конца своей fade-out — JS (navigate() в scripts.js) слушает animationend
-   на .page-out и только тогда переключает .active на новый раздел, поэтому
-   переход выглядит как последовательный кроссфейд, а не мгновенное исчезание. */
+   на .page-out/.page-out-fwd/.page-out-back и только тогда переключает
+   .active на новый раздел, поэтому переход выглядит как последовательный
+   кроссфейд, а не мгновенное исчезание. */
 .page.page-out {
   animation: page-out var(--dur-fast) var(--ease) forwards;
 }
 
+/* Горизонтальный слайд между пунктами верхнего меню (см. navigate() в
+   scripts.js) — направление берётся из порядка пунктов меню, поэтому переход
+   к соседнему разделу ощущается иначе, чем плоское затемнение выше:
+   «вперёд» уходит влево и въезжает справа, «назад» — зеркально. Селекторы
+   с тремя классами специфичнее .page.active — переопределяют её page-in. */
+@keyframes page-out-fwd {
+  from { opacity: 1; transform: translateX(0); }
+  to   { opacity: 0; transform: translateX(-18px); }
+}
+
+@keyframes page-in-fwd {
+  from { opacity: 0; transform: translateX(18px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes page-out-back {
+  from { opacity: 1; transform: translateX(0); }
+  to   { opacity: 0; transform: translateX(18px); }
+}
+
+@keyframes page-in-back {
+  from { opacity: 0; transform: translateX(-18px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+.page.page-out-fwd  { animation: page-out-fwd var(--dur-fast) var(--ease) forwards; }
+.page.page-out-back { animation: page-out-back var(--dur-fast) var(--ease) forwards; }
+.page.active.page-in-fwd  { animation: page-in-fwd var(--dur-fast) var(--ease); }
+.page.active.page-in-back { animation: page-in-back var(--dur-fast) var(--ease); }
+
 @media (prefers-reduced-motion: reduce) {
-  .page.active, .page.page-out { animation: none; }
+  .page.active, .page.page-out,
+  .page.page-out-fwd, .page.page-out-back,
+  .page.active.page-in-fwd, .page.active.page-in-back { animation: none; }
 }
 
 @keyframes fade-rise {

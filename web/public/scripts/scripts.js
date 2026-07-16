@@ -96,15 +96,36 @@ const STATE = {
 };
 
 // Переход между разделами — короткий кроссфейд: уходящий раздел доигрывает
-// fade-out (.page-out, см. styles.css) и только по его animationend раздел
-// переключается на новый (который получает свой fade-in через .page.active).
-// Без этого второй раздел появлялся плавно, а первый пропадал мгновенно —
-// переход выглядел рваным. При prefers-reduced-motion или повторном клике по
-// уже открытому разделу — переключение мгновенное, без анимации.
+// fade-out и только по его animationend раздел переключается на новый
+// (который получает свой fade-in). Без этого второй раздел появлялся
+// плавно, а первый пропадал мгновенно — переход выглядел рваным.
+//
+// Направление анимации зависит от типа перехода (см. styles.css — три пары
+// keyframes):
+// - Между пунктами верхнего меню (.nav-item[data-page]) — горизонтальный
+//   слайд, направление берётся из порядка пунктов в меню: переход к пункту
+//   правее по списку выглядит как движение «вперёд» (уходит влево, новый
+//   въезжает справа), к пункту левее — «назад» (зеркально). Так соседние
+//   разделы ощущаются разным движением, а не одним и тем же затемнением.
+// - Переходы на служебные детальные страницы вне меню (module/city — открываются
+//   кликом по карточке, а не пунктом меню) остаются на исходном вертикальном
+//   fade+rise — они не часть горизонтального «ряда» разделов.
+// При prefers-reduced-motion или повторном клике по уже открытому разделу —
+// переключение мгновенное, без анимации.
+const _NAV_ORDER = () => Array.from(document.querySelectorAll('.nav-item[data-page]')).map(el => el.dataset.page);
+
 function navigate(page) {
   const prev = document.querySelector('.page.active');
   const next = document.getElementById(`page-${page}`);
   const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  let dir = null; // 'fwd' | 'back' | null (null = стандартный вертикальный fade)
+  if (prev) {
+    const order = _NAV_ORDER();
+    const prevIdx = order.indexOf(prev.id.replace(/^page-/, ''));
+    const nextIdx = order.indexOf(page);
+    if (prevIdx !== -1 && nextIdx !== -1 && prevIdx !== nextIdx) dir = nextIdx > prevIdx ? 'fwd' : 'back';
+  }
 
   const applyPage = () => {
     STATE.page = page;
@@ -116,6 +137,11 @@ function navigate(page) {
     });
     document.querySelectorAll('.page').forEach(el =>
       el.classList.toggle('active', el.id === `page-${page}`));
+    if (next && dir && !reduced) {
+      const inClass = dir === 'fwd' ? 'page-in-fwd' : 'page-in-back';
+      next.classList.add(inClass);
+      next.addEventListener('animationend', () => next.classList.remove(inClass), { once: true });
+    }
 
     if (page === 'dashboard')  loadDashboard();
     if (page === 'chronicle')  loadChronicle();
@@ -136,14 +162,15 @@ function navigate(page) {
     if (page === 'city-new')   loadCitiesGrid();
   };
 
+  const outClass = dir === 'fwd' ? 'page-out-fwd' : dir === 'back' ? 'page-out-back' : 'page-out';
   if (prev && next && prev !== next && !reduced) {
-    prev.classList.add('page-out');
+    prev.classList.add(outClass);
     prev.addEventListener('animationend', () => {
-      prev.classList.remove('page-out');
+      prev.classList.remove(outClass);
       applyPage();
     }, { once: true });
   } else {
-    if (prev) prev.classList.remove('page-out');
+    if (prev) prev.classList.remove('page-out', 'page-out-fwd', 'page-out-back');
     applyPage();
   }
 }
