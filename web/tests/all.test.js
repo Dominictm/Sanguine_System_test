@@ -2135,6 +2135,137 @@ describe('API — integration', () => {
     });
   });
 
+  // ── Library — авторские элементы (фаза I) ─────────────────────────────────
+  describe('Library — авторские элементы (фаза I)', () => {
+    it('дисциплины: создание/правка/удаление работают только для custom, канон защищён', async () => {
+      const name = '__CDP_I_Тестовая дисциплина';
+      const create = await apiJson('/api/library/disciplines', {
+        method: 'POST',
+        body: JSON.stringify({
+          name, clans: 'Тестовый клан', source: '', note: 'Заметка',
+          levels: [{ level: 1, name: 'Сила первого уровня', literary: 'Лит.', system: 'Сист.' }],
+        }),
+      });
+      assert.equal(create.status, 200);
+      const slug = create.body.slug;
+      try {
+        const listed = await apiJson('/api/library/disciplines');
+        const created = listed.body.find(d => d.slug === slug);
+        assert.ok(created, 'новая дисциплина должна попасть в список без рестарта');
+        assert.equal(created.custom, true);
+        assert.equal(created.levels[0].name, 'Сила первого уровня');
+
+        const dup = await apiJson('/api/library/disciplines', { method: 'POST', body: JSON.stringify({ name }) });
+        assert.equal(dup.status, 409);
+
+        const edit = await apiJson(`/api/library/disciplines/${slug}`, {
+          method: 'PUT',
+          body: JSON.stringify({ name, clans: 'Правленый клан', levels: [] }),
+        });
+        assert.equal(edit.status, 200);
+        const afterEdit = (await apiJson('/api/library/disciplines')).body.find(d => d.slug === slug);
+        assert.equal(afterEdit.clans, 'Правленый клан');
+
+        // Канон нельзя редактировать/удалять через это API.
+        const canonEdit = await apiJson('/api/library/disciplines/animalism', {
+          method: 'PUT', body: JSON.stringify({ name: 'Анимализм' }),
+        });
+        assert.equal(canonEdit.status, 403);
+        const canonDelete = await apiJson('/api/library/disciplines/animalism', { method: 'DELETE' });
+        assert.equal(canonDelete.status, 403);
+      } finally {
+        await apiJson(`/api/library/disciplines/${slug}`, { method: 'DELETE' });
+        await fs.rm(path.join(__dirname, '../../system/library/disciplines/_deleted'), { recursive: true, force: true });
+      }
+      const afterDelete = (await apiJson('/api/library/disciplines')).body.find(d => d.slug === slug);
+      assert.ok(!afterDelete, 'удалённая дисциплина не должна больше отдаваться API');
+    });
+
+    it('психические способности: создание/удаление, custom=true', async () => {
+      const name = '__CDP_I_Тестовая психика';
+      const create = await apiJson('/api/library/psychics', {
+        method: 'POST',
+        body: JSON.stringify({ name, category: 'Тестовая категория', levels: [] }),
+      });
+      assert.equal(create.status, 200);
+      const slug = create.body.slug;
+      const created = (await apiJson('/api/library/psychics')).body.find(p => p.slug === slug);
+      assert.ok(created);
+      assert.equal(created.custom, true);
+      const del = await apiJson(`/api/library/psychics/${slug}`, { method: 'DELETE' });
+      assert.equal(del.status, 200);
+      await fs.rm(path.join(__dirname, '../../system/library/psychics/_deleted'), { recursive: true, force: true });
+      const afterDelete = (await apiJson('/api/library/psychics')).body.find(p => p.slug === slug);
+      assert.ok(!afterDelete);
+    });
+
+    it('достоинства: POST/PUT/DELETE по категории, канон защищён, неизвестная категория → 400', async () => {
+      const name = '__CDP_I_Тестовое достоинство';
+      const create = await apiJson('/api/library/merits', {
+        method: 'POST',
+        body: JSON.stringify({ category: 'physical', name, points: 2, description: 'Описание' }),
+      });
+      assert.equal(create.status, 200);
+      const slug = create.body.slug;
+
+      const badCategory = await apiJson('/api/library/merits', {
+        method: 'POST', body: JSON.stringify({ category: 'nope', name: 'x' }),
+      });
+      assert.equal(badCategory.status, 400);
+
+      const listed = (await apiJson('/api/library/merits/physical')).body.find(m => m.slug === slug);
+      assert.ok(listed);
+      assert.equal(listed.points, 2);
+      assert.equal(listed.custom, true);
+
+      const edit = await apiJson(`/api/library/merits/physical/${slug}`, {
+        method: 'PUT', body: JSON.stringify({ name, points: 3, description: 'Обновлено' }),
+      });
+      assert.equal(edit.status, 200);
+      const afterEdit = (await apiJson('/api/library/merits/physical')).body.find(m => m.slug === slug);
+      assert.equal(afterEdit.points, 3);
+
+      const canonDelete = await apiJson('/api/library/merits/physical/ambidekstr', { method: 'DELETE' });
+      assert.equal(canonDelete.status, 403);
+
+      const del = await apiJson(`/api/library/merits/physical/${slug}`, { method: 'DELETE' });
+      assert.equal(del.status, 200);
+      const afterDelete = (await apiJson('/api/library/merits/physical')).body.find(m => m.slug === slug);
+      assert.ok(!afterDelete);
+    });
+
+    it('недостатки: категория на кириллице (физические)', async () => {
+      const name = '__CDP_I_Тестовый недостаток';
+      const create = await apiJson('/api/library/flaws', {
+        method: 'POST',
+        body: JSON.stringify({ category: 'физические', name, points: 1, description: 'Описание' }),
+      });
+      assert.equal(create.status, 200);
+      const slug = create.body.slug;
+      const listed = (await apiJson('/api/library/flaws/физические')).body.find(f => f.slug === slug);
+      assert.ok(listed);
+      const del = await apiJson(`/api/library/flaws/физические/${slug}`, { method: 'DELETE' });
+      assert.equal(del.status, 200);
+    });
+
+    it('факты биографии (backgrounds): создание/удаление хранят description и system', async () => {
+      const name = '__CDP_I_Тестовый факт биографии';
+      const create = await apiJson('/api/library/backgrounds', {
+        method: 'POST',
+        body: JSON.stringify({ category: 'general', name, description: 'Описание', system: '1: раз\n2: два' }),
+      });
+      assert.equal(create.status, 200);
+      const slug = create.body.slug;
+      const listed = (await apiJson('/api/library/backgrounds/general')).body.find(b => b.slug === slug);
+      assert.ok(listed);
+      assert.equal(listed.system, '1: раз\n2: два');
+      const del = await apiJson(`/api/library/backgrounds/general/${slug}`, { method: 'DELETE' });
+      assert.equal(del.status, 200);
+      const afterDelete = (await apiJson('/api/library/backgrounds/general')).body.find(b => b.slug === slug);
+      assert.ok(!afterDelete);
+    });
+  });
+
   // ── Locations ──────────────────────────────────────────────────────────────
   describe('Locations', () => {
     it('GET /api/locations → array', async () => {

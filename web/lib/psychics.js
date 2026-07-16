@@ -41,13 +41,14 @@ function splitPowerBody(body) {
 
 function parsePsychicMd(rawContent, slug) {
   const content = String(rawContent || '').replace(/^﻿/, '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-  const p = { slug, name: slug, category: '', roll: '', source: '', note: '', levels: [] };
+  const p = { slug, name: slug, category: '', roll: '', source: '', note: '', levels: [], custom: false };
 
   const hm = content.match(EMOJI_RE);
   if (hm) p.name = hm[2].trim();
   p.category = field(content, 'Категория') || '';
   p.roll     = field(content, 'Бросок') || '';
   p.source   = field(content, 'Источник') || '';
+  p.custom   = field(content, 'Авторское') === 'да';
 
   // Примечание способности — строки-цитаты ДО первого «## ».
   const head = content.split(/\n##\s/)[0];

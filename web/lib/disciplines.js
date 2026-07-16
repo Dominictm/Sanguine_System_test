@@ -40,12 +40,13 @@ function splitPowerBody(body) {
 
 function parseDisciplineMd(rawContent, slug) {
   const content = String(rawContent || '').replace(/^﻿/, '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-  const d = { slug, name: slug, clans: '', source: '', note: '', levels: [], paths: [] };
+  const d = { slug, name: slug, clans: '', source: '', note: '', levels: [], paths: [], custom: false };
 
   const hm = content.match(EMOJI_RE);
   if (hm) d.name = hm[2].trim();
   d.clans  = field(content, 'Клан / принадлежность') || field(content, 'Клан') || '';
   d.source = field(content, 'Источник') || '';
+  d.custom = field(content, 'Авторское') === 'да';
 
   // Примечание дисциплины — строки-цитаты ДО первого «## ».
   const head = content.split(/\n##\s/)[0];

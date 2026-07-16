@@ -37,4 +37,9 @@ function getAllBackgrounds() {
   return all;
 }
 
-module.exports = { getBackgrounds, getAllBackgrounds };
+// Сбросить кэш категории после записи в её JSON-файл (см. merits-loader.js).
+function invalidateBackgrounds(category) {
+  delete backgroundsByCategory[category];
+}
+
+module.exports = { getBackgrounds, getAllBackgrounds, invalidateBackgrounds };

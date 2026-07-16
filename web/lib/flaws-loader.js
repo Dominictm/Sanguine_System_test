@@ -37,4 +37,9 @@ function getAllFlaws() {
   return all;
 }
 
-module.exports = { getFlaws, getAllFlaws };
+// Сбросить кэш категории после записи в её JSON-файл (см. merits-loader.js).
+function invalidateFlaws(category) {
+  delete flawsByCategory[category];
+}
+
+module.exports = { getFlaws, getAllFlaws, invalidateFlaws };

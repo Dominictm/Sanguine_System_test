@@ -9183,6 +9183,64 @@ a.md-link-loc:hover {
   margin-top: 8px;
 }
 
+/* Авторские элементы библиотеки (фаза I) — карточка оборачивается в
+   .lib-card-wrap, т.к. кнопки правки/удаления не могут быть вложенным
+   <button> внутри самой карточки (которая тоже <button>). */
+.lib-card-wrap {
+  position: relative;
+  width: 200px;
+  height: 200px;
+}
+
+.lib-card-wrap .lib-card {
+  width: 100%;
+  height: 100%;
+}
+
+.lib-card-actions {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 2;
+  display: flex;
+  gap: 4px;
+}
+
+.lib-card-action-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--border);
+  background: var(--bg2);
+  color: var(--text2);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--fs-sm);
+  transition: background .15s var(--ease), border-color .15s var(--ease);
+}
+
+.lib-card-action-btn:hover {
+  background: var(--bg4);
+  border-color: var(--accent);
+}
+
+@media (pointer: coarse) {
+  .lib-card-action-btn { width: 44px; height: 44px; }
+}
+
+.lib-card-custom-badge {
+  display: inline-block;
+  font-size: var(--fs-3xs);
+  color: var(--gold);
+  margin-top: 6px;
+}
+
+.lib-add-row {
+  margin-bottom: 14px;
+}
+
 /* ── Звуковая библиотека — 3 колонки (музыка/эффекты/пресеты). ── */
 .audio-lib-columns {
   display: grid;

@@ -745,15 +745,31 @@ function _libDisciplineListHtml() {
 // Библиотека → вкладка «Дисциплины»: карточки (как у персонажей), а не список —
 // клик открывает ту же модалку, что и ссылка на дисциплину в листе персонажа
 // (см. _v20OpenDisciplineModal), а не подменяет содержимое страницы.
+// Кнопки правки/удаления на карточке библиотеки — только для «custom» записей
+// (Фаза I). category опционален (нужен только для merits/flaws/backgrounds,
+// где PUT/DELETE адресуются по /:category/:slug, а не просто /:slug).
+function _libCardActionsHtml(kind, slug, category) {
+  const catAttr = category ? ` data-lib-category="${escAttr(category)}"` : '';
+  return `<div class="lib-card-actions">
+    <button type="button" class="lib-card-action-btn" data-lib-edit="${kind}" data-lib-slug="${escAttr(slug)}"${catAttr} title="Редактировать">✏️</button>
+    <button type="button" class="lib-card-action-btn" data-lib-delete="${kind}" data-lib-slug="${escAttr(slug)}"${catAttr} title="Удалить">🗑</button>
+  </div>`;
+}
+
 function _libDisciplineCardsHtml() {
   return `<div class="lib-cards">${(_disciplinesCache || []).map(d => {
     const art = d.hasArt
       ? `<img class="lib-card-art" src="/img/system/library/disciplines/${escAttr(d.slug)}.png" alt="">`
       : '';
-    const inner = `<div class="lib-card-name">${escHtml(d.name)}</div><div class="lib-card-meta">${escHtml(d.clans || '')}</div>`;
-    return `<button type="button" class="lib-card${d.hasArt ? ' has-art' : ''}" data-disc-slug="${escAttr(d.slug)}">
-      ${art}${d.hasArt ? `<div class="lib-card-overlay">${inner}</div>` : inner}
-    </button>`;
+    const badge = d.custom ? '<span class="lib-card-custom-badge">✏️ Авторское</span>' : '';
+    const inner = `<div class="lib-card-name">${escHtml(d.name)}</div><div class="lib-card-meta">${escHtml(d.clans || '')}</div>${badge}`;
+    const actions = d.custom ? _libCardActionsHtml('disciplines', d.slug) : '';
+    return `<div class="lib-card-wrap">
+      <button type="button" class="lib-card${d.hasArt ? ' has-art' : ''}" data-disc-slug="${escAttr(d.slug)}">
+        ${art}${d.hasArt ? `<div class="lib-card-overlay">${inner}</div>` : inner}
+      </button>
+      ${actions}
+    </div>`;
   }).join('')}</div>`;
 }
 
@@ -871,10 +887,15 @@ function _libPsychicCardsHtml() {
     const art = p.hasArt
       ? `<img class="lib-card-art" src="/img/system/library/psychics/${escAttr(p.slug)}.png" alt="">`
       : '';
-    const inner = `<div class="lib-card-name">${escHtml(p.name)}</div><div class="lib-card-meta">${escHtml(p.category || '')}</div>`;
-    return `<button type="button" class="lib-card${p.hasArt ? ' has-art' : ''}" data-psy-slug="${escAttr(p.slug)}">
-      ${art}${p.hasArt ? `<div class="lib-card-overlay">${inner}</div>` : inner}
-    </button>`;
+    const badge = p.custom ? '<span class="lib-card-custom-badge">✏️ Авторское</span>' : '';
+    const inner = `<div class="lib-card-name">${escHtml(p.name)}</div><div class="lib-card-meta">${escHtml(p.category || '')}</div>${badge}`;
+    const actions = p.custom ? _libCardActionsHtml('psychics', p.slug) : '';
+    return `<div class="lib-card-wrap">
+      <button type="button" class="lib-card${p.hasArt ? ' has-art' : ''}" data-psy-slug="${escAttr(p.slug)}">
+        ${art}${p.hasArt ? `<div class="lib-card-overlay">${inner}</div>` : inner}
+      </button>
+      ${actions}
+    </div>`;
   }).join('')}</div>`;
 }
 function _libRenderPsyList() {
@@ -905,11 +926,14 @@ function _libMeritDetailHtml(m) {
 // достоинств ключуется по категории, а не общим списком, как у дисциплин.
 function _libMeritCardsHtml(category) {
   const merits = _meritsCache[category] || [];
-  return `<div class="lib-cards">${merits.map(m =>
-    `<button type="button" class="lib-card" data-merit-slug="${escAttr(m.slug)}" data-merit-category="${category}">
+  return `<div class="lib-cards">${merits.map(m => `<div class="lib-card-wrap">
+    <button type="button" class="lib-card" data-merit-slug="${escAttr(m.slug)}" data-merit-category="${category}">
       <div class="lib-card-name">${escHtml(m.name)}</div>
       <div class="lib-card-points">${'<span class="lib-dot"></span>'.repeat(m.points)}</div>
-    </button>`).join('')}</div>`;
+      ${m.custom ? '<span class="lib-card-custom-badge">✏️ Авторское</span>' : ''}
+    </button>
+    ${m.custom ? _libCardActionsHtml('merits', m.slug, category) : ''}
+  </div>`).join('')}</div>`;
 }
 
 function _libRenderMeritList(category) {
@@ -961,11 +985,14 @@ function _libFlawDetailHtml(m) {
 // общей модалке (см. _v20EnsureLibModal). Зеркалит достоинства выше.
 function _libFlawCardsHtml(category) {
   const flaws = _flawsCache[category] || [];
-  return `<div class="lib-cards">${flaws.map(m =>
-    `<button type="button" class="lib-card" data-flaw-slug="${escAttr(m.slug)}" data-flaw-category="${category}">
+  return `<div class="lib-cards">${flaws.map(m => `<div class="lib-card-wrap">
+    <button type="button" class="lib-card" data-flaw-slug="${escAttr(m.slug)}" data-flaw-category="${category}">
       <div class="lib-card-name">${escHtml(m.name)}</div>
       <div class="lib-card-points">${'<span class="lib-dot"></span>'.repeat(m.points)}</div>
-    </button>`).join('')}</div>`;
+      ${m.custom ? '<span class="lib-card-custom-badge">✏️ Авторское</span>' : ''}
+    </button>
+    ${m.custom ? _libCardActionsHtml('flaws', m.slug, category) : ''}
+  </div>`).join('')}</div>`;
 }
 
 function _libRenderFlawList(category) {
@@ -1038,11 +1065,14 @@ function _libBackgroundDetailHtml(b) {
 
 function _libBackgroundCardsHtml(category) {
   const items = _backgroundsCache[category] || [];
-  return `<div class="lib-cards">${items.map(b =>
-    `<button type="button" class="lib-card" data-bg-slug="${escAttr(b.slug)}" data-bg-category="${category}">
+  return `<div class="lib-cards">${items.map(b => `<div class="lib-card-wrap">
+    <button type="button" class="lib-card" data-bg-slug="${escAttr(b.slug)}" data-bg-category="${category}">
       <div class="lib-card-name">${escHtml(b.name)}</div>
       ${b.sectOnly ? `<div class="lib-card-sect">Только ${escHtml(b.sectOnly)}</div>` : ''}
-    </button>`).join('')}</div>`;
+      ${b.custom ? '<span class="lib-card-custom-badge">✏️ Авторское</span>' : ''}
+    </button>
+    ${b.custom ? _libCardActionsHtml('backgrounds', b.slug, category) : ''}
+  </div>`).join('')}</div>`;
 }
 
 function _libRenderBackgroundList(category) {

@@ -37,4 +37,11 @@ function getAllMerits() {
   return all;
 }
 
-module.exports = { getMerits, getAllMerits };
+// Сбросить кэш категории после записи в её JSON-файл (создание/правка/удаление
+// авторского достоинства) — без этого следующий getMerits(category) молча
+// вернёт старый массив из памяти до перезапуска сервера.
+function invalidateMerits(category) {
+  delete meritsByCategory[category];
+}
+
+module.exports = { getMerits, getAllMerits, invalidateMerits };

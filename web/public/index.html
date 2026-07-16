@@ -726,12 +726,14 @@
       </div>
 
       <div class="tab-panel active" id="tab-lib-disciplines">
+        <div class="lib-add-row"><button type="button" class="mod-fill-add-btn" data-lib-add="disciplines">+ Добавить дисциплину</button></div>
         <div class="lib-panel" id="lib-disciplines-body">
           <div class="loading-state"><div class="spinner"></div>Загрузка...</div>
         </div>
       </div>
 
       <div class="tab-panel" id="tab-lib-psychics">
+        <div class="lib-add-row"><button type="button" class="mod-fill-add-btn" data-lib-add="psychics">+ Добавить способность</button></div>
         <div class="lib-panel" id="lib-psychics-body">
           <div class="loading-state"><div class="spinner"></div>Загрузка...</div>
         </div>
@@ -744,6 +746,7 @@
           <button class="merits-subtab-btn" data-merit-cat="social">Социальные</button>
           <button class="merits-subtab-btn" data-merit-cat="supernatural">Сверхъестественные</button>
         </div>
+        <div class="lib-add-row"><button type="button" class="mod-fill-add-btn" data-lib-add="merits">+ Добавить достоинство</button></div>
         <div class="lib-panel" id="lib-merits-body">
           <div class="loading-state"><div class="spinner"></div>Загрузка...</div>
         </div>
@@ -756,6 +759,7 @@
           <button class="flaws-subtab-btn" data-flaw-cat="социальные">Социальные</button>
           <button class="flaws-subtab-btn" data-flaw-cat="сверхъестественные">Сверхъестественные</button>
         </div>
+        <div class="lib-add-row"><button type="button" class="mod-fill-add-btn" data-lib-add="flaws">+ Добавить недостаток</button></div>
         <div class="lib-panel" id="lib-flaws-body">
           <div class="loading-state"><div class="spinner"></div>Загрузка...</div>
         </div>
@@ -769,11 +773,79 @@
           <button class="backgrounds-subtab-btn" data-bg-cat="mage">Маги</button>
           <button class="backgrounds-subtab-btn" data-bg-cat="changeling">Подменыши</button>
         </div>
+        <div class="lib-add-row"><button type="button" class="mod-fill-add-btn" data-lib-add="backgrounds">+ Добавить факт биографии</button></div>
         <div class="lib-panel" id="lib-backgrounds-body">
           <div class="loading-state"><div class="spinner"></div>Загрузка...</div>
         </div>
       </div>
     </section>
+
+    <!-- Библиотека: создание/правка авторского элемента (фаза I) -->
+    <div id="lib-edit-modal" class="chr-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="lib-edit-title">
+      <div class="chr-modal">
+        <div class="chr-modal-title" id="lib-edit-title">Новый элемент</div>
+        <div class="chr-modal-body">
+          <div class="chr-form-group">
+            <label class="chr-form-label" for="lib-edit-name">Название *</label>
+            <input class="chr-form-input" id="lib-edit-name" autocomplete="off">
+          </div>
+          <div class="chr-form-group" data-lib-field="clans">
+            <label class="chr-form-label" for="lib-edit-clans">Клан / принадлежность</label>
+            <input class="chr-form-input" id="lib-edit-clans" autocomplete="off">
+          </div>
+          <div class="chr-form-group" data-lib-field="category-text">
+            <label class="chr-form-label" for="lib-edit-category-text">Категория</label>
+            <input class="chr-form-input" id="lib-edit-category-text" autocomplete="off">
+          </div>
+          <div class="chr-form-group" data-lib-field="category-select">
+            <label class="chr-form-label" for="lib-edit-category-select">Категория</label>
+            <select class="chr-form-input" id="lib-edit-category-select"></select>
+          </div>
+          <div class="chr-form-group" data-lib-field="source">
+            <label class="chr-form-label" for="lib-edit-source">Источник</label>
+            <input class="chr-form-input" id="lib-edit-source" autocomplete="off">
+          </div>
+          <div class="chr-form-group" data-lib-field="note">
+            <label class="chr-form-label" for="lib-edit-note">Примечание</label>
+            <textarea class="chr-form-input chr-form-textarea" id="lib-edit-note" rows="2"></textarea>
+          </div>
+          <div class="chr-form-group" data-lib-field="points">
+            <label class="chr-form-label" for="lib-edit-points">Стоимость (очки)</label>
+            <input class="chr-form-input" id="lib-edit-points" type="number" min="1" max="7">
+          </div>
+          <div class="chr-form-group" data-lib-field="description">
+            <label class="chr-form-label" for="lib-edit-description">Описание</label>
+            <textarea class="chr-form-input chr-form-textarea" id="lib-edit-description" rows="4"></textarea>
+          </div>
+          <div class="chr-form-group" data-lib-field="system-text">
+            <label class="chr-form-label" for="lib-edit-system">Уровни <span class="chr-modal-dim">(по строке: «1: текст»)</span></label>
+            <textarea class="chr-form-input chr-form-textarea" id="lib-edit-system" rows="4"></textarea>
+          </div>
+          <div class="chr-form-group" data-lib-field="levels">
+            <label class="chr-form-label">Уровни силы</label>
+            <div id="lib-edit-levels"></div>
+            <button type="button" class="mod-fill-add-btn" id="lib-edit-add-level">+ Уровень</button>
+          </div>
+          <div id="lib-edit-error" class="chr-form-error" style="display:none"></div>
+        </div>
+        <div class="chr-modal-actions">
+          <button id="lib-edit-cancel" class="chr-modal-btn cancel">Отмена</button>
+          <button id="lib-edit-submit" class="chr-modal-btn create">✓ Сохранить</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Библиотека: подтверждение удаления авторского элемента -->
+    <div id="lib-delete-modal" class="chr-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="lib-delete-title">
+      <div class="chr-modal" style="max-width:440px">
+        <div class="chr-modal-title" id="lib-delete-title">🗑 Удалить запись?</div>
+        <div id="lib-delete-body" class="chr-modal-body"></div>
+        <div class="chr-modal-actions">
+          <button id="lib-delete-cancel" class="chr-modal-btn cancel">Отмена</button>
+          <button id="lib-delete-confirm" class="chr-modal-btn danger">Удалить</button>
+        </div>
+      </div>
+    </div>
 
     <!-- Audio library (soundboard) -->
     <section id="page-audio-library" class="page">
@@ -1458,6 +1530,7 @@
 <script src="scripts/graph.js"></script>
 <script src="scripts/locations.js"></script>
 <script src="scripts/v20-sheet.js"></script>
+<script src="scripts/library-authoring.js"></script>
 <script src="scripts/audio-library.js"></script>
 <script src="scripts/dice.js"></script>
 <script src="scripts/session-screen.js"></script>
