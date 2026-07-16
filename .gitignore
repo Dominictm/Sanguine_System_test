@@ -26,6 +26,7 @@ desktop.ini
 
 # Local secrets
 web/.env
+web/.gemini-vertex-key.json
 
 # Local proxy tool (binary, not committed)
 TgWsProxy_windows.exe

@@ -477,10 +477,12 @@ module.exports = function toolsRouter({
   runValidationBackground,
   readOauthCached, refreshClaudeOauth, writeClaudeOauth,
   claudeOauthConfig: getClaudeOauthConfig, claudeCredsPath,
-  invalidateGeminiClient,
+  invalidateGeminiClient, geminiAvailable,
   scheduleRestart, isSupervised,
   envPath, defaultClaudeModel,
 }) {
+  // Service account JSON для Vertex AI — рядом с .env, вне git (см. .gitignore).
+  const vertexKeyPath = () => path.join(path.dirname(envPath()), '.gemini-vertex-key.json');
   const router = express.Router();
   // CLAUDE_OAUTH is a `const` initialized after this factory runs at server.js
   // module-load time — server.js passes it as a lazy getter, called per-request
@@ -567,7 +569,7 @@ module.exports = function toolsRouter({
   router.get('/api/auth-status', async (req, res) => {
     try {
       // Google Gemini (shown only when explicitly queried; doesn't override OpenRouter default)
-      if (process.env.GEMINI_API_KEY && !process.env.OPENROUTER_API_KEY && !process.env.OPENAI_API_KEY) {
+      if (geminiAvailable() && !process.env.OPENROUTER_API_KEY && !process.env.OPENAI_API_KEY) {
         return res.json({ source: 'gemini', ok: true, model: process.env.GEMINI_MODEL || 'gemini-2.5-flash' });
       }
 
@@ -801,6 +803,12 @@ module.exports = function toolsRouter({
         hasAnthropicKey:    !!env.ANTHROPIC_API_KEY,
         hasGeminiKey:       !!env.GEMINI_API_KEY,
         GEMINI_MODEL:       env.GEMINI_MODEL       || '',
+        // Gemini: два вида credentials — 'api-key' (Google AI Studio) или
+        // 'vertex' (Google Cloud, service account JSON) — см. server.js _getGeminiClient.
+        GEMINI_AUTH_TYPE:      env.GEMINI_AUTH_TYPE || 'api-key',
+        GOOGLE_CLOUD_PROJECT:  env.GOOGLE_CLOUD_PROJECT  || '',
+        GOOGLE_CLOUD_LOCATION: env.GOOGLE_CLOUD_LOCATION || '',
+        hasVertexKeyFile:      !!(await fs.stat(vertexKeyPath()).catch(() => null)),
         claudeOauth,
       });
     } catch (e) { serverError(res, e); }
@@ -808,7 +816,21 @@ module.exports = function toolsRouter({
 
   router.post('/api/settings', express.json(), async (req, res) => {
     try {
-      const { OPENROUTER_API_KEY, OPENROUTER_MODEL, OPENAI_API_KEY, OPENAI_MODEL, ANTHROPIC_API_KEY, GEMINI_API_KEY, GEMINI_MODEL } = req.body || {};
+      const {
+        OPENROUTER_API_KEY, OPENROUTER_MODEL, OPENAI_API_KEY, OPENAI_MODEL, ANTHROPIC_API_KEY, GEMINI_API_KEY, GEMINI_MODEL,
+        GEMINI_AUTH_TYPE, GOOGLE_CLOUD_PROJECT, GOOGLE_CLOUD_LOCATION, GEMINI_VERTEX_KEY_JSON,
+      } = req.body || {};
+
+      // Service account JSON — валидируем и пишем ДО чтения/правки .env,
+      // чтобы невалидный JSON вернул 400 и ничего не менял (ни файла, ни .env).
+      if (GEMINI_VERTEX_KEY_JSON !== undefined && GEMINI_VERTEX_KEY_JSON.trim()) {
+        let parsed;
+        try { parsed = JSON.parse(GEMINI_VERTEX_KEY_JSON); }
+        catch { return res.status(400).json({ ok: false, error: 'Service account JSON: не удалось разобрать — проверь, что вставлен полный файл ключа.' }); }
+        if (!parsed || parsed.type !== 'service_account')
+          return res.status(400).json({ ok: false, error: 'Service account JSON: ожидается ключ типа "service_account" (скачивается в Google Cloud Console → IAM → Service Accounts → Keys).' });
+        await fs.writeFile(vertexKeyPath(), JSON.stringify(parsed, null, 2), 'utf-8');
+      }
 
       // Read current .env
       const raw = await fs.readFile(envPath(), 'utf-8').catch(() => '');
@@ -837,7 +859,23 @@ module.exports = function toolsRouter({
         if (GEMINI_MODEL.trim()) env.GEMINI_MODEL = GEMINI_MODEL.trim();
         else delete env.GEMINI_MODEL;
       }
-      invalidateGeminiClient(); // invalidate cached client on key/model change
+      if (GEMINI_AUTH_TYPE !== undefined) {
+        if (GEMINI_AUTH_TYPE === 'vertex') env.GEMINI_AUTH_TYPE = 'vertex';
+        else delete env.GEMINI_AUTH_TYPE; // 'api-key' — дефолт, в .env не пишем
+      }
+      if (GOOGLE_CLOUD_PROJECT !== undefined) {
+        if (GOOGLE_CLOUD_PROJECT.trim()) env.GOOGLE_CLOUD_PROJECT = GOOGLE_CLOUD_PROJECT.trim();
+        else delete env.GOOGLE_CLOUD_PROJECT;
+      }
+      if (GOOGLE_CLOUD_LOCATION !== undefined) {
+        if (GOOGLE_CLOUD_LOCATION.trim()) env.GOOGLE_CLOUD_LOCATION = GOOGLE_CLOUD_LOCATION.trim();
+        else delete env.GOOGLE_CLOUD_LOCATION;
+      }
+      // Ключ уже записан на диск выше (валидация до правки .env) — здесь только
+      // прописываем путь к нему для ADC (google-auth-library ищет ровно эту переменную).
+      if (GEMINI_VERTEX_KEY_JSON !== undefined && GEMINI_VERTEX_KEY_JSON.trim())
+        env.GOOGLE_APPLICATION_CREDENTIALS = vertexKeyPath();
+      invalidateGeminiClient(); // invalidate cached client on key/model/auth change
 
       const newContent = Object.entries(env).map(([k, v]) => `${k}=${v}`).join('\n') + '\n';
       await writeFileAtomic(envPath(), newContent, 'utf-8');

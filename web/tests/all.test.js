@@ -1758,6 +1758,83 @@ describe('API — integration', () => {
       assert.equal(typeof body, 'object');
       assert.ok(!Array.isArray(body));
     });
+
+    // ── Gemini: два вида учётных данных (API-ключ vs Vertex AI service account) ──
+    describe('Gemini auth — api-key vs vertex', () => {
+      const envFile = path.join(__dirname, '..', '.env');
+      const vertexKeyFile = path.join(__dirname, '..', '.gemini-vertex-key.json');
+      let originalEnv = null;
+      before(async () => { originalEnv = await fs.readFile(envFile, 'utf-8').catch(() => null); });
+      after(async () => {
+        if (originalEnv !== null) await fs.writeFile(envFile, originalEnv, 'utf-8');
+        else await fs.rm(envFile, { force: true });
+        await fs.rm(vertexKeyFile, { force: true });
+      });
+
+      it('GET /api/settings отдаёт GEMINI_AUTH_TYPE (по умолчанию api-key) и поля Vertex', async () => {
+        const { status, body } = await apiJson('/api/settings');
+        assert.equal(status, 200);
+        assert.ok('GEMINI_AUTH_TYPE' in body);
+        assert.ok('GOOGLE_CLOUD_PROJECT' in body);
+        assert.ok('GOOGLE_CLOUD_LOCATION' in body);
+        assert.ok('hasVertexKeyFile' in body);
+      });
+
+      it('POST /api/settings сохраняет GEMINI_AUTH_TYPE=vertex + project/location, без рестарта (restart:false)', async () => {
+        const { status, body } = await apiJson('/api/settings', {
+          method: 'POST',
+          body: JSON.stringify({
+            restart: false,
+            GEMINI_AUTH_TYPE: 'vertex',
+            GOOGLE_CLOUD_PROJECT: 'test-project-123',
+            GOOGLE_CLOUD_LOCATION: 'us-central1',
+          }),
+        });
+        assert.equal(status, 200);
+        assert.ok(body.ok);
+        assert.equal(body.needsRestart, false);
+        const after = await apiJson('/api/settings');
+        assert.equal(after.body.GEMINI_AUTH_TYPE, 'vertex');
+        assert.equal(after.body.GOOGLE_CLOUD_PROJECT, 'test-project-123');
+        assert.equal(after.body.GOOGLE_CLOUD_LOCATION, 'us-central1');
+      });
+
+      it('POST /api/settings с GEMINI_VERTEX_KEY_JSON пишет файл service account и репортит hasVertexKeyFile', async () => {
+        const fakeKey = JSON.stringify({ type: 'service_account', project_id: 'test-project-123', private_key: 'FAKE', client_email: 'x@test-project-123.iam.gserviceaccount.com' });
+        const { status, body } = await apiJson('/api/settings', {
+          method: 'POST',
+          body: JSON.stringify({ restart: false, GEMINI_VERTEX_KEY_JSON: fakeKey }),
+        });
+        assert.equal(status, 200);
+        assert.ok(body.ok);
+        const written = await fs.readFile(vertexKeyFile, 'utf-8');
+        assert.equal(JSON.parse(written).project_id, 'test-project-123');
+        const after = await apiJson('/api/settings');
+        assert.equal(after.body.hasVertexKeyFile, true);
+      });
+
+      it('POST /api/settings с невалидным GEMINI_VERTEX_KEY_JSON → 400, файл не создаётся', async () => {
+        await fs.rm(vertexKeyFile, { force: true });
+        const { status, body } = await apiJson('/api/settings', {
+          method: 'POST',
+          body: JSON.stringify({ restart: false, GEMINI_VERTEX_KEY_JSON: '{ не json' }),
+        });
+        assert.equal(status, 400);
+        assert.ok(body.error);
+        assert.equal(await fs.readFile(vertexKeyFile, 'utf-8').catch(() => null), null);
+      });
+
+      it('переключение обратно на GEMINI_AUTH_TYPE=api-key сохраняется', async () => {
+        const { status, body } = await apiJson('/api/settings', {
+          method: 'POST',
+          body: JSON.stringify({ restart: false, GEMINI_AUTH_TYPE: 'api-key' }),
+        });
+        assert.equal(status, 200);
+        assert.ok(body.ok);
+        const after = await apiJson('/api/settings');
+        assert.equal(after.body.GEMINI_AUTH_TYPE, 'api-key');
+      });
+    });
     it('GET /api/integrity → {totalIssues, checks[]}', async () => {
       const { status, body } = await apiJson(`/api/integrity${CITY}`);
       assert.equal(status, 200);

@@ -243,6 +243,7 @@ app.use(toolsRouterFactory({
   claudeOauthConfig:  () => CLAUDE_OAUTH,
   claudeCredsPath:    () => CLAUDE_CREDS_PATH,
   invalidateGeminiClient: () => { _geminiClient = null; },
+  geminiAvailable:    () => _geminiAvailable(),
   scheduleRestart: (...a) => scheduleRestart(...a),
   isSupervised:    () => SUPERVISED,
   envPath:         () => ENV_PATH,
@@ -299,7 +300,28 @@ function runValidationBackground() {
 // ── Google Gemini ─────────────────────────────────────────────────────────────
 // Lazy-initialised client; invalidated on /api/settings key change.
 let _geminiClient = null;
+
+// Два вида credentials: 'api-key' (Google AI Studio, строка-ключ) и 'vertex'
+// (Google Cloud Vertex AI — project+location, аутентификация через service
+// account JSON по стандартному GOOGLE_APPLICATION_CREDENTIALS/ADC). Настройка —
+// в Инструменты → Модели AI (см. routes/tools.js /api/settings).
+function _geminiAuthType() {
+  return process.env.GEMINI_AUTH_TYPE === 'vertex' ? 'vertex' : 'api-key';
+}
+function _geminiAvailable() {
+  return _geminiAuthType() === 'vertex'
+    ? !!(process.env.GOOGLE_CLOUD_PROJECT && process.env.GOOGLE_CLOUD_LOCATION && process.env.GOOGLE_APPLICATION_CREDENTIALS)
+    : !!process.env.GEMINI_API_KEY;
+}
 function _getGeminiClient() {
+  if (_geminiAuthType() === 'vertex') {
+    if (!process.env.GOOGLE_CLOUD_PROJECT || !process.env.GOOGLE_CLOUD_LOCATION || !process.env.GOOGLE_APPLICATION_CREDENTIALS)
+      throw Object.assign(new Error('Vertex AI: не заданы GOOGLE_CLOUD_PROJECT/GOOGLE_CLOUD_LOCATION/service account. Настрой в Инструменты → Модели AI.'), { status: 503 });
+    if (!_geminiClient) _geminiClient = new GoogleGenAI({
+      vertexai: true, project: process.env.GOOGLE_CLOUD_PROJECT, location: process.env.GOOGLE_CLOUD_LOCATION,
+    });
+    return _geminiClient;
+  }
   if (!process.env.GEMINI_API_KEY)
     throw Object.assign(new Error('GEMINI_API_KEY не задан. Настрой в Инструменты → Модели AI.'), { status: 503 });
   if (!_geminiClient) _geminiClient = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
@@ -408,7 +430,7 @@ async function makeGenerationClient(preferSource = null, modelOverride = null) {
   const clModel = () => modelOverride || 'claude-opus-4-8';
 
   // ── Google Gemini (explicit only) ─────────────────────────────
-  if (wantGemini && process.env.GEMINI_API_KEY) {
+  if (wantGemini && _geminiAvailable()) {
     return { source: 'gemini', model: geModel() };
   }
 
@@ -453,7 +475,7 @@ async function makeGenerationClient(preferSource = null, modelOverride = null) {
   // ── Fallbacks: requested provider has no key — use whatever is configured ──
   if (process.env.OPENAI_API_KEY     && !wantOR && !wantClaude) return { source: 'openai',     model: oaModel() };
   if (process.env.OPENROUTER_API_KEY && !wantClaude)            return { source: 'openrouter', model: orModel() };
-  if (process.env.GEMINI_API_KEY     && !wantClaude)            return { source: 'gemini',     model: geModel() };
+  if (_geminiAvailable()              && !wantClaude)            return { source: 'gemini',     model: geModel() };
 
   throw Object.assign(new Error(
     'Нет источника для генерации. Варианты:\n' +

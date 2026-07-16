@@ -782,10 +782,13 @@ const OPENAI_MODELS = [
   { id: 'gpt-4.1',      label: 'GPT-4.1 — высокое качество' },
   { id: 'gpt-4.1-mini', label: 'GPT-4.1 mini' },
 ];
+// Сверено с живым списком моделей Google (GET /v1beta/models, 2026-07-16) —
+// только текстовые модели генерации прозы, без TTS/image/robotics/preview-шлака.
 const GEMINI_MODELS = [
-  { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash — быстро и дёшево' },
-  { id: 'gemini-2.5-pro',   label: 'Gemini 2.5 Pro — сложная проза' },
-  { id: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash' },
+  { id: 'gemini-3.1-pro-preview',   label: 'Gemini 3.1 Pro — новейшее, лучшее качество' },
+  { id: 'gemini-3.1-flash-lite',    label: 'Gemini 3.1 Flash Lite — новейшее, быстро и дёшево' },
+  { id: 'gemini-2.5-pro',           label: 'Gemini 2.5 Pro — стабильно, сложная проза' },
+  { id: 'gemini-2.5-flash',         label: 'Gemini 2.5 Flash — стабильно, быстро и дёшево (по умолчанию)' },
 ];
 // Resolve a feature's model list by provider.
 function _modelsForProvider(provider, orModels) {
@@ -930,16 +933,53 @@ async function loadAiSettings() {
       <!-- Google Gemini section -->
       <div class="ais-section">
         <div class="ais-section-title">♊ Google Gemini — AI-проза</div>
-        <div class="ais-section-hint">Доступ через Google AI Studio API Key. Поддерживает Gemini 2.5 Pro/Flash для генерации прозы и сценариев. Назначается на функции в «⚡ Назначение провайдеров».</div>
+        <div class="ais-section-hint">Два вида доступа: обычный API-ключ (Google AI Studio) или Vertex AI (Google Cloud, для организаций/биллинга через GCP). Назначается на функции в «⚡ Назначение провайдеров».</div>
 
         <div class="ais-field">
-          <label class="ais-label">API Key
-            <span class="ais-key-state ${orSettings.hasGeminiKey ? 'ok' : ''}">${orSettings.hasGeminiKey ? '● задан' : '○ не задан'}</span>
-          </label>
-          <input class="ais-input" id="ais-gemini-key" type="password"
-            placeholder="${orSettings.hasGeminiKey ? '•••••• (задан)' : 'AIza...'}"
-            autocomplete="new-password">
-          <div class="ais-field-hint">Оставь пустым — ключ не изменится. Очисти и подтверди — удалить ключ.</div>
+          <label class="ais-label">Вид доступа</label>
+          <div class="ais-claude-btnrow">
+            <label class="ais-feat-prov-btn">
+              <input type="radio" name="gemini-auth-type" id="ais-gemini-auth-apikey" value="api-key" ${(orSettings.GEMINI_AUTH_TYPE || 'api-key') === 'api-key' ? 'checked' : ''}>
+              <span>API-ключ (AI Studio)</span>
+            </label>
+            <label class="ais-feat-prov-btn">
+              <input type="radio" name="gemini-auth-type" id="ais-gemini-auth-vertex" value="vertex" ${orSettings.GEMINI_AUTH_TYPE === 'vertex' ? 'checked' : ''}>
+              <span>Vertex AI (Google Cloud)</span>
+            </label>
+          </div>
+        </div>
+
+        <div id="ais-gemini-apikey-fields">
+          <div class="ais-field">
+            <label class="ais-label">API Key
+              <span class="ais-key-state ${orSettings.hasGeminiKey ? 'ok' : ''}">${orSettings.hasGeminiKey ? '● задан' : '○ не задан'}</span>
+            </label>
+            <input class="ais-input" id="ais-gemini-key" type="password"
+              placeholder="${orSettings.hasGeminiKey ? '•••••• (задан)' : 'AIza...'}"
+              autocomplete="new-password">
+            <div class="ais-field-hint">Получить: <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a>. Оставь пустым — ключ не изменится. Очисти и подтверди — удалить ключ.</div>
+          </div>
+        </div>
+
+        <div id="ais-gemini-vertex-fields" style="display:none">
+          <div class="ais-field">
+            <label class="ais-label">Google Cloud Project ID</label>
+            <input class="ais-input" id="ais-gemini-project" type="text"
+              placeholder="my-project-123456" value="${escAttr(orSettings.GOOGLE_CLOUD_PROJECT || '')}">
+          </div>
+          <div class="ais-field">
+            <label class="ais-label">Регион (location)</label>
+            <input class="ais-input" id="ais-gemini-location" type="text"
+              placeholder="us-central1" value="${escAttr(orSettings.GOOGLE_CLOUD_LOCATION || '')}">
+          </div>
+          <div class="ais-field">
+            <label class="ais-label">Service Account JSON
+              <span class="ais-key-state ${orSettings.hasVertexKeyFile ? 'ok' : ''}">${orSettings.hasVertexKeyFile ? '● задан' : '○ не задан'}</span>
+            </label>
+            <textarea class="ais-input" id="ais-gemini-vertex-json" rows="4"
+              placeholder='${orSettings.hasVertexKeyFile ? '(задан — вставь новый, чтобы заменить)' : '{ "type": "service_account", ... }'}'></textarea>
+            <div class="ais-field-hint">Ключ сервисного аккаунта: Google Cloud Console → IAM → Service Accounts → Keys → Add key (JSON). Вставь содержимое файла целиком. Оставь пустым — не изменится.</div>
+          </div>
         </div>
 
         <div class="ais-field">
@@ -1083,17 +1123,37 @@ async function loadAiSettings() {
     () => _saveKey('ais-or-save', 'ais-or-status', 'ais-or-key', 'OPENROUTER_API_KEY', '✓ Подтвердить OpenRouter'));
   document.getElementById('ais-openai-save').addEventListener('click',
     () => _saveKey('ais-openai-save', 'ais-openai-status', 'ais-openai-key', 'OPENAI_API_KEY', '✓ Подтвердить OpenAI'));
+  // Переключатель вида доступа — показывает поля своего варианта.
+  const _geminiToggleAuthFields = () => {
+    const vertex = document.getElementById('ais-gemini-auth-vertex').checked;
+    document.getElementById('ais-gemini-apikey-fields').style.display = vertex ? 'none' : '';
+    document.getElementById('ais-gemini-vertex-fields').style.display = vertex ? '' : 'none';
+  };
+  document.getElementById('ais-gemini-auth-apikey').addEventListener('change', _geminiToggleAuthFields);
+  document.getElementById('ais-gemini-auth-vertex').addEventListener('change', _geminiToggleAuthFields);
+  _geminiToggleAuthFields();
+
   document.getElementById('ais-gemini-save').addEventListener('click', async () => {
     const btn    = document.getElementById('ais-gemini-save');
     const status = document.getElementById('ais-gemini-status');
     const key    = document.getElementById('ais-gemini-key').value;
     const model  = document.getElementById('ais-gemini-model').value;
+    const authType = document.getElementById('ais-gemini-auth-vertex').checked ? 'vertex' : 'api-key';
+    const project  = document.getElementById('ais-gemini-project').value.trim();
+    const location = document.getElementById('ais-gemini-location').value.trim();
+    const vertexJson = document.getElementById('ais-gemini-vertex-json').value;
     btn.disabled = true; btn.textContent = '⏳…';
     status.className = 'ais-status'; status.textContent = '';
     try {
-      const body = { restart: true };
-      if (key !== '') body.GEMINI_API_KEY = key;
-      if (model)       body.GEMINI_MODEL  = model;
+      const body = { restart: true, GEMINI_AUTH_TYPE: authType };
+      if (authType === 'vertex') {
+        body.GOOGLE_CLOUD_PROJECT = project;
+        body.GOOGLE_CLOUD_LOCATION = location;
+        if (vertexJson.trim()) body.GEMINI_VERTEX_KEY_JSON = vertexJson;
+      } else {
+        if (key !== '') body.GEMINI_API_KEY = key;
+      }
+      if (model) body.GEMINI_MODEL = model;
       const d = await fetch('/api/settings', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
