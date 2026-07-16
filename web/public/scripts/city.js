@@ -169,6 +169,11 @@ function _polRowHtml(role = '', name = '', name2 = '', availableNames = _cityEdi
     <datalist id="${dlId}">${dlOpts}</datalist>
   </div>`;
 }
+// Строка «Ключевых локаций» ссылается на НАСТОЯЩУЮ карточку локации (по имени
+// из locationNames — уже существующих в городе). Если имя не совпало ни с одной
+// существующей — считаем запись новой локацией: показываем район+заметку и при
+// сохранении создаём реальную карточку через POST /api/locations (фаза K,
+// план 2026-07-16), а не просто текстовый тег без содержимого за ним.
 function _locRowHtml(type = '', name = '', locationNames = _cityEditLocs) {
   const known   = CITY_LOCATION_TYPES.includes(type);
   const selVal  = !type ? '' : (known ? type : 'other');
@@ -178,11 +183,18 @@ function _locRowHtml(type = '', name = '', locationNames = _cityEditLocs) {
     ...CITY_LOCATION_TYPES.map(o => `<option value="${escAttr(o)}"${o === selVal ? ' selected' : ''}>${escHtml(o)}</option>`),
     `<option value="other"${selVal === 'other' ? ' selected' : ''}>Другое…</option>`,
   ].join('');
-  return `<div class="cdet-rel-row cdet-loc-row">
-    <select class="form-control cdet-pol-role-sel cdet-loc-type-sel">${opts}</select>
-    <input class="cdet-rel-type-inp cdet-loc-type-custom" placeholder="Свой тип" value="${escAttr(custVal)}" style="${selVal === 'other' ? '' : 'display:none'}">
-    <input class="cdet-rel-name-inp cdet-loc-name-inp" list="cdet-city-loc-names" placeholder="Название локации" value="${escAttr(name)}">
-    <button class="cdet-rel-del-btn" type="button" title="Удалить запись">✕</button>
+  const isNew = !!(name && !locationNames.includes(name));
+  return `<div class="cdet-loc-row-wrap">
+    <div class="cdet-rel-row cdet-loc-row">
+      <select class="form-control cdet-pol-role-sel cdet-loc-type-sel">${opts}</select>
+      <input class="cdet-rel-type-inp cdet-loc-type-custom" placeholder="Свой тип" value="${escAttr(custVal)}" style="${selVal === 'other' ? '' : 'display:none'}">
+      <input class="cdet-rel-name-inp cdet-loc-name-inp" list="cdet-city-loc-names" placeholder="Название локации" value="${escAttr(name)}">
+      <button class="cdet-rel-del-btn" type="button" title="Удалить запись">✕</button>
+    </div>
+    <div class="cdet-loc-new-fields"${isNew ? '' : ' hidden'}>
+      <input class="form-control cdet-loc-new-district" list="cdet-city-district-names" placeholder="Район (для новой локации)">
+      <input class="form-control cdet-loc-new-note" placeholder="Заметка/статус — попадёт в «Атмосферу» карточки, необязательно">
+    </div>
   </div>`;
 }
 // Строка уезжает (fade+collapse), затем удаляется из DOM — без этого клик по «✕» среди
@@ -216,10 +228,23 @@ function _cityPolEditorHtml(sec) {
       <button class="cdet-rel-add-btn" id="cdet-political-add-btn" type="button">+ Добавить запись</button>
     </div>`;
 }
+// Кандидаты названий районов — первая часть каждой строки секции «Районы»
+// (конвенция «Название — кто держит/суть», см. CITY_FIELD_TIPS.Районы) до
+// первого тире/двоеточия. Best-effort: секция свободнотекстовая, без строгого
+// формата — подсказка для datalist, не проверка.
+function _parseDistrictNames(text) {
+  return String(text || '').split('\n')
+    .map(l => l.replace(/^\s*-\s?/, '').trim())
+    .filter(Boolean)
+    .map(l => l.split(/[—–:]/)[0].trim())
+    .filter(Boolean);
+}
+
 function _cityLocEditorHtml(sec) {
   const { narrative, recordLines } = _splitCitySectionRecords(sec.locations || '', _LOC_LABELS);
   const records = _parseLocationLines(recordLines);
   const rows = records.length ? records.map(r => _locRowHtml(r.type, r.name)).join('') : _locRowHtml();
+  const districts = _parseDistrictNames(sec.districts);
   return `
     <div class="form-group">
       <label class="form-label">Ключевые локации</label>
@@ -229,10 +254,11 @@ function _cityLocEditorHtml(sec) {
     </div>
     <div class="form-group">
       <label class="form-label">Отмеченные локации</label>
-      <div class="cdet-rels-hint">Тип — из списка или свой. Название — из созданных локаций или своё.</div>
+      <div class="cdet-rels-hint">Тип — из списка или свой. Название — из созданных локаций или своё: новое имя создаст настоящую карточку локации (район + заметка ниже), а не просто текст.</div>
       <div id="cdet-location-rows">${rows}</div>
       <button class="cdet-rel-add-btn" id="cdet-location-add-btn" type="button">+ Добавить запись</button>
       <datalist id="cdet-city-loc-names">${_cityEditLocs.map(n => `<option value="${escAttr(n)}">`).join('')}</datalist>
+      <datalist id="cdet-city-district-names">${districts.map(n => `<option value="${escAttr(n)}">`).join('')}</datalist>
     </div>`;
 }
 // Мультиселект-чипы: секты Камарилья/Анархи/Шабаш + независимые кланы. Храним как
@@ -284,16 +310,31 @@ function _collectPoliticalRows() {
   }).filter(r => r.role || r.name || r.name2).map(_politicalRowToLine);
   return [...narrativeLines, ...recordLines].join('\n');
 }
+// Строки, чьё имя не совпадает ни с одной уже существующей локацией города, —
+// заявки на создание настоящих карточек; собираются сюда и обрабатываются
+// в _saveCityEdit() ПОСЛЕ успешного сохранения city.md (фаза K).
+let _pendingNewLocations = [];
+
 function _collectLocationRows() {
   const narrative = document.querySelector('[data-city-field="locations-narrative"]')?.value.trim() || '';
   const narrativeLines = narrative ? narrative.split('\n').map(l => l.trim()).filter(Boolean) : [];
-  const recordLines = Array.from(document.querySelectorAll('#cdet-location-rows .cdet-loc-row')).map(row => {
+  const newLocationRequests = [];
+  const recordLines = Array.from(document.querySelectorAll('#cdet-location-rows .cdet-loc-row-wrap')).map(wrap => {
+    const row    = wrap.querySelector('.cdet-loc-row');
     const sel    = row.querySelector('.cdet-loc-type-sel');
     const custom = row.querySelector('.cdet-loc-type-custom');
     const type   = sel?.value === 'other' ? (custom?.value.trim() || '') : (sel?.value || '');
     const name   = row.querySelector('.cdet-loc-name-inp')?.value.trim() || '';
+    if (name && !_cityEditLocs.includes(name)) {
+      newLocationRequests.push({
+        name,
+        district: wrap.querySelector('.cdet-loc-new-district')?.value.trim() || '',
+        note:     wrap.querySelector('.cdet-loc-new-note')?.value.trim() || '',
+      });
+    }
     return { type, name };
   }).filter(r => r.type || r.name).map(_locationRowToLine);
+  _pendingNewLocations = newLocationRequests;
   return [...narrativeLines, ...recordLines].join('\n');
 }
 
@@ -481,7 +522,7 @@ document.getElementById('city-detail-content').addEventListener('click', async e
     }
     return;
   }
-  if (e.target.closest('#cdet-location-rows .cdet-rel-del-btn')) { _removeRelRow(e.target.closest('.cdet-loc-row')); return; }
+  if (e.target.closest('#cdet-location-rows .cdet-rel-del-btn')) { _removeRelRow(e.target.closest('.cdet-loc-row-wrap')); return; }
 
   if (e.target.closest('[data-city-edit]'))   { _renderCityEdit(); return; }
   if (e.target.closest('[data-city-cancel]')) { _renderCityView(); return; }
@@ -504,6 +545,16 @@ document.getElementById('city-detail-content').addEventListener('change', e => {
   if (locSel) { const c = locSel.closest('.cdet-loc-row')?.querySelector('.cdet-loc-type-custom'); if (c) c.style.display = locSel.value === 'other' ? '' : 'none'; return; }
   const polSel = e.target.closest('.cdet-pol-role-sel');
   if (polSel) { const c = polSel.closest('.cdet-pol-row')?.querySelector('.cdet-pol-role-custom'); if (c) c.style.display = polSel.value === 'other' ? '' : 'none'; }
+});
+
+// Район/заметка для новой локации показываются, только пока введённое имя не
+// совпадает ни с одной уже существующей локацией города (фаза K).
+document.getElementById('city-detail-content').addEventListener('input', e => {
+  const nameInp = e.target.closest('.cdet-loc-name-inp');
+  if (!nameInp) return;
+  const wrap = nameInp.closest('.cdet-loc-row-wrap');
+  const fields = wrap?.querySelector('.cdet-loc-new-fields');
+  if (fields) fields.hidden = !nameInp.value.trim() || _cityEditLocs.includes(nameInp.value.trim());
 });
 
 async function _saveCityEdit() {
@@ -538,6 +589,30 @@ async function _saveCityEdit() {
       body: JSON.stringify(payload),
     }).then(r => r.json());
     if (!r.ok) { if (statusEl) statusEl.textContent = '⚠ ' + (r.error || 'Ошибка'); return; }
+
+    // Новые локации из «Ключевых локаций» — создаём настоящие карточки
+    // (POST /api/locations), а не просто текстовый тег в city.md (фаза K).
+    if (activePane !== 'markdown' && _pendingNewLocations.length) {
+      if (statusEl) statusEl.textContent = `⏳ Создаю локации (${_pendingNewLocations.length})...`;
+      for (const req of _pendingNewLocations) {
+        try {
+          const lr = await fetch(`/api/locations?city=${encodeURIComponent(d.slug)}`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: req.name, district: req.district }),
+          }).then(x => x.json());
+          // 409 «уже существует» — гонка с параллельным созданием той же локации,
+          // не ошибка сохранения города; для остального пропускаем эту заявку.
+          if (lr.slug && req.note) {
+            await fetch(`/api/locations/${encodeURIComponent(lr.slug)}/fields?city=${encodeURIComponent(d.slug)}`, {
+              method: 'PUT', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ fields: { atmosphere: req.note } }),
+            });
+          }
+        } catch { /* одна неудавшаяся локация не должна срывать сохранение города */ }
+      }
+      _pendingNewLocations = [];
+    }
+
     // Перечитываем детально и возвращаемся в просмотр; обновляем грид доменов.
     const fresh = await fetch(`/api/cities/${encodeURIComponent(d.slug)}/detail`).then(r => r.json());
     _cityDetail = { ...fresh, slug: d.slug, active: d.slug === CITY };

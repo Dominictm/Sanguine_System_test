@@ -3331,6 +3331,35 @@ a:focus-visible {
   flex: 1 1 200px;
 }
 
+/* Район/заметка новой локации (фаза K) — обёртка целиком анимируется как строка. */
+.cdet-loc-row-wrap.row-enter {
+  animation: row-enter var(--dur-fast) var(--ease);
+}
+
+.cdet-loc-row-wrap.row-exit {
+  animation: row-exit var(--dur-fast) var(--ease) forwards;
+}
+
+.cdet-loc-new-fields {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 4px 0 4px 0;
+  padding-left: 20px;
+}
+
+.cdet-loc-new-fields[hidden] {
+  display: none;
+}
+
+.cdet-loc-new-district {
+  flex: 0 0 180px;
+}
+
+.cdet-loc-new-note {
+  flex: 1 1 260px;
+}
+
 .cdet-rel-name-inp:focus, .cdet-rel-type-inp:focus {
   outline: none;
   border-color: var(--accent);
