@@ -1040,8 +1040,25 @@ body {
   to   { opacity: 1; transform: translateY(0); }
 }
 
+@keyframes page-out {
+  from { opacity: 1; transform: translateY(0); }
+  to   { opacity: 0; transform: translateY(-6px); }
+}
+
 .page.active {
   animation: page-in var(--dur-fast) var(--ease);
+}
+
+/* Уходящий раздел навигации остаётся на экране (display:block через .active)
+   до конца своей fade-out — JS (navigate() в scripts.js) слушает animationend
+   на .page-out и только тогда переключает .active на новый раздел, поэтому
+   переход выглядит как последовательный кроссфейд, а не мгновенное исчезание. */
+.page.page-out {
+  animation: page-out var(--dur-fast) var(--ease) forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page.active, .page.page-out { animation: none; }
 }
 
 @keyframes fade-rise {

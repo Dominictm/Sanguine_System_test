@@ -95,34 +95,57 @@ const STATE = {
   locFilter: { zone: 'all', masq: 'all', district: 'all', search: '' },
 };
 
+// Переход между разделами — короткий кроссфейд: уходящий раздел доигрывает
+// fade-out (.page-out, см. styles.css) и только по его animationend раздел
+// переключается на новый (который получает свой fade-in через .page.active).
+// Без этого второй раздел появлялся плавно, а первый пропадал мгновенно —
+// переход выглядел рваным. При prefers-reduced-motion или повторном клике по
+// уже открытому разделу — переключение мгновенное, без анимации.
 function navigate(page) {
-  STATE.page = page;
-  document.querySelectorAll('.nav-item').forEach(el => {
-    const on = el.dataset.page === page;
-    el.classList.toggle('active', on);
-    if (on) el.setAttribute('aria-current', 'page');
-    else    el.removeAttribute('aria-current');
-  });
-  document.querySelectorAll('.page').forEach(el =>
-    el.classList.toggle('active', el.id === `page-${page}`));
+  const prev = document.querySelector('.page.active');
+  const next = document.getElementById(`page-${page}`);
+  const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-  if (page === 'dashboard')  loadDashboard();
-  if (page === 'chronicle')  loadChronicle();
-  if (page === 'characters') loadCharacters();
-  if (page === 'graph')      loadGraph();
-  if (page === 'chronicles-page') loadChroniclesPage();
-  if (page === 'modules')         loadModules();
-  if (page === 'module')          loadModulePage();
-  if (page === 'session')    loadSessionScreen();
-  if (page === 'city')       loadCityPage();
-  if (page === 'threads')    loadThreads();
-  if (page === 'locations')  loadLocations();
-  if (page === 'library')    loadLibrary();
-  if (page === 'audio-library') loadAudioLibrary();
-  if (page === 'factions')   loadFactions();
-  if (page === 'rumors')     loadRumors();
-  if (page === 'search')     loadSearch();
-  if (page === 'city-new')   loadCitiesGrid();
+  const applyPage = () => {
+    STATE.page = page;
+    document.querySelectorAll('.nav-item').forEach(el => {
+      const on = el.dataset.page === page;
+      el.classList.toggle('active', on);
+      if (on) el.setAttribute('aria-current', 'page');
+      else    el.removeAttribute('aria-current');
+    });
+    document.querySelectorAll('.page').forEach(el =>
+      el.classList.toggle('active', el.id === `page-${page}`));
+
+    if (page === 'dashboard')  loadDashboard();
+    if (page === 'chronicle')  loadChronicle();
+    if (page === 'characters') loadCharacters();
+    if (page === 'graph')      loadGraph();
+    if (page === 'chronicles-page') loadChroniclesPage();
+    if (page === 'modules')         loadModules();
+    if (page === 'module')          loadModulePage();
+    if (page === 'session')    loadSessionScreen();
+    if (page === 'city')       loadCityPage();
+    if (page === 'threads')    loadThreads();
+    if (page === 'locations')  loadLocations();
+    if (page === 'library')    loadLibrary();
+    if (page === 'audio-library') loadAudioLibrary();
+    if (page === 'factions')   loadFactions();
+    if (page === 'rumors')     loadRumors();
+    if (page === 'search')     loadSearch();
+    if (page === 'city-new')   loadCitiesGrid();
+  };
+
+  if (prev && next && prev !== next && !reduced) {
+    prev.classList.add('page-out');
+    prev.addEventListener('animationend', () => {
+      prev.classList.remove('page-out');
+      applyPage();
+    }, { once: true });
+  } else {
+    if (prev) prev.classList.remove('page-out');
+    applyPage();
+  }
 }
 
 document.querySelectorAll('[data-page]').forEach(el => {
