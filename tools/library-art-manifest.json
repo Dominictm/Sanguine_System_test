@@ -228,6 +228,10 @@
   { "section": "backgrounds", "slug": "tituly",                       "scene": "an ornate scroll unfurling with a line of gilded honorific titles" },
   { "section": "backgrounds", "slug": "uvazhenie_stai",               "scene": "a circle of bowed wolf-like silhouettes around a single standing figure" },
   { "section": "backgrounds", "slug": "chlenstvo_v_chernoy_ruke",     "scene": "a black gauntlet fist closed tightly around a hidden ceremonial blade" },
+  { "section": "backgrounds", "slug": "bogohulnoe_svyatilische",      "scene": "a defiled sarcophagus resting on an altar wreathed in coiling serpent iconography" },
+  { "section": "backgrounds", "slug": "pomestie",                     "scene": "an ancient fortified manor house standing guard over shadowed grounds" },
+  { "section": "backgrounds", "slug": "tretye_pokolenie_kainitov",    "scene": "a colossal ancient sarcophagus sealed shut by chains of dried dark blood" },
+  { "section": "backgrounds", "slug": "kult",                         "scene": "a circle of hooded worshippers kneeling before an empty ornate throne" },
 
   { "section": "backgrounds", "slug": "avatar",    "scene": "a radiant spark of light nested gently within a human silhouette's chest" },
   { "section": "backgrounds", "slug": "biblioteka","scene": "towering arcane shelves stacked with glowing sigil-marked tomes" },
@@ -246,6 +250,7 @@
   { "section": "backgrounds", "slug": "svita",        "scene": "a small devoted retinue of bowed enchanted silhouettes in attendance" },
   { "section": "backgrounds", "slug": "sokrovischa",  "scene": "a glowing chest overflowing with shimmering, dream-touched treasures" },
   { "section": "backgrounds", "slug": "himera",       "scene": "a small chimerical beast made of shifting glimmering light and shadow" },
+  { "section": "backgrounds", "slug": "senory_i_vassaly", "scene": "two clasped gauntleted hands bound by a ceremonial oath-chain, one kneeling" },
 
   { "section": "backgrounds", "slug": "dvoynaya_zhizn",   "scene": "a single face split cleanly between mortal light and vampiric shadow" },
   { "section": "backgrounds", "slug": "domitor",          "scene": "a collar and chain held gently, not cruelly, by an unseen hand" },
