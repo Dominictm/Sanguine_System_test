@@ -181,7 +181,12 @@ app.use((req, res, next) => {
     // видно, какой эндпойнт реально вызывался, если для него не завели
     // человекочитаемое описание. Теперь логируется КАЖДЫЙ /api/*-вызов:
     // с описанием, если оно есть в ACTION_MAP, иначе — метод + путь как есть.
-    const label = action || `${C.dim}${req.path}${C.reset}`;
+    let label = action;
+    if (!label) {
+      let readablePath = req.path;
+      try { readablePath = decodeURIComponent(req.path); } catch { /* malformed % — оставить как есть */ }
+      label = `${C.dim}${readablePath}${C.reset}`;
+    }
     console.log(`${C.dim}[web]${C.reset} ${methodStr} ${codeStr} ${timeStr}  ${label}`);
   });
 
