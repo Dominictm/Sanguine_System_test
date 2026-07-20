@@ -85,6 +85,41 @@ const VAMPIRE_GENERATIONS = ['14-е', '13-е', '12-е', '11-е', '10-е', '9-е'
 // State & routing
 // ═══════════════════════════════════════════════════════════════
 
+// Слаг вкладки (data-belonging-tab) → точное значение поля «Принадлежность»
+// в карточке персонажа. 'all' — особый случай, под фильтр не попадает.
+// Единый источник для renderChars() и дефолта в модалке «Новый НПС».
+const BELONGING_TAB_VALUES = {
+  master:   'Персонаж мастера',
+  player:   'Персонаж игрока',
+  episodic: 'Эпизодический персонаж',
+  familiar: 'Фамильяр',
+};
+
+// Пустое состояние списка персонажей. Задача — объяснить, как завести запись
+// этого типа, а не сообщить «ничего нет».
+function emptyCharsState(belonging, lineage, status, search) {
+  const narrowed = lineage !== 'all' || status !== 'all' || !!search;
+  if (belonging === 'familiar' && !narrowed) {
+    return `<div class="chars-empty">
+      <div class="chars-empty-title">Реестр фамильяров пуст</div>
+      <p class="chars-empty-body">Фамильяр заводится обычной карточкой персонажа. Линейку выбирают по природе существа: <b>Смертный</b> — животное-гуль или дух в зверином теле, <b>Фея / Ченджлинг</b> — химерический спутник. Дальше — «Принадлежность: Фамильяр».</p>
+      <p class="chars-empty-hint">Хозяина впишите первым пунктом секции «Отношения» со словом «домитор» или «хозяин» — связь проступит в графе. Кнопка «+ Создать» подставит принадлежность сама.</p>
+    </div>`;
+  }
+  if (narrowed) {
+    return `<div class="chars-empty">
+      <div class="chars-empty-title">Под этот отбор записей нет</div>
+      <p class="chars-empty-body">Архив хранит персонажей, но ни один не отвечает всем условиям сразу.</p>
+      <p class="chars-empty-hint">Ослабьте фильтр линейки, статуса или поиск по имени.</p>
+    </div>`;
+  }
+  return `<div class="chars-empty">
+    <div class="chars-empty-title">Раздел пока не заполнен</div>
+    <p class="chars-empty-body">Ни одна карточка не отмечена этой принадлежностью.</p>
+    <p class="chars-empty-hint">Принадлежность правится в карточке персонажа: вкладка «Инфо» → режим редактирования.</p>
+  </div>`;
+}
+
 const STATE = {
   page: 'dashboard',
   characters: [],
@@ -460,14 +495,14 @@ function renderChars() {
   let list = STATE.characters;
   if (lineage !== 'all')      list = list.filter(c => c.lineage === lineage);
   if (status  !== 'all')      list = list.filter(c => c.statusType === status);
-  if (belonging === 'episodic') list = list.filter(c => c.belonging === 'Эпизодический персонаж');
+  if (belonging !== 'all') list = list.filter(c => c.belonging === BELONGING_TAB_VALUES[belonging]);
   if (search)                 list = list.filter(c => c.name.toLowerCase().includes(search.toLowerCase()));
 
   document.getElementById('chars-count-label').textContent = `${list.length} персонажей`;
 
   const grid = document.getElementById('chars-grid');
   if (!list.length) {
-    grid.innerHTML = '<div class="loading-state" style="height:100px">Персонажи не найдены</div>';
+    grid.innerHTML = emptyCharsState(belonging, lineage, status, search);
     return;
   }
 
@@ -2297,7 +2332,7 @@ const CHAR_FIELD_TIPS = {
   'Натура': 'Истинная сущность персонажа — как он ведёт себя наедине с собой, без масок.',
   'Маска': 'Публичный образ персонажа — то лицо, которое он показывает окружающим.',
   'Амплуа': 'Краткая формулировка роли персонажа в истории — кто он по сути, одной фразой.',
-  'Принадлежность': 'К какой хронике, городу или сюжетной линии относится персонаж — эпизодический или постоянный.',
+  'Принадлежность': 'К какой хронике, городу или сюжетной линии относится персонаж — постоянный (мастера/игрока), эпизодический или фамильяр.',
   'Раса': 'Природа персонажа внутри линейки, если требуется уточнение (например, вид феи).',
   'Род': 'Разновидность феи (Кит) — накладывает свои особенности и склонности.',
   'Титул': 'Формальный титул феи при Дворе — определяет её ранг и привилегии.',

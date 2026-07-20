@@ -1555,6 +1555,52 @@ body {
   }
 }
 
+/* Пустое состояние списка персонажей: не «ничего нет», а инструкция, как
+   завести запись этого типа. Заменяет .loading-state, который для пустого
+   результата был капсом-заголовком без содержания. */
+.chars-empty {
+  grid-column: 1 / -1;
+  max-width: 62ch;
+  margin: 28px auto;
+  padding: 28px;
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  background: var(--bg2);
+  text-align: left;
+}
+
+.chars-empty-title {
+  font-family: var(--f-heading);
+  font-size: var(--fs-md);
+  letter-spacing: .18em;
+  text-transform: uppercase;
+  color: var(--text2);
+  margin-bottom: 14px;
+}
+
+.chars-empty-body {
+  font-family: var(--f-body);
+  font-size: var(--fs-xl);
+  line-height: 1.5;
+  color: var(--text);
+  margin: 0 0 14px;
+  text-wrap: pretty;
+}
+
+.chars-empty-body b {
+  font-weight: 600;
+  color: var(--gold);
+}
+
+.chars-empty-hint {
+  font-family: var(--f-mono);
+  font-size: var(--fs-xs);
+  line-height: 1.5;
+  letter-spacing: .02em;
+  color: var(--text3);
+  margin: 0;
+}
+
 .chars-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(min(260px, calc((100% - 28px) / 3)), 1fr));
