@@ -131,8 +131,11 @@
       </div>
 
       <div class="chars-belonging-tabs">
-        <button class="chron-tab active" data-belonging-tab="all">Все</button>
-        <button class="chron-tab" data-belonging-tab="episodic">🎭 Эпизодические</button>
+        <button class="chron-tab active" data-belonging-tab="all" aria-pressed="true">Все</button>
+        <button class="chron-tab" data-belonging-tab="master" aria-pressed="false"><span class="tab-ico" aria-hidden="true">🎬</span> Мастера</button>
+        <button class="chron-tab" data-belonging-tab="player" aria-pressed="false"><span class="tab-ico" aria-hidden="true">🎲</span> Игроки</button>
+        <button class="chron-tab" data-belonging-tab="episodic" aria-pressed="false"><span class="tab-ico" aria-hidden="true">🎭</span> Эпизодические</button>
+        <button class="chron-tab" data-belonging-tab="familiar" aria-pressed="false"><span class="tab-ico" aria-hidden="true">🐾</span> Фамильяры</button>
       </div>
 
       <div class="filter-bar">

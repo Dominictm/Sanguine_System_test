@@ -103,6 +103,7 @@
   --z-tour: 2500;
   --z-lightbox: 9000;
   --z-tooltip: 9600;
+  --z-toast: 9999;
   /* ── Misc ── */
   --sidebar-w: 210px;
   --ease: cubic-bezier(.4, 0, .2, 1);
@@ -1492,13 +1493,66 @@ body {
   max-width: 120px;
 }
 
-/* Все / Эпизодические — переключатель по полю «Принадлежность» (фаза H,
-   план 2026-07-16), не по линейке WoD; переиспользует .chron-tab. */
+/* Переключатель по полю «Принадлежность» (Все / Мастера / Игроки /
+   Эпизодические / Фамильяры), не по линейке WoD; переиспользует .chron-tab.
+   Пять кнопок не влезают в один ряд ниже ~1100px окна (замер 2026-07-20:
+   нужно 648px, контейнер даёт столько только с 1100px; на 760px сайдбар
+   ужимает контейнер до 497px). Поэтому: (1) уплотнённые подписи по двум
+   порогам, (2) активная вкладка маркируется полной рамкой-печатью, а не
+   подчёркиванием — при переносе подчёркивание повисало бы посреди блока,
+   в отрыве от нижней границы контейнера. */
 .chars-belonging-tabs {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
+  row-gap: 6px;
   margin-bottom: 16px;
-  border-bottom: 1px solid var(--border);
+  /* border-bottom убран намеренно: он был «рельсом» для подчёркивания,
+     а при переносе на второй ряд превращался в ложный разделитель. */
+}
+
+.chars-belonging-tabs .chron-tab {
+  margin-bottom: 0;                       /* гасим -1px из .chron-tab */
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  transition: color .15s, background .15s, border-color .15s;
+}
+
+.chars-belonging-tabs .chron-tab:hover {
+  border-color: var(--border2);
+}
+
+.chars-belonging-tabs .chron-tab.active {
+  color: var(--gold);
+  border-color: var(--gold);
+  background: var(--gold-tint-weak);
+}
+
+/* Иконки вкладок — обесцвечены до гравюрной метки: цветной эмодзи-стикер
+   тянет в «геймерскую яркость» (анти-референс Roll20 в PRODUCT.md). */
+.chars-belonging-tabs .tab-ico {
+  filter: grayscale(1) contrast(.85) opacity(.75);
+}
+
+.chars-belonging-tabs .chron-tab.active .tab-ico {
+  filter: grayscale(1) opacity(1);
+}
+
+/* Уплотнение подписей: держит пять кнопок в один ряд до 700px окна.
+   Высоту НЕ задаём — min-height: 44px из блока @media (pointer: coarse)
+   (styles.css ~2528) должен оставаться единственным источником правды. */
+@media (max-width: 1099px) {
+  .chars-belonging-tabs .chron-tab {
+    padding: 10px 11px;
+    letter-spacing: .05em;
+  }
+}
+
+@media (max-width: 699px) {
+  .chars-belonging-tabs .chron-tab {
+    padding: 9px 8px;
+    letter-spacing: .02em;
+  }
 }
 
 .chars-grid {
@@ -2082,7 +2136,7 @@ body {
 }
 
 #page-library .tab-btn.active {
-  color: var(--accent);
+  color: var(--text); /* активная вкладка: сигнал несут красный градиент-фон и border; текст держим читаемым (accent #8B0000 = 1.9:1 не читался) */
   background: linear-gradient(180deg,
       color-mix(in srgb, var(--accent) 2%, transparent) 0%,
       color-mix(in srgb, var(--accent) 35%, transparent) 100%);
@@ -2183,7 +2237,7 @@ body {
   border-radius: 50%;
   border: 1px solid var(--border);
   color: var(--text-dim);
-  font-size: 10px;
+  font-size: var(--fs-3xs);
   font-family: var(--f-body);
   font-style: normal;
   text-transform: none;
@@ -2220,7 +2274,7 @@ body {
   border: 1px solid var(--border);
   border-radius: var(--r-lg);
   color: var(--text2);
-  font-size: var(--fs-lg, 12px);
+  font-size: var(--fs-lg);
   font-family: var(--f-body);
   font-weight: 400;
   line-height: 1.45;
@@ -3027,7 +3081,7 @@ a:focus-visible {
 }
 
 .cdet-tab.active {
-  color: var(--accent);
+  color: var(--text); /* сигнал активности — border-bottom + градиент; текст читаемый (accent как color = 1.9:1) */
   border-bottom-color: var(--accent);
   background: linear-gradient(180deg,
       color-mix(in srgb, var(--accent) 2%, transparent) 0%,
@@ -3960,7 +4014,7 @@ a:focus-visible {
 
 .chr-form-textarea {
   width: 96%;
-  font-size: 22px;
+  font-size: var(--fs-xl);
   resize: vertical;
   min-height: 90px;
   font-family: var(--text2);
@@ -4379,7 +4433,7 @@ a:focus-visible {
 }
 
 .chd-recap-err {
-  color: var(--accent3, #d98);
+  color: var(--c-error);
   font-size: var(--fs-lg);
 }
 
@@ -4817,7 +4871,7 @@ a:focus-visible {
 }
 
 .module-card {
-  background: #120f18ad;
+  background: color-mix(in srgb, var(--bg3) 68%, transparent);
   border: 1px solid var(--accent);
   border-radius: var(--r-sm);
   padding: 22px 26px 44px;
@@ -6231,7 +6285,7 @@ a:focus-visible {
 
 .chron-event {
   position: relative;
-  background: #120f1882;
+  background: color-mix(in srgb, var(--bg3) 51%, transparent);
   border: 1px solid var(--accent);
   border-radius: var(--r-sm);
   padding: 18px 22px 20px;
@@ -7579,7 +7633,7 @@ a.md-link-loc:hover {
 .modp-tab.active {
   background: var(--bg-panel);
   border-color: var(--border);
-  color: var(--accent);
+  color: var(--text); /* активная вкладка: сигнал — панель+border; текст читаемый (accent = 1.9:1) */
   opacity: 1;
   border-bottom-color: var(--bg-panel);
 }
@@ -8007,8 +8061,8 @@ a.md-link-loc:hover {
 }
 
 .modp-npc-desc {
-  text-shadow: 0 0 #ffffff;
-  font-size: 22px;
+  text-shadow: 0 0 var(--pure-white);
+  font-size: var(--fs-xl);
   line-height: 1.45;
   color: var(--text2);
   opacity: 0.85;
@@ -9082,7 +9136,7 @@ a.md-link-loc:hover {
 .v20-disc-list-clans {
   flex-shrink: 0;
   color: var(--text3);
-  font-size: 15px;
+  font-size: var(--fs-md);
 }
 
 /* Библиотека — все 4 раздела (Дисциплины/Психика/Достоинства/Недостатки) как
@@ -9577,7 +9631,7 @@ a.md-link-loc:hover {
 }
 
 .audio-card-play-btn.playing {
-  color: var(--accent);
+  color: var(--crimson);
   border-color: var(--accent);
 }
 
@@ -9614,7 +9668,7 @@ a.md-link-loc:hover {
    CSS color, поэтому состояние кодируется через filter (grayscale/opacity),
    а не только через смену цвета. */
 .audio-card-icon-btn.active {
-  color: var(--accent);
+  color: var(--crimson);
 }
 
 .audio-card-icon-btn[data-audio-loop] {
@@ -10019,7 +10073,7 @@ a.md-link-loc:hover {
   font-family: var(--f-head);
   font-size: var(--fs-xl);
   letter-spacing: 1px;
-  color: var(--accent);
+  color: var(--crimson);
 }
 
 .modp-session-status {
@@ -10172,7 +10226,7 @@ a.md-link-loc:hover {
   font-family: var(--f-head);
   font-size: 1.3rem;
   letter-spacing: 1.5px;
-  color: var(--accent);
+  color: var(--crimson);
   margin: 18px 0 8px;
 }
 
@@ -10192,7 +10246,7 @@ a.md-link-loc:hover {
 }
 
 .modp-md em {
-  color: var(--accent);
+  color: var(--crimson);
   font-style: italic;
 }
 
@@ -10323,7 +10377,7 @@ a.md-link-loc:hover {
 .modp-edit-btn {
   background: none;
   border: 1px solid var(--border);
-  color: var(--accent);
+  color: var(--crimson);
   padding: 2px 10px;
   border-radius: var(--r-sm);
   font-size: var(--fs-lg);
@@ -10373,7 +10427,7 @@ a.md-link-loc:hover {
 
 /* Info tab panels */
 .modp-info-title {
-  font-size: var(--fs-md, 18px);
+  font-size: var(--fs-md);
   font-weight: 600;
   margin-bottom: 4px;
 }
@@ -10385,31 +10439,31 @@ a.md-link-loc:hover {
 
 .modp-info-table td {
   padding: 3px 8px 3px 0;
-  font-size: var(--fs-lg, 12px);
+  font-size: var(--fs-lg);
   vertical-align: top;
 }
 
 .modp-info-lbl {
-  color: var(--text2, #999);
+  color: var(--text2);
   white-space: nowrap;
   padding-right: 12px;
 }
 
 .modp-concept-text {
   white-space: pre-wrap;
-  font-size: 25px;
+  font-size: var(--fs-body);
   line-height: 1.5;
 }
 
 .modp-section-divider {
   height: 1px;
-  background: var(--border, #333);
+  background: var(--border);
   margin: 12px 0;
 }
 
 .modp-section-label {
-  font-size: var(--fs-lg, 12px);
-  color: var(--text2, #999);
+  font-size: var(--fs-lg);
+  color: var(--text2);
   text-transform: uppercase;
   letter-spacing: .05em;
   margin-bottom: 6px;
@@ -10431,7 +10485,7 @@ a.md-link-loc:hover {
   list-style: none;
   padding: 0;
   margin: 0;
-  font-size: 25px;
+  font-size: var(--fs-body);
 }
 
 .modp-part-list li {
@@ -10530,14 +10584,14 @@ a.md-link-loc:hover {
 
 .modp-block-label {
   font-family: var(--f-heading);
-  font-size: var(--fs-sm, 14px);
+  font-size: var(--fs-sm);
   letter-spacing: .04em;
   color: var(--text);
 }
 
 .modp-block-warn {
   color: var(--c-danger-text);
-  font-size: var(--fs-lg, 12px);
+  font-size: var(--fs-lg);
   font-weight: normal;
   text-transform: none;
   letter-spacing: normal;
@@ -10574,8 +10628,8 @@ a.md-link-loc:hover {
 }
 
 .modp-field-label {
-  font-size: var(--fs-lg, 12px);
-  color: var(--text2, #999);
+  font-size: var(--fs-lg);
+  color: var(--text2);
   text-transform: uppercase;
   letter-spacing: .05em;
 }
@@ -10585,7 +10639,7 @@ a.md-link-loc:hover {
   border: 1px solid var(--border);
   border-radius: var(--r-sm);
   color: var(--text2);
-  font-size: var(--fs-lg, 12px);
+  font-size: var(--fs-lg);
   line-height: 1;
   padding: 3px 6px;
   cursor: pointer;
@@ -10607,8 +10661,8 @@ a.md-link-loc:hover {
    (нет отдельного вида для игроков, это чисто страховка при показе экрана). */
 .modp-gm-badge {
   display: inline-block;
-  font-size: var(--fs-xs, 10px);
-  color: var(--c-error, #e87070);
+  font-size: var(--fs-xs);
+  color: var(--c-error);
   border: 1px solid currentColor;
   border-radius: var(--r-md);
   padding: 1px 5px;
@@ -10820,8 +10874,8 @@ a.md-link-loc:hover {
 }
 
 #rumors-content[data-rum-type="dreaming"] .rumor-told-cb:checked {
-  background: color-mix(in srgb, var(--c-violet) 75%, #000);
-  border-color: color-mix(in srgb, var(--c-violet) 75%, #000);
+  background: color-mix(in srgb, var(--c-violet) 75%, var(--pure-black));
+  border-color: color-mix(in srgb, var(--c-violet) 75%, var(--pure-black));
 }
 
 .rumor-cb-th {
@@ -11469,7 +11523,7 @@ tr.rumor-told:hover .rumor-cb-cell {
 .loc-edit-gen-full-btn {
   background: rgba(139, 0, 0, .12);
   border-color: var(--accent);
-  color: var(--accent);
+  color: var(--crimson);
 }
 
 .loc-edit-gen-full-btn:hover:not(:disabled) {
@@ -11501,7 +11555,7 @@ tr.rumor-told:hover .rumor-cb-cell {
 .modp-locs-new-btn {
   background: rgba(139, 0, 0, .1);
   border: 1px solid var(--accent);
-  color: var(--accent);
+  color: var(--crimson);
   border-radius: var(--r-sm);
   padding: 5px 12px;
   font-size: var(--fs-lg);
@@ -11713,7 +11767,7 @@ tr.rumor-told:hover .rumor-cb-cell {
   align-items: center;
   justify-content: space-between;
   padding: 6px 0;
-  border-bottom: 1px solid var(--border, #333);
+  border-bottom: 1px solid var(--border);
   gap: 8px;
 }
 
@@ -11722,20 +11776,23 @@ tr.rumor-told:hover .rumor-cb-cell {
 }
 
 .modp-locs-linked-badge {
-  font-size: var(--fs-lg, 12px);
-  color: var(--c-success, #4caf50);
+  font-size: var(--fs-lg);
+  color: var(--c-success);
 }
 
 .modp-locs-attach-btn, .modp-locs-create-btn {
   background: none;
-  border: 1px solid var(--border, #444);
-  color: var(--accent, #8b0000);
+  border: 1px solid var(--border);
+  color: var(--gold2); /* читаемая action-подпись (accent как color = 1.9:1 не читался) */
   padding: 2px 10px;
   border-radius: var(--r-md);
-  font-size: var(--fs-lg, 12px);
+  font-size: var(--fs-lg);
   cursor: pointer;
   white-space: nowrap;
   flex-shrink: 0;
+}
+@media (pointer: coarse) {
+  .modp-locs-attach-btn, .modp-locs-create-btn { min-height: 44px; }
 }
 
 .modp-locs-attach-btn:hover, .modp-locs-create-btn:hover {
@@ -11812,7 +11869,7 @@ tr.rumor-told:hover .rumor-cb-cell {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  z-index: 9999;
+  z-index: var(--z-toast);
   pointer-events: none;
 }
 
@@ -11961,7 +12018,7 @@ tr.rumor-told:hover .rumor-cb-cell {
 .merits-subtab-btn.active,
 .flaws-subtab-btn.active,
 .backgrounds-subtab-btn.active {
-  color: var(--accent);
+  color: var(--crimson);
   border-bottom-color: var(--accent);
   background: linear-gradient(180deg,
       color-mix(in srgb, var(--accent) 2%, transparent) 0%,
