@@ -707,7 +707,11 @@ function _advanceCard(name) {
 // Все / Эпизодические — переключатель по «Принадлежности» (фаза H).
 document.querySelectorAll('[data-belonging-tab]').forEach(btn => {
   btn.addEventListener('click', () => {
-    document.querySelectorAll('[data-belonging-tab]').forEach(b => b.classList.toggle('active', b === btn));
+    document.querySelectorAll('[data-belonging-tab]').forEach(b => {
+      const isActive = b === btn;
+      b.classList.toggle('active', isActive);
+      b.setAttribute('aria-pressed', String(isActive));
+    });
     STATE.filter.belonging = btn.dataset.belongingTab;
     if (STATE.characters.length) { renderChars(); _injectGridDims(); }
   });
