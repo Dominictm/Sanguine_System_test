@@ -1016,7 +1016,7 @@ function _enterInfoEdit(charName) {
       input = document.createElement('select');
       input.className = 'cdet-field-input';
       input.dataset.field = key;
-      ['Персонаж мастера', 'Персонаж игрока', 'Эпизодический персонаж'].forEach(opt => {
+      ['Персонаж мастера', 'Персонаж игрока', 'Эпизодический персонаж', 'Фамильяр'].forEach(opt => {
         const o = document.createElement('option');
         o.value = opt; o.textContent = opt;
         if (current === opt) o.selected = true;
