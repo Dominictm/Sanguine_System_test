@@ -35,7 +35,7 @@ function openCharDetail(name) {
 
   const portraitCol = c.imageUrl
     ? `<div class="cdet-carousel" id="cdet-carousel">
-        <img class="cdet-carousel-img" id="cdet-carousel-img" src="${c.imageUrl}" alt="${escHtml(c.name)}">
+        <img class="cdet-carousel-img" id="cdet-carousel-img" src="${escAttr(c.imageUrl)}" alt="${escHtml(c.name)}">
         <div class="cdet-carousel-overlay" id="cdet-carousel-overlay"></div>
         <button class="cdet-carousel-btn prev" id="cdet-carousel-prev" title="Предыдущее">&#8249;</button>
         <button class="cdet-carousel-btn next" id="cdet-carousel-next" title="Следующее">&#8250;</button>
@@ -1204,7 +1204,7 @@ async function triggerImageUpload(charName) {
         // Update portrait in modal immediately
         const col = document.getElementById('cdet-portrait-col');
         if (col) col.innerHTML = `<div class="cdet-carousel" id="cdet-carousel">
-          <img class="cdet-carousel-img" id="cdet-carousel-img" src="${newUrl}" alt="${escHtml(charName)}">
+          <img class="cdet-carousel-img" id="cdet-carousel-img" src="${escAttr(newUrl)}" alt="${escHtml(charName)}">
           <div class="cdet-carousel-overlay" id="cdet-carousel-overlay"></div>
           <button class="cdet-carousel-btn prev" id="cdet-carousel-prev" title="Предыдущее">&#8249;</button>
           <button class="cdet-carousel-btn next" id="cdet-carousel-next" title="Следующее">&#8250;</button>

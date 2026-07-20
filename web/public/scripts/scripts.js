@@ -521,7 +521,7 @@ function renderChars() {
 
     if (c.imageUrl) {
       return `<div class="char-card has-art" data-name="${escHtml(c.name)}" ${delay}>
-        <img class="char-card-art" src="${c.imageUrl}" alt="${escHtml(c.name)}" loading="lazy" decoding="async">
+        <img class="char-card-art" src="${escAttr(c.imageUrl)}" alt="${escHtml(c.name)}" loading="lazy" decoding="async">
         <div class="char-card-overlay">${textBlock}</div>
         ${stRow}
       </div>`;

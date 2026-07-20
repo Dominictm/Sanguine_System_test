@@ -393,7 +393,7 @@ function showInfoPanel(d, links, nodes) {
 
   const charData = (STATE.characters || []).find(c => c.name === d.id);
   const portraitHtml = charData?.imageUrl
-    ? `<img class="info-portrait" src="${charData.imageUrl}" alt="${d.id}">`
+    ? `<img class="info-portrait" src="${escAttr(charData.imageUrl)}" alt="${escAttr(d.id)}">`
     : `<span class="info-lineage-icon">${LINEAGE_ICONS[d.lineage] || '👤'}</span>`;
 
   const graphStatusLbl = charData ? statusLabel(charData) : (STATUS_LABELS[d.status] || d.status);
@@ -410,7 +410,7 @@ function showInfoPanel(d, links, nodes) {
     ${graphStatusDetails ? `<div class="cdet-status-details" style="margin-bottom:6px">${escHtml(graphStatusDetails)}</div>` : ''}
     <div class="info-divider"></div>
     <div class="info-section-label">Связи (${outLinks.length})</div>
-    ${relsHtml || '<div style="color:var(--text3);font-size:26px;font-style:italic">Нет известных связей</div>'}
+    ${relsHtml || '<div style="color:var(--text3);font-size:var(--fs-body);font-style:italic">Нет известных связей</div>'}
   `;
 
   document.getElementById('info-panel').classList.add('open');
