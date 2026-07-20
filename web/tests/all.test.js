@@ -4105,7 +4105,7 @@ describe('API — integration', () => {
   // ── H: «Эпизодические персонажи» — cross-lineage фильтр по «Принадлежности»,
   // не отдельная папка/линейка (поле и его enum уже существовали в схеме
   // карточки — «Эпизодический персонаж» как значение «Принадлежность») ────────
-  describe('Персонажи — belonging «Эпизодический персонаж» (фаза H)', () => {
+  describe('Персонажи — belonging «Эпизодический персонаж» (фаза H/I)', () => {
     it('POST /api/characters с belonging=«Эпизодический персонаж» пишет поле в карточку и отдаёт его в списке', async () => {
       const name = `Тест Эпизод ${Date.now()}`;
       const slug = slugify(name);
@@ -4137,10 +4137,53 @@ describe('API — integration', () => {
       await fs.rm(path.join(CITY_ROOT, 'characters', '_deleted', slug), { recursive: true, force: true });
     });
 
-    it('source-guard: страница «Персонажи» фильтрует по belonging (не по новой линейке)', () => {
+    it('POST /api/characters с belonging=«Фамильяр» пишет поле в карточку и отдаёт его в списке', async () => {
+      const name = `Тест Фамильяр ${Date.now()}`;
+      const slug = slugify(name);
+      const create = await apiJson(`/api/characters${CITY}`, {
+        method: 'POST',
+        // ⚠️ gender ОБЯЗАТЕЛЬНО 'Мужской'/'Женский' — НЕ 'Неизвестно'.
+        // Сервер (`web/routes/characters.js:75` → проверка на `:327`) принимает только два
+        // значения и вернёт 400, хотя схема (`card_schema.md:38`) и линтер
+        // (`validate_cards.js:22`) 'Неизвестно' разрешают. Это рассинхрон сервера со схемой,
+        // он чинится отдельной follow-up задачей (см. «Пробелы» выше). До неё — обход.
+        body: JSON.stringify({ name, lineage: 'mortal', gender: 'Мужской', belonging: 'Фамильяр' }),
+      });
+      assert.equal(create.status, 200);
+      const raw = await fs.readFile(path.join(CITY_ROOT, 'characters', 'mortals', slug, `${slug}.md`), 'utf-8');
+      assert.match(raw, /\*\*Принадлежность:\*\*\s*Фамильяр/);
+      const { body: chars } = await apiJson(`/api/characters${CITY}`);
+      const char = (Array.isArray(chars) ? chars : []).find(c => c.slug === slug);
+      assert.ok(char, 'персонаж должен быть найден после создания');
+      assert.equal(char.belonging, 'Фамильяр');
+      await apiJson(`/api/characters/${encodeURIComponent(slug)}${CITY}`, { method: 'DELETE' });
+      await fs.rm(path.join(CITY_ROOT, 'characters', '_deleted', slug), { recursive: true, force: true });
+    });
+
+    it('source-guard: страница «Персонажи» фильтрует по belonging через общую карту вкладок (не по новой линейке)', () => {
       const src = require('fs').readFileSync(path.join(__dirname, '../public/scripts/scripts.js'), 'utf-8');
-      assert.ok(src.includes("belonging === 'episodic'"), 'renderChars не фильтрует по belonging');
-      assert.ok(src.includes('data-belonging-tab'), 'нет обработчика вкладок Все/Эпизодические');
+      assert.ok(src.includes('BELONGING_TAB_VALUES'), 'нет общей карты слаг-вкладки → значение Принадлежности');
+      assert.ok(src.includes("c.belonging === BELONGING_TAB_VALUES[belonging]"), 'renderChars не фильтрует по BELONGING_TAB_VALUES');
+      assert.ok(src.includes('data-belonging-tab'), 'нет обработчика вкладок');
+      // Проверяем слаг именно внутри карты, а не где угодно в файле:
+      // голая подстрока "familiar:" слишком общая и даст ложно-зелёный результат.
+      assert.ok(/BELONGING_TAB_VALUES\s*=\s*\{[^}]*familiar:\s*'Фамильяр'/s.test(src),
+        'в карте вкладок нет пары familiar → Фамильяр');
+    });
+
+    it('source-guard: HTML-вкладки покрывают все 4 значения Принадлежности + «Все»', () => {
+      const html = require('fs').readFileSync(path.join(__dirname, '../public/index.html'), 'utf-8');
+      ['data-belonging-tab="all"', 'data-belonging-tab="master"', 'data-belonging-tab="player"',
+       'data-belonging-tab="episodic"', 'data-belonging-tab="familiar"'].forEach(attr => {
+        assert.ok(html.includes(attr), `не найдена вкладка ${attr}`);
+      });
+    });
+
+    it('source-guard: инлайн-редактор карточки предлагает «Фамильяр» в дропдауне Принадлежности', () => {
+      const src = require('fs').readFileSync(path.join(__dirname, '../public/scripts/char-detail.js'), 'utf-8');
+      // Не привязываемся к точной строке массива с пробелами — она сломается от любого
+      // переформатирования. Достаточно, что опция есть в ветке редактора belonging.
+      assert.ok(src.includes("'Фамильяр'"), 'дропдаун char-detail.js не содержит опцию Фамильяр');
     });
   });
 
