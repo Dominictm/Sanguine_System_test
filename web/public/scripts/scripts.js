@@ -1614,6 +1614,7 @@ document.getElementById('btn-new-npc').addEventListener('click', async () => {
     sire:        document.getElementById('npc-sire').value.trim(),
     biography:   document.getElementById('npc-bio').value.trim(),
     appearance:  document.getElementById('npc-appearance').value.trim(),
+    belonging:   document.getElementById('npc-belonging').value,
   };
 
   btn.disabled = true; btn.textContent = '⏳ Создание...';
@@ -2466,14 +2467,15 @@ document.querySelectorAll('.lineage-pick-btn').forEach(btn => {
     // fields[], иначе пришлось бы дублировать в 6 массивах). Если открыто со
     // вкладки «🎭 Эпизодические» — по умолчанию подставляется «Эпизодический
     // персонаж» (фаза H, план 2026-07-16).
-    const belongingDefault = STATE.filter.belonging === 'episodic' ? 'Эпизодический персонаж' : 'Персонаж мастера';
+    const belongingDefault = BELONGING_TAB_VALUES[STATE.filter.belonging] || 'Персонаж мастера';
     modalFields.insertAdjacentHTML('beforeend', `
       <div class="form-group">
         <label class="form-label">Принадлежность${fieldTip(CHAR_FIELD_TIPS['Принадлежность'])}</label>
         <select class="form-control" data-param="belonging">
           <option value="Персонаж мастера" ${belongingDefault === 'Персонаж мастера' ? 'selected' : ''}>Персонаж мастера</option>
-          <option value="Персонаж игрока">Персонаж игрока</option>
+          <option value="Персонаж игрока" ${belongingDefault === 'Персонаж игрока' ? 'selected' : ''}>Персонаж игрока</option>
           <option value="Эпизодический персонаж" ${belongingDefault === 'Эпизодический персонаж' ? 'selected' : ''}>Эпизодический персонаж</option>
+          <option value="Фамильяр" ${belongingDefault === 'Фамильяр' ? 'selected' : ''}>Фамильяр</option>
         </select>
       </div>`);
     showModalStep(2);
