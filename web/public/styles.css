@@ -12071,6 +12071,47 @@ tr.rumor-told:hover .rumor-cb-cell {
       color-mix(in srgb, var(--accent) 35%, transparent) 100%);
 }
 
+/* Подвкладки библиотеки «Дисциплины» — 8 кнопок: горизонтальный скролл на
+   узких экранах, перенос на широких. В отличие от merits-бара (flex:1 на 4
+   колонки) — здесь кнопки по контенту, чтобы 8 длинных подписей не сжимались. */
+.disciplines-subtab-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  background: color-mix(in srgb, var(--accent) 10%, var(--bg3));
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 12px;
+  overflow-x: auto;
+}
+.disciplines-subtab-btn {
+  flex: 0 1 auto;
+  min-height: 44px;
+  padding: 12px 14px;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  font-family: var(--f-heading);
+  font-size: var(--fs-2xs);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--text3);
+  cursor: pointer;
+  transition: color .15s, background .15s;
+  margin-bottom: -1px;
+  white-space: nowrap;
+}
+.disciplines-subtab-btn:hover {
+  color: var(--text2);
+  background: color-mix(in srgb, var(--accent) 5%, transparent);
+}
+.disciplines-subtab-btn.active {
+  color: var(--crimson);
+  border-bottom-color: var(--accent);
+  background: linear-gradient(180deg,
+      color-mix(in srgb, var(--accent) 2%, transparent) 0%,
+      color-mix(in srgb, var(--accent) 35%, transparent) 100%);
+}
+
 .merit-lib-detail {
   display: flex;
   flex-direction: column;
