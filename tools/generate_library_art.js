@@ -19,8 +19,11 @@ const ROOT       = path.join(__dirname, '..');
 const MANIFEST   = require('./library-art-manifest.json');
 const { compressPngViaSquoosh } = require('./lib/squoosh_compress');
 
-const POSITIVE_TMPL = scene => "solid pure black background, jet black background filling the entire square canvas, "
-  + "dark gothic emblem, circular ornate medallion badge floating on black, " + scene + ", "
+// Сюжет — первым и с весом: в середине длинного промта он проигрывает
+// «эмблемным» токенам, и модель рисует пустой орнамент с полумесяцем.
+const POSITIVE_TMPL = scene => "(" + scene + ":1.35), "
+  + "solid pure black background, jet black background filling the entire square canvas, "
+  + "dark gothic emblem, circular ornate medallion badge floating on black, "
   + "engraved etching illustration style, blood red crescent moon glowing behind the medallion, "
   + "deep crimson and black color palette, ornamental gold border with fine filigree linework, "
   + "symmetrical heraldic composition, high contrast chiaroscuro lighting, Vampire the Masquerade aesthetic, "
@@ -29,6 +32,7 @@ const POSITIVE_TMPL = scene => "solid pure black background, jet black backgroun
   + "background is solid black all the way to every corner and edge of the frame, no white anywhere in the background";
 
 const NEGATIVE = "photo, photorealistic, human face, person, portrait of a person, low quality, blurry, "
+  + "castle, cathedral, palace, building, architecture, "
   + "watermark, text, signature, cropped, extra limbs, deformed, asymmetrical, modern cartoon, anime chibi, "
   + "3d render, plastic, multiple subjects, collage, border cropped, jpeg artifacts, "
   + "beige background, tan background, cream background, white background, light background, parchment, paper texture, "
