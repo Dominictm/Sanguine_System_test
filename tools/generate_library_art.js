@@ -33,10 +33,10 @@ const POSITIVE_TMPL = scene => "(" + scene + ":1.35), "
   + "single subject, masterpiece, highly detailed, sharp focus, "
   + "background is solid black all the way to every corner and edge of the frame, no white anywhere in the background";
 
-const NEGATIVE = "photo, photorealistic, human face, person, portrait of a person, low quality, blurry, "
+// Луна не запрещена (просто не обязательна в позитиве); лица и нагота допустимы.
+const NEGATIVE = "photo, photorealistic, low quality, blurry, "
   + "castle, cathedral, palace, building, architecture, "
   + "bright gold, golden ornament, gilded decoration, shiny gold metal, "
-  + "nude, naked, nsfw, bare skin, kissing, romantic scene, "
   + "watermark, text, signature, cropped, extra limbs, deformed, asymmetrical, modern cartoon, anime chibi, "
   + "3d render, plastic, multiple subjects, collage, border cropped, jpeg artifacts, "
   + "beige background, tan background, cream background, white background, light background, parchment, paper texture, "
