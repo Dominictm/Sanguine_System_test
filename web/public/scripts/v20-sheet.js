@@ -786,7 +786,7 @@ function _libCardActionsHtml(kind, slug, category) {
 function _libDisciplineCardsHtml() {
   return `<div class="lib-cards">${(_disciplinesCache || []).map(d => {
     const art = d.hasArt
-      ? `<img class="lib-card-art" src="/img/system/library/disciplines/${escAttr(d.slug)}.png" alt="">`
+      ? `<img class="lib-card-art" loading="lazy" decoding="async" src="/img/system/library/disciplines/${escAttr(d.slug)}.png" alt="">`
       : '';
     const badge = d.custom ? '<span class="lib-card-custom-badge">✏️ Авторское</span>' : '';
     const inner = `<div class="lib-card-name">${escHtml(_libStripEn(d.name))}</div><div class="lib-card-meta">${escHtml(_libCleanClans(d.clans))}</div>${badge}`;
@@ -806,7 +806,7 @@ function _libSorceryPathsHtml(group) {
   const discs = (_disciplinesCache || []).filter(d => d.group === group);
   const cards = discs.flatMap(d => (d.paths || []).map(p => {
     const art = p.hasArt
-      ? `<img class="lib-card-art" src="/img/system/library/paths/${escAttr(p.artSlug)}.png" alt="">`
+      ? `<img class="lib-card-art" loading="lazy" decoding="async" src="/img/system/library/paths/${escAttr(p.artSlug)}.png" alt="">`
       : '';
     const inner = `<div class="lib-card-name">${escHtml(_libStripEn(p.name))}</div>`;
     return `<div class="lib-card-wrap">
@@ -825,7 +825,7 @@ function _libComboCardsHtml() {
   if (!list.length) return '<div class="v20-disc-empty">Комбо-дисциплины пока не заполнены.</div>';
   return `<div class="lib-cards">${list.map(c => {
     const art = c.hasArt
-      ? `<img class="lib-card-art" src="/img/system/library/combo/${escAttr(c.slug)}.png" alt="">`
+      ? `<img class="lib-card-art" loading="lazy" decoding="async" src="/img/system/library/combo/${escAttr(c.slug)}.png" alt="">`
       : '';
     const inner = `<div class="lib-card-name">${escHtml(_libStripEn(c.name))}</div><div class="lib-card-meta">${escHtml(c.prereq || '')}</div>`;
     return `<div class="lib-card-wrap">
@@ -872,7 +872,7 @@ function _v20RenderDisciplinePathDetail(discSlug, pathName) {
     `${(p.levels || []).map(_libPowerHtml).join('')}`;
 }
 async function _v20OpenDisciplinePathModal(discSlug, pathName) {
-  _v20EnsureLibModal().classList.add('open');
+  _v20OpenLibModalShell();
   await ensureDisciplines();
   _v20RenderDisciplinePathDetail(discSlug, pathName);
 }
@@ -890,11 +890,30 @@ function _v20RenderComboDetail(slug) {
     `${c.system ? `<div class="lib-power-sec"><div class="lib-power-label">Система</div><p class="lib-power-text lib-power-sys">${escHtml(c.system)}</p></div>` : ''}`;
 }
 async function _v20OpenComboModal(slug) {
-  _v20EnsureLibModal().classList.add('open');
+  _v20OpenLibModalShell();
   await ensureCombos();
   _v20RenderComboDetail(slug);
 }
-function _v20CloseDisciplineModal() { document.getElementById('v20-disc-modal-backdrop')?.classList.remove('open'); }
+function _v20CloseDisciplineModal() {
+  const m = document.getElementById('v20-disc-modal-backdrop');
+  if (!m || !m.classList.contains('open')) return;
+  m.classList.remove('open');
+  // Возврат фокуса инициатору открытия (см. _v20OpenLibModalShell).
+  if (_v20LibModalOpener && document.contains(_v20LibModalOpener)) _v20LibModalOpener.focus();
+  _v20LibModalOpener = null;
+}
+
+// Открытие оболочки модалки: запоминаем инициатора и переносим фокус на ✕,
+// чтобы клавиатура/скринридер сразу оказались внутри диалога; при закрытии
+// фокус возвращается туда, откуда модалку открыли.
+let _v20LibModalOpener = null;
+function _v20OpenLibModalShell() {
+  const modal = _v20EnsureLibModal();
+  if (!modal.classList.contains('open')) _v20LibModalOpener = document.activeElement;
+  modal.classList.add('open');
+  requestAnimationFrame(() => modal.querySelector('#v20-disc-modal-close')?.focus());
+  return modal;
+}
 
 // Single shared modal shell for all 4 library sections (disciplines/psychics/
 // merits/flaws) — created once, on whichever section is opened first. All
@@ -908,7 +927,7 @@ function _v20EnsureLibModal() {
   modal = document.createElement('div');
   modal.id = 'v20-disc-modal-backdrop';
   modal.className = 'v20-disc-modal-backdrop';
-  modal.innerHTML = `<div class="v20-disc-modal">
+  modal.innerHTML = `<div class="v20-disc-modal" role="dialog" aria-modal="true" aria-label="Справочник библиотеки">
     <button type="button" class="v20-disc-modal-close" id="v20-disc-modal-close" aria-label="Закрыть справочник">✕</button>
     <div id="v20-disc-modal-body"></div>
   </div>`;
@@ -926,11 +945,20 @@ function _v20EnsureLibModal() {
     const pitem = e.target.closest('[data-psy-slug]'); if (pitem) { _v20RenderPsychicDetail(pitem.dataset.psySlug); return; }
   });
   document.addEventListener('keydown', e => { if (e.key === 'Escape') _v20CloseDisciplineModal(); });
+  // Лёгкая ловушка фокуса: Tab циклится внутри открытой модалки.
+  modal.addEventListener('keydown', e => {
+    if (e.key !== 'Tab' || !modal.classList.contains('open')) return;
+    const foci = modal.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+    if (!foci.length) return;
+    const first = foci[0], last = foci[foci.length - 1];
+    if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+  });
   return modal;
 }
 
 async function _v20OpenDisciplineModal(name, preresolvedSlug) {
-  _v20EnsureLibModal().classList.add('open');
+  _v20OpenLibModalShell();
   const body = document.getElementById('v20-disc-modal-body');
   if (body) body.innerHTML = '<div class="loading-state"><div class="spinner"></div>Загрузка справочника…</div>';
   await ensureDisciplines();
@@ -995,7 +1023,7 @@ function _libPsyListHtml() {
 function _libPsychicCardsHtml() {
   return `<div class="lib-cards">${(_psychicsCache || []).map(p => {
     const art = p.hasArt
-      ? `<img class="lib-card-art" src="/img/system/library/psychics/${escAttr(p.slug)}.png" alt="">`
+      ? `<img class="lib-card-art" loading="lazy" decoding="async" src="/img/system/library/psychics/${escAttr(p.slug)}.png" alt="">`
       : '';
     const badge = p.custom ? '<span class="lib-card-custom-badge">✏️ Авторское</span>' : '';
     const inner = `<div class="lib-card-name">${escHtml(p.name)}</div><div class="lib-card-meta">${escHtml(p.category || '')}</div>${badge}`;
@@ -1038,7 +1066,7 @@ function _libMeritCardsHtml(category) {
   const merits = _meritsCache[category] || [];
   return `<div class="lib-cards">${merits.map(m => {
     const art = m.hasArt
-      ? `<img class="lib-card-art" src="/img/system/library/merits/${escAttr(m.slug)}.png" alt="">`
+      ? `<img class="lib-card-art" loading="lazy" decoding="async" src="/img/system/library/merits/${escAttr(m.slug)}.png" alt="">`
       : '';
     const inner = `<div class="lib-card-name">${escHtml(m.name)}</div>
       <div class="lib-card-points">${'<span class="lib-dot"></span>'.repeat(m.points)}</div>
@@ -1065,7 +1093,7 @@ function _v20RenderMeritDetail(slug, category) {
 }
 
 async function _v20OpenMeritModal(slug, category) {
-  _v20EnsureLibModal().classList.add('open');
+  _v20OpenLibModalShell();
   _v20RenderMeritDetail(slug, category);
 }
 
@@ -1103,7 +1131,7 @@ function _libFlawCardsHtml(category) {
   const flaws = _flawsCache[category] || [];
   return `<div class="lib-cards">${flaws.map(m => {
     const art = m.hasArt
-      ? `<img class="lib-card-art" src="/img/system/library/flaws/${escAttr(m.slug)}.png" alt="">`
+      ? `<img class="lib-card-art" loading="lazy" decoding="async" src="/img/system/library/flaws/${escAttr(m.slug)}.png" alt="">`
       : '';
     const inner = `<div class="lib-card-name">${escHtml(m.name)}</div>
       <div class="lib-card-points">${'<span class="lib-dot"></span>'.repeat(m.points)}</div>
@@ -1130,7 +1158,7 @@ function _v20RenderFlawDetail(slug, category) {
 }
 
 async function _v20OpenFlawModal(slug, category) {
-  _v20EnsureLibModal().classList.add('open');
+  _v20OpenLibModalShell();
   _v20RenderFlawDetail(slug, category);
 }
 
@@ -1189,7 +1217,7 @@ function _libBackgroundCardsHtml(category) {
   const items = _backgroundsCache[category] || [];
   return `<div class="lib-cards">${items.map(b => {
     const art = b.hasArt
-      ? `<img class="lib-card-art" src="/img/system/library/backgrounds/${escAttr(b.slug)}.png" alt="">`
+      ? `<img class="lib-card-art" loading="lazy" decoding="async" src="/img/system/library/backgrounds/${escAttr(b.slug)}.png" alt="">`
       : '';
     const inner = `<div class="lib-card-name">${escHtml(b.name)}</div>
       ${b.sectOnly ? `<div class="lib-card-sect">Только ${escHtml(b.sectOnly)}</div>` : ''}
@@ -1215,7 +1243,7 @@ function _v20RenderBackgroundDetail(slug, category) {
 }
 
 async function _v20OpenBackgroundModal(slug, category) {
-  _v20EnsureLibModal().classList.add('open');
+  _v20OpenLibModalShell();
   _v20RenderBackgroundDetail(slug, category);
 }
 
@@ -1267,7 +1295,7 @@ function _v20RenderPsychicDetail(slug) {
 // only one of the two modals is ever open at a time (vampire sheet has no psychic rows and vice
 // versa), so sharing the DOM node is safe and avoids a near-duplicate modal markup block.
 async function _v20OpenPsychicModal(name, preresolvedSlug) {
-  _v20EnsureLibModal().classList.add('open');
+  _v20OpenLibModalShell();
   const body = document.getElementById('v20-disc-modal-body');
   if (body) body.innerHTML = '<div class="loading-state"><div class="spinner"></div>Загрузка справочника…</div>';
   await ensurePsychics();

@@ -745,7 +745,7 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
       document.querySelectorAll('.disciplines-subtab-btn').forEach(b => {
         const isAll = b.dataset.discGroup === 'all';
         b.classList.toggle('active', isAll);
-        b.setAttribute('aria-selected', isAll ? 'true' : 'false');
+        b.setAttribute('aria-pressed', isAll ? 'true' : 'false');
       });
       loadLibrary('all');
     }
@@ -802,9 +802,9 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     if (!group) return;
     const bar = btn.closest('.disciplines-subtab-bar');
     bar.querySelectorAll('.disciplines-subtab-btn').forEach(b => {
-      b.classList.remove('active'); b.setAttribute('aria-selected', 'false');
+      b.classList.remove('active'); b.setAttribute('aria-pressed', 'false');
     });
-    btn.classList.add('active'); btn.setAttribute('aria-selected', 'true');
+    btn.classList.add('active'); btn.setAttribute('aria-pressed', 'true');
     loadLibrary(group);
   });
 });

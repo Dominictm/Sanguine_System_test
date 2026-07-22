@@ -12080,7 +12080,8 @@ tr.rumor-told:hover .rumor-cb-cell {
 .disciplines-subtab-bar {
   display: flex;
   flex-wrap: wrap;
-  gap: 2px;
+  column-gap: 2px;
+  row-gap: 4px; /* при переносе в 2+ ряда бордер-индикатор не липнет к нижнему ряду */
   background: color-mix(in srgb, var(--accent) 10%, var(--bg3));
   border-bottom: 1px solid var(--border);
   margin-bottom: 12px;
@@ -12095,7 +12096,7 @@ tr.rumor-told:hover .rumor-cb-cell {
   border-bottom: 2px solid transparent;
   font-family: var(--f-heading);
   font-size: var(--fs-2xs);
-  letter-spacing: .08em;
+  letter-spacing: .1em; /* как у merits/flaws/backgrounds-баров */
   text-transform: uppercase;
   color: var(--text3);
   cursor: pointer;
