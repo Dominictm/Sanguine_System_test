@@ -12064,7 +12064,10 @@ tr.rumor-told:hover .rumor-cb-cell {
 .merits-subtab-btn.active,
 .flaws-subtab-btn.active,
 .backgrounds-subtab-btn.active {
-  color: var(--crimson);
+  /* Активная = светлый текст + кровавый индикатор (как .tab-btn.active):
+     crimson-текст на тонированном баре давал 3.7:1 — ниже WCAG AA для
+     мелкого текста; сигнал цветом несёт бордер, не сама подпись. */
+  color: var(--text);
   border-bottom-color: var(--accent);
   background: linear-gradient(180deg,
       color-mix(in srgb, var(--accent) 2%, transparent) 0%,
@@ -12105,7 +12108,7 @@ tr.rumor-told:hover .rumor-cb-cell {
   background: color-mix(in srgb, var(--accent) 5%, transparent);
 }
 .disciplines-subtab-btn.active {
-  color: var(--crimson);
+  color: var(--text); /* см. комментарий у .merits-subtab-btn.active */
   border-bottom-color: var(--accent);
   background: linear-gradient(180deg,
       color-mix(in srgb, var(--accent) 2%, transparent) 0%,
