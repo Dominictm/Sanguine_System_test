@@ -834,6 +834,42 @@ function _v20RenderDisciplineDetail(slug) {
   if (!body) return;
   body.innerHTML = `<button type="button" class="v20-disc-back" data-disc-back>← к списку</button>${_libDisciplineDetailHtml(_discBySlug(slug))}`;
 }
+
+// Path-detail: одна колонка Пути (Некромантия/Тауматургия/колдовские) в общей модалке.
+function _v20RenderDisciplinePathDetail(discSlug, pathName) {
+  const body = document.getElementById('v20-disc-modal-body');
+  if (!body) return;
+  const d = _discBySlug(discSlug);
+  const p = d && (d.paths || []).find(x => x.name === pathName);
+  if (!p) { body.innerHTML = '<div class="v20-disc-empty">Путь не найден.</div>'; return; }
+  body.innerHTML = `<div class="v20-disc-detail-head"><h3>${escHtml(p.name)}</h3>` +
+    `<span class="v20-disc-clans">${escHtml(d.name)}</span></div>` +
+    `${p.note ? `<div class="v20-disc-note">${escHtml(p.note)}</div>` : ''}` +
+    `${(p.levels || []).map(_libPowerHtml).join('')}`;
+}
+async function _v20OpenDisciplinePathModal(discSlug, pathName) {
+  _v20EnsureLibModal().classList.add('open');
+  await ensureDisciplines();
+  _v20RenderDisciplinePathDetail(discSlug, pathName);
+}
+
+// Combo-detail: имя, предпосылки, описание, механика.
+function _v20RenderComboDetail(slug) {
+  const body = document.getElementById('v20-disc-modal-body');
+  if (!body) return;
+  const c = _comboBySlug(slug);
+  if (!c) { body.innerHTML = '<div class="v20-disc-empty">Комбо не найдено.</div>'; return; }
+  body.innerHTML = `<div class="v20-disc-detail-head"><h3>${escHtml(c.name)}</h3>` +
+    `<span class="v20-disc-clans">${escHtml(c.clans || '')}</span></div>` +
+    `<div class="v20-disc-note">Требует: ${escHtml(c.prereq || '—')}</div>` +
+    `${c.literary ? `<div class="lib-power-sec"><div class="lib-power-label">Литературное описание</div><p class="lib-power-text">${escHtml(c.literary)}</p></div>` : ''}` +
+    `${c.system ? `<div class="lib-power-sec"><div class="lib-power-label">Система</div><p class="lib-power-text lib-power-sys">${escHtml(c.system)}</p></div>` : ''}`;
+}
+async function _v20OpenComboModal(slug) {
+  _v20EnsureLibModal().classList.add('open');
+  await ensureCombos();
+  _v20RenderComboDetail(slug);
+}
 function _v20CloseDisciplineModal() { document.getElementById('v20-disc-modal-backdrop')?.classList.remove('open'); }
 
 // Single shared modal shell for all 4 library sections (disciplines/psychics/
