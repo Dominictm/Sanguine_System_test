@@ -733,16 +733,23 @@ function _libPowerHtml(p) {
   </div>`;
 }
 
+// «Алхимия (Alchemy)» → «Алхимия»: на карточках английское имя в скобках не
+// показываем (в заголовках модалок-деталей остаётся полное имя из данных).
+function _libStripEn(name) {
+  const s = String(name || '');
+  const stripped = s.replace(/\s*\([^)]*\)\s*$/, '').trim();
+  return stripped || s;
+}
+
 function _libDisciplineDetailHtml(d) {
   if (!d) return '<div class="v20-disc-empty">Дисциплина не найдена в справочнике.</div>';
   let body;
   if (d.noLevels && d.paths?.length) {
-    body = d.paths.map(p => `
-      <div class="lib-path">
-        <div class="lib-path-title">${escHtml(p.name)}</div>
-        ${p.note ? `<div class="v20-disc-note">${escHtml(p.note)}</div>` : ''}
-        ${(p.levels || []).map(_libPowerHtml).join('')}
-      </div>`).join('');
+    // Path-based школы (Тауматургия/Некромантия/колдовские): в общем справочнике
+    // Пути не перечисляем — только общее описание; полный разбор Путей живёт
+    // на отдельной подвкладке библиотеки.
+    body = `${d.note ? `<div class="v20-disc-note">${escHtml(d.note)}</div>` : ''}` +
+      `<p class="lib-power-text">Путей: ${d.paths.length} — полный разбор на отдельной вкладке библиотеки «Дисциплины».</p>`;
   } else {
     body = `${d.note ? `<div class="v20-disc-note">${escHtml(d.note)}</div>` : ''}${(d.levels || []).map(_libPowerHtml).join('')}`;
   }
@@ -773,7 +780,7 @@ function _libDisciplineCardsHtml() {
       ? `<img class="lib-card-art" src="/img/system/library/disciplines/${escAttr(d.slug)}.png" alt="">`
       : '';
     const badge = d.custom ? '<span class="lib-card-custom-badge">✏️ Авторское</span>' : '';
-    const inner = `<div class="lib-card-name">${escHtml(d.name)}</div><div class="lib-card-meta">${escHtml(d.clans || '')}</div>${badge}`;
+    const inner = `<div class="lib-card-name">${escHtml(_libStripEn(d.name))}</div><div class="lib-card-meta">${escHtml(d.clans || '')}</div>${badge}`;
     const actions = d.custom ? _libCardActionsHtml('disciplines', d.slug) : '';
     return `<div class="lib-card-wrap">
       <button type="button" class="lib-card${d.hasArt ? ' has-art' : ''}" data-disc-slug="${escAttr(d.slug)}">
@@ -791,8 +798,7 @@ function _libSorceryPathsHtml(group) {
   const cards = discs.flatMap(d => (d.paths || []).map(p =>
     `<div class="lib-card-wrap">
       <button type="button" class="lib-card" data-disc-path="${escAttr(d.slug)}" data-path-name="${escAttr(p.name)}">
-        <div class="lib-card-name">${escHtml(p.name)}</div>
-        <div class="lib-card-meta">${escHtml(d.name)}${(p.levels||[]).length ? ' · ' + p.levels.length + ' ур.' : ''}</div>
+        <div class="lib-card-name">${escHtml(_libStripEn(p.name))}</div>
       </button>
     </div>`).join(''));
   if (!cards.length) return '<div class="v20-disc-empty">Пути этой дисциплины пока не заполнены.</div>';
@@ -806,7 +812,7 @@ function _libComboCardsHtml() {
   return `<div class="lib-cards">${list.map(c =>
     `<div class="lib-card-wrap">
       <button type="button" class="lib-card" data-combo-slug="${escAttr(c.slug)}">
-        <div class="lib-card-name">${escHtml(c.name)}</div>
+        <div class="lib-card-name">${escHtml(_libStripEn(c.name))}</div>
         <div class="lib-card-meta">${escHtml(c.prereq || '')}</div>
       </button>
     </div>`).join('')}</div>`;
