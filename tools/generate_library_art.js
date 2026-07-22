@@ -7,7 +7,10 @@ const path = require('path');
 const { spawn, spawnSync } = require('child_process');
 
 const COMFY_HOST = 'http://127.0.0.1:8188';
-const COMFY_DIR  = process.env.COMFY_DIR || 'D:\\AIImage\\ComfyUI\\ComfyUI_windows_portable';
+// Git-установка ComfyUI (D:\ComfyUI, venv) — прежняя portable-версия удалена.
+const COMFY_DIR  = process.env.COMFY_DIR || 'D:\\ComfyUI';
+// Чекпоинт из models/checkpoints (подпапки — через '\\', как отдаёт /object_info).
+const COMFY_CKPT = process.env.COMFY_CKPT || 'Illustrious\\base model\\illustriousRealism_ilXL10V40.safetensors';
 const ROOT       = path.join(__dirname, '..');
 const MANIFEST   = require('./library-art-manifest.json');
 const { compressPngViaSquoosh } = require('./lib/squoosh_compress');
@@ -36,7 +39,7 @@ function buildWorkflow(scene, filenamePrefix) {
       "sampler_name": "dpmpp_2m", "scheduler": "karras", "denoise": 1.0,
       "model": ["4", 0], "positive": ["6", 0], "negative": ["7", 0], "latent_image": ["5", 0]
     }},
-    "4": { "class_type": "CheckpointLoaderSimple", "inputs": { "ckpt_name": "sd_xl_base_1.0.safetensors" } },
+    "4": { "class_type": "CheckpointLoaderSimple", "inputs": { "ckpt_name": COMFY_CKPT } },
     "5": { "class_type": "EmptyLatentImage", "inputs": { "width": 1024, "height": 1024, "batch_size": 1 } },
     "6": { "class_type": "CLIPTextEncode", "inputs": { "text": POSITIVE_TMPL(scene), "clip": ["4", 1] } },
     "7": { "class_type": "CLIPTextEncode", "inputs": { "text": NEGATIVE, "clip": ["4", 1] } },
@@ -56,8 +59,8 @@ async function ensureComfyRunning() {
   if (await isComfyUp()) return;
   console.log('ComfyUI not running — starting it...');
   const proc = spawn(
-    path.join(COMFY_DIR, 'python_embeded', 'python.exe'),
-    ['-s', 'ComfyUI/main.py', '--windows-standalone-build'],
+    path.join(COMFY_DIR, 'venv', 'Scripts', 'python.exe'),
+    ['main.py'],
     { cwd: COMFY_DIR, detached: true, stdio: 'ignore' }
   );
   proc.unref();
@@ -79,14 +82,16 @@ async function generateOne(entry) {
   if (data.error) throw new Error('ComfyUI queue error: ' + JSON.stringify(data.error));
   const promptId = data.prompt_id;
 
-  for (let i = 0; i < 120; i++) {
+  // До ~9 минут на картинку: первая генерация включает загрузку SDXL-модели
+  // в VRAM (RTX 3050), это заметно дольше самого сэмплинга.
+  for (let i = 0; i < 360; i++) {
     await new Promise(r => setTimeout(r, 1500));
     const hRes = await fetch(COMFY_HOST + '/history/' + promptId);
     const hData = await hRes.json();
     const entryHist = hData[promptId];
     if (entryHist && entryHist.status && entryHist.status.completed) {
       const img = entryHist.outputs['9'].images[0];
-      return path.join(COMFY_DIR, 'ComfyUI', 'output', img.filename);
+      return path.join(COMFY_DIR, 'output', img.filename);
     }
     if (entryHist && entryHist.status && entryHist.status.status_str === 'error') {
       throw new Error('Generation error: ' + JSON.stringify(entryHist.status));
@@ -133,9 +138,16 @@ async function main() {
       continue;
     }
     console.log('generating:', entry.slug, '...');
-    const outputPath = await generateOne(entry);
-    resizeTo400(outputPath, destPath);
-    console.log('saved:', destPath);
+    // Ошибка одной картинки не должна ронять весь батч (79+ записей за прогон):
+    // логируем и идём дальше, недостающие добираются повторным запуском.
+    try {
+      const outputPath = await generateOne(entry);
+      resizeTo400(outputPath, destPath);
+      console.log('saved:', destPath);
+    } catch (e) {
+      console.error('  FAILED:', entry.slug, '-', e.message);
+      continue;
+    }
 
     try {
       const { originalSize, compressedSize } = await compressPngViaSquoosh(destPath);

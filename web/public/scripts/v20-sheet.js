@@ -795,27 +795,36 @@ function _libDisciplineCardsHtml() {
 // группы. Клик по Пути открывает path-detail в общей модалке.
 function _libSorceryPathsHtml(group) {
   const discs = (_disciplinesCache || []).filter(d => d.group === group);
-  const cards = discs.flatMap(d => (d.paths || []).map(p =>
-    `<div class="lib-card-wrap">
-      <button type="button" class="lib-card" data-disc-path="${escAttr(d.slug)}" data-path-name="${escAttr(p.name)}">
-        <div class="lib-card-name">${escHtml(_libStripEn(p.name))}</div>
+  const cards = discs.flatMap(d => (d.paths || []).map(p => {
+    const art = p.hasArt
+      ? `<img class="lib-card-art" src="/img/system/library/paths/${escAttr(p.artSlug)}.png" alt="">`
+      : '';
+    const inner = `<div class="lib-card-name">${escHtml(_libStripEn(p.name))}</div>`;
+    return `<div class="lib-card-wrap">
+      <button type="button" class="lib-card${p.hasArt ? ' has-art' : ''}" data-disc-path="${escAttr(d.slug)}" data-path-name="${escAttr(p.name)}">
+        ${art}${p.hasArt ? `<div class="lib-card-overlay">${inner}</div>` : inner}
       </button>
-    </div>`).join(''));
+    </div>`;
+  }));
   if (!cards.length) return '<div class="v20-disc-empty">Пути этой дисциплины пока не заполнены.</div>';
-  return `<div class="lib-cards">${cards}</div>`;
+  return `<div class="lib-cards">${cards.join('')}</div>`;
 }
 
 // Вкладка «Комбо Дисциплины»: карточки комбо (имя + предпосылки). Клик → detail.
 function _libComboCardsHtml() {
   const list = _combosCache || [];
   if (!list.length) return '<div class="v20-disc-empty">Комбо-дисциплины пока не заполнены.</div>';
-  return `<div class="lib-cards">${list.map(c =>
-    `<div class="lib-card-wrap">
-      <button type="button" class="lib-card" data-combo-slug="${escAttr(c.slug)}">
-        <div class="lib-card-name">${escHtml(_libStripEn(c.name))}</div>
-        <div class="lib-card-meta">${escHtml(c.prereq || '')}</div>
+  return `<div class="lib-cards">${list.map(c => {
+    const art = c.hasArt
+      ? `<img class="lib-card-art" src="/img/system/library/combo/${escAttr(c.slug)}.png" alt="">`
+      : '';
+    const inner = `<div class="lib-card-name">${escHtml(_libStripEn(c.name))}</div><div class="lib-card-meta">${escHtml(c.prereq || '')}</div>`;
+    return `<div class="lib-card-wrap">
+      <button type="button" class="lib-card${c.hasArt ? ' has-art' : ''}" data-combo-slug="${escAttr(c.slug)}">
+        ${art}${c.hasArt ? `<div class="lib-card-overlay">${inner}</div>` : inner}
       </button>
-    </div>`).join('')}</div>`;
+    </div>`;
+  }).join('')}</div>`;
 }
 
 // Имя дисциплины из листа («Прорицание», «Auspex», «Прорицание (Auspex)») → slug.

@@ -10,7 +10,7 @@ const fs      = require('fs').promises;
 const { serverError } = require('../lib/http');
 const { ROOT, writeFileAtomic } = require('../lib/db');
 const { slugify } = require('../lib/parsers');
-const { parseDisciplineMd } = require('../lib/disciplines');
+const { parseDisciplineMd, pathArtSlug } = require('../lib/disciplines');
 const { parsePsychicMd } = require('../lib/psychics');
 const { getMerits, getAllMerits, invalidateMerits } = require('../lib/merits-loader');
 const { getFlaws, getAllFlaws, invalidateFlaws } = require('../lib/flaws-loader');
@@ -30,13 +30,18 @@ async function loadDisciplines() {
 
   const imgDir = path.join(__dirname, '..', 'public', 'img', 'system', 'library', 'disciplines');
   const artFiles = await fs.readdir(imgDir).catch(() => []);
+  // Арт Путей (path-based школы) живёт отдельно: paths/<disc>__<path>.png.
+  const pathsImgDir = path.join(__dirname, '..', 'public', 'img', 'system', 'library', 'paths');
+  const pathArtFiles = await fs.readdir(pathsImgDir).catch(() => []);
 
   // Сигнатура по mtime каждого файла: правка содержимого существующего .md
   // не меняет mtime каталога, поэтому ключевать по нему нельзя (иначе кэш не сбросится).
   // Список картинок тоже входит в сигнатуру — появление нового PNG должно
   // сбрасывать кэш так же надёжно, как правка текста дисциплины.
   const stats = await Promise.all(mds.map(f => fs.stat(path.join(DISC_DIR, f)).catch(() => null)));
-  const sig = mds.map((f, i) => `${f}:${stats[i] ? stats[i].mtimeMs : 0}`).join('|') + '||art:' + artFiles.sort().join(',');
+  const sig = mds.map((f, i) => `${f}:${stats[i] ? stats[i].mtimeMs : 0}`).join('|')
+    + '||art:' + artFiles.sort().join(',')
+    + '||partart:' + pathArtFiles.sort().join(',');
   if (_discCache && _discCache.sig === sig) return _discCache.list;
 
   const list = [];
@@ -46,6 +51,10 @@ async function loadDisciplines() {
     if (md) {
       const parsed = parseDisciplineMd(md, slug);
       parsed.hasArt = artFiles.includes(slug + '.png');
+      for (const p of parsed.paths) {
+        p.artSlug = pathArtSlug(slug, p.name);
+        p.hasArt = pathArtFiles.includes(p.artSlug + '.png');
+      }
       list.push(parsed);
     }
   }
@@ -112,7 +121,9 @@ async function loadCombos() {
   return list;
 }
 router.get('/api/library/combo-disciplines', async (_req, res) => {
-  try { res.json(await loadCombos()); }
+  // hasArt — как у merits/flaws: файлы combo/<slug>.png читаются на каждый
+  // запрос (см. _artFileSet ниже), чтобы новый арт подхватывался без рестарта.
+  try { res.json(_withArt(await loadCombos(), await _artFileSet('combo'))); }
   catch (e) { serverError(res, e); }
 });
 
