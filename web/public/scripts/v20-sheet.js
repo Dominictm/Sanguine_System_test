@@ -1056,7 +1056,7 @@ let _meritsCache = { physical: null, mental: null, social: null, supernatural: n
 
 function _libMeritDetailHtml(m) {
   if (!m) return '<div class="cdet-empty">Достоинство не найдено в справочнике.</div>';
-  return `<div class="merit-lib-detail"><div class="merit-lib-name">${escHtml(m.name)}</div><div class="merit-lib-cost">${'●'.repeat(m.points)} очков</div><div class="merit-lib-desc">${escHtml(m.description)}</div></div>`;
+  return `<div class="v20-disc-detail-head"><h3>${escHtml(m.name)}</h3></div><div class="merit-lib-detail"><div class="merit-lib-cost">${'●'.repeat(m.points)} очков</div><div class="merit-lib-desc">${escHtml(m.description)}</div></div>`;
 }
 
 // Библиотека → вкладка «Достоинства»: карточки (как у персонажей), детали — в
@@ -1122,7 +1122,7 @@ let _flawsCache = { 'физические': null, 'умственные': null, 
 
 function _libFlawDetailHtml(m) {
   if (!m) return '<div class="cdet-empty">Недостаток не найден в справочнике.</div>';
-  return `<div class="merit-lib-detail"><div class="merit-lib-name">${escHtml(m.name)}</div><div class="merit-lib-cost">${'●'.repeat(m.points)} очков</div><div class="merit-lib-desc">${escHtml(m.description)}</div></div>`;
+  return `<div class="v20-disc-detail-head"><h3>${escHtml(m.name)}</h3></div><div class="merit-lib-detail"><div class="merit-lib-cost">${'●'.repeat(m.points)} очков</div><div class="merit-lib-desc">${escHtml(m.description)}</div></div>`;
 }
 
 // Библиотека → вкладка «Недостатки»: карточки (как у персонажей), детали — в

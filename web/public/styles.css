@@ -12122,12 +12122,6 @@ tr.rumor-told:hover .rumor-cb-cell {
   gap: 12px;
 }
 
-.merit-lib-name {
-  font-size: var(--fs-md);
-  font-weight: 600;
-  color: var(--text);
-}
-
 .merit-lib-cost {
   font-size: var(--fs-lg);
   color: var(--gold);
