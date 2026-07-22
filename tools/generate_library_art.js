@@ -11,6 +11,10 @@ const COMFY_HOST = 'http://127.0.0.1:8188';
 const COMFY_DIR  = process.env.COMFY_DIR || 'D:\\ComfyUI';
 // Чекпоинт из models/checkpoints (подпапки — через '\\', как отдаёт /object_info).
 const COMFY_CKPT = process.env.COMFY_CKPT || 'Illustrious\\base model\\illustriousRealism_ilXL10V40.safetensors';
+// Размер генерации. SDXL/Illustrious обучены на ~1024×1024: ниже ~768 модель
+// заметно «разваливает» композицию (каша, дубли), поэтому по умолчанию генерим
+// 1024 и уменьшаем до 400 при сохранении. COMFY_SIZE=768 — компромисс скорости.
+const COMFY_SIZE = parseInt(process.env.COMFY_SIZE, 10) || 1024;
 const ROOT       = path.join(__dirname, '..');
 const MANIFEST   = require('./library-art-manifest.json');
 const { compressPngViaSquoosh } = require('./lib/squoosh_compress');
@@ -41,7 +45,7 @@ function buildWorkflow(scene, filenamePrefix) {
       "model": ["4", 0], "positive": ["6", 0], "negative": ["7", 0], "latent_image": ["5", 0]
     }},
     "4": { "class_type": "CheckpointLoaderSimple", "inputs": { "ckpt_name": COMFY_CKPT } },
-    "5": { "class_type": "EmptyLatentImage", "inputs": { "width": 1024, "height": 1024, "batch_size": 1 } },
+    "5": { "class_type": "EmptyLatentImage", "inputs": { "width": COMFY_SIZE, "height": COMFY_SIZE, "batch_size": 1 } },
     "6": { "class_type": "CLIPTextEncode", "inputs": { "text": POSITIVE_TMPL(scene), "clip": ["4", 1] } },
     "7": { "class_type": "CLIPTextEncode", "inputs": { "text": NEGATIVE, "clip": ["4", 1] } },
     "8": { "class_type": "VAEDecode", "inputs": { "samples": ["3", 0], "vae": ["4", 2] } },
