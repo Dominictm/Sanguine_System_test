@@ -708,6 +708,17 @@ async function ensureDisciplines() {
 }
 function _discBySlug(slug) { return (_disciplinesCache || []).find(d => d.slug === slug) || null; }
 
+let _combosCache = null;
+async function ensureCombos() {
+  if (_combosCache) return _combosCache;
+  try {
+    const data = await fetch('/api/library/combo-disciplines').then(r => r.json());
+    _combosCache = Array.isArray(data) ? data : [];
+  } catch { _combosCache = []; }
+  return _combosCache;
+}
+function _comboBySlug(slug) { return (_combosCache || []).find(c => c.slug === slug) || null; }
+
 // Уровень способности → N красно-золотых точек (1…10).
 function _libLevelDots(n) {
   const v = Math.max(1, Math.min(10, parseInt(n, 10) || 1));
@@ -771,6 +782,34 @@ function _libDisciplineCardsHtml() {
       ${actions}
     </div>`;
   }).join('')}</div>`;
+}
+
+// Колдовская вкладка (group != all/combo): карточки-Пути всех дисциплин этой
+// группы. Клик по Пути открывает path-detail в общей модалке.
+function _libSorceryPathsHtml(group) {
+  const discs = (_disciplinesCache || []).filter(d => d.group === group);
+  const cards = discs.flatMap(d => (d.paths || []).map(p =>
+    `<div class="lib-card-wrap">
+      <button type="button" class="lib-card" data-disc-path="${escAttr(d.slug)}" data-path-name="${escAttr(p.name)}">
+        <div class="lib-card-name">${escHtml(p.name)}</div>
+        <div class="lib-card-meta">${escHtml(d.name)}${(p.levels||[]).length ? ' · ' + p.levels.length + ' ур.' : ''}</div>
+      </button>
+    </div>`).join(''));
+  if (!cards.length) return '<div class="v20-disc-empty">Пути этой дисциплины пока не заполнены.</div>';
+  return `<div class="lib-cards">${cards}</div>`;
+}
+
+// Вкладка «Комбо Дисциплины»: карточки комбо (имя + предпосылки). Клик → detail.
+function _libComboCardsHtml() {
+  const list = _combosCache || [];
+  if (!list.length) return '<div class="v20-disc-empty">Комбо-дисциплины пока не заполнены.</div>';
+  return `<div class="lib-cards">${list.map(c =>
+    `<div class="lib-card-wrap">
+      <button type="button" class="lib-card" data-combo-slug="${escAttr(c.slug)}">
+        <div class="lib-card-name">${escHtml(c.name)}</div>
+        <div class="lib-card-meta">${escHtml(c.prereq || '')}</div>
+      </button>
+    </div>`).join('')}</div>`;
 }
 
 // Имя дисциплины из листа («Прорицание», «Auspex», «Прорицание (Auspex)») → slug.
@@ -842,17 +881,28 @@ async function _v20OpenDisciplineModal(name, preresolvedSlug) {
 
 // ── Library page → «Дисциплины» tab: cards (as characters), detail opens in
 // the shared modal (_v20OpenDisciplineModal) instead of replacing the page ──
-function _libRenderDisciplineList() {
+let _libDiscGroup = 'all';
+function _libRenderDisciplineGroup() {
   const body = document.getElementById('lib-disciplines-body');
-  if (body) body.innerHTML = _libDisciplineCardsHtml();
+  if (!body) return;
+  const g = _libDiscGroup;
+  if (g === 'all')        body.innerHTML = _libDisciplineCardsHtml();
+  else if (g === 'combo') body.innerHTML = _libComboCardsHtml();
+  else                    body.innerHTML = _libSorceryPathsHtml(g);
 }
-async function loadLibrary() {
+async function loadLibrary(group) {
+  if (group) _libDiscGroup = group;
   const body = document.getElementById('lib-disciplines-body');
   if (body) body.innerHTML = '<div class="loading-state"><div class="spinner"></div>Загрузка...</div>';
   await ensureDisciplines();
-  _libRenderDisciplineList();
+  if (_libDiscGroup === 'combo') await ensureCombos();
+  _libRenderDisciplineGroup();
 }
 document.getElementById('lib-disciplines-body')?.addEventListener('click', e => {
+  const path = e.target.closest('[data-disc-path]');
+  if (path) { _v20OpenDisciplinePathModal(path.dataset.discPath, path.dataset.pathName); return; }
+  const combo = e.target.closest('[data-combo-slug]');
+  if (combo) { _v20OpenComboModal(combo.dataset.comboSlug); return; }
   const card = e.target.closest('[data-disc-slug]');
   if (card) _v20OpenDisciplineModal(null, card.dataset.discSlug);
 });

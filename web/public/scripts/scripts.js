@@ -741,7 +741,14 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
     document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.id === `tab-${tab}`));
     if (tab === 'ai-settings')     loadAiSettings();
-    if (tab === 'lib-disciplines') loadLibrary();
+    if (tab === 'lib-disciplines') {
+      document.querySelectorAll('.disciplines-subtab-btn').forEach(b => {
+        const isAll = b.dataset.discGroup === 'all';
+        b.classList.toggle('active', isAll);
+        b.setAttribute('aria-selected', isAll ? 'true' : 'false');
+      });
+      loadLibrary('all');
+    }
     if (tab === 'lib-psychics')    loadPsychicsLibrary();
     if (tab === 'lib-merits')      loadMeritsLibrary('physical');
     if (tab === 'lib-flaws')       loadFlawsLibrary('физические');
@@ -785,6 +792,20 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     bar.querySelectorAll('.backgrounds-subtab-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
     loadBackgroundsLibrary(cat);
+  });
+
+  // Disciplines subtabs (all/combo/koldun/necromancy/thaumaturgy/dark-thaumaturgy/assamite/setite)
+  document.addEventListener('click', e => {
+    const btn = e.target.closest('.disciplines-subtab-btn');
+    if (!btn) return;
+    const group = btn.dataset.discGroup;
+    if (!group) return;
+    const bar = btn.closest('.disciplines-subtab-bar');
+    bar.querySelectorAll('.disciplines-subtab-btn').forEach(b => {
+      b.classList.remove('active'); b.setAttribute('aria-selected', 'false');
+    });
+    btn.classList.add('active'); btn.setAttribute('aria-selected', 'true');
+    loadLibrary(group);
   });
 });
 
