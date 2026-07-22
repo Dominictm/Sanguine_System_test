@@ -741,6 +741,15 @@ function _libStripEn(name) {
   return stripped || s;
 }
 
+// «общая (Малкавиан, Тореадор, Тремер)» → «Малкавиан, Тореадор, Тремер»:
+// служебную пометку «общая» со скобками в подписи не показываем. Осмысленные
+// скобки без этого префикса («Ассамиты (визири)») остаются как есть.
+function _libCleanClans(clans) {
+  const s = String(clans || '').trim();
+  const m = s.match(/^общая\s*\(([^)]*)\)\s*$/i);
+  return m ? m[1].trim() : s;
+}
+
 function _libDisciplineDetailHtml(d) {
   if (!d) return '<div class="v20-disc-empty">Дисциплина не найдена в справочнике.</div>';
   let body;
@@ -753,11 +762,11 @@ function _libDisciplineDetailHtml(d) {
   } else {
     body = `${d.note ? `<div class="v20-disc-note">${escHtml(d.note)}</div>` : ''}${(d.levels || []).map(_libPowerHtml).join('')}`;
   }
-  return `<div class="v20-disc-detail-head"><h3>${escHtml(d.name)}</h3><span class="v20-disc-clans">${escHtml(d.clans || '')}</span></div>${body}`;
+  return `<div class="v20-disc-detail-head"><h3>${escHtml(d.name)}</h3><span class="v20-disc-clans">${escHtml(_libCleanClans(d.clans))}</span></div>${body}`;
 }
 function _libDisciplineListHtml() {
   return `<div class="v20-disc-list">${(_disciplinesCache || []).map(d =>
-    `<button type="button" class="v20-disc-list-item" data-disc-slug="${escAttr(d.slug)}"><span>${escHtml(d.name)}</span><span class="v20-disc-list-clans">${escHtml(d.clans || '')}</span></button>`).join('')}</div>`;
+    `<button type="button" class="v20-disc-list-item" data-disc-slug="${escAttr(d.slug)}"><span>${escHtml(d.name)}</span><span class="v20-disc-list-clans">${escHtml(_libCleanClans(d.clans))}</span></button>`).join('')}</div>`;
 }
 
 // Библиотека → вкладка «Дисциплины»: карточки (как у персонажей), а не список —
@@ -780,7 +789,7 @@ function _libDisciplineCardsHtml() {
       ? `<img class="lib-card-art" src="/img/system/library/disciplines/${escAttr(d.slug)}.png" alt="">`
       : '';
     const badge = d.custom ? '<span class="lib-card-custom-badge">✏️ Авторское</span>' : '';
-    const inner = `<div class="lib-card-name">${escHtml(_libStripEn(d.name))}</div><div class="lib-card-meta">${escHtml(d.clans || '')}</div>${badge}`;
+    const inner = `<div class="lib-card-name">${escHtml(_libStripEn(d.name))}</div><div class="lib-card-meta">${escHtml(_libCleanClans(d.clans))}</div>${badge}`;
     const actions = d.custom ? _libCardActionsHtml('disciplines', d.slug) : '';
     return `<div class="lib-card-wrap">
       <button type="button" class="lib-card${d.hasArt ? ' has-art' : ''}" data-disc-slug="${escAttr(d.slug)}">
