@@ -2155,6 +2155,13 @@ describe('API — integration', () => {
       assert.ok(body.length > 0);
       for (const p of body) assert.equal(typeof p.hasArt, 'boolean');
     });
+    it('GET /api/library/combo-disciplines отдаёт массив с полями slug/name/prereq', async () => {
+      const { status, body } = await apiJson('/api/library/combo-disciplines');
+      assert.equal(status, 200);
+      assert.ok(Array.isArray(body));
+      assert.ok(body.length >= 1);
+      assert.ok('slug' in body[0] && 'name' in body[0] && 'prereq' in body[0]);
+    });
     it('GET /api/library/merits(/flaws|/backgrounds) → hasArt отражает наличие PNG в web/public/img/system/library/<раздел>/', async () => {
       // Достоинства/недостатки/факты биографии хранятся как JSON-массивы (не
       // по файлу на запись, как дисциплины) — фикстуру создаём через уже

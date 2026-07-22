@@ -94,6 +94,28 @@ router.get('/api/library/psychics', async (_req, res) => {
   catch (e) { serverError(res, e); }
 });
 
+// ── Библиотека: комбинированные дисциплины (system/library/combo_disciplines.json) ──
+// Город-нейтральные данные. У комбо нет шкалы 1–5 — только предпосылки (prereq)
+// и описание, поэтому это отдельный JSON, а не .md-дисциплина (иначе комбо
+// засоряли бы список «все дисциплины» и требовали фиктивных уровней-точек).
+const COMBO_FILE = path.join(ROOT, 'system', 'library', 'combo_disciplines.json');
+let _comboCache = null; // { mtimeMs, list }
+async function loadCombos() {
+  const st = await fs.stat(COMBO_FILE).catch(() => null);
+  if (!st) return [];
+  if (_comboCache && _comboCache.mtimeMs === st.mtimeMs) return _comboCache.list;
+  const raw = await fs.readFile(COMBO_FILE, 'utf-8').catch(() => '[]');
+  let list;
+  try { list = JSON.parse(raw); } catch { list = []; }
+  if (!Array.isArray(list)) list = [];
+  _comboCache = { mtimeMs: st.mtimeMs, list };
+  return list;
+}
+router.get('/api/library/combo-disciplines', async (_req, res) => {
+  try { res.json(await loadCombos()); }
+  catch (e) { serverError(res, e); }
+});
+
 // Набор PNG-файлов в web/public/img/system/library/<section>/ (генерирует
 // tools/generate_library_art.js) — читается на каждый запрос (каталог
 // маленький, кэш не нужен), т.к. hasArt считается отдельно от кэша
