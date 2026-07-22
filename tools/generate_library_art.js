@@ -24,7 +24,7 @@ const { compressPngViaSquoosh } = require('./lib/squoosh_compress');
 const POSITIVE_TMPL = scene => "(" + scene + ":1.35), "
   + "solid pure black background, jet black background filling the entire square canvas, "
   + "dark gothic emblem, circular ornate medallion badge floating on black, "
-  + "engraved etching illustration style, blood red crescent moon glowing behind the medallion, "
+  + "engraved etching illustration style, "
   + "deep crimson and black color palette, ornamental gold border with fine filigree linework, "
   + "symmetrical heraldic composition, high contrast chiaroscuro lighting, Vampire the Masquerade aesthetic, "
   + "dark fantasy tarot card icon, intricate line detail, painterly digital illustration, centered composition, "
