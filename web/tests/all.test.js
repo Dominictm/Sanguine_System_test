@@ -4381,3 +4381,21 @@ describe('API — integration', () => {
   });
 
 }); // API — integration
+
+// ══════════════════════════════════════════════════════════════════════════════
+// UNIT — source-guard: подвкладки Дисциплин библиотеки (Фаза C)
+// ══════════════════════════════════════════════════════════════════════════════
+
+test('source-guard: 8 подвкладок Дисциплин присутствуют в HTML', () => {
+  const html = require('fs').readFileSync(path.join(__dirname, '../public/index.html'), 'utf-8');
+  for (const g of ['all','combo','koldun','necromancy','thaumaturgy','dark-thaumaturgy','assamite','setite']) {
+    assert.ok(html.includes(`data-disc-group="${g}"`), 'нет подвкладки ' + g);
+  }
+});
+
+test('source-guard: рендер группы Дисциплин ветвится на all/combo/иначе', () => {
+  const js = require('fs').readFileSync(path.join(__dirname, '../public/scripts/v20-sheet.js'), 'utf-8');
+  assert.ok(js.includes('_libSorceryPathsHtml'));
+  assert.ok(js.includes('_libComboCardsHtml'));
+  assert.ok(js.includes("_libDiscGroup === 'combo'"));
+});
