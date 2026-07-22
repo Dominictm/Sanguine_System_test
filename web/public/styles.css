@@ -12085,7 +12085,8 @@ tr.rumor-told:hover .rumor-cb-cell {
   background: color-mix(in srgb, var(--accent) 10%, var(--bg3));
   border-bottom: 1px solid var(--border);
   margin-bottom: 12px;
-  overflow-x: auto;
+  /* без overflow-x: бар переносит кнопки (flex-wrap), горизонтальный скролл
+     только рисовал лишнюю полосу из-за margin-bottom: -1px у кнопок */
 }
 .disciplines-subtab-btn {
   flex: 0 1 auto;
