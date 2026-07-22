@@ -40,11 +40,12 @@ function splitPowerBody(body) {
 
 function parseDisciplineMd(rawContent, slug) {
   const content = String(rawContent || '').replace(/^﻿/, '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-  const d = { slug, name: slug, clans: '', source: '', note: '', levels: [], paths: [], custom: false };
+  const d = { slug, name: slug, clans: '', source: '', note: '', group: 'base', levels: [], paths: [], custom: false };
 
   const hm = content.match(EMOJI_RE);
   if (hm) d.name = hm[2].trim();
   d.clans  = field(content, 'Клан / принадлежность') || field(content, 'Клан') || '';
+  d.group = (field(content, 'Группа') || 'base').trim().toLowerCase();
   d.source = field(content, 'Источник') || '';
   d.custom = field(content, 'Авторское') === 'да';
 

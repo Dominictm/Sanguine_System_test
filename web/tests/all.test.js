@@ -2,7 +2,7 @@
 // Single entry point: unit tests for lib/parsers.js + integration tests for API.
 // Run: node --test --test-reporter=./tests/reporter.js tests/all.test.js
 
-const { describe, it, before, after } = require('node:test');
+const { describe, it, test, before, after } = require('node:test');
 const assert = require('node:assert/strict');
 const fs     = require('fs').promises;
 const path   = require('path');
@@ -20,6 +20,7 @@ const {
   parsePoliticalFactions, setPoliticalFactionInfluence,
   CITY_SECTIONS, buildCityMd, parseCityMd, cityScaffold,
 } = require('../lib/parsers');
+const { parseDisciplineMd } = require('../lib/disciplines');
 
 // ── Shared fixtures ───────────────────────────────────────────────────────────
 
@@ -59,6 +60,27 @@ const CITY_ROOT     = path.join(__dirname, '../../cities/paris');
 // ══════════════════════════════════════════════════════════════════════════════
 // UNIT — lib/parsers.js
 // ══════════════════════════════════════════════════════════════════════════════
+
+test('parseDisciplineMd: поле Группа читается из шапки', () => {
+  const md = [
+    '# 🔥 Тест (Test)',
+    '- **Клан / принадлежность:** Тремер',
+    '- **Группа:** thaumaturgy',
+    '- **Источник:** https://wod.su/x',
+    '',
+    '## Уровень 1 — Икс (X)',
+    '**Литературное описание.** Флавор.',
+    '**Система.** Механика.',
+  ].join('\n');
+  const d = parseDisciplineMd(md, 'test');
+  assert.strictEqual(d.group, 'thaumaturgy');
+});
+
+test('parseDisciplineMd: без поля Группа — default base', () => {
+  const md = '# 🔮 Прорицание (Auspex)\n- **Клан:** общая\n\n## Уровень 1 — Y (Y)\n**Система.** Z.';
+  const d = parseDisciplineMd(md, 'auspex');
+  assert.strictEqual(d.group, 'base');
+});
 
 describe('Parsers — unit', () => {
 
