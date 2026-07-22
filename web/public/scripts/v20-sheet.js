@@ -1026,7 +1026,7 @@ function _libPsychicCardsHtml() {
       ? `<img class="lib-card-art" loading="lazy" decoding="async" src="/img/system/library/psychics/${escAttr(p.slug)}.png" alt="">`
       : '';
     const badge = p.custom ? '<span class="lib-card-custom-badge">✏️ Авторское</span>' : '';
-    const inner = `<div class="lib-card-name">${escHtml(p.name)}</div><div class="lib-card-meta">${escHtml(p.category || '')}</div>${badge}`;
+    const inner = `<div class="lib-card-name">${escHtml(_libStripEn(p.name))}</div><div class="lib-card-meta">${escHtml(p.category || '')}</div>${badge}`;
     const actions = p.custom ? _libCardActionsHtml('psychics', p.slug) : '';
     return `<div class="lib-card-wrap">
       <button type="button" class="lib-card${p.hasArt ? ' has-art' : ''}" data-psy-slug="${escAttr(p.slug)}">
