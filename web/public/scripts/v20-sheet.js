@@ -1390,7 +1390,9 @@ async function _v20LoadLibrary(kind) {
       const tag = (list, k) => (Array.isArray(list) ? list : []).map(x => ({ ...x, _kind: k }));
       _v20LibraryCache[kind] = [...tag(merits, 'merit'), ...tag(flaws, 'flaw')];
     } else {
-      const endpoint = kind === 'discipline' ? '/api/library/disciplines' : '/api/library/psychics';
+      const endpoint = kind === 'discipline' ? '/api/library/disciplines'
+        : kind === 'background' ? '/api/library/backgrounds'
+        : '/api/library/psychics';
       const data = await fetch(endpoint).then(r => r.json());
       _v20LibraryCache[kind] = Array.isArray(data) ? data : [];
     }
@@ -1401,6 +1403,7 @@ async function _v20LoadLibrary(kind) {
 function _v20LibPickerKindToSection(kind) {
   if (kind === 'discipline') return 'disciplines';
   if (kind === 'meritflaw') return 'meritsFlaws';
+  if (kind === 'background') return 'backgrounds';
   return 'psychicPowers';
 }
 
@@ -1426,6 +1429,8 @@ function _v20RenderV20LibList(kind, lib, pickerEl) {
     const name = item.name || item.ru || '';
     const hint = kind === 'meritflaw'
       ? `${item._kind === 'flaw' ? 'Недостаток' : 'Достоинство'} · ${item.category || ''} · ${item.points ?? 0} очк.`
+      : kind === 'background'
+      ? [item.category, item.sectOnly ? `только ${item.sectOnly}` : ''].filter(Boolean).join(' · ')
       : ((item.levels || []).length ? `${(item.levels || []).length} уровней` : '');
     return `<button type="button" class="v20-lib-item" data-v20-lib-item="${escAttr(name)}" data-v20-lib-kind="${kind}"><span>${escHtml(name)}</span><span class="v20-lib-hint">${escHtml(hint)}</span></button>`;
   }).join('');
@@ -1592,7 +1597,13 @@ function _v20RenderSheet(panel, charName) {
     </div>
     ${m.disciplines.map(discRow).join('')}
   </div>`;
-  const bgCol = `<div class="v20-col"><div class="v20-col-title">Факты биографии${_v20AddRowBtn('backgrounds')}</div>${m.backgrounds.map((b, i) => _v20NamedDotRow(`backgrounds.${i}.name`, b.name, `backgrounds.${i}.val`, b.val, genMaxDots, i >= _V20_BASELINE_LEN.backgrounds ? 'backgrounds' : '')).join('')}</div>`;
+  const bgLibBtn = `<button type="button" class="v20-mini-action v20-lib-add-btn" data-v20-lib-kind="background" title="Добавить из справочника фактов биографии">+ Из справочника</button>`;
+  const bgCol = `<div class="v20-col"><div class="v20-col-title">Факты биографии${bgLibBtn}${_v20AddRowBtn('backgrounds')}</div>
+    <div class="v20-lib-picker" data-v20-lib-kind="background" hidden>
+      <input type="text" class="v20-lib-search" placeholder="Поиск…" data-v20-lib-kind="background">
+      <div class="v20-lib-list" data-v20-lib-kind="background"></div>
+    </div>
+    ${m.backgrounds.map((b, i) => _v20NamedDotRow(`backgrounds.${i}.name`, b.name, `backgrounds.${i}.val`, b.val, genMaxDots, i >= _V20_BASELINE_LEN.backgrounds ? 'backgrounds' : '')).join('')}</div>`;
   const virtCol = `<div class="v20-col"><div class="v20-col-title">Добродетели</div>
       ${_v20DotRow('Совесть/Решимость', 'virtues.conscience', m.virtues.conscience)}
       ${_v20DotRow('Самоконтроль/Инстинкты', 'virtues.selfcontrol', m.virtues.selfcontrol)}
@@ -1986,7 +1997,7 @@ async function _v20Regen(btn) {
 }
 
 let _v20Model = null, _v20Ctx = null, _v20DirtyFlag = false;
-let _v20LibraryCache = { discipline: null, numina: null, meritflaw: null };
+let _v20LibraryCache = { discipline: null, numina: null, meritflaw: null, background: null };
 async function _loadCharSheet(charName) {
   const panel = document.getElementById('cdet-sheet-panel');
   if (!panel) return;
