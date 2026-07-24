@@ -398,32 +398,31 @@ function _cleanNpcName(s) {
 function _npcCardHref(chunk) {
   return (chunk.match(/\[Карточка\]\(([^)]+)\)/) || [])[1] || '';
 }
-function _parseNpcEntries(body) {
+// Строка-«деталь» мини-листа: «- **Клан:** …», «- **Статус:** …» — это поля НПС,
+// а не сам НПС. Их нельзя принимать за отдельные записи (иначе один персонаж с
+// подзаголовком `### Имя` разваливается на «Клан: …», «Роль: …» и т.п.).
+const _isDetailBullet = t => /^[-*]\s*\*\*[^*\n]+:\*\*/.test(t.trim());
+
+// Разбить тело секции по САМОМУ ВЕРХНЕМУ уровню подзаголовков (### если есть, иначе ####),
+// чтобы `#### ` дети оставались вложенными в свой `### ` родитель, а не становились его
+// сиблингами (иначе подгруппа-родитель и её НПС-ребёнок оба попали бы в список). Возвращает
+// { parts, headRe } — head-regex того же уровня для матчинга заголовка каждого чанка.
+function _npcSubSplit(body) {
+  const h3 = /^###(?!#)\s+/m.test(body);
+  return h3
+    ? { parts: body.split(/\n(?=###(?!#)\s+)/), headRe: /^###(?!#)\s+(.+)$/m }
+    : { parts: body.split(/\n(?=####\s+)/),     headRe: /^####\s+(.+)$/m };
+}
+
+// Formats A/B — по одной записи на строку («- Имя — роль …» / «**Имя** — описание …»).
+// Строки-детали (**Ключ:** …) пропускаются — это поля мини-листа, не НПС.
+function _parseNpcBulletLines(body) {
   const entries = [];
-  // Format C — «#### Имя — роль» subsections (модульные НПС со встроенным мини-листом)
-  if (/^####\s+/m.test(body)) {
-    for (const part of body.split(/\n(?=####\s+)/)) {
-      const h = part.match(/^####\s+(.+)$/m);
-      if (!h) continue;
-      const [namePart, ...rest] = h[1].split(/\s*[—–]\s*/);
-      const name = _cleanNpcName(namePart);
-      if (!name) continue;
-      const after = part.slice(part.indexOf(h[0]) + h[0].length);
-      const descBits = [rest.join(' — ').trim()];
-      for (const ln of after.split('\n')) {
-        const t = ln.trim();
-        if (!t || /\[Карточка\]/.test(t)) continue;
-        descBits.push(t.replace(/^[-*]\s*/, ''));
-      }
-      entries.push({ name, desc: descBits.filter(Boolean).join(' — ').replace(/\*\*/g, '').trim(), cardHref: _npcCardHref(part) });
-    }
-    return entries;
-  }
-  // Formats A/B — one entry per line («- Имя — роль …» или «**Имя** — описание …»)
   for (const ln of body.split('\n')) {
     const t = ln.trim();
     if (!t || /^>/.test(t)) continue;
     if (!/\[Карточка\]/.test(t) && !/^\s*[-*]/.test(t) && !/^\*\*/.test(t)) continue;
+    if (_isDetailBullet(t)) continue;
     let prefix = t
       .replace(/[→➔➜]?\s*🔗?\s*\[Карточка\]\([^)]*\).*$/, '')   // drop «→ 🔗 [Карточка](…)» trailer
       .replace(/^\s*-\s+/, '')                                   // strip leading «- » bullet
@@ -437,6 +436,41 @@ function _parseNpcEntries(body) {
   }
   return entries;
 }
+// Рукописные npc.md используют `### / #### ` двояко: как ИМЯ НПС («### Ламбер Жирон —
+// посредник» + поля-детали) и как ЗАГОЛОВОК ПОДГРУППЫ («### Игровые персонажи» + список
+// НПС-буллетов). Отличаем рекурсивно: если под подзаголовком есть настоящие записи —
+// это подгруппа (спускаемся внутрь); если только поля-детали/проза — сам подзаголовок
+// и есть НПС. Так один разбор покрывает оба уровня и любую вложенность.
+function _parseNpcEntries(body) {
+  if (/^#{3,4}\s+/m.test(body)) {
+    const entries = [];
+    const { parts, headRe } = _npcSubSplit(body);
+    for (const part of parts) {
+      const h = part.match(headRe);
+      if (!h) { entries.push(..._parseNpcBulletLines(part)); continue; } // преамбула до 1-го подзаголовка
+      const after  = part.slice(part.indexOf(h[0]) + h[0].length);
+      const nested = _parseNpcEntries(after);
+      if (nested.length) { entries.push(...nested); continue; }          // подзаголовок = подгруппа
+      const [namePart, ...rest] = h[1].split(/\s*[—–]\s*/);              // подзаголовок = сам НПС
+      const name = _cleanNpcName(namePart);
+      if (!name) continue;
+      const descBits = [rest.join(' — ').trim()];
+      for (const ln of after.split('\n')) {
+        const t = ln.trim();
+        if (!t || /\[Карточка\]/.test(t)) continue;
+        descBits.push(t.replace(/^[-*]\s*/, ''));
+      }
+      entries.push({ name, desc: descBits.filter(Boolean).join(' — ').replace(/\*\*/g, '').trim(), cardHref: _npcCardHref(part) });
+    }
+    return entries;
+  }
+  return _parseNpcBulletLines(body);
+}
+// Секции npc.md, которые НЕ являются ростером НПС (промты изображений, негативный
+// промт, Session 0, служебные заметки) — их `### …` подзаголовки не должны попадать
+// в список персонажей. Классификатор по умолчанию относит любой неизвестный `## `
+// к canon, поэтому такие секции надо отсеивать явно.
+const _NPC_NON_ROSTER = /промт|изображени|негатив|session\s*\d|session\s*0|сесси[яю]/i;
 // Locate the first `## ` heading in npc.md classified as `kind` (pc/canon/modular) —
 // same classification _parseNpcMdGroups uses, so deletion always targets the exact
 // section the «НПС» tab rendered the entry from, regardless of the heading's actual
@@ -448,39 +482,74 @@ function _findNpcMdSection(text, kind) {
   while ((m = re.exec(text))) heads.push({ title: m[1].trim(), at: m.index, bodyStart: m.index + m[0].length });
   for (let i = 0; i < heads.length; i++) {
     const title = heads[i].title;
-    const k = /игров|\bпк\b|персонаж\w*\s+игрок/i.test(title) ? 'pc'
+    if (_NPC_NON_ROSTER.test(title)) continue;
+    const k = /игрок|игров|\bпк\b/i.test(title) ? 'pc'
             : /модульн|неканон/i.test(title) ? 'modular'
             : 'canon';
     if (k === kind) return { bodyStart: heads[i].bodyStart, end: i + 1 < heads.length ? heads[i + 1].at : text.length };
   }
   return null;
 }
-// Remove one entry (by display name) from a npc.md section body — mirrors the three
-// formats _parseNpcEntries tolerates (bullet/bold line, «#### » subsection). Returns
-// the raw text of the removed entry (so callers can pull its cardHref/slug), or null
-// if no matching entry was found.
+// Все `## ` секции данного kind (pc/canon/modular). В рукописных npc.md один kind
+// нередко разбит на несколько секций («Ключевые НПС» + «Ранее существующие НПС» — обе
+// canon), поэтому удаление обязано перебрать их все, а не только первую.
+function _findNpcMdSections(text, kind) {
+  const heads = [];
+  const re = /^##\s+(.+)$/gm;
+  let m;
+  while ((m = re.exec(text))) heads.push({ title: m[1].trim(), at: m.index, bodyStart: m.index + m[0].length });
+  const out = [];
+  for (let i = 0; i < heads.length; i++) {
+    const title = heads[i].title;
+    if (_NPC_NON_ROSTER.test(title)) continue;
+    const k = /игрок|игров|\bпк\b/i.test(title) ? 'pc'
+            : /модульн|неканон/i.test(title) ? 'modular'
+            : 'canon';
+    if (k === kind) out.push({ bodyStart: heads[i].bodyStart, end: i + 1 < heads.length ? heads[i + 1].at : text.length });
+  }
+  return out;
+}
+// Remove one entry (by display name) from a npc.md section body — зеркалит разбор в
+// _parseNpcEntries (буллет/жирная строка, `### / #### ` подзаголовок-НПС, и НПС внутри
+// подгрупп-подзаголовков). Возвращает сырой текст удалённой записи (чтобы вытащить её
+// cardHref/slug) или null, если совпадения не нашлось.
 function _removeNpcEntry(body, targetName) {
   const targetClean = _cleanNpcName(targetName).toLowerCase();
-  if (/^####\s+/m.test(body)) {
-    const chunks = body.split(/\n(?=####\s+)/);
+  if (/^#{3,4}\s+/m.test(body)) {
+    const { parts, headRe } = _npcSubSplit(body);
     let removedChunk = null;
-    const kept = chunks.filter(part => {
-      if (removedChunk) return true; // only remove the first match
-      const h = part.match(/^####\s+(.+)$/m);
-      if (!h) return true;
-      const [namePart] = h[1].split(/\s*[—–]\s*/);
-      if (_cleanNpcName(namePart).toLowerCase() === targetClean) { removedChunk = part; return false; }
-      return true;
-    });
-    return { body: kept.join(''), removedChunk };
+    const kept = parts.map(part => {
+      if (removedChunk) return part;                       // only remove the first match
+      const h = part.match(headRe);
+      if (!h) {                                            // преамбула — буллеты до подзаголовков
+        const r = _removeBulletEntry(part, targetClean);
+        if (r.removedChunk) removedChunk = r.removedChunk;
+        return r.body;
+      }
+      const headEnd = part.indexOf(h[0]) + h[0].length;
+      const after   = part.slice(headEnd);
+      if (_parseNpcEntries(after).length) {                // подзаголовок = подгруппа → внутрь
+        const r = _removeNpcEntry(after, targetName);
+        if (r.removedChunk) { removedChunk = r.removedChunk; return part.slice(0, headEnd) + r.body; }
+        return part;
+      }
+      const [namePart] = h[1].split(/\s*[—–]\s*/);         // подзаголовок = сам НПС → срезаем чанк
+      if (_cleanNpcName(namePart).toLowerCase() === targetClean) { removedChunk = part; return null; }
+      return part;
+    }).filter(p => p !== null);
+    return { body: kept.join('\n'), removedChunk };
   }
-  const lines = body.split('\n');
+  return _removeBulletEntry(body, targetClean);
+}
+// Удалить одну буллет/жирную строку-НПС (Formats A/B); поля-детали (**Ключ:** …) не трогаем.
+function _removeBulletEntry(body, targetClean) {
   let removedChunk = null;
-  const kept = lines.filter(ln => {
+  const kept = body.split('\n').filter(ln => {
     if (removedChunk) return true;
     const t = ln.trim();
     if (!t || /^>/.test(t)) return true;
     if (!/\[Карточка\]/.test(t) && !/^\s*[-*]/.test(t) && !/^\*\*/.test(t)) return true;
+    if (_isDetailBullet(t)) return true;
     const prefix = t
       .replace(/[→➔➜]?\s*🔗?\s*\[Карточка\]\([^)]*\).*$/, '')
       .replace(/^\s*-\s+/, '')
@@ -504,7 +573,8 @@ function _parseNpcMdGroups(raw) {
   for (let i = 0; i < heads.length; i++) {
     const body  = text.slice(heads[i].bodyStart, i + 1 < heads.length ? heads[i + 1].at : text.length);
     const title = heads[i].title;
-    const kind  = /игров|\bпк\b|персонаж\w*\s+игрок/i.test(title) ? 'pc'
+    if (_NPC_NON_ROSTER.test(title)) continue;
+    const kind  = /игрок|игров|\bпк\b/i.test(title) ? 'pc'
                 : /модульн|неканон/i.test(title) ? 'modular'
                 : 'canon';
     const entries = _parseNpcEntries(body);
@@ -572,6 +642,6 @@ module.exports = {
   _renderModuleNpcMd, _charTimelineDigest, _extractScenarioSection, _SCENE_HEADING_RE,
   _parseScenarioScenesDirect, _parseScenarioScenesLegacy, _parseScenarioScenes, _parseScenarioLocations,
   _parseModuleLocSlugs, _writeModuleLocSlugs, _parseSessions, _cleanNpcName, _npcCardHref,
-  _parseNpcEntries, _findNpcMdSection, _removeNpcEntry, _parseNpcMdGroups, _renderSessionBlock,
+  _parseNpcEntries, _findNpcMdSection, _findNpcMdSections, _removeNpcEntry, _parseNpcMdGroups, _renderSessionBlock,
   _writeSessionsFile, _patchModuleMain, _claudeOnlyModel,
 };

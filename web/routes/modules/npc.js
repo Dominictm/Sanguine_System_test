@@ -14,7 +14,7 @@ const {
   _renderModuleNpcMd, _charTimelineDigest, _extractScenarioSection, _SCENE_HEADING_RE,
   _parseScenarioScenesDirect, _parseScenarioScenesLegacy, _parseScenarioScenes, _parseScenarioLocations,
   _parseModuleLocSlugs, _writeModuleLocSlugs, _parseSessions, _cleanNpcName, _npcCardHref,
-  _parseNpcEntries, _findNpcMdSection, _removeNpcEntry, _parseNpcMdGroups, _renderSessionBlock,
+  _parseNpcEntries, _findNpcMdSection, _findNpcMdSections, _removeNpcEntry, _parseNpcMdGroups, _renderSessionBlock,
   _writeSessionsFile, _patchModuleMain,
 } = require('./shared');
 
@@ -173,14 +173,24 @@ module.exports = function npcRouter({ makeGenerationClient, generateV20Sheet, en
       const bom = rawFile.charCodeAt(0) === 0xFEFF;
       const text = (bom ? rawFile.slice(1) : rawFile).replace(/\r\n/g, '\n');
 
-      const section = _findNpcMdSection(text, group);
-      if (!section) return res.status(404).json({ ok: false, error: 'Раздел не найден в npc.md' });
+      // Один kind может быть разбит на несколько `## ` секций (напр. «Ключевые НПС» +
+      // «Ранее существующие НПС» — обе canon), поэтому перебираем все и удаляем из той,
+      // где реально нашлась запись.
+      const sections = _findNpcMdSections(text, group);
+      if (!sections.length) return res.status(404).json({ ok: false, error: 'Раздел не найден в npc.md' });
 
-      const body = text.slice(section.bodyStart, section.end);
-      const { body: newBody, removedChunk } = _removeNpcEntry(body, nm);
+      let newText = null, removedChunk = null;
+      for (const section of sections) {
+        const body = text.slice(section.bodyStart, section.end);
+        const r = _removeNpcEntry(body, nm);
+        if (r.removedChunk) {
+          removedChunk = r.removedChunk;
+          newText = text.slice(0, section.bodyStart) + r.body + text.slice(section.end);
+          break;
+        }
+      }
       if (!removedChunk) return res.status(404).json({ ok: false, error: 'НПС не найден в списке' });
 
-      const newText = text.slice(0, section.bodyStart) + newBody + text.slice(section.end);
       await writeFileAtomic(npcMdPath, (bom ? '﻿' : '') + newText, 'utf-8');
 
       let cardDeleted = false;

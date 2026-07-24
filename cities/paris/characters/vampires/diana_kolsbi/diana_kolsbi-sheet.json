@@ -1,0 +1,391 @@
+{
+  "lineage": "vampires",
+  "header": {
+    "name": "",
+    "player": "Мастер",
+    "chronicle": "",
+    "nature": "Покровитель (Caregiver)",
+    "demeanor": "",
+    "concept": "",
+    "clan": "Малкавиан",
+    "generation": "8-е",
+    "sire": "Неизвестен"
+  },
+  "attributes": {
+    "physical": {
+      "strength": 1,
+      "dexterity": 3,
+      "stamina": 2
+    },
+    "social": {
+      "charisma": 1,
+      "manipulation": 4,
+      "appearance": 1,
+      "composure": 1
+    },
+    "mental": {
+      "perception": 3,
+      "intelligence": 3,
+      "wits": 3,
+      "resolve": 1
+    }
+  },
+  "abilities": {
+    "talents": [
+      {
+        "name": "Атлетика",
+        "val": 1,
+        "fixed": true
+      },
+      {
+        "name": "Бдительность",
+        "val": 0,
+        "fixed": true
+      },
+      {
+        "name": "Драка",
+        "val": 0,
+        "fixed": true
+      },
+      {
+        "name": "Запугивание",
+        "val": 2,
+        "fixed": true
+      },
+      {
+        "name": "Красноречие",
+        "val": 0,
+        "fixed": true
+      },
+      {
+        "name": "Лидерство",
+        "val": 2,
+        "fixed": true
+      },
+      {
+        "name": "Уличное чутьё",
+        "val": 0,
+        "fixed": true
+      },
+      {
+        "name": "Хитрость",
+        "val": 0,
+        "fixed": true
+      },
+      {
+        "name": "Шестое чувство",
+        "val": 0,
+        "fixed": true
+      },
+      {
+        "name": "Эмпатия",
+        "val": 3,
+        "fixed": true
+      },
+      {
+        "name": "Настороженность (Alertness)",
+        "val": 2
+      },
+      {
+        "name": "Осознанность (Awareness)",
+        "val": 3
+      }
+    ],
+    "skills": [
+      {
+        "name": "Вождение",
+        "val": 2,
+        "fixed": true
+      },
+      {
+        "name": "Воровство",
+        "val": 2,
+        "fixed": true
+      },
+      {
+        "name": "Выживание",
+        "val": 0,
+        "fixed": true
+      },
+      {
+        "name": "Исполнение",
+        "val": 0,
+        "fixed": true
+      },
+      {
+        "name": "Обращение с животными",
+        "val": 0,
+        "fixed": true
+      },
+      {
+        "name": "Ремесло",
+        "val": 0,
+        "fixed": true
+      },
+      {
+        "name": "Скрытность",
+        "val": 2,
+        "fixed": true
+      },
+      {
+        "name": "Стрельба",
+        "val": 0,
+        "fixed": true
+      },
+      {
+        "name": "Фехтование",
+        "val": 0,
+        "fixed": true
+      },
+      {
+        "name": "Этикет",
+        "val": 4,
+        "fixed": true
+      },
+      {
+        "name": "Огнестрельное оружие (Firearms)",
+        "val": 2
+      },
+      {
+        "name": "Холодное оружие (Melee)",
+        "val": 3
+      }
+    ],
+    "knowledges": [
+      {
+        "name": "Гуманитарные науки",
+        "val": 0,
+        "fixed": true
+      },
+      {
+        "name": "Естественные науки",
+        "val": 1,
+        "fixed": true
+      },
+      {
+        "name": "Законы",
+        "val": 0,
+        "fixed": true
+      },
+      {
+        "name": "Информатика",
+        "val": 0,
+        "fixed": true
+      },
+      {
+        "name": "Медицина",
+        "val": 2,
+        "fixed": true
+      },
+      {
+        "name": "Оккультизм",
+        "val": 4,
+        "fixed": true
+      },
+      {
+        "name": "Политика",
+        "val": 4,
+        "fixed": true
+      },
+      {
+        "name": "Расследование",
+        "val": 2,
+        "fixed": true
+      },
+      {
+        "name": "Финансы",
+        "val": 2,
+        "fixed": true
+      },
+      {
+        "name": "Электроника",
+        "val": 0,
+        "fixed": true
+      },
+      {
+        "name": "Академические знания (Academics)",
+        "val": 3
+      },
+      {
+        "name": "Компьютеры (Computer)",
+        "val": 1
+      }
+    ]
+  },
+  "disciplines": [
+    {
+      "name": "Прорицание (Auspex)",
+      "val": 3
+    },
+    {
+      "name": "Доминирование (Dominate)",
+      "val": 3
+    },
+    {
+      "name": "Затемнение (Obfuscate)",
+      "val": 3
+    }
+  ],
+  "psychicPowers": [],
+  "backgrounds": [
+    {
+      "name": "Ресурсы (Resources)",
+      "val": 2
+    },
+    {
+      "name": "Контакты (Contacts)",
+      "val": 2
+    },
+    {
+      "name": "Влияние (Influence)",
+      "val": 2
+    },
+    {
+      "name": "Покровительство (Patron)",
+      "val": 1
+    },
+    {
+      "name": "Фамильяр",
+      "val": 4
+    }
+  ],
+  "virtues": {
+    "conscience": 2,
+    "selfcontrol": 3,
+    "courage": 1
+  },
+  "meritsFlaws": [],
+  "humanity": 5,
+  "path": "Человечность",
+  "willpower": {
+    "permanent": 1,
+    "temp": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "bloodPool": [
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true
+  ],
+  "bloodPoolCount": 0,
+  "bloodPerTurn": 3,
+  "health": {
+    "bruised": false,
+    "hurt": false,
+    "injured": false,
+    "wounded": false,
+    "mauled": false,
+    "crippled": false,
+    "incapacitated": false
+  },
+  "flaw": "",
+  "experience": {
+    "total": 0,
+    "spent": 0,
+    "log": []
+  },
+  "specializations": [
+    {
+      "ability": "",
+      "spec": ""
+    },
+    {
+      "ability": "",
+      "spec": ""
+    },
+    {
+      "ability": "",
+      "spec": ""
+    },
+    {
+      "ability": "",
+      "spec": ""
+    },
+    {
+      "ability": "",
+      "spec": ""
+    },
+    {
+      "ability": "",
+      "spec": ""
+    }
+  ],
+  "otherTraits": [],
+  "rituals": [],
+  "history": "",
+  "goals": "",
+  "description": {
+    "birthDate": "",
+    "apparentAge": "32",
+    "deathDate": "",
+    "gender": "Женский",
+    "race": "",
+    "hair": "",
+    "eyes": "",
+    "heightWeight": "",
+    "build": "",
+    "nationality": ""
+  },
+  "allies": "",
+  "possessions": "",
+  "combat": [
+    {
+      "weapon": "",
+      "diff": "",
+      "damage": "",
+      "range": "",
+      "rate": "",
+      "clip": "",
+      "size": ""
+    },
+    {
+      "weapon": "",
+      "diff": "",
+      "damage": "",
+      "range": "",
+      "rate": "",
+      "clip": "",
+      "size": ""
+    },
+    {
+      "weapon": "",
+      "diff": "",
+      "damage": "",
+      "range": "",
+      "rate": "",
+      "clip": "",
+      "size": ""
+    },
+    {
+      "weapon": "",
+      "diff": "",
+      "damage": "",
+      "range": "",
+      "rate": "",
+      "clip": "",
+      "size": ""
+    }
+  ]
+}
