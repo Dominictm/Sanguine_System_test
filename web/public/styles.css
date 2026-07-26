@@ -3726,6 +3726,73 @@ a:focus-visible {
   line-height: 1.4;
 }
 
+/* Вкладка «Фамильяр» (5.8) — компактная карточка-превью связанного персонажа */
+.cdet-familiar-card {
+  display: flex;
+  gap: 18px;
+  align-items: flex-start;
+}
+
+.cdet-familiar-portrait {
+  width: 120px;
+  height: 120px;
+  flex-shrink: 0;
+  border-radius: var(--r-md);
+  object-fit: cover;
+  border: 1px solid var(--border);
+}
+
+.cdet-familiar-noart {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 48px;
+  background: linear-gradient(180deg,
+      color-mix(in srgb, var(--clan-tint, var(--accent)) 20%, var(--bg3)) 0%,
+      color-mix(in srgb, var(--clan-tint, var(--accent)) 12%, var(--bg2)) 100%);
+}
+
+.cdet-familiar-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.cdet-familiar-name {
+  font-family: var(--f-heading);
+  font-size: var(--fs-xl);
+  letter-spacing: .07em;
+  color: var(--text);
+  margin-bottom: 8px;
+}
+
+.cdet-familiar-fields {
+  margin-top: 12px;
+  gap: 6px 20px;
+}
+
+.cdet-familiar-open-btn {
+  margin-top: 14px;
+  padding: 8px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: transparent;
+  color: var(--gold);
+  font-family: var(--f-heading);
+  font-size: var(--fs-sm);
+  letter-spacing: .06em;
+  cursor: pointer;
+  transition: border-color .15s var(--ease), background .15s var(--ease);
+}
+
+.cdet-familiar-open-btn:hover {
+  border-color: var(--gold);
+  background: rgba(184, 134, 11, .08);
+}
+
+@media (pointer: coarse) {
+  .cdet-familiar-open-btn { min-height: 44px; }
+}
+
 .cdet-section-title {
   font-family: var(--f-heading);
   font-size: var(--fs-lg);
@@ -11737,7 +11804,7 @@ tr.rumor-told:hover .rumor-cb-cell {
 @media (pointer: coarse) {
 
   .hooks-del-btn, .cdet-img-del-btn, .diary-item-del-btn,
-  .v20-row-remove-btn, .v20-disc-info-btn {
+  .v20-row-remove-btn, .v20-disc-info-btn, .v20-add-row-btn {
     min-width: 44px;
     min-height: 44px;
   }

@@ -4621,3 +4621,27 @@ test('source-guard: styles.css — #graph-toolbar переносит строк�
   assert.ok(toolbarBlock, 'нет правила #graph-toolbar в styles.css');
   assert.ok(/flex-wrap:\s*wrap/.test(toolbarBlock[0]), '#graph-toolbar без flex-wrap: wrap — риск горизонтального переполнения с двумя рядами чипов');
 });
+
+// ══════════════════════════════════════════════════════════════════════════════
+// UNIT — source-guard: Фаза 5 — тикеты 5.1 (кнопка «+») / 5.8 (вкладка «Фамильяр»)
+// ══════════════════════════════════════════════════════════════════════════════
+
+test('source-guard: v20-sheet.js — _v20AddRowBtn рендерит «+» (без «Добавить») с title-подсказкой', () => {
+  const js = require('fs').readFileSync(path.join(__dirname, '../public/scripts/v20-sheet.js'), 'utf-8');
+  const fnMatch = js.match(/function _v20AddRowBtn\([^)]*\)\s*\{[\s\S]*?\n\}/);
+  assert.ok(fnMatch, 'не найдена функция _v20AddRowBtn');
+  const fn = fnMatch[0];
+  assert.ok(/>\+<\/button>/.test(fn), '_v20AddRowBtn не рендерит кнопку с видимым текстом ровно «+»');
+  assert.ok(!/>\+ ?Добавить/.test(fn), '_v20AddRowBtn всё ещё показывает видимый текст «+ Добавить» вместо «+»');
+  assert.ok(/title="Добавить строку"/.test(fn), '_v20AddRowBtn не содержит title="Добавить строку"');
+});
+
+test('source-guard: char-detail.js — вкладка «Фамильяр» (5.8): детект по /фамильяр/i в «Отношения» + resolveCharByName', () => {
+  const js = require('fs').readFileSync(path.join(__dirname, '../public/scripts/char-detail.js'), 'utf-8');
+  assert.ok(js.includes('data-tab="familiar"'), 'нет кнопки вкладки data-tab="familiar"');
+  assert.ok(js.includes('data-panel="familiar"'), 'нет панели data-panel="familiar"');
+  assert.ok(/\/фамильяр\/i/.test(js), 'нет регэкспа /фамильяр\\/i для детекта связи-фамильяра');
+  assert.ok(js.includes('resolveCharByName'), 'вкладка «Фамильяр» не переиспользует resolveCharByName из archive.js');
+  // Плейсхолдер для нерезолвящегося имени
+  assert.ok(js.includes('не найден в реестре персонажей'), 'нет текста плейсхолдера для нерезолвящегося фамильяра');
+});

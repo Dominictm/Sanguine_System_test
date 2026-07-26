@@ -1,3 +1,32 @@
+// Компактная карточка фамильяра для вкладки «Фамильяр» (5.8) — усечённая версия портрета/полей
+// из openCharDetail (portraitCol/infoFields), не полный рекурсивный рендер всей модалки.
+function _familiarCardHtml(fc) {
+  const icon = LINEAGE_ICONS[fc.lineage] || '👤';
+  const stType = fc.statusType || 'unknown';
+  const stLbl = statusLabel(fc);
+  const portrait = fc.imageUrl
+    ? `<img class="cdet-familiar-portrait" src="${escAttr(fc.imageUrl)}" alt="${escHtml(fc.name)}">`
+    : `<div class="cdet-familiar-portrait cdet-familiar-noart">${icon}</div>`;
+  const fields = infoFieldsFor(fc.lineage)
+    .filter(([k]) => fc[k] && fc[k] !== '—' && !String(fc[k]).includes('⚠️'))
+    .slice(0, 4)
+    .map(([k, lbl]) => `<div class="cdet-key">${escHtml(lbl)}</div><div class="cdet-val">${escHtml(fc[k])}</div>`)
+    .join('');
+  return `
+    <div class="cdet-familiar-card">
+      ${portrait}
+      <div class="cdet-familiar-info">
+        <div class="cdet-familiar-name">${escHtml(fc.name)}</div>
+        <div class="cdet-badges">
+          <span class="badge badge-${fc.lineage}">${LINEAGE_LABELS[fc.lineage] || fc.lineage}</span>
+          ${stType !== 'unknown' ? `<span class="badge badge-${stType}">${stLbl}</span>` : ''}
+        </div>
+        <div class="cdet-fields cdet-familiar-fields">${fields}</div>
+        <button type="button" class="cdet-familiar-open-btn" data-open-familiar="${escAttr(fc.name)}">Открыть карточку целиком</button>
+      </div>
+    </div>`;
+}
+
 function openCharDetail(name) {
   const c = STATE.characters.find(ch => ch.name === name);
   if (!c) return;
@@ -32,6 +61,15 @@ function openCharDetail(name) {
       <div class="cdet-rel-name">${escHtml(r.target)}</div>
       <div class="cdet-rel-desc">${escHtml(r.description)}</div>
     </div>`).join('');
+
+  // Вкладка «Фамильяр» (5.8) — признак и линк берутся из «Отношения» (тот же массив, что рендерит
+  // вкладку «Отношения»), НЕ из sheet-модели: связь с description, матчащим /фамильяр/i, — источник
+  // истины. resolveCharByName — общий фаззи-резолвер имени в реестре персонажей (archive.js).
+  const familiarRel = (c.relationships || []).find(r => /фамильяр/i.test(r.description || ''));
+  const familiarChar = familiarRel ? resolveCharByName(familiarRel.target) : null;
+  const familiarPanelHtml = !familiarRel ? '' : !familiarChar
+    ? `<div class="cdet-empty">Фамильяр «${escHtml(familiarRel.target)}» не найден в реестре персонажей. Заведите карточку с Принадлежностью «Фамильяр», чтобы она отобразилась здесь.</div>`
+    : _familiarCardHtml(familiarChar);
 
   const portraitCol = c.imageUrl
     ? `<div class="cdet-carousel" id="cdet-carousel">
@@ -85,6 +123,7 @@ function openCharDetail(name) {
         <button class="cdet-tab" data-tab="diaries">Дневники${c.diaries?.length ? ` (${c.diaries.length})` : ''}</button>
         <button class="cdet-tab" data-tab="sheet" data-char="${escHtml(c.name)}">Лист V20</button>
         <button class="cdet-tab" data-tab="desc">Описание</button>
+        ${familiarRel ? `<button class="cdet-tab" data-tab="familiar">Фамильяр</button>` : ''}
       </div>
       <div class="cdet-panels">
         <div class="cdet-panel active" data-panel="info">
@@ -187,6 +226,7 @@ function openCharDetail(name) {
             <div id="cdet-dlg-result" class="cdet-dialogue-result" style="display:none"></div>
           </div>
         </div>
+        ${familiarRel ? `<div class="cdet-panel" data-panel="familiar">${familiarPanelHtml}</div>` : ''}
       </div>
     </div>`;
 
@@ -219,6 +259,8 @@ document.getElementById('char-detail-content').addEventListener('click', e => {
     if (tab.dataset.tab === 'sheet') _loadCharSheet(tab.dataset.char);
     return;
   }
+  const openFamiliarBtn = e.target.closest('[data-open-familiar]');
+  if (openFamiliarBtn) { openCharDetail(openFamiliarBtn.dataset.openFamiliar); return; }
   if (e.target.closest('#cdet-carousel-prev')) { _carouselGoTo(_carouselIdx - 1, true); return; }
   if (e.target.closest('#cdet-carousel-next')) { _carouselGoTo(_carouselIdx + 1, true); return; }
   if (e.target.closest('#cdet-delete-btn'))  { _confirmDeleteChar(e.target.closest('#cdet-delete-btn').dataset.char); return; }

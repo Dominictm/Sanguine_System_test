@@ -524,7 +524,7 @@ function _v20Field(label, tpath, val, extra = '') {
 // «+ Добавить» affordance appended at the end of a fixed-length section's row list. removeKey
 // matches the one passed to _v20NamedDotRow/used by discRow/ritRow — 'section' or 'section:group'.
 function _v20AddRowBtn(removeKey) {
-  return `<button type="button" class="v20-mini-action v20-add-row-btn" data-v20-add="${escAttr(removeKey)}">+ Добавить</button>`;
+  return `<button type="button" class="v20-mini-action v20-add-row-btn" data-v20-add="${escAttr(removeKey)}" title="Добавить строку">+</button>`;
 }
 
 // Видимый возраст = Год обращения − Год рождения (карточка персонажа). Возвращает целое число
@@ -1581,7 +1581,7 @@ function _v20RenderSheet(panel, charName) {
     <div class="v20-grid3">${abilCol('talents')}${abilCol('skills')}${abilCol('knowledges')}</div>`;
 
   const discFillBtn = clanInfo && m.disciplines.slice(0, 3).every(d => !d.name)
-    ? `<button type="button" class="v20-mini-action" data-v20-action="fill-clan-disc">+ клановые</button>` : '';
+    ? `<button type="button" class="v20-mini-action" data-v20-action="fill-clan-disc" title="Подставить клановые дисциплины">+ клановые</button>` : '';
   const discLibBtn = `<button type="button" class="v20-mini-action v20-lib-add-btn" data-v20-lib-kind="discipline" title="Добавить из справочника дисциплин">+ Из справочника</button>`;
   const discRow = (d, i) => {
     const known = !!v20DisciplineKey(d.name);
@@ -1665,7 +1665,7 @@ function _v20RenderSheet(panel, charName) {
           <div class="v20-lib-list" data-v20-lib-kind="meritflaw"></div>
         </div>
         ${mfRows}
-        <div class="v20-col-title" style="margin-top:12px">Изъян${clanInfo && clanInfo.weakness ? `<button type="button" class="v20-mini-action" data-v20-action="insert-clan-weakness">+ слабость клана</button>` : ''}</div>
+        <div class="v20-col-title" style="margin-top:12px">Изъян${clanInfo && clanInfo.weakness ? `<button type="button" class="v20-mini-action" data-v20-action="insert-clan-weakness" title="Вставить типовую слабость клана">+ слабость клана</button>` : ''}</div>
         <input class="v20-field-input" data-tpath="flaw" value="${escAttr(m.flaw)}">
       </div>
       <div class="v20-col">
@@ -1760,9 +1760,9 @@ function _v20RenderSheet(panel, charName) {
 
   panel.innerHTML = `
     <div class="cdet-sheet-toolbar">
-      <button class="cdet-sheet-btn primary" id="v20-save" disabled>💾 Сохранено</button>
-      <button class="cdet-sheet-btn" id="v20-regen">♻ Перегенерировать ИИ</button>
-      <button class="cdet-sheet-btn" id="v20-validate">📋 Проверить лист</button>
+      <button class="cdet-sheet-btn primary" id="v20-save" disabled title="Сохранить изменения листа">💾 Сохранено</button>
+      <button class="cdet-sheet-btn" id="v20-regen" title="Перегенерировать лист через ИИ">♻ Перегенерировать ИИ</button>
+      <button class="cdet-sheet-btn" id="v20-validate" title="Проверить лист на ошибки и предупреждения">📋 Проверить лист</button>
       <button class="cdet-sheet-btn${_v20XpMode ? ' active' : ''}" id="v20-xpmode" title="В этом режиме поднятие точки списывает опыт по таблице обучения">🎓 Режим опыта${_v20XpMode ? ': вкл' : ''}</button>
       <button class="cdet-sheet-btn" id="v20-roll-btn" title="Открыть конструктор броска d10">🎲 Бросок</button>
       ${(isVamp || isMortal) ? `
