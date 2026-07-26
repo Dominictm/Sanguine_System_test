@@ -648,6 +648,19 @@ function _moduleSectionHeadingRe(heading) {
   // every subsequent upsert. Restrict trailing match to same-line whitespace.
   return new RegExp(`^##\\s+${escaped}[ \\t]*$`, 'm');
 }
+// Finds where the CURRENT section's body ends within `rest` (the text right
+// after its heading line): at the next `## `-heading, or at end of string if
+// there isn't one. Critically, if a `---`-separator sits directly before that
+// next heading (blank line + `---` + blank line + `## `, the format used
+// between sections in `<mod>.md` — see e.g. cities/balmont/.../vstrecha_v_parke.md),
+// the boundary is placed BEFORE the separator's leading blank line, so the
+// separator is treated as belonging to the NEXT section, not swallowed into
+// this one's body. Returns idx === -1 when there is no following heading.
+function _moduleSectionBodyBoundary(rest) {
+  const sepThenHeading = rest.match(/\n+---[ \t]*\n+##\s+/);
+  if (sepThenHeading) return { idx: sepThenHeading.index, hasSep: true };
+  return { idx: rest.search(/\n##\s+/), hasSep: false };
+}
 async function _upsertModuleSection(modDir, mod, heading, body) {
   const p = path.join(modDir, `${mod}.md`);
   let txt = await fs.readFile(p, 'utf-8').catch(() => '');
@@ -657,9 +670,17 @@ async function _upsertModuleSection(modDir, mod, heading, body) {
   if (m) {
     const start = m.index + m[0].length;
     const rest = txt.slice(start);
-    const nextIdx = rest.search(/\n##\s+/);
+    const { idx: nextIdx, hasSep } = _moduleSectionBodyBoundary(rest);
     const end = nextIdx === -1 ? txt.length : start + nextIdx;
-    txt = txt.slice(0, start) + '\n\n' + cleanBody + '\n' + txt.slice(end);
+    const tail = txt.slice(end);
+    // hasSep: `tail` already starts with the blank-line + `---` + blank-line
+    // glue verbatim, so it must NOT get an extra '\n' glued on top of it (that
+    // would leave a doubled blank line before the separator). Without a
+    // separator, `tail` starts with a single '\n' right before the next `## `
+    // (or is empty at EOF) and needs the usual '\n' to restore the blank line.
+    txt = hasSep
+      ? txt.slice(0, start) + '\n\n' + cleanBody + tail
+      : txt.slice(0, start) + '\n\n' + cleanBody + '\n' + tail;
   } else {
     txt = txt.replace(/\s*$/, '') + `\n\n---\n\n## ${heading}\n\n${cleanBody}\n`;
   }
@@ -674,7 +695,7 @@ async function _readModuleSection(modDir, mod, heading) {
   if (!m) return '';
   const start = m.index + m[0].length;
   const rest = txt.slice(start);
-  const nextIdx = rest.search(/\n##\s+/);
+  const { idx: nextIdx } = _moduleSectionBodyBoundary(rest);
   const body = nextIdx === -1 ? rest : rest.slice(0, nextIdx);
   return body.trim();
 }

@@ -89,6 +89,9 @@ module.exports = function sessionsRouter() {
         return res.status(400).json({ ok: false, error: 'Недопустимое имя' });
 
       const modDir = path.join(chroniclesDir(city), chr, 'modules', mod);
+      if (!await fs.stat(modDir).catch(() => null))
+        return res.status(404).json({ ok: false, error: 'Модуль не найден' });
+
       const raw = await fs.readFile(path.join(modDir, 'scene_notes.md'), 'utf-8').catch(() => '');
       const { sections } = parseScenarioSections(raw);
       const notesByHeading = Object.fromEntries(sections.map(s => [s.heading, s.body]));
@@ -137,6 +140,9 @@ module.exports = function sessionsRouter() {
         return res.status(400).json({ ok: false, error: 'Недопустимое имя' });
 
       const modDir = path.join(chroniclesDir(city), chr, 'modules', mod);
+      if (!await fs.stat(modDir).catch(() => null))
+        return res.status(404).json({ ok: false, error: 'Модуль не найден' });
+
       const text = await _readModuleSection(modDir, mod, '📝 Заметки сессии');
       res.json({ text });
     } catch (e) {

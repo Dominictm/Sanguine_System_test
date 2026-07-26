@@ -2,10 +2,11 @@
 // Single entry point: unit tests for lib/parsers.js + integration tests for API.
 // Run: node --test --test-reporter=./tests/reporter.js tests/all.test.js
 
-const { describe, it, test, before, after } = require('node:test');
+const { describe, it, test, before, after, beforeEach, afterEach } = require('node:test');
 const assert = require('node:assert/strict');
 const fs     = require('fs').promises;
 const path   = require('path');
+const os     = require('os');
 const { startServer, stopServer, apiJson, BASE } = require('./helpers');
 const {
   readPrompt, writePrompt, periodLabel,
@@ -4330,6 +4331,47 @@ describe('API — integration', () => {
         assert.equal(status, 200);
         assert.equal(body.text, 'Обновлённые заметки сессии.');
       });
+    });
+  });
+
+  // ── UNIT — _upsertModuleSection/_readModuleSection: секция НЕ последняя в файле ──
+  // Регрессия: rest.search(/\n##\s+/) находит `\n` НЕПОСРЕДСТВЕННО перед следующим
+  // `## `, поэтому `---`-разделитель между секциями попадал в диапазон
+  // чтения/замены — GET утекал "BodyA\n\n---" вместо "BodyA", а PUT молча стирал
+  // разделитель перед следующей секцией. На проде это недостижимо (заметки
+  // сессии всегда дописываются последней секцией), но хелпер спроектирован как
+  // переиспользуемый — покрываем именно случай «после целевой секции есть ещё одна».
+  describe('_upsertModuleSection/_readModuleSection — секция не последняя в файле', () => {
+    const { _upsertModuleSection, _readModuleSection } = require('../routes/modules/shared');
+    const mod = 'mod';
+    let tmpDir = null;
+
+    const RAW = '# Title\n\n---\n\n## 📝 Заметки сессии\n\nBodyA\n\n---\n\n## Что-то после\n\nBodyB\n';
+
+    beforeEach(async () => {
+      tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'sanguine-module-section-'));
+      await fs.writeFile(path.join(tmpDir, `${mod}.md`), RAW, 'utf-8');
+    });
+    afterEach(async () => {
+      if (tmpDir) await fs.rm(tmpDir, { recursive: true, force: true });
+    });
+
+    it('_readModuleSection не утекает разделитель «---» в тело секции', async () => {
+      const text = await _readModuleSection(tmpDir, mod, '📝 Заметки сессии');
+      assert.equal(text, 'BodyA');
+    });
+
+    it('_upsertModuleSection заменяет только тело целевой секции, сохраняя разделитель и следующую секцию', async () => {
+      await _upsertModuleSection(tmpDir, mod, '📝 Заметки сессии', 'NEW BODY');
+      const raw = await fs.readFile(path.join(tmpDir, `${mod}.md`), 'utf-8');
+      assert.equal(raw,
+        '# Title\n\n---\n\n## 📝 Заметки сессии\n\nNEW BODY\n\n---\n\n## Что-то после\n\nBodyB\n');
+    });
+
+    it('после апсерта _readModuleSection на следующей секции по-прежнему видит нетронутое тело', async () => {
+      await _upsertModuleSection(tmpDir, mod, '📝 Заметки сессии', 'NEW BODY');
+      const text = await _readModuleSection(tmpDir, mod, 'Что-то после');
+      assert.equal(text, 'BodyB');
     });
   });
 
