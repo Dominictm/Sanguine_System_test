@@ -12,6 +12,18 @@ let _sessCurrentMod = null;  // slug выбранного модуля (карт
                               // заменили <select id="sess-mod-sel"> — источник
                               // «модуль выбран» для _sessSyncSceneNavVisibility)
 
+// Заметка сцены (3.5-FE): кэш всех заметок сцен ТЕКУЩЕГО модуля,
+// { [heading]: text } — грузится один раз в _sessLoadModule (GET scene-notes)
+// и обновляется локально при успешном PUT scene-note (не перезапрашивается
+// целиком после каждого сохранения). Ключ — heading КАК ЕСТЬ (с эмодзи, если
+// он есть в заголовке сцены) — без нормализации, так же, как хранит его бэкенд.
+let _sessSceneNotesCache   = {};
+let _sessSceneNoteLoaded   = ''; // «загруженное» значение для активной сцены (dirty-сравнение)
+// Заметки сессии (3.6-FE): файл модуля вместо localStorage — «загруженное»
+// значение для dirty-сравнения кнопки «Сохранить» (не сам текст — тот живёт
+// только в DOM/на сервере).
+let _sessSessionNotesLoaded = '';
+
 function _sessCity() {
   return new URLSearchParams(window.location.search).get('city') || 'paris';
 }
@@ -34,11 +46,15 @@ async function loadSessionScreen() {
   catch { chrs = []; }
   chrSel.innerHTML = '<option value="">— хроника —</option>' +
     (chrs || []).map(c => `<option value="${escHtml(c.slug)}">${escHtml((c.hidden ? '📂 ' : '') + (c.display || c.slug))}${c.status === 'closed' ? ' (закрыта)' : ''}</option>`).join('');
+  // Скелет заметок сессии (#sess-notes) нужен ДО _sessLoadModules — тот может
+  // синхронно каскадом дойти до _sessLoadModule → _sessHydrateSessionNotes,
+  // которой нужен уже существующий #sess-notes (иначе загруженный текст молча
+  // потеряется: он придёт раньше, чем появится textarea).
+  _sessRenderNotes();
   if (saved.chr && chrs.some(c => c.slug === saved.chr)) {
     chrSel.value = saved.chr;
     await _sessLoadModules(saved.chr, saved.mod);
   }
-  _sessRenderNotes();
 }
 
 async function _sessLoadModules(chr, preselect) {
@@ -83,9 +99,12 @@ function _sessSyncSceneNavVisibility() {
 
 function _sessClearModule() {
   _sessDetail = null; _sessBlocks = []; _sessScene = 0; _sessCurrentMod = null;
+  _sessSceneNotesCache = {};
   document.getElementById('sess-scenario').innerHTML = '<div class="cdet-empty">Выбери хронику и модуль</div>';
   document.getElementById('sess-npcs').innerHTML = '';
   document.getElementById('sess-audio').innerHTML = '';
+  _sessRenderSceneNote();       // сбрасывает блок заметки сцены (нет сцены — нет блока)
+  _sessHydrateSessionNotes(''); // сбрасывает textarea заметок сессии (нет модуля — нет заметки)
   _sessSyncSceneNavVisibility();
 }
 
@@ -101,13 +120,21 @@ async function _sessLoadModule(chr, mod) {
   // с актуальным _sessCurrentMod — этот ответ устарел, тихо выходим, не трогая
   // _sessBlocks/_sessDetail/localStorage/рендер (иначе более медленный поздний
   // ответ мог бы затереть уже показанный результат более быстрого).
-  let detail;
+  const qs   = window.location.search || '';
+  const base = `/api/chronicles/${encodeURIComponent(chr)}/modules/${encodeURIComponent(mod)}`;
+  let detail, sceneNotes, sessionNotesResp;
   try {
     if (typeof ensureCharsLoaded === 'function') await ensureCharsLoaded(); // для resolveCharByName в чипах НПС
     if (_sessCurrentMod !== mod) return;
-    detail = await fetch(
-      `/api/chronicles/${encodeURIComponent(chr)}/modules/${encodeURIComponent(mod)}/detail` + (window.location.search || '')
-    ).then(r => r.json());
+    // scene-notes/session-notes грузятся параллельно с detail — тот же guard от
+    // гонки устаревших асинхронных ответов ниже покрывает и их. Сбой ИМЕННО
+    // этих двух не должен ронять загрузку сценария/НПС/аудио — свой .catch()
+    // с безопасным дефолтом на каждый (detail — по-прежнему фатален).
+    [detail, sceneNotes, sessionNotesResp] = await Promise.all([
+      fetch(`${base}/detail${qs}`).then(r => r.json()),
+      fetch(`${base}/scene-notes${qs}`).then(r => r.json()).catch(() => ({})),
+      fetch(`${base}/session-notes${qs}`).then(r => r.json()).catch(() => ({ text: '' })),
+    ]);
   } catch {
     if (_sessCurrentMod !== mod) return; // устаревший запрос — не заслоняем ошибкой уже выбранный другой модуль
     scEl.innerHTML = '<div class="cdet-empty">⚠ Не удалось загрузить модуль</div>';
@@ -117,6 +144,7 @@ async function _sessLoadModule(chr, mod) {
   }
   if (_sessCurrentMod !== mod) return; // устаревший ответ пришёл позже более нового запроса
   _sessDetail = detail;
+  _sessSceneNotesCache = (sceneNotes && typeof sceneNotes === 'object') ? sceneNotes : {};
   const raw = (_sessDetail.scenario || '').replace(/\r\n/g, '\n');
   _sessBlocks = raw.trim()
     ? raw.split(/\n(?=##\s+)/).map(part => {
@@ -133,6 +161,8 @@ async function _sessLoadModule(chr, mod) {
   _sessRenderScenario();
   _sessRenderNpcs();
   _sessRenderAudio();
+  _sessRenderSceneNote();
+  _sessHydrateSessionNotes(sessionNotesResp?.text || '');
   _sessSyncSceneNavVisibility();
 }
 
@@ -161,6 +191,7 @@ function _sessGoScene(idx) {
   _sessScene = Math.min(Math.max(0, idx), _sessBlocks.length - 1);
   _sessSave({ scene: _sessScene });
   _sessRenderScenario();
+  _sessRenderSceneNote(); // новая сцена — свой заголовок/текст/dirty-состояние кнопки
 }
 
 // ── НПС ───────────────────────────────────────────────────────────────────────
@@ -213,22 +244,103 @@ async function _sessRenderAudio() {
       </div>`).join('')}`;
 }
 
-// ── Заметки ───────────────────────────────────────────────────────────────────
+// ── Сохранение заметок: общий хелпер кнопки «Сохранить» ────────────────────────
+// Переиспользуется и «Заметкой сцены», и «Заметками сессии» — обе требуют
+// одинаковый набор состояний:
+//  - disabled, пока значение textarea совпадает с последним загруженным
+//    (getLoaded() — вызывается каждый раз заново, а не один раз при биндинге,
+//    т.к. «загруженное» значение меняется при смене сцены/модуля);
+//  - на время onSave(text) — disabled + текст «⏳ Сохраняю…» (иначе двойной
+//    клик до ответа сервера уйдёт вторым параллельным запросом);
+//  - при ошибке onSave() (throw) — showToast(..., 'error') и кнопка
+//    возвращается в активное состояние, чтобы можно было повторить попытку
+//    без повторного набора текста;
+//  - onSave может вернуть `false`, если к моменту ответа сервера результат уже
+//    устарел (пользователь успел переключить сцену/модуль, пока запрос летел) —
+//    тогда кнопку/подпись НЕ трогаем: их уже мог переопределить свежий рендер
+//    для нового контекста, и не должны затирать его состояние гонки.
+function _sessBindSaveButton(btn, ta, getLoaded, onSave) {
+  const syncDirty = () => { btn.disabled = (ta.value === getLoaded()); };
+  ta.addEventListener('input', syncDirty);
+  btn.addEventListener('click', async () => {
+    const text  = ta.value;
+    const label = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = '⏳ Сохраняю…';
+    try {
+      const stale = (await onSave(text)) === false;
+      if (stale) return;
+      btn.textContent = label;
+      btn.disabled = true; // сохранено — снова в синхронном состоянии
+    } catch (err) {
+      btn.textContent = label;
+      btn.disabled = false;
+      showToast('Не удалось сохранить: ' + err.message, 'error');
+    }
+  });
+  return syncDirty;
+}
 
-let _sessNotesTimer = null;
+// ── Заметка сцены (3.5-FE) ──────────────────────────────────────────────────────
+
+function _sessRenderSceneNote() {
+  const wrap = document.getElementById('sess-scene-notes-wrap');
+  if (!_sessBlocks.length) { wrap.innerHTML = ''; _sessSceneNoteLoaded = ''; return; }
+  const heading = _sessBlocks[_sessScene]?.heading || '';
+  if (!wrap.querySelector('#sess-scene-note')) {
+    wrap.innerHTML = `
+      <div class="sess-side-title" id="sess-scene-note-title"></div>
+      <textarea class="form-control" id="sess-scene-note" rows="6" placeholder="Заметка к этой сцене..."></textarea>
+      <button class="chr-modal-btn" id="sess-scene-note-save" disabled>Сохранить</button>`;
+    const ta  = wrap.querySelector('#sess-scene-note');
+    const btn = wrap.querySelector('#sess-scene-note-save');
+    _sessBindSaveButton(btn, ta, () => _sessSceneNoteLoaded, async text => {
+      const h = _sessBlocks[_sessScene]?.heading || ''; // heading НА МОМЕНТ клика, как есть — без нормализации/strip эмодзи
+      const capturedMod = _sessCurrentMod;
+      const chr = document.getElementById('sess-chr-sel').value;
+      const r = await fetch(
+        `/api/chronicles/${encodeURIComponent(chr)}/modules/${encodeURIComponent(capturedMod)}/scene-note${window.location.search || ''}`,
+        { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ heading: h, text }) }
+      );
+      const result = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(result.error || 'Ошибка сохранения');
+      if (_sessCurrentMod !== capturedMod) return false; // модуль сменился, пока PUT летел — не трогаем чужой кэш/кнопку
+      _sessSceneNotesCache[h] = text;
+      _sessSceneNoteLoaded = text;
+    });
+  }
+  document.getElementById('sess-scene-note-title').textContent = `Заметка «${heading}»`;
+  const ta  = document.getElementById('sess-scene-note');
+  const btn = document.getElementById('sess-scene-note-save');
+  _sessSceneNoteLoaded = _sessSceneNotesCache[heading] || '';
+  ta.value = _sessSceneNoteLoaded;
+  btn.disabled = true;
+  btn.textContent = 'Сохранить';
+}
+
+// ── Заметки сессии (3.6-FE) — файл модуля, не localStorage ─────────────────────
 
 function _sessRenderNotes() {
   const wrap = document.getElementById('sess-notes-wrap');
-  if (wrap.querySelector('#sess-notes')) return; // уже отрисовано
+  if (wrap.querySelector('#sess-notes')) return; // скелет уже отрисован — значение обновляет _sessHydrateSessionNotes
   wrap.innerHTML = `
     <div class="sess-side-title">📝 Заметки сессии</div>
     <textarea class="form-control" id="sess-notes" rows="8" placeholder="Что произошло, имена, зацепки..."></textarea>
+    <button class="chr-modal-btn" id="sess-notes-save" disabled>Сохранить</button>
     <button class="chr-modal-btn" id="sess-to-log">→ Записать сессию</button>`;
-  const ta = wrap.querySelector('#sess-notes');
-  ta.value = _sessStore().notes || '';
-  ta.addEventListener('input', () => {
-    clearTimeout(_sessNotesTimer);
-    _sessNotesTimer = setTimeout(() => _sessSave({ notes: ta.value }), 500);
+  const ta  = wrap.querySelector('#sess-notes');
+  const btn = wrap.querySelector('#sess-notes-save');
+  _sessBindSaveButton(btn, ta, () => _sessSessionNotesLoaded, async text => {
+    const capturedMod = _sessCurrentMod;
+    const chr = document.getElementById('sess-chr-sel').value;
+    const r = await fetch(
+      `/api/chronicles/${encodeURIComponent(chr)}/modules/${encodeURIComponent(capturedMod)}/session-notes${window.location.search || ''}`,
+      { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text }) }
+    );
+    const result = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(result.error || 'Ошибка сохранения');
+    if (_sessCurrentMod !== capturedMod) return false; // модуль сменился, пока PUT летел
+    _sessSessionNotesLoaded = text;
   });
   wrap.querySelector('#sess-to-log').addEventListener('click', () => {
     const notes = ta.value.trim();
@@ -244,6 +356,19 @@ function _sessRenderNotes() {
     const modName = document.getElementById('ls-mod-name');
     if (modName && !modName.value.trim() && mod && _sessDetail) modName.value = _sessDetail.title || mod;
   });
+}
+
+// Обновляет содержимое textarea заметок сессии ТЕКУЩЕГО модуля (вызывается из
+// _sessLoadModule после загрузки session-notes и из _sessClearModule для
+// сброса) — сам скелет (textarea/кнопка) создаётся один раз в _sessRenderNotes().
+function _sessHydrateSessionNotes(text) {
+  const ta  = document.getElementById('sess-notes');
+  const btn = document.getElementById('sess-notes-save');
+  if (!ta || !btn) return; // _sessRenderNotes ещё не отрисовала скелет
+  _sessSessionNotesLoaded = text || '';
+  ta.value = _sessSessionNotesLoaded;
+  btn.disabled = true;
+  btn.textContent = 'Сохранить';
 }
 
 // ── Обработчики ───────────────────────────────────────────────────────────────

@@ -5048,6 +5048,84 @@ test('source-guard: session-screen.js — клик по бейджу «Фина�
     'ветка [data-open-finale] должна перехватывать клик раньше общей ветки .chd-mod-card');
 });
 
+// ── W5 тикет 3.5-FE: блок «Заметка сцены» ─────────────────────────────────────
+
+test('source-guard: session-screen.js — кэш _sessSceneNotesCache и вызовы scene-notes/scene-note', () => {
+  const js = require('fs').readFileSync(path.join(__dirname, '../public/scripts/session-screen.js'), 'utf-8');
+  assert.ok(/let _sessSceneNotesCache\s*=\s*\{\}/.test(js), 'нет модульного кэша _sessSceneNotesCache = {}');
+  assert.ok(js.includes('function _sessRenderSceneNote'), 'нет функции _sessRenderSceneNote');
+  assert.ok(/`\$\{base\}\/scene-notes\$\{qs\}`/.test(js) || js.includes('/scene-notes'),
+    'нет обращения к эндпоинту GET .../scene-notes');
+  assert.ok(js.includes('/scene-note'), 'нет обращения к эндпоинту PUT .../scene-note');
+  // GET scene-notes грузится вместе с detail в _sessLoadModule и заполняет кэш.
+  const loadBody = js.match(/async function _sessLoadModule\(chr, mod\) \{[\s\S]*?\n\}/)[0];
+  assert.ok(loadBody.includes('_sessSceneNotesCache ='), '_sessLoadModule не заполняет _sessSceneNotesCache');
+  assert.ok(loadBody.includes('_sessRenderSceneNote()'), '_sessLoadModule не рендерит заметку сцены после загрузки');
+});
+
+test('source-guard: session-screen.js — _sessGoScene вызывает _sessRenderSceneNote (заметка обновляется при смене сцены)', () => {
+  const js = require('fs').readFileSync(path.join(__dirname, '../public/scripts/session-screen.js'), 'utf-8');
+  const fnMatch = js.match(/function _sessGoScene\(idx\) \{[\s\S]*?\n\}/);
+  assert.ok(fnMatch, 'не найдено тело _sessGoScene');
+  assert.ok(fnMatch[0].includes('_sessRenderSceneNote()'), '_sessGoScene не вызывает _sessRenderSceneNote() при смене сцены');
+});
+
+test('source-guard: session-screen.js — кнопка «Сохранить» заметки сцены: dirty/loading/error через общий хелпер', () => {
+  const js = require('fs').readFileSync(path.join(__dirname, '../public/scripts/session-screen.js'), 'utf-8');
+  assert.ok(js.includes('function _sessBindSaveButton'), 'нет общего хелпера _sessBindSaveButton (dirty/loading/error)');
+  assert.ok(js.includes("id=\"sess-scene-note-save\""), 'нет кнопки #sess-scene-note-save');
+  assert.ok(/Сохраняю/.test(js), 'нет индикации состояния "Сохраняю…" на время запроса');
+  assert.ok(/showToast\([^)]*'error'\)/.test(js), 'нет showToast(..., \'error\') при ошибке сохранения');
+});
+
+// ── W5 тикет 3.6-FE: «Заметки сессии» — файл вместо localStorage ──────────────
+
+test('source-guard: session-screen.js — заметки сессии грузятся/сохраняются через session-notes, не localStorage', () => {
+  const js = require('fs').readFileSync(path.join(__dirname, '../public/scripts/session-screen.js'), 'utf-8');
+  assert.ok(js.includes('/session-notes'), 'нет обращения к эндпоинту .../session-notes');
+  assert.ok(js.includes('function _sessHydrateSessionNotes'), 'нет функции _sessHydrateSessionNotes (гидратация из файла)');
+  assert.ok(js.includes("id=\"sess-notes-save\""), 'нет кнопки #sess-notes-save для заметок сессии');
+  // «Записать сессию» физически остаётся в разметке этого блока (поведение не менялось в 3.6-FE).
+  assert.ok(js.includes("id=\"sess-to-log\""), 'кнопка #sess-to-log пропала из разметки блока заметок сессии');
+
+  // Регрессия: содержимое заметок сессии больше НЕ проходит через _sessSave/
+  // _sessStore (тот остаётся только для chr/mod/scene — localStorage-механизм
+  // не тронут, но текст заметок в него больше не пишется и не читается).
+  assert.ok(!/_sessSave\(\s*\{\s*notes:/.test(js), '_sessSave всё ещё пишет notes в localStorage (должно быть удалено в 3.6-FE)');
+  assert.ok(!/_sessStore\(\)\.notes/.test(js), 'код всё ещё читает _sessStore().notes (legacy localStorage-путь заметок должен быть удалён)');
+  // Сам механизм _sessSave/_sessStore (для chr/mod/scene) остаётся нетронутым.
+  assert.ok(js.includes('function _sessStore') && js.includes('function _sessSave'),
+    '_sessStore/_sessSave как механизм (chr/mod/scene) не должны быть удалены');
+});
+
+test('source-guard: session-screen.js — _sessClearModule сбрасывает заметку сцены и заметки сессии текущего модуля', () => {
+  const js = require('fs').readFileSync(path.join(__dirname, '../public/scripts/session-screen.js'), 'utf-8');
+  const fnMatch = js.match(/function _sessClearModule\(\) \{[\s\S]*?\n\}/);
+  assert.ok(fnMatch, 'не найдено тело _sessClearModule');
+  assert.ok(fnMatch[0].includes('_sessRenderSceneNote()'), '_sessClearModule не сбрасывает блок заметки сцены');
+  assert.ok(fnMatch[0].includes('_sessHydrateSessionNotes('), '_sessClearModule не сбрасывает заметки сессии');
+});
+
+// ── W5: гонка при смене модуля во время загрузки scene-notes/session-notes ────
+
+test('source-guard: session-screen.js — GET scene-notes/session-notes в _sessLoadModule защищены тем же guard от гонки, что и detail', () => {
+  const js = require('fs').readFileSync(path.join(__dirname, '../public/scripts/session-screen.js'), 'utf-8');
+  const body = js.match(/async function _sessLoadModule\(chr, mod\) \{[\s\S]*?\n\}/)[0];
+  // detail/scene-notes/session-notes должны грузиться в одном Promise.all —
+  // единая guard-проверка после await покрывает все три (а не только detail).
+  const promiseAllMatch = body.match(/await Promise\.all\(\[[\s\S]*?\]\)/);
+  assert.ok(promiseAllMatch, 'detail/scene-notes/session-notes не объединены в один await Promise.all(...)');
+  assert.ok(promiseAllMatch[0].includes('/detail'), 'Promise.all не включает fetch detail');
+  assert.ok(promiseAllMatch[0].includes('/scene-notes'), 'Promise.all не включает fetch scene-notes');
+  assert.ok(promiseAllMatch[0].includes('/session-notes'), 'Promise.all не включает fetch session-notes');
+  // guard-проверка после Promise.all должна идти раньше применения результатов.
+  const promiseAllEnd = body.indexOf(promiseAllMatch[0]) + promiseAllMatch[0].length;
+  const guardAfter = body.indexOf('if (_sessCurrentMod !== mod) return;', promiseAllEnd);
+  const applyIdx = body.indexOf('_sessDetail = detail;');
+  assert.ok(guardAfter !== -1 && applyIdx > guardAfter,
+    'нет guard-проверки после Promise.all перед применением detail/scene-notes/session-notes');
+});
+
 test('source-guard: styles.css — кнопка удаления модуля скрыта в #sess-mod-cards (Сессия — режим игры, не управления модулями)', () => {
   const css = require('fs').readFileSync(path.join(__dirname, '../public/styles.css'), 'utf-8');
   const ruleMatch = css.match(/#sess-mod-cards \.chd-mod-del-btn\s*\{[^}]*\}/);
