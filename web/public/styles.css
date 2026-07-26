@@ -4996,12 +4996,26 @@ a:focus-visible {
   align-items: flex-start;
   gap: 16px;
   padding: 16px 20px;
+  border: 1px solid transparent;
   border-bottom: 1px solid rgba(139, 0, 0, .08);
   transition: background .15s;
 }
 
+@media (prefers-reduced-motion: no-preference) {
+  .thread-card {
+    transition: background .15s, box-shadow var(--dur-base) var(--ease), border-color var(--dur-base) var(--ease);
+  }
+}
+
 .thread-card:hover {
   background: var(--bg3);
+}
+
+/* Временная подсветка нити, к которой пришли кликом по «Висящим нитям» на
+   Панели (archive.js → loadThreads); снимается через 2с. */
+.thread-card--focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 20px var(--glow);
 }
 
 /* Приоритет уже читается по цвету/рамке .thread-priority — не нужен ещё и

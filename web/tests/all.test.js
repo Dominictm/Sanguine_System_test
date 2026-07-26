@@ -2751,6 +2751,32 @@ describe('API — integration', () => {
     });
   });
 
+  // ── Threads — переход из «Висящих нитей» Панели со скроллом/подсветкой ─────
+  describe('Threads — фокус нити при переходе с Панели', () => {
+    it('source-guard: renderDashboard прокидывает data-thread-id/data-thread-file в строку нити', () => {
+      const src = require('fs').readFileSync(path.join(__dirname, '../public/scripts/scripts.js'), 'utf-8');
+      assert.ok(src.includes('data-thread-id'), 'нет data-thread-id в строке «Висящих нитей»');
+      assert.ok(src.includes('data-thread-file'), 'нет data-thread-file в строке «Висящих нитей»');
+      assert.ok(src.includes('_pendingThreadFocus'),
+        'клик-обработчик не устанавливает _pendingThreadFocus перед navigate(\'threads\')');
+    });
+    it('source-guard: loadThreads() скроллит и подсвечивает целевую нить по _pendingThreadFocus', () => {
+      const src = require('fs').readFileSync(path.join(__dirname, '../public/scripts/archive.js'), 'utf-8');
+      assert.ok(src.includes('_pendingThreadFocus'), 'archive.js не объявляет/не использует _pendingThreadFocus');
+      assert.ok(src.includes('scrollIntoView'), 'loadThreads() не скроллит к целевой нити');
+      assert.ok(src.includes('thread-card--focus'), 'loadThreads() не подсвечивает целевую карточку класса thread-card--focus');
+      assert.ok(src.includes('prefers-reduced-motion'), 'скролл не учитывает prefers-reduced-motion');
+    });
+    it('source-guard: styles.css определяет подсветку .thread-card--focus на существующих токенах', () => {
+      const css = require('fs').readFileSync(path.join(__dirname, '../public/styles.css'), 'utf-8');
+      assert.ok(css.includes('.thread-card--focus'), 'нет класса .thread-card--focus');
+      assert.ok(/\.thread-card--focus\s*\{[^}]*var\(--glow\)/s.test(css),
+        '.thread-card--focus не использует var(--glow)');
+      assert.ok(/\.thread-card--focus\s*\{[^}]*var\(--accent\)/s.test(css),
+        '.thread-card--focus не использует var(--accent)');
+    });
+  });
+
   // ── Diary — validation ─────────────────────────────────────────────────────
   describe('Diary — validation', () => {
     it('GET without file param → 400', async () => {

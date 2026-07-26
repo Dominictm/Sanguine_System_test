@@ -281,7 +281,7 @@ function renderDashboard(s, container, threads) {
     <div class="dash-stale-threads">
       <div class="dash-stale-title">🧵 Висящие нити</div>
       ${staleThreads.map(t => `
-        <button class="dash-stale-row stat-clickable" data-nav="threads" title="${escHtml(t.description || t.title)}">
+        <button class="dash-stale-row stat-clickable" data-nav="threads" data-thread-id="${t.id}" data-thread-file="${escAttr(t.file || '')}" title="${escHtml(t.description || t.title)}">
           <span class="dash-stale-dot ${t.status}"></span>
           <span class="dash-stale-name">${escHtml(t.title)}</span>
           <span class="dash-stale-age">${t.staleMonths} ${ruMonths(t.staleMonths)} без движения</span>
@@ -450,7 +450,11 @@ function renderIntegrity(data, el) {
 // Clickable dashboard stat cards → navigate; integrity rows → expand
 document.getElementById('dash-content').addEventListener('click', e => {
   const card = e.target.closest('.stat-clickable[data-nav]');
-  if (card) { navigate(card.dataset.nav); return; }
+  if (card) {
+    if (card.dataset.threadId) _pendingThreadFocus = { id: card.dataset.threadId, file: card.dataset.threadFile };
+    navigate(card.dataset.nav);
+    return;
+  }
 
   if (e.target.closest('#ip-canon-btn')) {
     _runCanonCheck(document.getElementById('ip-canon-text')?.value || '',

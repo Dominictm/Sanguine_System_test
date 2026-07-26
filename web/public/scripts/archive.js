@@ -8,6 +8,10 @@ const THREAD_STATUS_OPTS = [
 ];
 const THREAD_PRIO_OPTS = ['Высокий', 'Средний', 'Низкий'];
 let _threadFiles = ['archive/open_threads.md'];
+// Заполняется делегированным обработчиком клика по «Висящим нитям» на Панели
+// (scripts.js) непосредственно перед navigate('threads'); loadThreads() при
+// рендере прокручивает к этой нити и подсвечивает её, затем обнуляет.
+let _pendingThreadFocus = null;
 
 function fileLabel(f) {
   if (f === 'archive/open_threads.md') return 'Архив города';
@@ -55,6 +59,19 @@ async function loadThreads() {
     html += section('🟡', 'Фоновые', bg);
     html += section('🟢', 'Закрытые', done);
     el.innerHTML = html || '<div class="loading-state" style="height:120px">Нитей нет</div>';
+
+    if (_pendingThreadFocus) {
+      const { id, file } = _pendingThreadFocus;
+      _pendingThreadFocus = null;
+      const target = Array.from(el.querySelectorAll('.thread-card'))
+        .find(c => c.dataset.id === String(id) && c.dataset.file === (file || ''));
+      if (target) {
+        const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        target.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'center' });
+        target.classList.add('thread-card--focus');
+        setTimeout(() => target.classList.remove('thread-card--focus'), 2000);
+      }
+    }
   } catch {
     el.innerHTML = '<div class="loading-state" style="color:var(--accent3)">⚠ Не удалось загрузить</div>';
   }
