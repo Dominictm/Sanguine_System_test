@@ -296,7 +296,8 @@ function _sessRenderSceneNote() {
     const btn = wrap.querySelector('#sess-scene-note-save');
     _sessBindSaveButton(btn, ta, () => _sessSceneNoteLoaded, async text => {
       const h = _sessBlocks[_sessScene]?.heading || ''; // heading НА МОМЕНТ клика, как есть — без нормализации/strip эмодзи
-      const capturedMod = _sessCurrentMod;
+      const capturedMod   = _sessCurrentMod;
+      const capturedScene = h; // heading как ключ идентичности сцены — тот же ключ, что и в _sessSceneNotesCache
       const chr = document.getElementById('sess-chr-sel').value;
       const r = await fetch(
         `/api/chronicles/${encodeURIComponent(chr)}/modules/${encodeURIComponent(capturedMod)}/scene-note${window.location.search || ''}`,
@@ -305,7 +306,8 @@ function _sessRenderSceneNote() {
       const result = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(result.error || 'Ошибка сохранения');
       if (_sessCurrentMod !== capturedMod) return false; // модуль сменился, пока PUT летел — не трогаем чужой кэш/кнопку
-      _sessSceneNotesCache[h] = text;
+      _sessSceneNotesCache[h] = text; // сцена сохранилась на сервере — кэш обновляем независимо от того, что сейчас отображается
+      if ((_sessBlocks[_sessScene]?.heading || '') !== capturedScene) return false; // сцена сменилась (тот же модуль), пока PUT летел — не трогаем кнопку/loaded уже другой сцены
       _sessSceneNoteLoaded = text;
     });
   }
