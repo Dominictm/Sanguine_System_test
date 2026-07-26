@@ -358,19 +358,50 @@ function _sessRenderNotes() {
     const curTa = document.getElementById('sess-notes-wrap')?.querySelector('#sess-notes');
     if (curTa) curTa.value = text;
   });
+  // 3.7: «→ Записать сессию» больше не ведёт на устаревшую вкладку записи
+  // сессии на странице «Инструменты» — вместо этого открывает страницу
+  // ТЕКУЩЕГО модуля сразу на вкладке «Сессии» с уже открытой формой,
+  // префилленной агрегатом заметок
+  // сыгранных (ещё не записанных в прошлые сессии) сцен. chr/mod берём из
+  // актуального состояния экрана Сессии (#sess-chr-sel, _sessCurrentMod), а не
+  // из _sessStore() — та может отставать от live-состояния.
   wrap.querySelector('#sess-to-log').addEventListener('click', () => {
-    const notes = ta.value.trim();
-    const { chr, mod } = _sessStore();
-    navigate('tools');
-    const tabBtn = document.querySelector('.tab-btn[data-tab="log-session"]');
-    if (tabBtn) tabBtn.click();
-    // Предзаполняем только пустые поля — ручной ввод не затираем.
-    const summary = document.getElementById('ls-summary');
-    if (summary && !summary.value.trim() && notes) summary.value = notes;
-    const chrSel = document.getElementById('ls-chron-slug');
-    if (chrSel && !chrSel.value && chr) chrSel.value = chr;
-    const modName = document.getElementById('ls-mod-name');
-    if (modName && !modName.value.trim() && mod && _sessDetail) modName.value = _sessDetail.title || mod;
+    const chr = document.getElementById('sess-chr-sel').value;
+    const mod = _sessCurrentMod;
+    if (!chr || !mod) {
+      showToast('Выбери хронику и модуль перед записью сессии', 'error');
+      return;
+    }
+    // «Сыгранные» сцены — тем же принципом, что фильтр sceneOpts в modules.js
+    // (вынесен в общий хелпер _filterUnrecordedScenes, modules.js): сцены
+    // сценария, чьи заголовки ещё не встречаются ни в одной уже записанной
+    // сессии этого модуля.
+    const scenes    = _sessDetail?.scenes   || [];
+    const sessions  = _sessDetail?.sessions || [];
+    const unrecorded = typeof _filterUnrecordedScenes === 'function'
+      ? _filterUnrecordedScenes(scenes, sessions) : [];
+    // Для каждой несыгранной-ранее сцены ищем заметку в _sessSceneNotesCache —
+    // ключ кэша это СЫРОЙ heading из _sessBlocks[i].heading, а `unrecorded`
+    // содержит реконструированные бэкендом лейблы `${sc.date} — ${sc.title}`
+    // (см. modules.js sceneSelect). На реальных данных сценария оба совпадают
+    // байт-в-байт, когда заголовок без эмодзи-префикса и с разделителем «—»
+    // (проверено на progulki_po_metro/scenario.md) — но это не гарантировано
+    // для всех данных, поэтому просто пропускаем сцену без совпадения, не
+    // вставляя пустой/мусорный блок.
+    const noteParts = [];
+    for (const label of unrecorded) {
+      const block = _sessBlocks.find(b => b.heading === label);
+      if (!block) continue;
+      const note = (_sessSceneNotesCache[block.heading] || '').trim();
+      if (!note) continue;
+      noteParts.push(`## ${block.heading}\n${note}`);
+    }
+    _pendingModulePrefill = {
+      tab: 'sessions',
+      notes: noteParts.join('\n\n'),
+      scenes: unrecorded.join(', '),
+    };
+    openModulePage(chr, mod);
   });
 }
 

@@ -5218,3 +5218,103 @@ test('source-guard: styles.css — .sess-side sticky на десктопе, stat
   assert.ok(sideInMq, 'брейкпоинт 900px не переопределяет .sess-side (нужно отключить sticky на мобильном)');
   assert.ok(/position:\s*static/.test(sideInMq[0]), '.sess-side в брейкпоинте 900px не возвращает position: static');
 });
+
+// ── W5 тикет 3.7: «→ Записать сессию» ведёт на страницу модуля (вкладка
+// «Сессии»), не на устаревший tools/log-session ──────────────────────────────
+
+test('source-guard: session-screen.js — обработчик #sess-to-log больше НЕ ведёт на tools/log-session, а открывает страницу модуля', () => {
+  const js = require('fs').readFileSync(path.join(__dirname, '../public/scripts/session-screen.js'), 'utf-8');
+  const clickIdx = js.indexOf("wrap.querySelector('#sess-to-log').addEventListener('click'");
+  assert.ok(clickIdx !== -1, 'не найден обработчик клика #sess-to-log');
+  // Тело обработчика — от начала addEventListener до следующего `});` на
+  // верхнем уровне функции _sessRenderNotes (сам обработчик — последний в ней).
+  const fnBody = js.match(/function _sessRenderNotes\(\) \{[\s\S]*?\n\}/)[0];
+  assert.ok(!/navigate\('tools'\)/.test(fnBody),
+    'обработчик #sess-to-log всё ещё делает navigate(\'tools\') — устаревший путь записи сессии не заменён');
+  assert.ok(!/data-tab="log-session"/.test(fnBody) && !/log-session/.test(fnBody),
+    'обработчик #sess-to-log всё ещё ссылается на вкладку log-session (устаревший путь)');
+  assert.ok(/openModulePage\(\s*chr\s*,\s*mod\s*\)/.test(fnBody),
+    'обработчик #sess-to-log не вызывает openModulePage(chr, mod)');
+  assert.ok(fnBody.includes('_pendingModulePrefill'),
+    'обработчик #sess-to-log не устанавливает _pendingModulePrefill перед openModulePage');
+  assert.ok(/const chr\s*=\s*document\.getElementById\('sess-chr-sel'\)\.value/.test(fnBody),
+    'chr берётся не из document.getElementById(\'sess-chr-sel\').value (актуальное live-состояние, не _sessStore())');
+  assert.ok(/const mod\s*=\s*_sessCurrentMod/.test(fnBody),
+    'mod берётся не из _sessCurrentMod (актуальное live-состояние, не _sessStore())');
+});
+
+test('source-guard: session-screen.js — агрегат заметок для _pendingModulePrefill использует общий хелпер _filterUnrecordedScenes и кэш заметок сцен', () => {
+  const js = require('fs').readFileSync(path.join(__dirname, '../public/scripts/session-screen.js'), 'utf-8');
+  const fnBody = js.match(/function _sessRenderNotes\(\) \{[\s\S]*?\n\}/)[0];
+  assert.ok(/_filterUnrecordedScenes\(/.test(fnBody),
+    '#sess-to-log не переиспользует _filterUnrecordedScenes — рискует разойтись с фильтром sceneOpts в modules.js');
+  assert.ok(/_sessSceneNotesCache\[/.test(fnBody),
+    '#sess-to-log не читает заметки сцен из _sessSceneNotesCache для агрегата');
+  assert.ok(/_sessBlocks\.find\(/.test(fnBody),
+    '#sess-to-log не сопоставляет отфильтрованные сцены с _sessBlocks (сырой heading — ключ кэша заметок)');
+});
+
+test('source-guard: modules.js — объявляет общий хелпер _filterUnrecordedScenes и переиспользует его в renderModulePage (не дублирует фильтр)', () => {
+  const js = require('fs').readFileSync(path.join(__dirname, '../public/scripts/modules.js'), 'utf-8');
+  assert.ok(js.includes('function _filterUnrecordedScenes('), 'нет функции _filterUnrecordedScenes');
+  assert.ok(/const sceneOpts = _filterUnrecordedScenes\(/.test(js),
+    'renderModulePage не переиспользует _filterUnrecordedScenes для sceneOpts (дублирует логику фильтра)');
+});
+
+test('source-guard: modules.js — объявляет модульную переменную _pendingModulePrefill и обрабатывает её в loadModulePage', () => {
+  const js = require('fs').readFileSync(path.join(__dirname, '../public/scripts/modules.js'), 'utf-8');
+  assert.ok(/let _pendingModulePrefill\s*=\s*null/.test(js), 'нет объявления let _pendingModulePrefill = null');
+  const fnBody = js.match(/async function loadModulePage\(\) \{[\s\S]*?\n\}/)[0];
+  assert.ok(fnBody.includes('_pendingModulePrefill'), 'loadModulePage не обрабатывает _pendingModulePrefill');
+  // Применение префилла должно идти ПОСЛЕ renderModulePage(data) — та синхронно
+  // рендерит #modp-panel-sessions, форма должна уже существовать в DOM.
+  const renderIdx  = fnBody.indexOf('renderModulePage(data)');
+  const prefillIdx = fnBody.indexOf('_pendingModulePrefill');
+  assert.ok(renderIdx !== -1 && prefillIdx > renderIdx,
+    'применение _pendingModulePrefill идёт не после renderModulePage(data) — форма сессий может быть ещё не отрисована');
+  // Обнуление намерения сразу после применения (не должно залипать между модулями).
+  assert.ok(/_pendingModulePrefill\s*=\s*null/.test(fnBody.slice(prefillIdx)),
+    'loadModulePage не обнуляет _pendingModulePrefill после применения');
+});
+
+test('source-guard: modules.js — применение _pendingModulePrefill переключает вкладку на «Сессии»', () => {
+  const js = require('fs').readFileSync(path.join(__dirname, '../public/scripts/modules.js'), 'utf-8');
+  const fnBody = js.match(/async function loadModulePage\(\) \{[\s\S]*?\n\}/)[0];
+  const prefillIdx = fnBody.indexOf('_pendingModulePrefill');
+  const afterPrefill = fnBody.slice(prefillIdx);
+  assert.ok(/data-modtab="sessions"/.test(afterPrefill),
+    'применение префилла не переключает вкладку модуля на sessions (data-modtab="sessions")');
+});
+
+// ── Регрессия (тот же класс id-коллизии, что уже чинили для #sess-notes-wrap
+// в session-screen.js): применение _pendingModulePrefill ЧИТАЕТ/ПИШЕТ поля
+// #sess-notes/#sess-scenes формы записи сессии на СТРАНИЦЕ МОДУЛЯ — те же id,
+// что #sess-notes на экране Сессии (widget «Заметки сессии»). navigate() не
+// удаляет страницы из DOM, так что несскоупленный document.getElementById
+// после ЛЮБОГО открытия Сессии навсегда резолвился бы в чужой textarea ───────
+
+test('source-guard: modules.js — применение _pendingModulePrefill скоупит #sess-notes/#sess-scenes через #modp-panel-sessions (не голый getElementById — коллизия id с session-screen.js)', () => {
+  const js = require('fs').readFileSync(path.join(__dirname, '../public/scripts/modules.js'), 'utf-8');
+  const fnBody = js.match(/async function loadModulePage\(\) \{[\s\S]*?\n\}/)[0];
+  const prefillIdx = fnBody.indexOf('_pendingModulePrefill');
+  const afterPrefill = fnBody.slice(prefillIdx);
+  assert.ok(!/document\.getElementById\('sess-notes'\)/.test(afterPrefill),
+    'применение префилла использует несскоупленный document.getElementById(\'sess-notes\') — коллизия с #sess-notes-wrap на экране Сессии');
+  assert.ok(!/document\.getElementById\('sess-scenes'\)/.test(afterPrefill),
+    'применение префилла использует несскоупленный document.getElementById(\'sess-scenes\')');
+  assert.ok(/document\.getElementById\('modp-panel-sessions'\)\.querySelector\(['"]#sess-notes['"]\)/.test(afterPrefill),
+    'применение префилла не берёт #sess-notes через document.getElementById(\'modp-panel-sessions\').querySelector(\'#sess-notes\')');
+  assert.ok(/document\.getElementById\('modp-panel-sessions'\)\.querySelector\(['"]#sess-scenes['"]\)/.test(afterPrefill),
+    'применение префилла не берёт #sess-scenes через document.getElementById(\'modp-panel-sessions\').querySelector(\'#sess-scenes\')');
+});
+
+test('source-guard: modules.js — применение _pendingModulePrefill не затирает уже заполненные вручную поля', () => {
+  const js = require('fs').readFileSync(path.join(__dirname, '../public/scripts/modules.js'), 'utf-8');
+  const fnBody = js.match(/async function loadModulePage\(\) \{[\s\S]*?\n\}/)[0];
+  const prefillIdx = fnBody.indexOf('_pendingModulePrefill');
+  const afterPrefill = fnBody.slice(prefillIdx);
+  assert.ok(/notesEl\s*&&\s*!notesEl\.value\.trim\(\)/.test(afterPrefill),
+    'префилл #sess-notes не проверяет пустоту поля перед записью — рискует затереть ручной ввод');
+  assert.ok(/scenesEl\s*&&\s*!scenesEl\.value\.trim\(\)/.test(afterPrefill),
+    'префилл #sess-scenes не проверяет пустоту поля перед записью — рискует затереть ручной ввод');
+});

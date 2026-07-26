@@ -1059,6 +1059,14 @@ document.getElementById('finale-preview-modal').addEventListener('click', e => {
 
 STATE.currentModule = null;
 
+// Намерение «после загрузки страницы модуля — переключиться на вкладку и
+// префилльнуть форму» (тикет 3.7), по аналогии с _pendingThreadFocus в
+// archive.js. Устанавливается session-screen.js перед openModulePage() (кнопка
+// «→ Записать сессию»), применяется и обнуляется в loadModulePage() сразу
+// после renderModulePage() — та синхронно рендерит все панели модуля, включая
+// форму сессий (#modp-panel-sessions), так что DOM уже готов к этому моменту.
+let _pendingModulePrefill = null;
+
 function openModulePage(chronicle, name) {
   STATE.currentModule = { chronicle, name };
   closeModal('chr-detail-modal');
@@ -1091,7 +1099,29 @@ async function loadModulePage() {
         : fetch(`/api/characters${qs}`).then(r => r.json()).then(d => { STATE.characters = Array.isArray(d) ? d : []; }).catch(() => {}),
     ]);
     if (data.error) throw new Error(data.error);
-    renderModulePage(data);
+    renderModulePage(data); // синхронно рендерит ВСЕ панели, включая форму сессий (#modp-panel-sessions) — DOM готов сразу после этого вызова
+
+    // Применяем отложенное намерение «→ Записать сессию» (тикет 3.7), если оно
+    // было выставлено session-screen.js перед openModulePage().
+    if (_pendingModulePrefill) {
+      const prefill = _pendingModulePrefill;
+      _pendingModulePrefill = null;
+      if (prefill.tab === 'sessions') {
+        // Программно «кликаем» по вкладке — тот же путь, что и ручной клик GM,
+        // без дублирования логики переключения .active из делегированного
+        // обработчика #modp-tabbar ниже.
+        document.querySelector('.modp-tab[data-modtab="sessions"]')?.click();
+        // Контекстный селектор через #modp-panel-sessions — НЕ голый lookup по
+        // id «sess-notes»/«sess-scenes»: те же id рендерит #sess-notes-wrap на
+        // экране Сессии (session-screen.js) для виджета «Заметки сессии» — тот
+        // же класс id-коллизии, что уже чинили в _sessHydrateSessionNotes
+        // (см. регрессионный тест выше по коду).
+        const notesEl  = document.getElementById('modp-panel-sessions').querySelector('#sess-notes');
+        const scenesEl = document.getElementById('modp-panel-sessions').querySelector('#sess-scenes');
+        if (notesEl && !notesEl.value.trim() && prefill.notes) notesEl.value = prefill.notes;
+        if (scenesEl && !scenesEl.value.trim() && prefill.scenes) scenesEl.value = prefill.scenes;
+      }
+    }
   } catch (e) {
     document.getElementById('modp-title').textContent = 'Ошибка загрузки';
     document.getElementById('modp-panel-info').innerHTML = `<div class="modp-empty"><div class="modp-empty-icon">⚠</div>${escHtml(e.message)}</div>`;
@@ -1100,6 +1130,27 @@ async function loadModulePage() {
 
 // Permanent scene-picker option — игроки могут отступать от сценария (VtM)
 const SCENE_OFF_SCRIPT = 'События вне сценария';
+
+// Scenes from the scenario that are NOT already covered by any earlier session
+// record of this module — используется и формой «+ Запись сессии»
+// (renderModulePage → sceneSelect), и агрегатом заметок при переходе с экрана
+// Сессии (session-screen.js, кнопка «→ Записать сессию», тикет 3.7): обе
+// стороны должны считать «сыграно» одинаково, поэтому логика вынесена сюда, а
+// не продублирована в двух файлах. `scenes` — data.scenes/_sessDetail.scenes
+// ([{date, title}]), `sessions` — data.sessions/_sessDetail.sessions
+// ([{scenes}]) — тот же `/detail`-ответ на обеих страницах.
+function _filterUnrecordedScenes(scenes, sessions) {
+  const playedText = (sessions || []).map(s => s.scenes || '').join(' | ').toLowerCase();
+  return (scenes || [])
+    .map(sc => (sc.date ? `${sc.date} — ${sc.title}` : sc.title))
+    .filter(Boolean)
+    .filter(label => {
+      const datePart = (label.match(/^(?:сцена|эпизод)\s*\d+/i) || [''])[0].toLowerCase();
+      if (playedText.includes(label.toLowerCase())) return false;
+      if (datePart && playedText.includes(datePart)) return false;
+      return true;
+    });
+}
 
 // Resolve a character by name (exact, ё-insensitive) against the loaded roster.
 function _findCharByName(name) {
@@ -1618,16 +1669,7 @@ function renderModulePage(data) {
 
   // Scenes from the scenario, excluding those already recorded in earlier sessions.
   // «События вне сценария» is a permanent option — игроки могут отступать от сценария.
-  const playedText = sessions.map(s => s.scenes || '').join(' | ').toLowerCase();
-  const sceneOpts = (data.scenes || [])
-    .map(sc => (sc.date ? `${sc.date} — ${sc.title}` : sc.title))
-    .filter(Boolean)
-    .filter(label => {
-      const datePart = (label.match(/^(?:сцена|эпизод)\s*\d+/i) || [''])[0].toLowerCase();
-      if (playedText.includes(label.toLowerCase())) return false;
-      if (datePart && playedText.includes(datePart)) return false;
-      return true;
-    });
+  const sceneOpts = _filterUnrecordedScenes(data.scenes, sessions);
   const attr = s => escHtml(s).replace(/"/g, '&quot;');
   const sceneSelect = `<select id="sess-scene-pick" class="modp-sf-input" title="Добавить сцену или внесценарное событие">
          <option value="">${sceneOpts.length ? '+ Сцена / событие…' : ((data.scenes && data.scenes.length) ? '✓ Все сцены сыграны — выбери:' : '+ Событие…')}</option>
