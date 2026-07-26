@@ -8936,8 +8936,6 @@ a.md-link-loc:hover {
   text-transform: uppercase;
   color: var(--text3);
   text-align: center;
-  flex: 0 1 auto;
-  width: auto;
   max-width: 100%;
 }
 
