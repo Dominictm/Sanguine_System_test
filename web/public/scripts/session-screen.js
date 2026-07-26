@@ -4,10 +4,13 @@
 // Только композиция существующих API/глобалей (openCharDetail,
 // loadAudioLibrary, _audioPresetPlay/_audioPresetStop, navigate).
 
-let _sessDetail  = null;   // ответ /detail выбранного модуля
-let _sessBlocks  = [];     // [{heading, body}] — сценарий по ##-блокам
-let _sessScene   = 0;      // индекс развёрнутого блока
-let _sessPresets = null;   // кэш GET /api/audio/presets
+let _sessDetail    = null;   // ответ /detail выбранного модуля
+let _sessBlocks    = [];     // [{heading, body}] — сценарий по ##-блокам
+let _sessScene     = 0;      // индекс развёрнутого блока
+let _sessPresets   = null;   // кэш GET /api/audio/presets
+let _sessCurrentMod = null;  // slug выбранного модуля (карточки #sess-mod-cards
+                              // заменили <select id="sess-mod-sel"> — источник
+                              // «модуль выбран» для _sessSyncSceneNavVisibility)
 
 function _sessCity() {
   return new URLSearchParams(window.location.search).get('city') || 'paris';
@@ -39,18 +42,27 @@ async function loadSessionScreen() {
 }
 
 async function _sessLoadModules(chr, preselect) {
-  const modSel = document.getElementById('sess-mod-sel');
-  modSel.disabled = true;
-  modSel.innerHTML = '<option value="">— модуль —</option>';
-  if (!chr) { _sessClearModule(); return; }
+  const cardsEl = document.getElementById('sess-mod-cards');
+  if (!chr) { cardsEl.innerHTML = ''; _sessClearModule(); return; }
+  cardsEl.innerHTML = '<div class="loading-state"><div class="spinner"></div>Загрузка модулей...</div>';
   let mods;
   try { mods = await fetch(`/api/chronicles/${encodeURIComponent(chr)}/modules` + (window.location.search || '')).then(r => r.json()); }
   catch { mods = []; }
-  modSel.innerHTML = '<option value="">— модуль —</option>' +
-    (mods || []).map(m => `<option value="${escHtml(m.name)}">${escHtml(m.title || m.name)}</option>`).join('');
-  modSel.disabled = false;
+  if (!Array.isArray(mods) || !mods.length) {
+    // Обучающий empty-state (принцип .chars-empty) — не голое «пусто».
+    cardsEl.innerHTML = `
+      <div class="chars-empty">
+        <div class="chars-empty-title">В этой хронике пока нет модулей</div>
+        <p class="chars-empty-body">Создайте первый модуль на странице «Модули», чтобы начать сессию.</p>
+      </div>`;
+    return;
+  }
+  cardsEl.innerHTML = mods.map(m => {
+    let html = renderModuleCardInChr(m, chr);
+    if (preselect && m.name === preselect) html = html.replace('class="chd-mod-card"', 'class="chd-mod-card chd-mod-card--active"');
+    return html;
+  }).join('');
   if (preselect && mods.some(m => m.name === preselect)) {
-    modSel.value = preselect;
     await _sessLoadModule(chr, preselect);
   }
 }
@@ -60,15 +72,17 @@ async function _sessLoadModules(chr, preselect) {
 // _sessClearModule()/_sessRenderScenario() — вызывается в нескольких точках
 // жизненного цикла, чтобы кнопки не мелькали видимыми в промежуточных
 // состояниях асинхронной загрузки (смена хроники/модуля).
+// Модуль выбран — читаем модульную переменную _sessCurrentMod, а не
+// .value несуществующего <select id="sess-mod-sel"> (заменён карточками
+// #sess-mod-cards в тикете 3.2).
 function _sessSyncSceneNavVisibility() {
   const chrSel = document.getElementById('sess-chr-sel');
-  const modSel = document.getElementById('sess-mod-sel');
   const nav    = document.getElementById('sess-scene-nav');
-  nav.hidden = !(chrSel.value && modSel.value && _sessBlocks.length);
+  nav.hidden = !(chrSel.value && _sessCurrentMod && _sessBlocks.length);
 }
 
 function _sessClearModule() {
-  _sessDetail = null; _sessBlocks = []; _sessScene = 0;
+  _sessDetail = null; _sessBlocks = []; _sessScene = 0; _sessCurrentMod = null;
   document.getElementById('sess-scenario').innerHTML = '<div class="cdet-empty">Выбери хронику и модуль</div>';
   document.getElementById('sess-npcs').innerHTML = '';
   document.getElementById('sess-audio').innerHTML = '';
@@ -76,6 +90,7 @@ function _sessClearModule() {
 }
 
 async function _sessLoadModule(chr, mod) {
+  _sessCurrentMod = mod;
   const scEl = document.getElementById('sess-scenario');
   scEl.innerHTML = '<div class="loading-state"><div class="spinner"></div>Загрузка...</div>';
   _sessBlocks = [];
@@ -227,17 +242,30 @@ document.getElementById('sess-chr-sel').addEventListener('change', async e => {
   _sessClearModule();
   await _sessLoadModules(e.target.value, null);
 });
-document.getElementById('sess-mod-sel').addEventListener('change', async e => {
-  const chr = document.getElementById('sess-chr-sel').value;
-  if (!e.target.value) { _sessClearModule(); return; }
-  await _sessLoadModule(chr, e.target.value);
-});
 document.getElementById('sess-prev').addEventListener('click', () => _sessGoScene(_sessScene - 1));
 document.getElementById('sess-next').addEventListener('click', () => _sessGoScene(_sessScene + 1));
 
 document.getElementById('page-session').addEventListener('click', async e => {
   const head = e.target.closest('[data-scene-head]');
   if (head) { _sessGoScene(Number(head.dataset.sceneHead)); return; }
+
+  // Карточки модулей (#sess-mod-cards, renderModuleCardInChr — тикет 3.2).
+  // Кнопка удаления модуля скрыта здесь через CSS (Сессия — режим игры, не
+  // управления модулями), но на всякий случай не открываем сессию, если клик
+  // всё же пришёлся на неё (то же условие, что modules.js:224 для модалки хроники).
+  if (e.target.closest('.chd-mod-del-btn')) return;
+  const modCard = e.target.closest('.chd-mod-card');
+  if (modCard) {
+    const chr = document.getElementById('sess-chr-sel').value;
+    const mod = modCard.dataset.mod;
+    if (mod) {
+      document.querySelectorAll('#sess-mod-cards .chd-mod-card--active')
+        .forEach(c => c.classList.remove('chd-mod-card--active'));
+      modCard.classList.add('chd-mod-card--active');
+      await _sessLoadModule(chr, mod);
+    }
+    return;
+  }
 
   const npc = e.target.closest('[data-sess-char]');
   if (npc) { openCharDetail(npc.dataset.sessChar); return; }

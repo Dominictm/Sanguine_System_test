@@ -4920,8 +4920,12 @@ test('source-guard: session-screen.js — явный хелпер _sessSyncScene
   assert.ok(js.includes('function _sessSyncSceneNavVisibility'), 'нет функции _sessSyncSceneNavVisibility');
   const fnMatch = js.match(/function _sessSyncSceneNavVisibility\(\)\s*\{[\s\S]*?\n\}/);
   assert.ok(fnMatch, 'не найдено тело _sessSyncSceneNavVisibility');
-  assert.ok(/chrSel\.value\s*&&\s*modSel\.value\s*&&\s*_sessBlocks\.length/.test(fnMatch[0]),
-    '_sessSyncSceneNavVisibility не проверяет chrSel.value && modSel.value && _sessBlocks.length');
+  // Тикет 3.2: #sess-mod-sel заменён карточками #sess-mod-cards — «модуль
+  // выбран» теперь читается из модульной переменной _sessCurrentMod, а не
+  // .value несуществующего селекта (иначе exception при первом же вызове).
+  assert.ok(!/sess-mod-sel/.test(fnMatch[0]), '_sessSyncSceneNavVisibility всё ещё ссылается на удалённый #sess-mod-sel');
+  assert.ok(/chrSel\.value\s*&&\s*_sessCurrentMod\s*&&\s*_sessBlocks\.length/.test(fnMatch[0]),
+    '_sessSyncSceneNavVisibility не проверяет chrSel.value && _sessCurrentMod && _sessBlocks.length');
   // Вызывается в конце _sessClearModule() и в начале/конце _sessLoadModule(),
   // а не только через побочный эффект веток — иначе риск регрессии при
   // будущих правках (тикет 3.2 карточек модулей).
@@ -4930,6 +4934,54 @@ test('source-guard: session-screen.js — явный хелпер _sessSyncScene
   const loadBody = js.match(/async function _sessLoadModule\([\s\S]*?\n\}/);
   const syncCalls = (loadBody ? loadBody[0].match(/_sessSyncSceneNavVisibility\(\)/g) : []) || [];
   assert.ok(syncCalls.length >= 2, `_sessLoadModule() должен вызывать _sessSyncSceneNavVisibility() в начале и в конце (найдено ${syncCalls.length} вызовов)`);
+});
+
+// ── W4 тикет 3.2: модули карточками вместо <select> ───────────────────────────
+
+test('source-guard: index.html — #sess-mod-sel заменён карточками #sess-mod-cards, #sess-chr-sel остаётся селектом', () => {
+  const html = require('fs').readFileSync(path.join(__dirname, '../public/index.html'), 'utf-8');
+  assert.ok(!html.includes('id="sess-mod-sel"'), 'старый <select id="sess-mod-sel"> всё ещё в разметке');
+  assert.ok(html.includes('id="sess-mod-cards"'), 'нет контейнера карточек модулей #sess-mod-cards');
+  assert.ok(html.includes('id="sess-chr-sel"'), '#sess-chr-sel (выбор хроники) не должен исчезать — остаётся select');
+  const cardsMatch = html.match(/<div id="sess-mod-cards"[^>]*>/);
+  assert.ok(cardsMatch && /class="[^"]*\bchd-mod-grid\b/.test(cardsMatch[0]),
+    '#sess-mod-cards не переиспользует класс .chd-mod-grid (дублирование CSS вместо переиспользования)');
+});
+
+test('source-guard: session-screen.js — _sessLoadModules рендерит карточки модулей через renderModuleCardInChr в #sess-mod-cards', () => {
+  const js = require('fs').readFileSync(path.join(__dirname, '../public/scripts/session-screen.js'), 'utf-8');
+  // Комментарии могут упоминать старый id в качестве истории/документации —
+  // важно, чтобы кода, реально обращающегося к нему, не осталось.
+  assert.ok(!js.includes("getElementById('sess-mod-sel')"), 'session-screen.js всё ещё обращается к удалённому #sess-mod-sel через getElementById');
+  const fnMatch = js.match(/async function _sessLoadModules\([\s\S]*?\n\}/);
+  assert.ok(fnMatch, 'не найдено тело _sessLoadModules');
+  assert.ok(fnMatch[0].includes('renderModuleCardInChr'), '_sessLoadModules не вызывает renderModuleCardInChr (модули.js) для рендера карточек');
+  assert.ok(fnMatch[0].includes("getElementById('sess-mod-cards')"), '_sessLoadModules не пишет в #sess-mod-cards');
+});
+
+test('source-guard: session-screen.js — loading-state на время загрузки модулей и обучающий empty-state при нуле модулей', () => {
+  const js = require('fs').readFileSync(path.join(__dirname, '../public/scripts/session-screen.js'), 'utf-8');
+  const fnMatch = js.match(/async function _sessLoadModules\([\s\S]*?\n\}/);
+  assert.ok(fnMatch, 'не найдено тело _sessLoadModules');
+  assert.ok(/loading-state/.test(fnMatch[0]), '_sessLoadModules не показывает .loading-state на время fetch списка модулей');
+  assert.ok(/chars-empty/.test(fnMatch[0]), '_sessLoadModules не показывает обучающий empty-state (принцип .chars-empty) при нуле модулей');
+});
+
+test('source-guard: session-screen.js — восстановление выбранного модуля (chd-mod-card--active) и клик по карточке открывают сессию через _sessLoadModule', () => {
+  const js = require('fs').readFileSync(path.join(__dirname, '../public/scripts/session-screen.js'), 'utf-8');
+  assert.ok(js.includes('chd-mod-card--active'), 'нет модификатора .chd-mod-card--active для восстановленного/выбранного модуля');
+  const clickMatch = js.match(/document\.getElementById\('page-session'\)\.addEventListener\('click', async e => \{[\s\S]*?\n\}\);/);
+  assert.ok(clickMatch, 'не найден делегированный click-обработчик #page-session');
+  assert.ok(clickMatch[0].includes(".chd-mod-del-btn'"), 'делегированный клик по #page-session не защищён от .chd-mod-del-btn (кнопка удаления модуля должна игнорироваться)');
+  assert.ok(clickMatch[0].includes(".chd-mod-card'"), 'делегированный клик по #page-session не матчит .chd-mod-card');
+  assert.ok(/_sessLoadModule\(chr, mod\)/.test(clickMatch[0]), 'клик по карточке модуля не вызывает _sessLoadModule(chr, mod)');
+});
+
+test('source-guard: styles.css — кнопка удаления модуля скрыта в #sess-mod-cards (Сессия — режим игры, не управления модулями)', () => {
+  const css = require('fs').readFileSync(path.join(__dirname, '../public/styles.css'), 'utf-8');
+  const ruleMatch = css.match(/#sess-mod-cards \.chd-mod-del-btn\s*\{[^}]*\}/);
+  assert.ok(ruleMatch, 'не найдено правило #sess-mod-cards .chd-mod-del-btn');
+  assert.ok(/display:\s*none/.test(ruleMatch[0]), '#sess-mod-cards .chd-mod-del-btn не скрыт через display: none');
 });
 
 // ── W3 тикет 3.4: sticky-панель «Аудио-пресеты» + «Заметки сессии» ────────────

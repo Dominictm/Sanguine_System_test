@@ -1155,6 +1155,25 @@ body {
   max-width: 340px;
 }
 
+/* Карточки модулей хроники (тикет 3.2) — переиспользуют .chd-mod-grid/
+   .chd-mod-card модалки хроники (см. renderModuleCardInChr в modules.js);
+   здесь отдельный контейнер под селектом хроники, а не внутри .sess-picker —
+   карточки (min 380px) не помещаются в узкую колонку селекта. */
+#sess-mod-cards {
+  margin-bottom: 18px;
+}
+
+#sess-mod-cards .chd-mod-del-btn {
+  display: none;
+}
+
+/* Восстановленный/выбранный модуль — визуально отличим от остальных карточек
+   списка (клик или восстановление из localStorage). */
+.chd-mod-card--active {
+  border-color: var(--gold2);
+  box-shadow: 0 0 0 1px var(--gold2);
+}
+
 .sess-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 300px;
