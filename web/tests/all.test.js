@@ -5098,6 +5098,31 @@ test('source-guard: session-screen.js — заметки сессии грузя
     '_sessStore/_sessSave как механизм (chr/mod/scene) не должны быть удалены');
 });
 
+// ── Регрессия: #sess-notes id-коллизия с modules.js (форма записи сессии в
+// #modp-panel-sessions рендерит СВОЙ <textarea id="sess-notes">) — navigate()
+// не удаляет страницы из DOM, поэтому несскоупленный document.getElementById
+// после открытия любого модуля навсегда резолвится в чужой textarea ─────────
+
+test('source-guard: session-screen.js — _sessHydrateSessionNotes скоупит #sess-notes/#sess-notes-save через #sess-notes-wrap (не голый getElementById — коллизия id с modules.js)', () => {
+  const js = require('fs').readFileSync(path.join(__dirname, '../public/scripts/session-screen.js'), 'utf-8');
+  const fnBody = js.match(/function _sessHydrateSessionNotes\(text\) \{[\s\S]*?\n\}/)[0];
+  assert.ok(fnBody, 'не найдено тело _sessHydrateSessionNotes');
+  assert.ok(!/document\.getElementById\('sess-notes'\)/.test(fnBody),
+    '_sessHydrateSessionNotes использует несскоупленный document.getElementById(\'sess-notes\') — коллизия с #modp-panel-sessions в modules.js');
+  assert.ok(!/document\.getElementById\('sess-notes-save'\)/.test(fnBody),
+    '_sessHydrateSessionNotes использует несскоупленный document.getElementById(\'sess-notes-save\') — коллизия с #modp-panel-sessions в modules.js');
+  assert.ok(/getElementById\('sess-notes-wrap'\)/.test(fnBody) && /\.querySelector\(['"]#sess-notes['"]\)/.test(fnBody),
+    '_sessHydrateSessionNotes не берёт textarea через #sess-notes-wrap.querySelector(\'#sess-notes\')');
+  assert.ok(/\.querySelector\(['"]#sess-notes-save['"]\)/.test(fnBody),
+    '_sessHydrateSessionNotes не берёт кнопку через #sess-notes-wrap.querySelector(\'#sess-notes-save\')');
+});
+
+test('source-guard: modules.js действительно рендерит свой <textarea id="sess-notes"> в #modp-panel-sessions (подтверждение реальности коллизии id)', () => {
+  const modulesJs = require('fs').readFileSync(path.join(__dirname, '../public/scripts/modules.js'), 'utf-8');
+  assert.ok(/id=["']sess-notes["']/.test(modulesJs),
+    'modules.js больше не рендерит #sess-notes — если id переименован, тест-регрессию на коллизию можно снять/обновить');
+});
+
 test('source-guard: session-screen.js — _sessClearModule сбрасывает заметку сцены и заметки сессии текущего модуля', () => {
   const js = require('fs').readFileSync(path.join(__dirname, '../public/scripts/session-screen.js'), 'utf-8');
   const fnMatch = js.match(/function _sessClearModule\(\) \{[\s\S]*?\n\}/);
@@ -5124,6 +5149,49 @@ test('source-guard: session-screen.js — GET scene-notes/session-notes в _sess
   const applyIdx = body.indexOf('_sessDetail = detail;');
   assert.ok(guardAfter !== -1 && applyIdx > guardAfter,
     'нет guard-проверки после Promise.all перед применением detail/scene-notes/session-notes');
+});
+
+// ── Регрессия 851fe96: guard сохранения заметки сцены сравнивает и по модулю,
+// и по сцене (не только по модулю) — иначе смена сцены (тот же модуль), пока
+// PUT летит, могла бы затереть loaded/кнопку уже другой (новой) сцены ────────
+
+test('source-guard: session-screen.js — save-guard заметки сцены сравнивает capturedScene в дополнение к capturedMod (851fe96)', () => {
+  const js = require('fs').readFileSync(path.join(__dirname, '../public/scripts/session-screen.js'), 'utf-8');
+  const fnBody = js.match(/function _sessRenderSceneNote\(\) \{[\s\S]*?\n\}/)[0];
+  assert.ok(fnBody, 'не найдено тело _sessRenderSceneNote');
+  // capturedMod — guard по модулю (уже был до 851fe96).
+  const modIdx = fnBody.indexOf('const capturedMod');
+  assert.ok(modIdx !== -1, '_sessRenderSceneNote не захватывает capturedMod на момент клика «Сохранить»');
+  // capturedScene — guard по сцене (введён 851fe96, не должен быть тихо убран
+  // будущим рефакторингом _sessBindSaveButton/_sessRenderSceneNote).
+  const sceneIdx = fnBody.indexOf('const capturedScene');
+  assert.ok(sceneIdx !== -1, '_sessRenderSceneNote не захватывает capturedScene — регрессия фикса 851fe96 (guard только по модулю недостаточен при смене сцены внутри того же модуля)');
+  assert.ok(sceneIdx > modIdx, 'capturedScene должен захватываться после capturedMod (тот же порядок, что и оба return false ниже)');
+  // Оба return false должны идти ПОСЛЕ применения PUT (после throw на !r.ok) и
+  // ДО обновления _sessSceneNoteLoaded — сравнение и по модулю, и по сцене.
+  const modGuardIdx   = fnBody.indexOf('if (_sessCurrentMod !== capturedMod) return false');
+  const sceneGuardIdx = fnBody.indexOf('!== capturedScene) return false');
+  const loadedIdx     = fnBody.indexOf('_sessSceneNoteLoaded = text;');
+  assert.ok(modGuardIdx !== -1, 'нет guard-проверки по capturedMod перед обновлением _sessSceneNoteLoaded');
+  assert.ok(sceneGuardIdx !== -1, 'нет guard-проверки по capturedScene перед обновлением _sessSceneNoteLoaded');
+  assert.ok(modGuardIdx < sceneGuardIdx && sceneGuardIdx < loadedIdx,
+    'порядок guard-проверок нарушен: ожидается capturedMod → capturedScene → _sessSceneNoteLoaded = text');
+});
+
+test('source-guard: session-screen.js — после guard совпадения сцены/модуля видимая textarea досинхронизируется со свежесохранённым текстом (не только кэш)', () => {
+  const js = require('fs').readFileSync(path.join(__dirname, '../public/scripts/session-screen.js'), 'utf-8');
+  const sceneBody = js.match(/function _sessRenderSceneNote\(\) \{[\s\S]*?\n\}/)[0];
+  const loadedIdx = sceneBody.indexOf('_sessSceneNoteLoaded = text;');
+  const afterLoaded = sceneBody.slice(loadedIdx);
+  assert.ok(/getElementById\('sess-scene-note'\)/.test(afterLoaded) && /\.value\s*=\s*text/.test(afterLoaded),
+    '_sessRenderSceneNote: после подтверждения актуальности сцены видимая #sess-scene-note не досинхронизируется с сохранённым text (баг: остаётся устаревшей до следующего переключения сцены)');
+
+  const notesBody = js.match(/function _sessRenderNotes\(\) \{[\s\S]*?\n\}/)[0];
+  const notesLoadedIdx = notesBody.indexOf('_sessSessionNotesLoaded = text;');
+  assert.ok(notesLoadedIdx !== -1, '_sessRenderNotes: не найдено обновление _sessSessionNotesLoaded в save-guard');
+  const notesAfterLoaded = notesBody.slice(notesLoadedIdx);
+  assert.ok(/sess-notes-wrap/.test(notesAfterLoaded) && /\.value\s*=\s*text/.test(notesAfterLoaded),
+    '_sessRenderNotes: после подтверждения актуальности модуля видимая #sess-notes не досинхронизируется с сохранённым text');
 });
 
 test('source-guard: styles.css — кнопка удаления модуля скрыта в #sess-mod-cards (Сессия — режим игры, не управления модулями)', () => {

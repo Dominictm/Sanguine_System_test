@@ -309,6 +309,13 @@ function _sessRenderSceneNote() {
       _sessSceneNotesCache[h] = text; // сцена сохранилась на сервере — кэш обновляем независимо от того, что сейчас отображается
       if ((_sessBlocks[_sessScene]?.heading || '') !== capturedScene) return false; // сцена сменилась (тот же модуль), пока PUT летел — не трогаем кнопку/loaded уже другой сцены
       _sessSceneNoteLoaded = text;
+      // GM мог уйти со сцены и вернуться на ТУ ЖЕ, пока PUT летел — тогда
+      // _sessRenderSceneNote() уже перерисовал(а) textarea со старым (дозапросным)
+      // значением кэша. Раз сцена совпала — досинхронизируем ВИДИМОЕ значение с
+      // тем, что реально сохранилось, беря ссылку на textarea заново из DOM (а
+      // не захваченную замыканием `ta`, которая могла устареть после рендера).
+      const curTa = document.getElementById('sess-scene-note');
+      if (curTa) curTa.value = text;
     });
   }
   document.getElementById('sess-scene-note-title').textContent = `Заметка «${heading}»`;
@@ -343,6 +350,13 @@ function _sessRenderNotes() {
     if (!r.ok) throw new Error(result.error || 'Ошибка сохранения');
     if (_sessCurrentMod !== capturedMod) return false; // модуль сменился, пока PUT летел
     _sessSessionNotesLoaded = text;
+    // Тот же принцип, что и у заметки сцены: GM мог уйти с модуля и вернуться
+    // на ТОТ ЖЕ, пока PUT летел — _sessHydrateSessionNotes уже показал(а)
+    // старое (дозапросное) значение. Модуль совпал — досинхронизируем видимое
+    // значение, беря ссылку на textarea заново из скоупленного #sess-notes-wrap
+    // (не замыканную `ta`, которая могла устареть после повторного рендера).
+    const curTa = document.getElementById('sess-notes-wrap')?.querySelector('#sess-notes');
+    if (curTa) curTa.value = text;
   });
   wrap.querySelector('#sess-to-log').addEventListener('click', () => {
     const notes = ta.value.trim();
@@ -364,8 +378,15 @@ function _sessRenderNotes() {
 // _sessLoadModule после загрузки session-notes и из _sessClearModule для
 // сброса) — сам скелет (textarea/кнопка) создаётся один раз в _sessRenderNotes().
 function _sessHydrateSessionNotes(text) {
-  const ta  = document.getElementById('sess-notes');
-  const btn = document.getElementById('sess-notes-save');
+  // Скоуплено через #sess-notes-wrap, а НЕ через голый document.getElementById
+  // по id «sess-notes» — тот же id рендерит modules.js (#modp-panel-sessions,
+  // форма записи сессии на странице модуля); navigate() не удаляет страницы из
+  // DOM, а лишь переключает .active, так что после ЛЮБОГО открытия модуля
+  // через openModulePage несскоупленный лукап по этому id навсегда резолвился
+  // бы в чужой (скрытый) textarea модуля вместо виджета на экране Сессии.
+  const wrap = document.getElementById('sess-notes-wrap');
+  const ta   = wrap.querySelector('#sess-notes');
+  const btn  = wrap.querySelector('#sess-notes-save');
   if (!ta || !btn) return; // _sessRenderNotes ещё не отрисовала скелет
   _sessSessionNotesLoaded = text || '';
   ta.value = _sessSessionNotesLoaded;
