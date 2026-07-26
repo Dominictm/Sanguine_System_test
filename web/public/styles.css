@@ -3746,7 +3746,7 @@ a:focus-visible {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 48px;
+  font-size: var(--fs-display-2);
   background: linear-gradient(180deg,
       color-mix(in srgb, var(--clan-tint, var(--accent)) 20%, var(--bg3)) 0%,
       color-mix(in srgb, var(--clan-tint, var(--accent)) 12%, var(--bg2)) 100%);
@@ -8859,6 +8859,7 @@ a.md-link-loc:hover {
   flex-wrap: wrap;
   gap: 4px;
   margin-top: 4px;
+  justify-content: center;
 }
 
 .v20-box {
@@ -9047,6 +9048,15 @@ a.md-link-loc:hover {
 .v20-auto-badge:not(.is-match):hover {
   color: var(--gold);
   border-color: var(--gold);
+}
+
+/* #dice-unskilled-badge reuses .v20-auto-badge purely for its visual style —
+   it's informational only (no click handler in dice.js), so strip the
+   interactive affordance (pointer cursor / hover response) it would
+   otherwise inherit. */
+#dice-unskilled-badge {
+  cursor: default;
+  pointer-events: none;
 }
 
 .v20-mini-action {
