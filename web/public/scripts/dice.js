@@ -156,6 +156,16 @@ if (typeof document !== 'undefined' && document.getElementById('dice-fab')) {
       _diceFillFromModel(_v20Model);
     } else if (current && chars.some(c => c.name === current)) {
       charSel.value = current; // сохранить выбор между открытиями панели
+      // _diceFillFromModel для current намеренно не вызывается: attrSel/abilSel/
+      // virtueSel — отдельные от charSel элементы, innerHTML выше их не трогает,
+      // поэтому их прошлый рендер (заполненный при исходном выборе через 'change'
+      // на charSel) остаётся в DOM как есть между открытиями/закрытиями панели.
+    } else {
+      // 2.1: ни открытого листа, ни сохранённого выбора нет (в т.ч. самое первое
+      // открытие панели на свежей странице) — селекты обязаны заполниться полным
+      // статическим списком и перестать быть disabled, а не остаться в исходном
+      // состоянии разметки index.html.
+      _diceFillFromModel(null);
     }
   }
 
