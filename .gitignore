@@ -36,3 +36,8 @@ TgWsProxy_data/
 # Личный персонаж для внешней хроники — не индексировать
 /Демиан Лорей.md
 **/.impeccable/
+
+# Локальный ChromeDriver для web/tests/run-ui.bat + кэш Selenium Manager —
+# бинарник платформозависимый и тяжёлый (~40MB), в репозиторий не кладём.
+web/tests/bin/
+web/se-metadata.json

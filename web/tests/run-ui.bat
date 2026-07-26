@@ -1,13 +1,14 @@
 @echo off
 chcp 65001 >nul
 cd /d "%~dp0.."
+set "PATH=%~dp0bin;%PATH%"
 
 echo.
 echo  =======================================================
 echo   Sanguine System -- UI Selenium (Chrome)
 echo  =======================================================
 echo  Requirements: Chrome must be installed
-echo   (ChromeDriver is fetched automatically by Selenium Manager).
+echo   Local ChromeDriver from tests\bin is used when available.
 echo  Set HEADLESS=1 to run without a browser window.
 echo.
 

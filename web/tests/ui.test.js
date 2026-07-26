@@ -226,9 +226,9 @@ describe('UI — Selenium (Chrome)', () => {
   // ── Инструменты (создание через UI) ──────────────────────────────────────────
 
   describe('Инструменты (Node-инструменты через UI)', () => {
-    it('создание города через вкладку «Новый домен»', async () => {
-      await navTo('tools');
-      await openTab('new-city');
+    it('создание города через страницу «Города»', async () => {
+      await navTo('city-new');
+      await (await css('#city-create-spoiler summary')).click();
       await typeIn('city-name', UI_NAME);
       await typeIn('city-year', '2010');
       await (await id_('btn-new-city')).click();

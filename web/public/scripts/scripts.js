@@ -1605,7 +1605,9 @@ document.getElementById('btn-new-city').addEventListener('click', async () => {
 // Vampire-only fields visible / clan+sect required only for vampires
 function _updateNpcForm() {
   const isVamp = document.getElementById('npc-type').value === 'vampire';
+  const isFairy = document.getElementById('npc-type').value === 'fairy';
   document.getElementById('npc-vamp-fields').style.display = isVamp ? '' : 'none';
+  document.getElementById('npc-fairy-fields').style.display = isFairy ? '' : 'none';
   document.getElementById('npc-clan-req').style.display = isVamp ? '' : 'none';
   document.getElementById('npc-sect-req').style.display = isVamp ? '' : 'none';
 }
@@ -1621,14 +1623,18 @@ document.getElementById('btn-new-npc').addEventListener('click', async () => {
   const gender = document.getElementById('npc-gender').value.trim();
   const clan = document.getElementById('npc-clan').value.trim();
   const sect = document.getElementById('npc-sect').value.trim();
+  const seeming = document.getElementById('npc-seeming').value.trim();
+  const court = document.getElementById('npc-court').value.trim();
+  const house = document.getElementById('npc-house').value.trim();
   if (!name) { showToast('Укажи имя', 'warning'); return; }
   if (!gender) { showToast('Укажи пол', 'warning'); return; }
   if (!CITY) { showToast('Сначала выбери город в шапке', 'warning'); return; }
   if (isVamp && !clan) { showToast('Клан обязателен для вампира', 'warning'); return; }
   if (isVamp && !sect) { showToast('Секта обязательна для вампира', 'warning'); return; }
+  if (lineage === 'fairy' && !seeming) { showToast('Обличье обязательно для феи', 'warning'); return; }
 
   const payload = {
-    name, lineage, gender, clan, sect,
+    name, lineage, gender, clan, sect, seeming, court, house,
     generation:  document.getElementById('npc-generation').value.trim(),
     birthYear:   document.getElementById('npc-birth').value.trim(),
     embraceYear: document.getElementById('npc-embrace').value.trim(),
@@ -1665,7 +1671,7 @@ document.getElementById('btn-new-npc').addEventListener('click', async () => {
     }
     out.innerHTML = `<span class="ok">${escHtml(msg)}</span>`;
 
-    ['npc-name','npc-clan','npc-sect','npc-generation','npc-birth','npc-embrace','npc-sire','npc-bio','npc-appearance']
+    ['npc-name','npc-clan','npc-sect','npc-seeming','npc-court','npc-house','npc-generation','npc-birth','npc-embrace','npc-sire','npc-bio','npc-appearance']
       .forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
     document.getElementById('npc-gender').value = '';
     const art = document.getElementById('npc-art'); if (art) art.value = '';
