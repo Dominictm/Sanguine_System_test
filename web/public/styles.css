@@ -1856,7 +1856,9 @@ body {
 #graph-toolbar {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 14px;
+  row-gap: 10px;
   padding: 12px 20px;
   background: var(--bg2);
   border-bottom: 1px solid var(--border);
@@ -1941,7 +1943,8 @@ body {
   align-items: center;
 }
 
-/* Фильтр по линейке WoD на графе связей (фаза G, план 2026-07-16) */
+/* Фильтр по линейке WoD (фаза G, план 2026-07-16) и по типу связи (тикет 4.2) на
+   графе связей — оба используют один и тот же ряд-контейнер и чип. */
 .graph-lineage-filter {
   display: flex;
   gap: 12px;
@@ -1949,7 +1952,7 @@ body {
   align-items: center;
 }
 
-.graph-lineage-chip {
+.graph-filter-chip {
   display: flex;
   align-items: center;
   gap: 5px;
@@ -1963,13 +1966,13 @@ body {
   user-select: none;
 }
 
-.graph-lineage-chip input {
+.graph-filter-chip input {
   accent-color: var(--accent2);
   cursor: pointer;
 }
 
 @media (pointer: coarse) {
-  .graph-lineage-chip { min-height: 44px; }
+  .graph-filter-chip { min-height: 44px; }
 }
 
 .legend-item {
@@ -2640,6 +2643,13 @@ select.form-control {
   .modp-field-regen-btn, .field-tip {
     min-width: 44px;
     min-height: 44px;
+  }
+
+  /* .btn-icon уже получает min-height: 44px выше; #btn-reset (тикет 4.1) теперь
+     содержит только символ «↺» без текста — без явного min-width узкая иконочная
+     кнопка не дотягивает до 44px по ширине на touch. */
+  .btn-icon {
+    min-width: 44px;
   }
 
   .modal-close, .info-close, .chr-detail-close, .lightbox-close, .cdet-delete-btn, .cdet-prompt-copy {

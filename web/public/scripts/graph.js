@@ -109,6 +109,7 @@ async function loadGraph() {
   buildLegend();
   renderGraph(data);
   buildLineageFilter();
+  buildRelTypeFilter();
 }
 
 // ── Фильтр по линейке WoD (фаза G, план 2026-07-16) ────────────────────────────
@@ -122,19 +123,40 @@ function buildLineageFilter() {
   const keys = Object.keys(LINEAGE_LABELS).filter(k => present.has(k));
   STATE.graph.lineageFilter = new Set(keys);
   document.getElementById('graph-lineage-filter').innerHTML = keys.map(k => `
-    <label class="graph-lineage-chip">
+    <label class="graph-filter-chip">
       <input type="checkbox" data-lineage-filter="${k}" checked>
       ${LINEAGE_LABELS[k]}
     </label>`).join('');
 }
 
-// Ребро видимо только если видимы ОБА конца — иначе связь «в никуда» повисает на экране.
-function applyLineageFilter() {
+// ── Фильтр по типу связи (тикет 4.2, план "Нити · Броски · Сессия · Связи · Лист") ──
+// По образцу buildLineageFilter(): чекбоксы только для типов, реально присутствующих
+// среди рёбер текущего графа (в т.ч. синтетический 'aggregate' в ?compact=true —
+// он тоже присутствует у рёбер в этом режиме, исключать искусственно не нужно).
+function buildRelTypeFilter() {
+  const present = new Set((STATE.graph.data?.links || []).map(l => l.type).filter(Boolean));
+  const keys = Object.keys(REL_LABELS).filter(k => present.has(k));
+  STATE.graph.relTypeFilter = new Set(keys);
+  document.getElementById('graph-reltype-filter').innerHTML = keys.map(k => `
+    <label class="graph-filter-chip">
+      <input type="checkbox" data-reltype-filter="${k}" checked>
+      ${REL_LABELS[k]}
+    </label>`).join('');
+}
+
+// Единый хелпер видимости: ребро видимо только если видимы ОБА конца (иначе связь
+// «в никуда» повисает на экране) И его тип отмечен в фильтре типов связи. Оба условия
+// пишут в одно и то же style('display', …) — раньше это делала только applyLineageFilter(),
+// отдельного независимого writer'а для типов связи быть не должно (риск гонки видимости).
+function applyGraphFilters() {
   const nodeG = STATE.graph.nodes, link = STATE.graph.links;
   if (!nodeG || !link) return;
-  const active = STATE.graph.lineageFilter;
-  nodeG.style('display', d => active.has(d.lineage) ? null : 'none');
-  link.style('display', l => (active.has(l.source.lineage) && active.has(l.target.lineage)) ? null : 'none');
+  const activeLineage = STATE.graph.lineageFilter;
+  const activeRelType = STATE.graph.relTypeFilter;
+  nodeG.style('display', d => activeLineage.has(d.lineage) ? null : 'none');
+  link.style('display', l =>
+    (activeLineage.has(l.source.lineage) && activeLineage.has(l.target.lineage) && activeRelType.has(l.type))
+      ? null : 'none');
 }
 
 document.getElementById('graph-lineage-filter').addEventListener('change', e => {
@@ -143,7 +165,16 @@ document.getElementById('graph-lineage-filter').addEventListener('change', e => 
   const key = cb.dataset.lineageFilter;
   if (cb.checked) STATE.graph.lineageFilter.add(key);
   else STATE.graph.lineageFilter.delete(key);
-  applyLineageFilter();
+  applyGraphFilters();
+});
+
+document.getElementById('graph-reltype-filter').addEventListener('change', e => {
+  const cb = e.target.closest('[data-reltype-filter]');
+  if (!cb) return;
+  const key = cb.dataset.reltypeFilter;
+  if (cb.checked) STATE.graph.relTypeFilter.add(key);
+  else STATE.graph.relTypeFilter.delete(key);
+  applyGraphFilters();
 });
 
 function buildLegend() {
@@ -428,23 +459,20 @@ document.getElementById('info-close').addEventListener('click', e => {
   closeInfoPanel();
 });
 
-// Zoom controls
-document.getElementById('btn-zoom-in').addEventListener('click', () => {
-  if (!STATE.graph.svg) return;
-  STATE.graph.svg.transition().call(STATE.graph.zoom.scaleBy, 1.4);
-});
-document.getElementById('btn-zoom-out').addEventListener('click', () => {
-  if (!STATE.graph.svg) return;
-  STATE.graph.svg.transition().call(STATE.graph.zoom.scaleBy, .7);
-});
+// Zoom: колесо мыши/жест (zoom-behaviour в renderGraph) остаётся единственным способом
+// масштабирования после тикета 4.1 — кнопки +/- убраны, их обработчики удалены отсюда.
 document.getElementById('btn-reset').addEventListener('click', () => {
   if (!STATE.graph.svg) return;
   STATE.graph.svg.transition().duration(500).call(
     STATE.graph.zoom.transform, d3.zoomIdentity);
-  // Сброс снимает и фильтр линеек (план 2026-07-16, фаза G).
+  // Сброс снимает и фильтр линеек (план 2026-07-16, фаза G), и фильтр типов связи (тикет 4.2).
   document.querySelectorAll('#graph-lineage-filter [data-lineage-filter]').forEach(cb => { cb.checked = true; });
+  document.querySelectorAll('#graph-reltype-filter [data-reltype-filter]').forEach(cb => { cb.checked = true; });
   if (STATE.graph.lineageFilter) {
     Object.keys(LINEAGE_LABELS).forEach(k => STATE.graph.lineageFilter.add(k));
-    applyLineageFilter();
   }
+  if (STATE.graph.relTypeFilter) {
+    Object.keys(REL_LABELS).forEach(k => STATE.graph.relTypeFilter.add(k));
+  }
+  applyGraphFilters();
 });

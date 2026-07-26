@@ -4568,3 +4568,56 @@ test('source-guard: dice.js/index.html — селект добродетелей
   // добродетель — самостоятельный пул, не сумма с атрибутом/способностью
   assert.ok(js.includes('_diceApplyVirtuePool'), 'нет отдельного применения пула добродетели');
 });
+
+// ══════════════════════════════════════════════════════════════════════════════
+// UNIT — source-guard: граф связей — тулбар без zoom-кнопок + фильтр по типу связи
+// (тикеты 4.1/4.2, план "Нити · Броски · Сессия · Связи · Лист")
+// ══════════════════════════════════════════════════════════════════════════════
+
+test('source-guard: index.html — zoom-кнопки убраны, #btn-reset — иконка с aria-label', () => {
+  const html = require('fs').readFileSync(path.join(__dirname, '../public/index.html'), 'utf-8');
+  assert.ok(!html.includes('id="btn-zoom-in"'), 'кнопка btn-zoom-in всё ещё в разметке');
+  assert.ok(!html.includes('id="btn-zoom-out"'), 'кнопка btn-zoom-out всё ещё в разметке');
+  const resetTag = html.match(/<button[^>]*id="btn-reset"[^>]*>[^<]*<\/button>/);
+  assert.ok(resetTag, 'нет кнопки #btn-reset в разметке');
+  assert.ok(/aria-label="[^"]+"/.test(resetTag[0]), 'у #btn-reset нет aria-label (текст «Сброс» убран из DOM)');
+  assert.ok(/title="[^"]+"/.test(resetTag[0]), 'у #btn-reset нет title-подсказки');
+  assert.ok(!/Сброс/.test(resetTag[0].replace(/aria-label="[^"]*"|title="[^"]*"/g, '')), 'текстовая метка «Сброс» должна быть убрана из содержимого кнопки');
+});
+
+test('source-guard: graph.js — обработчики удалённых zoom-кнопок отсутствуют (иначе getElementById(null).addEventListener роняет весь скрипт)', () => {
+  const js = require('fs').readFileSync(path.join(__dirname, '../public/scripts/graph.js'), 'utf-8');
+  assert.ok(!js.includes("getElementById('btn-zoom-in')"), 'остался обработчик на удалённую кнопку btn-zoom-in');
+  assert.ok(!js.includes("getElementById('btn-zoom-out')"), 'остался обработчик на удалённую кнопку btn-zoom-out');
+});
+
+test('source-guard: index.html содержит контейнер фильтра типов связи #graph-reltype-filter', () => {
+  const html = require('fs').readFileSync(path.join(__dirname, '../public/index.html'), 'utf-8');
+  assert.ok(html.includes('id="graph-reltype-filter"'), 'нет #graph-reltype-filter в разметке тулбара графа');
+});
+
+test('source-guard: graph.js — фильтр типов связи объединён с фильтром линеек в один хелпер applyGraphFilters', () => {
+  const js = require('fs').readFileSync(path.join(__dirname, '../public/scripts/graph.js'), 'utf-8');
+  assert.ok(js.includes('relTypeFilter'), 'нет STATE.graph.relTypeFilter — фильтр типов связи не реализован');
+  assert.ok(js.includes('function applyGraphFilters'), 'нет единого хелпера applyGraphFilters()');
+  assert.ok(js.includes('function buildRelTypeFilter'), 'нет buildRelTypeFilter() по образцу buildLineageFilter()');
+  // единственный writer в style('display', …) для рёбер — оба условия в одном месте
+  const displayWriters = js.match(/link\.style\('display'/g) || [];
+  assert.strictEqual(displayWriters.length, 1, 'должен быть ровно один writer link.style(\'display\', …) — иначе гонка видимости между функциями');
+  assert.ok(/activeLineage\.has\(l\.source\.lineage\)[\s\S]{0,80}activeLineage\.has\(l\.target\.lineage\)[\s\S]{0,80}activeRelType\.has\(l\.type\)/.test(js),
+    'applyGraphFilters не проверяет оба условия (линейки обоих концов И тип связи) в одном выражении');
+  // btn-reset сбрасывает оба фильтра и вызывает applyGraphFilters ровно один раз
+  const resetHandlerMatch = js.match(/getElementById\('btn-reset'\)\.addEventListener\('click', \(\) => \{[\s\S]*?\n\}\);/);
+  assert.ok(resetHandlerMatch, 'нет обработчика click на #btn-reset');
+  const resetHandler = resetHandlerMatch[0];
+  assert.ok(resetHandler.includes('graph-reltype-filter'), 'btn-reset не чекает чекбоксы #graph-reltype-filter');
+  assert.ok(resetHandler.includes('STATE.graph.relTypeFilter'), 'btn-reset не возвращает все ключи в STATE.graph.relTypeFilter');
+  assert.ok(resetHandler.includes('applyGraphFilters()'), 'btn-reset не вызывает applyGraphFilters()');
+});
+
+test('source-guard: styles.css — #graph-toolbar переносит строки (flex-wrap), не переполняется горизонтально', () => {
+  const css = require('fs').readFileSync(path.join(__dirname, '../public/styles.css'), 'utf-8');
+  const toolbarBlock = css.match(/#graph-toolbar\s*\{[^}]*\}/);
+  assert.ok(toolbarBlock, 'нет правила #graph-toolbar в styles.css');
+  assert.ok(/flex-wrap:\s*wrap/.test(toolbarBlock[0]), '#graph-toolbar без flex-wrap: wrap — риск горизонтального переполнения с двумя рядами чипов');
+});
