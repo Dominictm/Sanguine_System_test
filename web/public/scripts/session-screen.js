@@ -95,17 +95,28 @@ async function _sessLoadModule(chr, mod) {
   scEl.innerHTML = '<div class="loading-state"><div class="spinner"></div>Загрузка...</div>';
   _sessBlocks = [];
   _sessSyncSceneNavVisibility(); // _sessBlocks уже сброшен — скрыть, пока не подтвердится новый сценарий
+  // Guard от гонки: пока этот await летит, GM может успеть кликнуть по другой
+  // карточке модуля — та вызовет _sessLoadModule заново и синхронно перезапишет
+  // _sessCurrentMod. Если к моменту разрешения await «наш» mod уже не совпадает
+  // с актуальным _sessCurrentMod — этот ответ устарел, тихо выходим, не трогая
+  // _sessBlocks/_sessDetail/localStorage/рендер (иначе более медленный поздний
+  // ответ мог бы затереть уже показанный результат более быстрого).
+  let detail;
   try {
     if (typeof ensureCharsLoaded === 'function') await ensureCharsLoaded(); // для resolveCharByName в чипах НПС
-    _sessDetail = await fetch(
+    if (_sessCurrentMod !== mod) return;
+    detail = await fetch(
       `/api/chronicles/${encodeURIComponent(chr)}/modules/${encodeURIComponent(mod)}/detail` + (window.location.search || '')
     ).then(r => r.json());
   } catch {
+    if (_sessCurrentMod !== mod) return; // устаревший запрос — не заслоняем ошибкой уже выбранный другой модуль
     scEl.innerHTML = '<div class="cdet-empty">⚠ Не удалось загрузить модуль</div>';
     _sessBlocks = [];
     _sessSyncSceneNavVisibility();
     return;
   }
+  if (_sessCurrentMod !== mod) return; // устаревший ответ пришёл позже более нового запроса
+  _sessDetail = detail;
   const raw = (_sessDetail.scenario || '').replace(/\r\n/g, '\n');
   _sessBlocks = raw.trim()
     ? raw.split(/\n(?=##\s+)/).map(part => {
@@ -254,6 +265,12 @@ document.getElementById('page-session').addEventListener('click', async e => {
   // управления модулями), но на всякий случай не открываем сессию, если клик
   // всё же пришёлся на неё (то же условие, что modules.js:224 для модалки хроники).
   if (e.target.closest('.chd-mod-del-btn')) return;
+  // Бейдж «📜 Финал» на карточке — как в модалке хроники (modules.js): открыть
+  // лёгкое превью финала, перехватывая клик РАНЬШЕ общего клика по карточке
+  // модуля (иначе клик по бейджу просто грузил бы сценарий, будто кликнули
+  // мимо, — бейдж выглядит кликабельным, но ничего не делает).
+  const finaleBadge = e.target.closest('[data-open-finale]');
+  if (finaleBadge) { openFinalePreview(finaleBadge.dataset.chr, finaleBadge.dataset.mod); return; }
   const modCard = e.target.closest('.chd-mod-card');
   if (modCard) {
     const chr = document.getElementById('sess-chr-sel').value;

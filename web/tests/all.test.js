@@ -4977,6 +4977,77 @@ test('source-guard: session-screen.js — восстановление выбр�
   assert.ok(/_sessLoadModule\(chr, mod\)/.test(clickMatch[0]), 'клик по карточке модуля не вызывает _sessLoadModule(chr, mod)');
 });
 
+test('source-guard: session-screen.js — _sessLoadModule защищён от гонки устаревших асинхронных ответов', () => {
+  // Баг 3.2/Critical: быстрый клик по карточке А, затем по карточке Б до того,
+  // как разрешился fetch для А, мог применить устаревший результат А поверх
+  // уже выбранной Б (_sessCurrentMod/подсветка карточки говорят «Б», а
+  // отрендеренный сценарий/localStorage — «А» или вообще третий модуль).
+  // Guard: после каждого await внутри _sessLoadModule нужно перепроверять, что
+  // _sessCurrentMod всё ещё равен захваченному в начале функции параметру mod,
+  // и тихо выходить (return), если пользователь успел выбрать другой модуль,
+  // не трогая _sessBlocks/_sessDetail/_sessSave/рендер.
+  const js = require('fs').readFileSync(path.join(__dirname, '../public/scripts/session-screen.js'), 'utf-8');
+  const fnMatch = js.match(/async function _sessLoadModule\(chr, mod\) \{[\s\S]*?\n\}/);
+  assert.ok(fnMatch, 'не найдено тело _sessLoadModule(chr, mod)');
+  const body = fnMatch[0];
+
+  // Захват mod происходит синхронно в начале — единственная точка присвоения
+  // _sessCurrentMod в этой функции (иначе guard сравнивал бы mod сам с собой).
+  const assignIdx = body.indexOf('_sessCurrentMod = mod;');
+  assert.ok(assignIdx !== -1, '_sessLoadModule не устанавливает _sessCurrentMod = mod синхронно в начале');
+
+  // Guard должен присутствовать в теле функции хотя бы дважды: после успешного
+  // fetch (в try) и в catch-ветке ошибки — оба места применяют результат
+  // асинхронной операции и должны быть защищены от устаревшего ответа.
+  const guardMatches = body.match(/if\s*\(\s*_sessCurrentMod\s*!==\s*mod\s*\)\s*return;/g) || [];
+  assert.ok(guardMatches.length >= 2,
+    `_sessLoadModule должен перепроверять _sessCurrentMod !== mod после await (успешный путь и catch), найдено ${guardMatches.length} guard-проверок`);
+
+  // Guard в успешном пути обязан идти ПОСЛЕ разрешения fetch (иначе он не
+  // защищает от гонки — проверка до await ничего не даёт).
+  const fetchIdx = body.indexOf('.then(r => r.json())');
+  const lastGuardIdx = body.lastIndexOf('if (_sessCurrentMod !== mod) return;');
+  assert.ok(fetchIdx !== -1 && lastGuardIdx > fetchIdx,
+    'guard-проверка после основного fetch отсутствует или стоит раньше await fetch (не защищает от гонки)');
+
+  // Применение результата (_sessDetail = ...) должно идти после этой финальной
+  // guard-проверки, а не до неё — иначе устаревший ответ всё равно затрёт стейт.
+  const applyIdx = body.indexOf('_sessDetail = detail;');
+  assert.ok(applyIdx !== -1 && applyIdx > lastGuardIdx,
+    '_sessDetail применяется до финальной guard-проверки — устаревший ответ может затереть текущий стейт');
+
+  // ensureCharsLoaded() — тоже await внутри функции (упомянут в тикете отдельно)
+  // — должен быть защищён своей guard-проверкой раньше основного fetch.
+  const ensureIdx = body.indexOf('ensureCharsLoaded()');
+  const firstGuardIdx = body.indexOf('if (_sessCurrentMod !== mod) return;');
+  assert.ok(ensureIdx !== -1 && firstGuardIdx > ensureIdx && firstGuardIdx < fetchIdx,
+    'await ensureCharsLoaded() не защищён guard-проверкой перед основным fetch');
+});
+
+test('source-guard: session-screen.js — клик по бейджу «Финал» на карточке модуля Сессии открывает превью финала (data-open-finale)', () => {
+  // Баг 3.2/Important: renderModuleCardInChr (modules.js) рендерит кликабельный
+  // (визуально) бейдж <span data-open-finale> для модулей с hasFinale — в
+  // модалке хроники (modules.js) клик по нему перехватывается раньше общего
+  // клика по карточке и открывает openFinalePreview. На странице Сессия
+  // делегированный обработчик #page-session этого не делал — клик по бейджу
+  // молча проваливался в общую логику «открыть модуль» (ложная аффорданс).
+  const js = require('fs').readFileSync(path.join(__dirname, '../public/scripts/session-screen.js'), 'utf-8');
+  const clickMatch = js.match(/document\.getElementById\('page-session'\)\.addEventListener\('click', async e => \{[\s\S]*?\n\}\);/);
+  assert.ok(clickMatch, 'не найден делегированный click-обработчик #page-session');
+  const body = clickMatch[0];
+  assert.ok(/\[data-open-finale\]/.test(body),
+    'делегированный клик по #page-session не матчит [data-open-finale] — бейдж «Финал» не обрабатывается');
+  assert.ok(/openFinalePreview\(/.test(body),
+    'делегированный клик по #page-session не вызывает openFinalePreview для бейджа «Финал»');
+  // Перехват бейджа обязан стоять РАНЬШЕ общей ветки .chd-mod-card — иначе
+  // общий клик по карточке (закрывающий closest() раньше) откроет модуль
+  // вместо превью финала, как это уже устроено в modules.js.
+  const finaleIdx  = body.indexOf('[data-open-finale]');
+  const modCardIdx = body.indexOf(".chd-mod-card'");
+  assert.ok(finaleIdx !== -1 && modCardIdx !== -1 && finaleIdx < modCardIdx,
+    'ветка [data-open-finale] должна перехватывать клик раньше общей ветки .chd-mod-card');
+});
+
 test('source-guard: styles.css — кнопка удаления модуля скрыта в #sess-mod-cards (Сессия — режим игры, не управления модулями)', () => {
   const css = require('fs').readFileSync(path.join(__dirname, '../public/styles.css'), 'utf-8');
   const ruleMatch = css.match(/#sess-mod-cards \.chd-mod-del-btn\s*\{[^}]*\}/);
