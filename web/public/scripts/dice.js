@@ -47,36 +47,101 @@ if (typeof document !== 'undefined' && document.getElementById('dice-fab')) {
   const diffEl  = document.getElementById('dice-diff');
   const resEl   = document.getElementById('dice-result');
   const histEl  = document.getElementById('dice-history');
-  const attrSel = document.getElementById('dice-attr-sel');
-  const abilSel = document.getElementById('dice-abil-sel');
-  const charSel = document.getElementById('dice-char-sel');
+  const attrSel   = document.getElementById('dice-attr-sel');
+  const abilSel   = document.getElementById('dice-abil-sel');
+  const virtueSel = document.getElementById('dice-virtue-sel');
+  const charSel   = document.getElementById('dice-char-sel');
+  const unskilledBadge = document.getElementById('dice-unskilled-badge');
   const _history = []; // последние 10 бросков, в памяти сессии
   let _diceModel = null; // модель листа выбранного персонажа
+  let _diceUnskilled = false; // выбрано «Не владеет» в abilSel → +2 к сложности
+
+  // dataset.base — БАЗОВАЯ (введённая пользователем) сложность, отдельно от
+  // эффективной (с учётом штрафа «Не владеет»). Обновляется только при ручном
+  // вводе пользователя (см. слушатель ниже) и при инициализации/смене
+  // персонажа — никогда не читается из текущего diffEl.value внутри
+  // _diceSetUnskilled, иначе повторное переключение накопит +2.
+  diffEl.dataset.base = diffEl.value || '6';
+  diffEl.addEventListener('input', () => { diffEl.dataset.base = diffEl.value; });
+  diffEl.addEventListener('change', () => { diffEl.dataset.base = diffEl.value; });
+
+  function _diceSetUnskilled(flag) {
+    _diceUnskilled = flag;
+    const base = parseInt(diffEl.dataset.base, 10) || 6;
+    diffEl.value = base + (flag ? 2 : 0); // программная установка .value не шлёт input/change
+    if (unskilledBadge) unskilledBadge.hidden = !flag;
+  }
+
+  // 2.3: третий список — добродетели (Совесть/Самоконтроль/Смелость) + Сила воли в
+  // одном селекте «Добродетель». Без модели — только имена, без чисел (2.1).
+  function _diceFillVirtues(m) {
+    if (!virtueSel) return;
+    const has = !!(m && m.virtues && m.willpower);
+    const items = [
+      ['Совесть/Решимость', has ? m.virtues.conscience : null],
+      ['Самоконтроль/Инстинкты', has ? m.virtues.selfcontrol : null],
+      ['Смелость', has ? m.virtues.courage : null],
+      ['Сила воли', has ? m.willpower.permanent : null],
+    ];
+    virtueSel.innerHTML = '<option value="">— добродетель —</option>' +
+      items.map(([label, val]) => {
+        const known = val !== null && val !== undefined;
+        return `<option value="${known ? val : ''}">${escHtml(label)}${known ? ` (${val})` : ''}</option>`;
+      }).join('');
+  }
 
   // Пул из листа: выбор персонажа прямо в панели (лист открывать не нужно) →
-  // fetch sheet-data → селекты «Атрибут/Способность». Если V20-лист уже
-  // открыт в модалке, его модель подставляется сразу.
+  // fetch sheet-data → селекты «Атрибут/Способность/Добродетель». Если V20-лист
+  // уже открыт в модалке, его модель подставляется сразу.
   function _diceFillFromModel(m) {
     _diceModel = m;
+    // Селекты пересобираются заново — предыдущий выбор «Не владеет» (если был) больше не
+    // отражён в разметке, поэтому синхронизируем флаг/сложность в конце функции (не трогая
+    // dataset.base — пользовательскую сложность между персонажами не сбрасываем).
+    attrSel.disabled = abilSel.disabled = false; // 2.1: списки доступны и без персонажа
     if (!m || !m.attributes) {
-      attrSel.disabled = abilSel.disabled = true;
-      attrSel.innerHTML = '<option value="">— атрибут —</option>';
-      abilSel.innerHTML = '<option value="">— способность —</option>';
+      // 2.1: без персонажа — полный статический список из V20_ATTRS/V20_ABILITIES,
+      // значения неизвестны (без чисел в скобках); пул — ручной ввод.
+      const attrLabels = [];
+      for (const [, list] of Object.entries(typeof V20_ATTRS !== 'undefined' ? V20_ATTRS : {}))
+        for (const [, label] of list) attrLabels.push(label);
+      const abilLabels = [];
+      for (const [, list] of Object.entries(typeof V20_ABILITIES !== 'undefined' ? V20_ABILITIES : {}))
+        for (const label of list) abilLabels.push(label);
+      attrSel.innerHTML = '<option value="">— атрибут —</option>' +
+        attrLabels.map(label => `<option value="">${escHtml(label)}</option>`).join('');
+      abilSel.innerHTML = '<option value="">— способность —</option>' +
+        abilLabels.map(label => `<option value="">${escHtml(label)}</option>`).join('') +
+        '<option value="unskilled">Не владеет</option>';
+      _diceFillVirtues(null);
+      _diceSetUnskilled(false);
       return;
     }
+    // 2.2: только прокачанные (val > 0) — нулевые атрибуты/способности (напр.
+    // Внешность Носферату, непрокачанные навыки) для броска бессмысленны.
     const attrs = [];
     for (const [group, list] of Object.entries(typeof V20_ATTRS !== 'undefined' ? V20_ATTRS : {})) {
-      for (const [key, label] of list) attrs.push({ label, val: (m.attributes[group] || {})[key] || 0 });
+      for (const [key, label] of list) {
+        const val = (m.attributes[group] || {})[key] || 0;
+        if (val > 0) attrs.push({ label, val });
+      }
     }
     const abils = [];
     for (const group of Object.keys(m.abilities || {})) {
-      for (const slot of m.abilities[group]) if (slot.name) abils.push({ label: slot.name, val: slot.val || 0 });
+      for (const slot of m.abilities[group]) {
+        const val = slot.val || 0;
+        if (slot.name && val > 0) abils.push({ label: slot.name, val });
+      }
     }
     attrSel.innerHTML = '<option value="">— атрибут —</option>' +
       attrs.map(a => `<option value="${a.val}">${escHtml(a.label)} (${a.val})</option>`).join('');
+    // «Не владеет» — синтетическая опция, есть всегда, даже если у персонажа нет
+    // собственных нулевых способностей: штраф +2 к сложности за бросок неосвоенным навыком.
     abilSel.innerHTML = '<option value="">— способность —</option>' +
-      abils.map(a => `<option value="${a.val}">${escHtml(a.label)} (${a.val})</option>`).join('');
-    attrSel.disabled = abilSel.disabled = false;
+      abils.map(a => `<option value="${a.val}">${escHtml(a.label)} (${a.val})</option>`).join('') +
+      '<option value="unskilled">Не владеет</option>';
+    _diceFillVirtues(m);
+    _diceSetUnskilled(false);
   }
 
   async function _diceFillCharSelect() {
@@ -113,11 +178,26 @@ if (typeof document !== 'undefined' && document.getElementById('dice-fab')) {
 
   function _diceApplySheetPool() {
     const a = parseInt(attrSel.value) || 0;
-    const b = parseInt(abilSel.value) || 0;
+    // «Не владеет» → 0 к пулу явно (не полагаемся на parseInt('unskilled') → NaN → 0 случайно).
+    const b = abilSel.value === 'unskilled' ? 0 : (parseInt(abilSel.value) || 0);
     if (attrSel.value !== '' || abilSel.value !== '') poolEl.value = Math.max(1, a + b);
   }
-  attrSel.addEventListener('change', _diceApplySheetPool);
-  abilSel.addEventListener('change', _diceApplySheetPool);
+  // 2.3: добродетель — самостоятельный пул (не сумма с атрибутом/способностью); порядок
+  // выбора решает, что «выигрывает» — последний применённый селект перезаписывает #dice-pool.
+  function _diceApplyVirtuePool() {
+    if (!virtueSel || virtueSel.value === '') return;
+    const v = parseInt(virtueSel.value, 10);
+    if (!isNaN(v)) poolEl.value = Math.max(1, v);
+  }
+  // 2.1: без персонажа (_diceModel === null) выбор в списках — чисто информационный
+  // (для истории броска), #dice-pool остаётся ручным вводом — _diceApplySheetPool не
+  // вызывается, чтобы не просуммировать несуществующие числа.
+  attrSel.addEventListener('change', () => { if (_diceModel) _diceApplySheetPool(); });
+  abilSel.addEventListener('change', () => {
+    _diceSetUnskilled(abilSel.value === 'unskilled');
+    if (_diceModel) _diceApplySheetPool();
+  });
+  if (virtueSel) virtueSel.addEventListener('change', () => { if (_diceModel) _diceApplyVirtuePool(); });
 
   fab.addEventListener('click', () => {
     panel.hidden = !panel.hidden;

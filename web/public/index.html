@@ -1551,10 +1551,11 @@
     <select class="form-control" id="dice-char-sel"><option value="">— персонаж —</option></select>
     <select class="form-control" id="dice-attr-sel" disabled><option value="">— атрибут —</option></select>
     <select class="form-control" id="dice-abil-sel" disabled><option value="">— способность —</option></select>
+    <select class="form-control" id="dice-virtue-sel"><option value="">— добродетель —</option></select>
   </div>
   <div class="dice-inputs">
     <label>Пул <input class="form-control" id="dice-pool" type="number" min="1" max="20" value="5"></label>
-    <label>Сложность <input class="form-control" id="dice-diff" type="number" min="2" max="10" value="6"></label>
+    <label>Сложность <input class="form-control" id="dice-diff" type="number" min="2" max="10" value="6"><span class="v20-auto-badge" id="dice-unskilled-badge" hidden>+2 — Не владеет</span></label>
     <button class="chr-modal-btn" id="dice-roll">Бросить</button>
   </div>
   <div id="dice-result"></div>

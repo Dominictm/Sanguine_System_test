@@ -4517,3 +4517,54 @@ test('source-guard: лист V20 — «+ Из справочника» для ф
   assert.ok(js.includes("'/api/library/backgrounds'"), 'пикер не грузит /api/library/backgrounds');
   assert.ok(js.includes("if (kind === 'background') return 'backgrounds'"), 'kind=background не мапится на секцию backgrounds');
 });
+
+// ══════════════════════════════════════════════════════════════════════════════
+// UNIT — source-guard: FAB дайс-роллер (dice.js) — тикеты 2.1/2.2/2.3
+// ══════════════════════════════════════════════════════════════════════════════
+
+test('source-guard: dice.js — бросок без персонажа (2.1) заполняет полные списки V20_ATTRS/V20_ABILITIES', () => {
+  const js = require('fs').readFileSync(path.join(__dirname, '../public/scripts/dice.js'), 'utf-8');
+  // без модели селекты больше не отключаются
+  assert.ok(!/attrSel\.disabled = abilSel\.disabled = true/.test(js), 'селекты всё ещё дизейблятся без персонажа');
+  assert.ok(js.includes('V20_ATTRS'), 'нет обхода V20_ATTRS для списка без персонажа');
+  assert.ok(js.includes('V20_ABILITIES'), 'нет обхода V20_ABILITIES для списка без персонажа');
+  // _diceApplySheetPool вызывается только когда есть модель
+  assert.ok(/if \(_diceModel\) _diceApplySheetPool\(\)/.test(js), 'пул из атрибута/способности применяется и без персонажа');
+});
+
+test('source-guard: dice.js — «Не владеет» (2.2): фильтр val>0, dataset.base, +2 без накопления', () => {
+  const js = require('fs').readFileSync(path.join(__dirname, '../public/scripts/dice.js'), 'utf-8');
+  assert.ok(js.includes("'unskilled'"), "нет опции/значения 'unskilled'");
+  assert.ok(js.includes('dataset.base'), 'нет dataset.base — базовой сложности отдельно от эффективной');
+  // атрибуты и способности фильтруются по val > 0 (нулевые не попадают в список броска)
+  assert.match(js, /if \(val > 0\) attrs\.push/, 'атрибуты не фильтруются по val > 0');
+  assert.match(js, /val > 0\) abils\.push/, 'способности не фильтруются по val > 0');
+  // «Не владеет» — 0 к пулу явным условием, а не случайным NaN||0
+  assert.ok(js.includes("abilSel.value === 'unskilled' ? 0 :"), "«Не владеет» не даёт явный 0 к пулу");
+  // эффективная сложность = base + 2, никогда не читая diffEl.value как источник базы
+  assert.match(js, /base \+ \(flag \? 2 : 0\)/, 'нет формулы «база + 2 при unskilled» без накопления');
+  assert.ok(!/diffEl\.value = parseInt\(diffEl\.value/.test(js), 'база читается из текущего diffEl.value — риск накопления +2');
+});
+
+test('source-guard: dice.js — индикатор автоматического +2 к сложности виден только при «Не владеет»', () => {
+  const js = require('fs').readFileSync(path.join(__dirname, '../public/scripts/dice.js'), 'utf-8');
+  const html = require('fs').readFileSync(path.join(__dirname, '../public/index.html'), 'utf-8');
+  const badgeTag = html.match(/<span[^>]*id="dice-unskilled-badge"[^>]*>([^<]*)<\/span>/);
+  assert.ok(badgeTag, 'нет индикатора рядом с #dice-diff в разметке');
+  assert.ok(/\bhidden\b/.test(badgeTag[0]), 'индикатор должен по умолчанию быть скрыт (атрибут hidden)');
+  assert.ok(/\+2.*Не владеет/.test(badgeTag[1]), 'текст индикатора не «+2 — Не владеет»');
+  assert.ok(js.includes('unskilledBadge.hidden = !flag'), 'индикатор не переключается по состоянию _diceUnskilled');
+});
+
+test('source-guard: dice.js/index.html — селект добродетелей (2.3) с 4 пунктами включая Силу воли', () => {
+  const js = require('fs').readFileSync(path.join(__dirname, '../public/scripts/dice.js'), 'utf-8');
+  const html = require('fs').readFileSync(path.join(__dirname, '../public/index.html'), 'utf-8');
+  assert.ok(html.includes('id="dice-virtue-sel"'), 'нет #dice-virtue-sel в разметке');
+  assert.ok(html.includes('class="form-control" id="dice-virtue-sel"'), 'селект добродетели не переиспользует form-control как attrSel/abilSel');
+  assert.ok(js.includes('m.virtues.conscience'), 'нет Совести/Решимости в модели добродетелей');
+  assert.ok(js.includes('m.virtues.selfcontrol'), 'нет Самоконтроля/Инстинктов в модели добродетелей');
+  assert.ok(js.includes('m.virtues.courage'), 'нет Смелости в модели добродетелей');
+  assert.ok(js.includes('m.willpower.permanent'), 'нет Силы воли в модели добродетелей');
+  // добродетель — самостоятельный пул, не сумма с атрибутом/способностью
+  assert.ok(js.includes('_diceApplyVirtuePool'), 'нет отдельного применения пула добродетели');
+});
