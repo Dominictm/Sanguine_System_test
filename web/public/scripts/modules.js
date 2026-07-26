@@ -257,6 +257,8 @@ document.getElementById('chr-detail-body').addEventListener('click', e => {
 // дублируют клик; preventDefault на Space, чтобы не скроллить модалку (см. .v20-box в v20-sheet.js).
 document.getElementById('chr-detail-body').addEventListener('keydown', e => {
   if (e.key !== 'Enter' && e.key !== ' ') return;
+  if (e.target.closest('.chd-mod-del-btn'))  return;
+  if (e.target.closest('.chd-mod-fill-btn')) return;
   const modCard = e.target.closest('.chd-mod-card');
   if (!modCard) return;
   e.preventDefault();

@@ -5318,3 +5318,37 @@ test('source-guard: modules.js — применение _pendingModulePrefill н
   assert.ok(/scenesEl\s*&&\s*!scenesEl\.value\.trim\(\)/.test(afterPrefill),
     'префилл #sess-scenes не проверяет пустоту поля перед записью — рискует затереть ручной ввод');
 });
+
+// Регрессия ревью коммита 49d7bed (P2 design-аудит «карточки модулей недоступны
+// с клавиатуры»): keydown-обработчик .chd-mod-card, добавленный тем коммитом,
+// НЕ содержал ту же проверку-исключение .chd-mod-del-btn, что уже есть у
+// соседнего click-обработчика (modules.js:224) и у аналогичного keydown в
+// session-screen.js. Из-за этого Tab на кнопку удаления модуля → Enter вызывал
+// e.preventDefault() и открывал модуль вместо срабатывания удаления — клавиатурный
+// пользователь полностью терял возможность удалить модуль в модалке хроники
+// (в отличие от экрана Сессии, где эта кнопка скрыта CSS-ом и потому недостижима
+// с клавиатуры). Guard: оба keydown-обработчика должны игнорировать нажатия,
+// пришедшиеся на .chd-mod-del-btn, ДО preventDefault/открытия модуля — иначе
+// будущий рефакторинг может тихо откатить фикс в одном из двух мест.
+test('source-guard: modules.js и session-screen.js — оба keydown-обработчика .chd-mod-card защищены от .chd-mod-del-btn (паритет с click)', () => {
+  const modulesJs = require('fs').readFileSync(path.join(__dirname, '../public/scripts/modules.js'), 'utf-8');
+  const sessionJs = require('fs').readFileSync(path.join(__dirname, '../public/scripts/session-screen.js'), 'utf-8');
+
+  const modulesKeydown = modulesJs.match(/document\.getElementById\('chr-detail-body'\)\.addEventListener\('keydown', e => \{[\s\S]*?\n\}\);/);
+  assert.ok(modulesKeydown, 'не найден делегированный keydown-обработчик #chr-detail-body (.chd-mod-card)');
+  const modulesGuardIdx = modulesKeydown[0].indexOf(".chd-mod-del-btn'");
+  const modulesPreventIdx = modulesKeydown[0].indexOf('e.preventDefault()');
+  assert.ok(modulesGuardIdx !== -1,
+    'keydown-обработчик #chr-detail-body не защищён от .chd-mod-del-btn — Enter/Space на кнопке удаления модуля вместо неё откроет модуль');
+  assert.ok(modulesGuardIdx < modulesPreventIdx,
+    'проверка .chd-mod-del-btn в keydown #chr-detail-body должна идти ДО e.preventDefault()/открытия модуля');
+
+  const sessionKeydown = sessionJs.match(/document\.getElementById\('page-session'\)\.addEventListener\('keydown', async e => \{[\s\S]*?\n\}\);/);
+  assert.ok(sessionKeydown, 'не найден делегированный keydown-обработчик #page-session (.chd-mod-card)');
+  const sessionGuardIdx = sessionKeydown[0].indexOf(".chd-mod-del-btn'");
+  const sessionPreventIdx = sessionKeydown[0].indexOf('e.preventDefault()');
+  assert.ok(sessionGuardIdx !== -1,
+    'keydown-обработчик #page-session не защищён от .chd-mod-del-btn (паритет с modules.js должен сохраняться при рефакторинге)');
+  assert.ok(sessionGuardIdx < sessionPreventIdx,
+    'проверка .chd-mod-del-btn в keydown #page-session должна идти ДО e.preventDefault()/открытия сессии');
+});
