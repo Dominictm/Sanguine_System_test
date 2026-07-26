@@ -4645,3 +4645,99 @@ test('source-guard: char-detail.js — вкладка «Фамильяр» (5.8)
   // Плейсхолдер для нерезолвящегося имени
   assert.ok(js.includes('не найден в реестре персонажей'), 'нет текста плейсхолдера для нерезолвящегося фамильяра');
 });
+
+// ══════════════════════════════════════════════════════════════════════════════
+// UNIT — source-guard: Фаза 5 — тикет 5.3–5.7 (блок .v20-stat-block: боксы/Воля/Путь/центрирование)
+// ══════════════════════════════════════════════════════════════════════════════
+
+test('source-guard: v20-sheet.js — _v20BoxesHtml рендерит кумулятивные боксы span[role=checkbox] с data-i (не input)', () => {
+  const js = require('fs').readFileSync(path.join(__dirname, '../public/scripts/v20-sheet.js'), 'utf-8');
+  const fnMatch = js.match(/function _v20BoxesHtml\([^)]*\)\s*\{[\s\S]*?\n\}/);
+  assert.ok(fnMatch, 'не найдена функция _v20BoxesHtml');
+  const fn = fnMatch[0];
+  assert.ok(/<span class="v20-box/.test(fn), '_v20BoxesHtml должна рендерить <span class="v20-box…"> (не <input type=checkbox>)');
+  assert.ok(!/<input type="checkbox" class="v20-box/.test(fn), '_v20BoxesHtml всё ещё рендерит нативный <input type=checkbox> для боксов');
+  assert.ok(/role="checkbox"/.test(fn), '_v20BoxesHtml не проставляет role="checkbox"');
+  assert.ok(/aria-checked="\$\{on\}"/.test(fn), '_v20BoxesHtml не проставляет aria-checked');
+  assert.ok(/tabindex="0"/.test(fn), '_v20BoxesHtml не проставляет tabindex="0" (клавиатурная доступность)');
+  assert.ok(/data-i="\$\{i\}"/.test(fn), '_v20BoxesHtml не проставляет data-i (нужен для разграничения от health-боксов)');
+});
+
+test('source-guard: v20-sheet.js — health-боксы остаются нативным <input type=checkbox> без data-i', () => {
+  const js = require('fs').readFileSync(path.join(__dirname, '../public/scripts/v20-sheet.js'), 'utf-8');
+  const healthMatch = js.match(/const healthRows = [\s\S]*?\)\.join\(''\);/);
+  assert.ok(healthMatch, 'не найден рендер healthRows');
+  const fn = healthMatch[0];
+  assert.ok(/<input type="checkbox" class="v20-box"/.test(fn), 'health-бокс должен остаться нативным <input type=checkbox class="v20-box">');
+  assert.ok(!/data-i=/.test(fn), 'health-бокс не должен получить data-i — иначе схлопнется с кумулятивной логикой боксов Воли/Крови');
+});
+
+test('source-guard: v20-sheet.js — onBox (клик по .v20-box[data-i]) зеркалит step-down логику onDot и использует _fillBoxes', () => {
+  const js = require('fs').readFileSync(path.join(__dirname, '../public/scripts/v20-sheet.js'), 'utf-8');
+  const fnMatch = js.match(/const onBox = box => \{[\s\S]*?\n  \};/);
+  assert.ok(fnMatch, 'не найдена функция onBox в _v20BindPanel');
+  const fn = fnMatch[0];
+  assert.ok(/_fillBoxes\(arr\.length, nv\)/.test(fn), 'onBox не использует существующий хелпер _fillBoxes для перестройки массива');
+  assert.ok(/cur === d\)\s*\?\s*d - 1\s*:\s*d/.test(fn), 'onBox не реализует step-down (клик по последнему заполненному боксу должен снимать его)');
+  assert.ok(/_v20RebuildBoxes\(wrap, nvArr\)/.test(fn), 'onBox не перерисовывает DOM боксов после изменения модели');
+});
+
+test('source-guard: v20-sheet.js — клик и keydown (Enter/Space) на .v20-box матчатся только при data-i !== undefined (health исключён)', () => {
+  const js = require('fs').readFileSync(path.join(__dirname, '../public/scripts/v20-sheet.js'), 'utf-8');
+  assert.ok(js.includes(`const box = e.target.closest('.v20-box'); if (box && box.dataset.i !== undefined) { onBox(box); return; }`),
+    'click-обработчик панели не матчит .v20-box[data-i] → onBox');
+  assert.ok(js.includes(`if (box && box.dataset.i !== undefined && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); onBox(box); }`),
+    'keydown-обработчик панели не матчит .v20-box[data-i] на Enter/Space → onBox (клавиатурная доступность)');
+});
+
+test('source-guard: v20-sheet.js — нативный change для .v20-box больше не завязан на data-i (только health, одиночный toggle)', () => {
+  const js = require('fs').readFileSync(path.join(__dirname, '../public/scripts/v20-sheet.js'), 'utf-8');
+  const changeMatch = js.match(/panel\.addEventListener\('change', e => \{[\s\S]*?\n  \}\);/);
+  assert.ok(changeMatch, 'не найден change-обработчик панели');
+  const fn = changeMatch[0];
+  assert.ok(!/dataset\.i !== undefined/.test(fn), 'change-обработчик всё ещё содержит ветку data-i (мертвый код — боксы Воли/Крови больше не <input>)');
+  assert.ok(/_v20Set\(_v20Model, box\.dataset\.bpath, box\.checked\)/.test(fn), 'change-обработчик не выставляет одиночное булево значение для health-боксов');
+});
+
+test('source-guard: v20-sheet.js — «Временная сила воли» вынесена на свою строку под точками постоянной Воли (5.4/5.5)', () => {
+  const js = require('fs').readFileSync(path.join(__dirname, '../public/scripts/v20-sheet.js'), 'utf-8');
+  assert.ok(js.includes('Временная сила воли'), 'нет лейбла «Временная сила воли»');
+  const willpowerBlock = js.match(/Воля \$\{_v20AutoBadge\(m\.willpower\.permanent[\s\S]*?willpower\.temp'[\s\S]*?<\/div>/);
+  assert.ok(willpowerBlock, 'не найден блок «Воля» целиком');
+  const idxPermanentDots = willpowerBlock[0].indexOf(`_v20DotsHtml('willpower.permanent'`);
+  const idxSubtitle = willpowerBlock[0].indexOf('Временная сила воли');
+  const idxTempBoxes = willpowerBlock[0].indexOf(`_v20BoxesHtml('willpower.temp'`);
+  assert.ok(idxPermanentDots >= 0 && idxSubtitle > idxPermanentDots, 'подпись «Временная сила воли» не идёт после точек постоянной Воли');
+  assert.ok(idxTempBoxes > idxSubtitle, 'боксы временной Воли не идут после подписи «Временная сила воли»');
+});
+
+test('source-guard: v20-sheet.js — заголовок блока Человечность/Путь редактируемый (.v20-path-title, placeholder «Человечность»), точки под ним (5.7)', () => {
+  const js = require('fs').readFileSync(path.join(__dirname, '../public/scripts/v20-sheet.js'), 'utf-8');
+  assert.ok(js.includes('v20-path-title'), 'нет класса .v20-path-title для редактируемого заголовка Пути');
+  assert.ok(js.includes('placeholder="Человечность"'), 'у поля заголовка Пути нет placeholder="Человечность"');
+  assert.ok(!js.includes('placeholder="Столп (Путь)"'), 'старое отдельное поле «Столп (Путь)» всё ещё присутствует — должно быть заменено единым заголовком');
+  const idxTitleInput = js.indexOf('v20-path-title');
+  const idxHumanityDots = js.indexOf(`_v20DotsHtml('humanity', m.humanity, 10)`);
+  assert.ok(idxTitleInput >= 0 && idxHumanityDots > idxTitleInput, 'точки humanity должны идти после редактируемого заголовка Пути в разметке');
+});
+
+test('source-guard: v20-sheet.js/styles.css — блоки Человечность/Путь, Воля и Запас крови отцентрированы через .v20-stat-block--centered, Опыт не тронут (5.6)', () => {
+  const js = require('fs').readFileSync(path.join(__dirname, '../public/scripts/v20-sheet.js'), 'utf-8');
+  const centeredCount = (js.match(/v20-stat-block--centered/g) || []).length;
+  assert.strictEqual(centeredCount, 3, `ожидалось 3 применения .v20-stat-block--centered (Человечность/Путь, Воля, Запас крови), найдено ${centeredCount}`);
+  // Блок «Опыт» — соседний .v20-stat-block без модификатора центрирования
+  const expBlock = js.match(/<div class="v20-stat-block" style="margin-top:12px">\s*<div class="v20-stat-title">Опыт<\/div>/);
+  assert.ok(expBlock, 'блок «Опыт» не найден или неожиданно получил класс центрирования');
+
+  const css = require('fs').readFileSync(path.join(__dirname, '../public/styles.css'), 'utf-8');
+  assert.ok(css.includes('.v20-stat-block--centered'), 'styles.css не определяет .v20-stat-block--centered');
+  const ruleMatch = css.match(/\.v20-stat-block--centered\s*\{[^}]*\}/);
+  assert.ok(ruleMatch, 'не найдено тело правила .v20-stat-block--centered');
+  assert.ok(/align-items:\s*center/.test(ruleMatch[0]), '.v20-stat-block--centered не центрирует по align-items');
+});
+
+test('source-guard: styles.css — .v20-box.on задаёт заливку для span-боксов (у span нет псевдокласса :checked)', () => {
+  const css = require('fs').readFileSync(path.join(__dirname, '../public/styles.css'), 'utf-8');
+  assert.ok(/\.v20-box\.on\s*\{|\.v20-box:checked,\s*\n?\s*\.v20-box\.on\s*\{/.test(css) || css.includes('.v20-box.on'),
+    'styles.css не определяет заливку для .v20-box.on (нужна для span-боксов без :checked)');
+});

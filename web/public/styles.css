@@ -8874,7 +8874,8 @@ a.md-link-loc:hover {
   transition: background .12s;
 }
 
-.v20-box:checked {
+.v20-box:checked,
+.v20-box.on {
   background: var(--accent2);
 }
 
@@ -8904,6 +8905,14 @@ a.md-link-loc:hover {
   margin-bottom: 14px;
 }
 
+/* Человечность/Путь, Воля, Запас крови — визуально отцентрированы (Опыт/Здоровье не тронуты). */
+.v20-stat-block--centered {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
 .v20-stat-title {
   font-family: var(--f-head);
   font-size: var(--fs-2xs);
@@ -8913,8 +8922,23 @@ a.md-link-loc:hover {
   margin-bottom: 5px;
 }
 
-.v20-path {
-  margin-top: 6px;
+/* Подзаголовок внутри блока (напр. «Временная сила воли» над боксами) — тот же стиль, чуть отделён сверху. */
+.v20-stat-subtitle {
+  margin-top: 8px;
+}
+
+/* Редактируемый заголовок блока Человечность/Путь — показывает фактическое название Пути
+   (пусто → placeholder «Человечность»), стилизован как .v20-stat-title, но остаётся полем ввода. */
+.v20-path-title {
+  font-family: var(--f-head);
+  font-size: var(--fs-2xs);
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--text3);
+  text-align: center;
+  flex: 0 1 auto;
+  width: auto;
+  max-width: 100%;
 }
 
 .v20-inline-field {

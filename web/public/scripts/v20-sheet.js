@@ -515,8 +515,13 @@ function _v20NamedDotRow(namePath, nameVal, dpath, val, max = 5, removeKey = '')
   const rm = removeKey ? `<button type="button" class="v20-row-remove-btn" data-v20-remove="${escAttr(removeKey)}" data-v20-remove-idx="${dpath.match(/(\d+)/)?.[1] ?? ''}" title="Удалить строку">×</button>` : '';
   return `<div class="v20-row v20-named">${rm}<input class="v20-line-input" data-tpath="${namePath}" value="${escAttr(nameVal)}" placeholder="…">${_v20DotsHtml(dpath, val, max)}</div>`;
 }
+// Кумулятивные боксы (временная Воля, Запас крови кроме 3-го поколения): рендерятся как
+// <span role="checkbox"> (НЕ <input type=checkbox>) — клик/Enter/Space обрабатывается делегированно
+// в _v20BindPanel (onBox), заполняя 1..N разом, а не тогля один бокс независимо. Health-боксы
+// (.v20-health-row) — отдельная разметка (см. healthRows в _v20RenderSheet), настоящие <input>,
+// с независимым нативным change-тогглом; их эта функция не рендерит.
 function _v20BoxesHtml(bpath, arr) {
-  return `<span class="v20-boxes">${arr.map((on, i) => `<input type="checkbox" class="v20-box" data-bpath="${bpath}" data-i="${i}"${on ? ' checked' : ''}>`).join('')}</span>`;
+  return `<span class="v20-boxes">${arr.map((on, i) => `<span class="v20-box${on ? ' on' : ''}" data-bpath="${bpath}" data-i="${i}" role="checkbox" aria-checked="${on}" tabindex="0"></span>`).join('')}</span>`;
 }
 function _v20Field(label, tpath, val, extra = '') {
   return `<label class="v20-field"><span class="v20-field-lbl">${escHtml(label)}</span><input class="v20-field-input" data-tpath="${tpath}" value="${escAttr(val || '')}"${extra}></label>`;
@@ -1669,17 +1674,17 @@ function _v20RenderSheet(panel, charName) {
         <input class="v20-field-input" data-tpath="flaw" value="${escAttr(m.flaw)}">
       </div>
       <div class="v20-col">
-        <div class="v20-stat-block">
-          <div class="v20-stat-title">Человечность / Путь ${_v20AutoBadge(m.humanity, derived.humanity, 'humanity', 'dot')}</div>
+        <div class="v20-stat-block v20-stat-block--centered">
+          <div class="v20-stat-title"><input class="v20-line-input v20-path-title" data-tpath="path" value="${escAttr(m.path)}" placeholder="Человечность">${_v20AutoBadge(m.humanity, derived.humanity, 'humanity', 'dot')}</div>
           ${_v20DotsHtml('humanity', m.humanity, 10)}
-          <input class="v20-line-input v20-path" data-tpath="path" value="${escAttr(m.path)}" placeholder="Столп (Путь)">
         </div>
-        <div class="v20-stat-block">
+        <div class="v20-stat-block v20-stat-block--centered">
           <div class="v20-stat-title">Воля ${_v20AutoBadge(m.willpower.permanent, derived.willpower, 'willpower.permanent', 'dot')}<button type="button" class="v20-mini-action" data-v20-action="spend-willpower" title="Потратить 1 пункт временной Воли">−1</button></div>
           ${_v20DotsHtml('willpower.permanent', m.willpower.permanent, 10)}
+          <div class="v20-stat-title v20-stat-subtitle">Временная сила воли</div>
           ${_v20BoxesHtml('willpower.temp', m.willpower.temp)}
         </div>
-        ${isVamp ? `<div class="v20-stat-block">
+        ${isVamp ? `<div class="v20-stat-block v20-stat-block--centered">
           <div class="v20-stat-title">Запас крови${derived.gen ? `<span class="v20-gen-info" title="Поколение ${escAttr(m.header.generation)}: max ${derived.gen.bloodMax ?? '— (счётчик)'}, предел/ход ${derived.gen.bloodPerTurn ?? '—'}, max точек (атрибуты/способности/дисциплины/факты биографии) ${derived.gen.maxDots}">ⓘ</span>` : ''}<button type="button" class="v20-mini-action" data-v20-action="spend-blood" title="Потратить 1 пункт крови">−1</button></div>
           ${derived.gen && derived.gen.bloodMax == null
             ? `<input type="number" min="0" class="v20-mini-input v20-blood-counter" data-tpath="bloodPoolCount" value="${escAttr(m.bloodPoolCount)}" title="3-е поколение — запас крови без фиксированного потолка">`
@@ -1795,6 +1800,17 @@ function _v20RebuildDots(span, val) {
   if (num) num.textContent = val;
 }
 
+// Кумулятивные боксы (временная Воля, Запас крови) — зеркало _v20RebuildDots для .v20-box[data-i].
+// Health-боксы не проходят через эту функцию (у них нет data-i / они не рендерятся _v20BoxesHtml).
+function _v20RebuildBoxes(wrap, arr) {
+  wrap.querySelectorAll('.v20-box').forEach(box => {
+    if (box.dataset.i === undefined) return;
+    const on = !!arr[+box.dataset.i];
+    box.classList.toggle('on', on);
+    box.setAttribute('aria-checked', on);
+  });
+}
+
 function _v20BindPanel(panel) {
   if (panel._v20Bound) return;
   panel._v20Bound = true;
@@ -1822,8 +1838,25 @@ function _v20BindPanel(panel) {
     _v20RebuildDots(span, nv);
     _v20MarkDirty();
   };
+  // Кумулятивные боксы (временная Воля, Запас крови — не health): клик по N-му боксу заполняет
+  // 1..N, повторный клик по уже последнему заполненному — снимает его (step-down, как у onDot).
+  // Матчится только data-i !== undefined — health-боксы (без data-i) сюда не попадают, у них
+  // остаётся независимый одиночный тоггл через нативный change-обработчик ниже.
+  const onBox = box => {
+    const wrap = box.closest('.v20-boxes'); if (!wrap) return;
+    const bpath = box.dataset.bpath, i = +box.dataset.i;
+    const arr = _v20Get(_v20Model, bpath) || [];
+    const cur = arr.filter(Boolean).length;
+    const d = i + 1;
+    const nv = (cur === d) ? d - 1 : d;
+    const nvArr = _fillBoxes(arr.length, nv);
+    _v20Set(_v20Model, bpath, nvArr);
+    _v20RebuildBoxes(wrap, nvArr);
+    _v20MarkDirty();
+  };
   panel.addEventListener('click', e => {
     const dot = e.target.closest('.v20-dot'); if (dot) { onDot(dot); return; }
+    const box = e.target.closest('.v20-box'); if (box && box.dataset.i !== undefined) { onBox(box); return; }
     const badge = e.target.closest('.v20-auto-badge'); if (badge) { _v20ApplyAutoBadge(badge); return; }
     const action = e.target.closest('[data-v20-action]'); if (action) { _v20RunAction(action.dataset.v20Action); return; }
     const discView = e.target.closest('[data-disc-view]'); if (discView) { _v20OpenDisciplineModal(discView.dataset.discView); return; }
@@ -1881,14 +1914,19 @@ function _v20BindPanel(panel) {
   });
   panel.addEventListener('keydown', e => {
     const dot = e.target.closest('.v20-dot');
-    if (dot && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); onDot(dot); }
+    if (dot && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); onDot(dot); return; }
+    // Клавиатурный доступ для кумулятивных боксов (span[role=checkbox], не <input>, поэтому нет
+    // бесплатного Space-тоггла из коробки) — см. onBox выше.
+    const box = e.target.closest('.v20-box');
+    if (box && box.dataset.i !== undefined && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); onBox(box); }
   });
   panel.addEventListener('change', e => {
+    // Только health-боксы доходят сюда: настоящие <input type=checkbox> без data-i, независимый
+    // одиночный тоггл. Временная Воля/Запас крови — span[role=checkbox] без нативного change,
+    // обрабатываются кликом/keydown → onBox выше.
     const box = e.target.closest('.v20-box');
     if (box) {
-      const bp = box.dataset.bpath;
-      if (box.dataset.i !== undefined) { const arr = _v20Get(_v20Model, bp) || []; arr[+box.dataset.i] = box.checked; _v20Set(_v20Model, bp, arr); }
-      else _v20Set(_v20Model, bp, box.checked);
+      _v20Set(_v20Model, box.dataset.bpath, box.checked);
       _v20MarkDirty();
       return;
     }
