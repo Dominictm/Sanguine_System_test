@@ -55,17 +55,30 @@ async function _sessLoadModules(chr, preselect) {
   }
 }
 
+// Явное условие видимости навигации «Сцена назад/вперёд»: нужны и хроника, и
+// модуль, и непустой сценарий. Не полагаемся только на побочный эффект веток
+// _sessClearModule()/_sessRenderScenario() — вызывается в нескольких точках
+// жизненного цикла, чтобы кнопки не мелькали видимыми в промежуточных
+// состояниях асинхронной загрузки (смена хроники/модуля).
+function _sessSyncSceneNavVisibility() {
+  const chrSel = document.getElementById('sess-chr-sel');
+  const modSel = document.getElementById('sess-mod-sel');
+  const nav    = document.getElementById('sess-scene-nav');
+  nav.hidden = !(chrSel.value && modSel.value && _sessBlocks.length);
+}
+
 function _sessClearModule() {
   _sessDetail = null; _sessBlocks = []; _sessScene = 0;
-  document.getElementById('sess-scene-nav').hidden = true;
   document.getElementById('sess-scenario').innerHTML = '<div class="cdet-empty">Выбери хронику и модуль</div>';
   document.getElementById('sess-npcs').innerHTML = '';
   document.getElementById('sess-audio').innerHTML = '';
+  _sessSyncSceneNavVisibility();
 }
 
 async function _sessLoadModule(chr, mod) {
   const scEl = document.getElementById('sess-scenario');
   scEl.innerHTML = '<div class="loading-state"><div class="spinner"></div>Загрузка...</div>';
+  _sessSyncSceneNavVisibility(); // _sessBlocks ещё от прошлого модуля/пуст — скрыть, пока не подтвердится новый сценарий
   try {
     if (typeof ensureCharsLoaded === 'function') await ensureCharsLoaded(); // для resolveCharByName в чипах НПС
     _sessDetail = await fetch(
@@ -73,6 +86,8 @@ async function _sessLoadModule(chr, mod) {
     ).then(r => r.json());
   } catch {
     scEl.innerHTML = '<div class="cdet-empty">⚠ Не удалось загрузить модуль</div>';
+    _sessBlocks = [];
+    _sessSyncSceneNavVisibility();
     return;
   }
   const raw = (_sessDetail.scenario || '').replace(/\r\n/g, '\n');
@@ -91,19 +106,18 @@ async function _sessLoadModule(chr, mod) {
   _sessRenderScenario();
   _sessRenderNpcs();
   _sessRenderAudio();
+  _sessSyncSceneNavVisibility();
 }
 
 // ── Сценарий ──────────────────────────────────────────────────────────────────
 
 function _sessRenderScenario() {
   const scEl  = document.getElementById('sess-scenario');
-  const nav   = document.getElementById('sess-scene-nav');
+  _sessSyncSceneNavVisibility();
   if (!_sessBlocks.length) {
-    nav.hidden = true;
     scEl.innerHTML = '<div class="cdet-empty">Сценарий не сгенерирован — открой модуль и заполни его на странице «Модули».</div>';
     return;
   }
-  nav.hidden = false;
   document.getElementById('sess-scene-label').textContent =
     `${_sessScene + 1} / ${_sessBlocks.length}`;
   scEl.innerHTML = _sessBlocks.map((b, i) => `

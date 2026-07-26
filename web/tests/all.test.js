@@ -4912,3 +4912,40 @@ test('source-guard: styles.css — .v20-box.on задаёт заливку дл�
   assert.ok(/\.v20-box\.on\s*\{|\.v20-box:checked,\s*\n?\s*\.v20-box\.on\s*\{/.test(css) || css.includes('.v20-box.on'),
     'styles.css не определяет заливку для .v20-box.on (нужна для span-боксов без :checked)');
 });
+
+// ── W3 тикет 3.1: скрытие «Сцена назад/вперёд» без хроники и/или модуля ───────
+
+test('source-guard: session-screen.js — явный хелпер _sessSyncSceneNavVisibility синхронизирует nav.hidden по хронике+модулю+сценарию', () => {
+  const js = require('fs').readFileSync(path.join(__dirname, '../public/scripts/session-screen.js'), 'utf-8');
+  assert.ok(js.includes('function _sessSyncSceneNavVisibility'), 'нет функции _sessSyncSceneNavVisibility');
+  const fnMatch = js.match(/function _sessSyncSceneNavVisibility\(\)\s*\{[\s\S]*?\n\}/);
+  assert.ok(fnMatch, 'не найдено тело _sessSyncSceneNavVisibility');
+  assert.ok(/chrSel\.value\s*&&\s*modSel\.value\s*&&\s*_sessBlocks\.length/.test(fnMatch[0]),
+    '_sessSyncSceneNavVisibility не проверяет chrSel.value && modSel.value && _sessBlocks.length');
+  // Вызывается в конце _sessClearModule() и в начале/конце _sessLoadModule(),
+  // а не только через побочный эффект веток — иначе риск регрессии при
+  // будущих правках (тикет 3.2 карточек модулей).
+  const clearBody = js.match(/function _sessClearModule\(\)\s*\{[\s\S]*?\n\}/);
+  assert.ok(clearBody && clearBody[0].includes('_sessSyncSceneNavVisibility()'), '_sessClearModule() не вызывает _sessSyncSceneNavVisibility()');
+  const loadBody = js.match(/async function _sessLoadModule\([\s\S]*?\n\}/);
+  const syncCalls = (loadBody ? loadBody[0].match(/_sessSyncSceneNavVisibility\(\)/g) : []) || [];
+  assert.ok(syncCalls.length >= 2, `_sessLoadModule() должен вызывать _sessSyncSceneNavVisibility() в начале и в конце (найдено ${syncCalls.length} вызовов)`);
+});
+
+// ── W3 тикет 3.4: sticky-панель «Аудио-пресеты» + «Заметки сессии» ────────────
+
+test('source-guard: styles.css — .sess-side sticky на десктопе, static на брейкпоинте 900px', () => {
+  const css = require('fs').readFileSync(path.join(__dirname, '../public/styles.css'), 'utf-8');
+  const sideMatch = css.match(/\.sess-side\s*\{[^}]*\}/);
+  assert.ok(sideMatch, 'не найдено правило .sess-side');
+  assert.ok(/position:\s*sticky/.test(sideMatch[0]), '.sess-side не задаёт position: sticky');
+  assert.ok(/top:\s*[\d.]+px/.test(sideMatch[0]), '.sess-side не задаёт числовой top');
+  assert.ok(/max-height:\s*calc\(100vh/.test(sideMatch[0]), '.sess-side не ограничивает max-height через calc(100vh...)');
+  assert.ok(/overflow-y:\s*auto/.test(sideMatch[0]), '.sess-side не задаёт overflow-y: auto для локального скролла');
+
+  const mqMatch = css.match(/@media \(max-width: 900px\)\s*\{[\s\S]*?\n\}\s*\n/);
+  assert.ok(mqMatch, 'не найден брейкпоинт @media (max-width: 900px)');
+  const sideInMq = mqMatch[0].match(/\.sess-side\s*\{[^}]*\}/);
+  assert.ok(sideInMq, 'брейкпоинт 900px не переопределяет .sess-side (нужно отключить sticky на мобильном)');
+  assert.ok(/position:\s*static/.test(sideInMq[0]), '.sess-side в брейкпоинте 900px не возвращает position: static');
+});
