@@ -4204,6 +4204,135 @@ describe('API — integration', () => {
     });
   });
 
+  // ── W2: Сессия backend — scene_notes.md + «## 📝 Заметки сессии» в <mod>.md ──
+  describe('Scene notes & session notes (W2 backend)', () => {
+    let chr = null, mod = null, modDir = null;
+    let origMd = null, origSceneNotes = null, sceneNotesExisted = false;
+
+    before(async () => {
+      const { body } = await apiJson(`/api/modules${CITY}`);
+      if (Array.isArray(body) && body.length) {
+        const m = body.find(x => x.chronicle && x.name) || body[0];
+        chr = m.chronicle; mod = m.name;
+        modDir = path.join(CITY_ROOT, 'chronicles', chr, 'modules', mod);
+        origMd = await fs.readFile(path.join(modDir, `${mod}.md`), 'utf-8').catch(() => null);
+        origSceneNotes = await fs.readFile(path.join(modDir, 'scene_notes.md'), 'utf-8').catch(() => null);
+        sceneNotesExisted = origSceneNotes !== null;
+      }
+    });
+    after(async () => {
+      if (!modDir) return;
+      if (origMd !== null) await fs.writeFile(path.join(modDir, `${mod}.md`), origMd, 'utf-8');
+      if (sceneNotesExisted) await fs.writeFile(path.join(modDir, 'scene_notes.md'), origSceneNotes, 'utf-8');
+      else await fs.unlink(path.join(modDir, 'scene_notes.md')).catch(() => {});
+    });
+
+    describe('GET/PUT scene-notes (scene_notes.md) — тикет 3.5-BE', () => {
+      it('PUT — неизвестный модуль → 404', async () => {
+        const { status } = await apiJson(`/api/chronicles/__nochron__/modules/__nomod__/scene-note${CITY}`,
+          { method: 'PUT', body: JSON.stringify({ heading: 'Сцена 1', text: 'x' }) });
+        assert.equal(status, 404);
+      });
+      it('PUT — пустой heading → 400', async () => {
+        if (!modDir) return;
+        const { status } = await apiJson(`/api/chronicles/${encodeURIComponent(chr)}/modules/${encodeURIComponent(mod)}/scene-note${CITY}`,
+          { method: 'PUT', body: JSON.stringify({ text: 'x' }) });
+        assert.equal(status, 400);
+      });
+      it('(1) PUT на несуществующий scene_notes.md создаёт его с одной секцией', async () => {
+        if (!modDir) return;
+        await fs.unlink(path.join(modDir, 'scene_notes.md')).catch(() => {});
+        const put = await apiJson(`/api/chronicles/${encodeURIComponent(chr)}/modules/${encodeURIComponent(mod)}/scene-note${CITY}`,
+          { method: 'PUT', body: JSON.stringify({ heading: 'Сцена 1', text: 'Первая заметка.' }) });
+        assert.equal(put.status, 200);
+        assert.ok(put.body.ok);
+        const raw = await fs.readFile(path.join(modDir, 'scene_notes.md'), 'utf-8');
+        assert.match(raw, /## Сцена 1\n\nПервая заметка\./);
+      });
+      it('(2) второй PUT с другим heading добавляет вторую секцию, не трогая первую', async () => {
+        if (!modDir) return;
+        const put = await apiJson(`/api/chronicles/${encodeURIComponent(chr)}/modules/${encodeURIComponent(mod)}/scene-note${CITY}`,
+          { method: 'PUT', body: JSON.stringify({ heading: 'Сцена 2', text: 'Вторая заметка.' }) });
+        assert.equal(put.status, 200);
+        const raw = await fs.readFile(path.join(modDir, 'scene_notes.md'), 'utf-8');
+        assert.match(raw, /## Сцена 1\n\nПервая заметка\./);
+        assert.match(raw, /## Сцена 2\n\nВторая заметка\./);
+      });
+      it('(3) повторный PUT с тем же heading заменяет только тело этой секции', async () => {
+        if (!modDir) return;
+        const put = await apiJson(`/api/chronicles/${encodeURIComponent(chr)}/modules/${encodeURIComponent(mod)}/scene-note${CITY}`,
+          { method: 'PUT', body: JSON.stringify({ heading: 'Сцена 1', text: 'Обновлённая первая заметка.' }) });
+        assert.equal(put.status, 200);
+        const raw = await fs.readFile(path.join(modDir, 'scene_notes.md'), 'utf-8');
+        assert.match(raw, /## Сцена 1\n\nОбновлённая первая заметка\./);
+        assert.doesNotMatch(raw, /## Сцена 1\n\nПервая заметка\./);
+        assert.match(raw, /## Сцена 2\n\nВторая заметка\./, 'вторая секция не должна была пострадать');
+      });
+      it('(4) GET возвращает объект с обоими ключами разом', async () => {
+        if (!modDir) return;
+        const { status, body } = await apiJson(
+          `/api/chronicles/${encodeURIComponent(chr)}/modules/${encodeURIComponent(mod)}/scene-notes${CITY}`);
+        assert.equal(status, 200);
+        assert.equal(body['Сцена 1'], 'Обновлённая первая заметка.');
+        assert.equal(body['Сцена 2'], 'Вторая заметка.');
+      });
+    });
+
+    describe('GET/PUT session-notes (## 📝 Заметки сессии в <mod>.md) — тикет 3.6-BE', () => {
+      it('PUT — неизвестный модуль → 404', async () => {
+        const { status } = await apiJson(`/api/chronicles/__nochron__/modules/__nomod__/session-notes${CITY}`,
+          { method: 'PUT', body: JSON.stringify({ text: 'x' }) });
+        assert.equal(status, 404);
+      });
+      it('GET на модуль без секции → { text: "" }', async () => {
+        if (!modDir) return;
+        const { status, body } = await apiJson(
+          `/api/chronicles/${encodeURIComponent(chr)}/modules/${encodeURIComponent(mod)}/session-notes${CITY}`);
+        assert.equal(status, 200);
+        assert.equal(body.text, '');
+      });
+      it('(1)+(2) PUT дописывает секцию в конец файла; поля detail до/после совпадают (regression-guard)', async () => {
+        if (!modDir) return;
+        const before = await apiJson(
+          `/api/chronicles/${encodeURIComponent(chr)}/modules/${encodeURIComponent(mod)}/detail${CITY}`);
+        const put = await apiJson(
+          `/api/chronicles/${encodeURIComponent(chr)}/modules/${encodeURIComponent(mod)}/session-notes${CITY}`,
+          { method: 'PUT', body: JSON.stringify({ text: 'Заметки первой сессии.' }) });
+        assert.equal(put.status, 200);
+        assert.ok(put.body.ok);
+
+        const raw = await fs.readFile(path.join(modDir, `${mod}.md`), 'utf-8');
+        assert.match(raw, /## 📝 Заметки сессии\n\nЗаметки первой сессии\./);
+        // Секция дописана в конец, после `---`-разделителя, как остальные секции модуля
+        assert.ok(raw.trimEnd().endsWith('Заметки первой сессии.'));
+
+        const after = await apiJson(
+          `/api/chronicles/${encodeURIComponent(chr)}/modules/${encodeURIComponent(mod)}/detail${CITY}`);
+        for (const key of ['title', 'pcs', 'npcs', 'type', 'format', 'time']) {
+          assert.deepEqual(after.body[key], before.body[key], `поле «${key}» изменилось после апсерта заметок сессии`);
+        }
+      });
+      it('(3) повторный PUT заменяет тело, не дублируя заголовок', async () => {
+        if (!modDir) return;
+        const put = await apiJson(
+          `/api/chronicles/${encodeURIComponent(chr)}/modules/${encodeURIComponent(mod)}/session-notes${CITY}`,
+          { method: 'PUT', body: JSON.stringify({ text: 'Обновлённые заметки сессии.' }) });
+        assert.equal(put.status, 200);
+
+        const raw = await fs.readFile(path.join(modDir, `${mod}.md`), 'utf-8');
+        const occurrences = (raw.match(/## 📝 Заметки сессии/g) || []).length;
+        assert.equal(occurrences, 1, 'заголовок секции не должен дублироваться');
+        assert.match(raw, /## 📝 Заметки сессии\n\nОбновлённые заметки сессии\./);
+        assert.doesNotMatch(raw, /Заметки первой сессии\./);
+
+        const { status, body } = await apiJson(
+          `/api/chronicles/${encodeURIComponent(chr)}/modules/${encodeURIComponent(mod)}/session-notes${CITY}`);
+        assert.equal(status, 200);
+        assert.equal(body.text, 'Обновлённые заметки сессии.');
+      });
+    });
+  });
+
   // ── E2: мотивация НПС — Хочет/Боится/Рычаг (опциональные поля карточки) ──────
   describe('Character fields — мотивация (want/fear/leverage)', () => {
     it('PUT fields пишет Хочет/Боится/Рычаг в карточку, parseCharacter читает обратно', async () => {

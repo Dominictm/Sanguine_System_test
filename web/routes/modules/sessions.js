@@ -16,6 +16,7 @@ const {
   _parseModuleLocSlugs, _writeModuleLocSlugs, _parseSessions, _cleanNpcName, _npcCardHref,
   _parseNpcEntries, _findNpcMdSection, _removeNpcEntry, _parseNpcMdGroups, _renderSessionBlock,
   _writeSessionsFile, _patchModuleMain,
+  _upsertScenarioLikeSection, _upsertModuleSection, _readModuleSection,
 } = require('./shared');
 
 module.exports = function sessionsRouter() {
@@ -74,6 +75,93 @@ module.exports = function sessionsRouter() {
       res.json({ ok: true, n: i + 1 });
     } catch (e) {
       console.error('[module-session-edit]', e.message);
+      serverError(res, e);
+    }
+  });
+
+  // ── Scene notes (scene_notes.md) — per-scene freeform notes taken during play ──
+
+  router.get('/api/chronicles/:chr/modules/:mod/scene-notes', async (req, res) => {
+    try {
+      const city = reqCity(req);
+      const { chr, mod } = req.params;
+      if (chr.includes('..') || mod.includes('..'))
+        return res.status(400).json({ ok: false, error: 'Недопустимое имя' });
+
+      const modDir = path.join(chroniclesDir(city), chr, 'modules', mod);
+      const raw = await fs.readFile(path.join(modDir, 'scene_notes.md'), 'utf-8').catch(() => '');
+      const { sections } = parseScenarioSections(raw);
+      const notesByHeading = Object.fromEntries(sections.map(s => [s.heading, s.body]));
+      res.json(notesByHeading);
+    } catch (e) {
+      console.error('[scene-notes]', e.message);
+      serverError(res, e);
+    }
+  });
+
+  router.put('/api/chronicles/:chr/modules/:mod/scene-note', express.json(), async (req, res) => {
+    try {
+      const city = reqCity(req);
+      const { chr, mod } = req.params;
+      if (chr.includes('..') || mod.includes('..'))
+        return res.status(400).json({ ok: false, error: 'Недопустимое имя' });
+
+      const heading = (req.body?.heading || '').trim();
+      const text    = (req.body?.text    || '');
+      if (!heading)
+        return res.status(400).json({ ok: false, error: 'Укажи заголовок сцены' });
+
+      const modDir = path.join(chroniclesDir(city), chr, 'modules', mod);
+      if (!await fs.stat(modDir).catch(() => null))
+        return res.status(404).json({ ok: false, error: 'Модуль не найден' });
+
+      const notesPath = path.join(modDir, 'scene_notes.md');
+      const raw = await fs.readFile(notesPath, 'utf-8').catch(() => '# Заметки сцен\n\n');
+      const updated = _upsertScenarioLikeSection(raw, heading, text);
+      await writeFileAtomic(notesPath, updated, 'utf-8');
+      console.log(`[scene-note] ${city}/${chr}/${mod} → «${heading}»`);
+      res.json({ ok: true });
+    } catch (e) {
+      console.error('[scene-note]', e.message);
+      serverError(res, e);
+    }
+  });
+
+  // ── Session notes (## 📝 Заметки сессии внутри <mod>.md) ───────────────────────
+
+  router.get('/api/chronicles/:chr/modules/:mod/session-notes', async (req, res) => {
+    try {
+      const city = reqCity(req);
+      const { chr, mod } = req.params;
+      if (chr.includes('..') || mod.includes('..'))
+        return res.status(400).json({ ok: false, error: 'Недопустимое имя' });
+
+      const modDir = path.join(chroniclesDir(city), chr, 'modules', mod);
+      const text = await _readModuleSection(modDir, mod, '📝 Заметки сессии');
+      res.json({ text });
+    } catch (e) {
+      console.error('[session-notes]', e.message);
+      serverError(res, e);
+    }
+  });
+
+  router.put('/api/chronicles/:chr/modules/:mod/session-notes', express.json(), async (req, res) => {
+    try {
+      const city = reqCity(req);
+      const { chr, mod } = req.params;
+      if (chr.includes('..') || mod.includes('..'))
+        return res.status(400).json({ ok: false, error: 'Недопустимое имя' });
+
+      const modDir = path.join(chroniclesDir(city), chr, 'modules', mod);
+      if (!await fs.stat(modDir).catch(() => null))
+        return res.status(404).json({ ok: false, error: 'Модуль не найден' });
+
+      const text = req.body?.text || '';
+      await _upsertModuleSection(modDir, mod, '📝 Заметки сессии', text);
+      console.log(`[session-notes] ${city}/${chr}/${mod} → updated`);
+      res.json({ ok: true });
+    } catch (e) {
+      console.error('[session-notes]', e.message);
       serverError(res, e);
     }
   });

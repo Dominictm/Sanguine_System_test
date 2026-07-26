@@ -616,6 +616,69 @@ async function _patchModuleMain(modDir, mod, firstLoc) {
   await writeFileAtomic(p, txt, 'utf-8');
 }
 
+// ── Scene notes (scene_notes.md) — плоский список «## <heading>» разделов,
+// один на сцену, без вложенных `### `-подсекций. Структурно идентично
+// scenario.md без H3-детей, поэтому парсер/сериализатор переиспользуются
+// напрямую из lib/parsers (parseScenarioSections/serializeScenarioSections).
+// replaceScenarioSection() ничего не делает, если заголовок не найден (нет
+// такой сцены ещё) — эта тонкая обёртка добавляет апсерт-с-созданием для
+// случая «первая заметка к новой сцене».
+function _upsertScenarioLikeSection(raw, heading, body) {
+  const { preamble, sections } = parseScenarioSections(raw);
+  const idx = findScenarioSectionIndex(sections, heading);
+  const cleanBody = String(body == null ? '' : body).trim();
+  if (idx === -1) sections.push({ heading, body: cleanBody, level: 2, parent: null });
+  else sections[idx] = { ...sections[idx], body: cleanBody };
+  return serializeScenarioSections(preamble, sections);
+}
+
+// ── Session notes (## 📝 Заметки сессии внутри <mod>.md) ───────────────────────
+// <mod>.md — не «чистый» файл заметок: метаданные (таблица), участники,
+// концепция и т.д. Полная реконструкция через parseScenarioSections/
+// serializeScenarioSections рискует переформатировать секции, которых этот
+// апсерт вообще не должен касаться — поэтому здесь узкий regex-патч в духе
+// _patchModuleMain выше: находит `## <heading>` и правит только тело до
+// следующего `## ` (или до конца файла), не трогая остальной текст.
+function _moduleSectionHeadingRe(heading) {
+  const escaped = String(heading).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  // [ \t]*$ — NOT \s*$: \s matches \n too, and with the `m` flag $ is
+  // satisfied right before ANY \n, so a greedy \s*$ can backtrack into
+  // swallowing the blank line after the heading into the match itself,
+  // making `start` (and the replace-path body) drift by one newline on
+  // every subsequent upsert. Restrict trailing match to same-line whitespace.
+  return new RegExp(`^##\\s+${escaped}[ \\t]*$`, 'm');
+}
+async function _upsertModuleSection(modDir, mod, heading, body) {
+  const p = path.join(modDir, `${mod}.md`);
+  let txt = await fs.readFile(p, 'utf-8').catch(() => '');
+  const cleanBody = String(body == null ? '' : body).trim();
+  const headingRe = _moduleSectionHeadingRe(heading);
+  const m = headingRe.exec(txt);
+  if (m) {
+    const start = m.index + m[0].length;
+    const rest = txt.slice(start);
+    const nextIdx = rest.search(/\n##\s+/);
+    const end = nextIdx === -1 ? txt.length : start + nextIdx;
+    txt = txt.slice(0, start) + '\n\n' + cleanBody + '\n' + txt.slice(end);
+  } else {
+    txt = txt.replace(/\s*$/, '') + `\n\n---\n\n## ${heading}\n\n${cleanBody}\n`;
+  }
+  await writeFileAtomic(p, txt, 'utf-8');
+}
+// Читает тело секции тем же паттерном, каким _upsertModuleSection её находит —
+// GET-эндпоинт должен видеть ровно то, что найдёт последующий апсерт.
+async function _readModuleSection(modDir, mod, heading) {
+  const p = path.join(modDir, `${mod}.md`);
+  const txt = await fs.readFile(p, 'utf-8').catch(() => '');
+  const m = _moduleSectionHeadingRe(heading).exec(txt);
+  if (!m) return '';
+  const start = m.index + m[0].length;
+  const rest = txt.slice(start);
+  const nextIdx = rest.search(/\n##\s+/);
+  const body = nextIdx === -1 ? rest : rest.slice(0, nextIdx);
+  return body.trim();
+}
+
 // Захардкоженный model-оверрайд (дешёвая/быстрая модель вместо дефолтной) имеет
 // смысл только для Claude-источника — для openrouter/openai/gemini голый
 // Anthropic model ID не резолвится и роняет запрос 400-й ошибкой (_isOA/_oaCall
@@ -644,4 +707,5 @@ module.exports = {
   _parseModuleLocSlugs, _writeModuleLocSlugs, _parseSessions, _cleanNpcName, _npcCardHref,
   _parseNpcEntries, _findNpcMdSection, _findNpcMdSections, _removeNpcEntry, _parseNpcMdGroups, _renderSessionBlock,
   _writeSessionsFile, _patchModuleMain, _claudeOnlyModel,
+  _upsertScenarioLikeSection, _upsertModuleSection, _readModuleSection,
 };
