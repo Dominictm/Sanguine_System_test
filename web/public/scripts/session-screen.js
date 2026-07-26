@@ -290,7 +290,7 @@ function _sessRenderSceneNote() {
   if (!wrap.querySelector('#sess-scene-note')) {
     wrap.innerHTML = `
       <div class="sess-side-title" id="sess-scene-note-title"></div>
-      <textarea class="form-control" id="sess-scene-note" rows="6" placeholder="Заметка к этой сцене..."></textarea>
+      <textarea class="form-control" id="sess-scene-note" rows="6" placeholder="Заметка к этой сцене..." aria-labelledby="sess-scene-note-title"></textarea>
       <button class="chr-modal-btn" id="sess-scene-note-save" disabled>Сохранить</button>`;
     const ta  = wrap.querySelector('#sess-scene-note');
     const btn = wrap.querySelector('#sess-scene-note-save');
@@ -475,5 +475,24 @@ document.getElementById('page-session').addEventListener('click', async e => {
     else { _audioPresetCache = _sessPresets; await _audioPresetPlay(pid); }
     _sessRenderAudio();
     return;
+  }
+});
+
+// Клавиатурный доступ для карточек модулей (role="button" tabindex="0", см. modules.js:
+// renderModuleCardInChr) — Enter/Space дублируют клик; preventDefault на Space, чтобы не
+// скроллить страницу (тот же паттерн, что для .v20-box в v20-sheet.js).
+document.getElementById('page-session').addEventListener('keydown', async e => {
+  if (e.key !== 'Enter' && e.key !== ' ') return;
+  const modCard = e.target.closest('.chd-mod-card');
+  if (!modCard) return;
+  if (e.target.closest('.chd-mod-del-btn')) return;
+  e.preventDefault();
+  const chr = document.getElementById('sess-chr-sel').value;
+  const mod = modCard.dataset.mod;
+  if (mod) {
+    document.querySelectorAll('#sess-mod-cards .chd-mod-card--active')
+      .forEach(c => c.classList.remove('chd-mod-card--active'));
+    modCard.classList.add('chd-mod-card--active');
+    await _sessLoadModule(chr, mod);
   }
 });

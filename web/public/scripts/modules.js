@@ -48,7 +48,7 @@ function renderModuleCardInChr(m, chrSlug) {
     m.hasNpc      ? '<span class="chd-mod-file">👥 НПС</span>' : '',
   ].filter(Boolean).join('');
   return `
-    <div class="chd-mod-card" data-chr="${escHtml(chrSlug)}" data-mod="${escHtml(m.name)}">
+    <div class="chd-mod-card" data-chr="${escHtml(chrSlug)}" data-mod="${escHtml(m.name)}" role="button" tabindex="0">
       <div class="chd-mod-main">
         <div class="chd-mod-title">${escHtml(m.title)}</div>
         ${m.time ? `<div class="chd-mod-time">${escHtml(m.time)}</div>` : ''}
@@ -251,6 +251,18 @@ document.getElementById('chr-detail-body').addEventListener('click', e => {
     const chr = modCard.dataset.chr || _chrDetailSlug || '';
     if (mod) openModulePage(chr, mod);
   }
+});
+
+// Клавиатурный доступ для карточек модулей (role="button" tabindex="0") — Enter/Space
+// дублируют клик; preventDefault на Space, чтобы не скроллить модалку (см. .v20-box в v20-sheet.js).
+document.getElementById('chr-detail-body').addEventListener('keydown', e => {
+  if (e.key !== 'Enter' && e.key !== ' ') return;
+  const modCard = e.target.closest('.chd-mod-card');
+  if (!modCard) return;
+  e.preventDefault();
+  const mod = modCard.dataset.mod;
+  const chr = modCard.dataset.chr || _chrDetailSlug || '';
+  if (mod) openModulePage(chr, mod);
 });
 
 // Close detail modal

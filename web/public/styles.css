@@ -2677,7 +2677,8 @@ select.form-control {
   .form-control, .ais-input, .ais-select, .chr-form-input,
   .city-edit-btn, .city-del-btn, .mod-gen-scenario-btn, .nav-item,
   .cdet-faction-chip, .modp-edit-btn,
-  .tour-replay-btn, .city-switch-add, .chd-dir-btn, button.chron-chip {
+  .tour-replay-btn, .city-switch-add, .chd-dir-btn, button.chron-chip,
+  .chron-toggle {
     min-height: 44px;
   }
 
@@ -4429,7 +4430,7 @@ a:focus-visible {
 /* Module cards inside chronicle detail */
 .chd-mod-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(380px, 100%), 1fr));
   gap: 10px;
 }
 
