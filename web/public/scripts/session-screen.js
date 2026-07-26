@@ -78,7 +78,8 @@ function _sessClearModule() {
 async function _sessLoadModule(chr, mod) {
   const scEl = document.getElementById('sess-scenario');
   scEl.innerHTML = '<div class="loading-state"><div class="spinner"></div>Загрузка...</div>';
-  _sessSyncSceneNavVisibility(); // _sessBlocks ещё от прошлого модуля/пуст — скрыть, пока не подтвердится новый сценарий
+  _sessBlocks = [];
+  _sessSyncSceneNavVisibility(); // _sessBlocks уже сброшен — скрыть, пока не подтвердится новый сценарий
   try {
     if (typeof ensureCharsLoaded === 'function') await ensureCharsLoaded(); // для resolveCharByName в чипах НПС
     _sessDetail = await fetch(
