@@ -664,8 +664,10 @@ async function initGridCarousels() {
   if (!resp?.ok) return;
   _gridImages = await resp.json().catch(() => ({}));
 
-  for (const name of Object.keys(_gridImages)) _gridIdxs[name] = 0;
-
+  // _gridIdxs больше не сеется здесь заранее нулём — _injectGridDims() тут же
+  // ниже пересчитывает реальный индекс по отрисованной img.src для каждой
+  // карточки (см. комментарий там); отдельный проход стал бы мёртвым кодом,
+  // который сразу перезаписывается и может ввести в заблуждение.
   _injectGridDims();
 
   // Каждая карточка стартует в свой случайный момент, независимо
@@ -680,6 +682,18 @@ function _injectGridDims() {
   for (const name of Object.keys(_gridImages)) {
     const card = document.querySelector(`.char-card[data-name="${CSS.escape(name)}"]`);
     if (!card || card.querySelector('.char-card-dim')) continue;
+    // Ресинк «текущего» индекса с тем, что реально отрисовано: карточка
+    // изначально показывает c.imageUrl (бэкенд берёт ПОСЛЕДНИЙ отсортированный
+    // файл, см. web/lib/db.js), а не images[0] — без этого do-while в
+    // _advanceCard иногда гарантированно выбирает уже показанную картинку
+    // (не видно смены). Пересчитываем при каждой (пере)отрисовке карточки —
+    // renderChars() перерисовывает грид при каждом фильтре/поиске, всегда
+    // возвращая imageUrl, так что старый индекс тут же снова устаревает.
+    const img = card.querySelector('.char-card-art');
+    if (img) {
+      const idx = (_gridImages[name] || []).indexOf(img.getAttribute('src'));
+      _gridIdxs[name] = idx === -1 ? 0 : idx;
+    }
     const dim = document.createElement('div');
     dim.className = 'char-card-dim';
     card.insertBefore(dim, card.firstChild);
@@ -690,10 +704,15 @@ function _advanceCard(name) {
   const images = _gridImages[name];
   if (!images || images.length < 2) return;
   const card = document.querySelector(`.char-card[data-name="${CSS.escape(name)}"]`);
-  if (!card) return;
+  // Карточка сейчас не в DOM (скрыта фильтром/поиском по имени) — не бросаем
+  // цикл насовсем: без переброса таймера карусель этого персонажа умирала бы
+  // навсегда при первом же срабатывании под фильтром, т.к. больше ничто её не
+  // перезапустит (initGridCarousels вызывается только один раз за визит на
+  // страницу). Планируем следующую попытку и выходим.
+  if (!card) { _scheduleCard(name); return; }
   const img = card.querySelector('.char-card-art');
   const dim = card.querySelector('.char-card-dim');
-  if (!img || !dim) return;
+  if (!img || !dim) { _scheduleCard(name); return; }
 
   dim.classList.add('dark');
   setTimeout(() => {
