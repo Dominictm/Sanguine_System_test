@@ -1598,10 +1598,19 @@ function resolveMdLink(text, href) {
     const slug = href.replace(/\.md$/, '').split('/').pop();
     return `<a class="md-link md-link-loc" data-loc-slug="${slug}" href="#">${text}</a>`;
   }
-  if (/\.md$/.test(href) || href.startsWith('#')) {
+  if (href.startsWith('#')) {
+    return `<a class="md-link md-link-anchor" href="${href}">${text}</a>`;
+  }
+  if (/\.md$/.test(href)) {
     return `<span class="md-link">${text}</span>`;
   }
   return `<a class="md-link" href="${href}" target="_blank" rel="noopener">${text}</a>`;
+}
+
+// GitHub-style heading slug (must stay deterministic — docs/guide.md's TOC
+// hardcodes anchors like #7-сессия-живой-режим-игры against this exact shape).
+function slugifyHeading(text) {
+  return text.toLowerCase().trim().replace(/[^\p{L}\p{N}\s-]/gu, '').replace(/\s+/g, '-');
 }
 
 // styled text (relative .md paths don't resolve in the browser).
@@ -1616,15 +1625,31 @@ function mdToHtmlBlock(md) {
   if (!md) return '';
   const lines = md.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
   let html = '', i = 0;
-  const isBlockStart = t => /^(#{1,6}\s|>|[-*]\s|\d+\.\s|\|)/.test(t) || /^---+$/.test(t);
+  const usedSlugs = new Map();
+  const nextId = text => {
+    const base = slugifyHeading(text) || 'section';
+    const n = (usedSlugs.get(base) || 0) + 1;
+    usedSlugs.set(base, n);
+    return n === 1 ? base : `${base}-${n}`;
+  };
+  const isBlockStart = t => /^(#{1,6}\s|>|[-*]\s|\d+\.\s|\||```)/.test(t) || /^---+$/.test(t);
   while (i < lines.length) {
     const t = lines[i].trim();
     if (!t) { i++; continue; }
 
+    if (/^```/.test(t)) {
+      i++;
+      const buf = [];
+      while (i < lines.length && !/^```/.test(lines[i].trim())) { buf.push(lines[i]); i++; }
+      i++; // skip closing fence
+      html += `<pre class="md-pre"><code>${escHtml(buf.join('\n'))}</code></pre>`;
+      continue;
+    }
+
     if (/^---+$/.test(t)) { html += '<hr class="md-hr">'; i++; continue; }
 
     const h = t.match(/^(#{1,6})\s+(.*)$/);
-    if (h) { const lvl = Math.min(h[1].length, 6); html += `<div class="md-h md-h${lvl}">${mdInline(h[2])}</div>`; i++; continue; }
+    if (h) { const lvl = Math.min(h[1].length, 6); const id = nextId(h[2]); html += `<div class="md-h md-h${lvl}" id="${id}">${mdInline(h[2])}</div>`; i++; continue; }
 
     if (/^>\s?/.test(t)) {
       const buf = [];

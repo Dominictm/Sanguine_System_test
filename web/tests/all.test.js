@@ -5035,6 +5035,38 @@ test('source-guard: routes/tools.js — GET /api/guide отдаёт содерж
   assert.ok(/res\.json\(\{\s*content/.test(routeMatch[0]), 'роут не возвращает { content }');
 });
 
+test('source-guard: scripts.js — resolveMdLink() рендерит #-якоря как настоящую <a href="#...">, не инертный <span> (нужно для оглавления guide.md)', () => {
+  const js = require('fs').readFileSync(path.join(__dirname, '../public/scripts/scripts.js'), 'utf-8');
+  const fnMatch = js.match(/function resolveMdLink\([^)]*\)\s*\{[\s\S]*?\n\}/);
+  assert.ok(fnMatch, 'не найдена функция resolveMdLink');
+  assert.ok(/href\.startsWith\('#'\)[\s\S]*?<a class="md-link md-link-anchor" href="\$\{href\}">/.test(fnMatch[0]),
+    'resolveMdLink не рендерит #-ссылки как кликабельную <a href="#...">');
+});
+
+test('source-guard: scripts.js — mdToHtmlBlock() присваивает заголовкам id через slugifyHeading (клик по оглавлению должен куда-то попадать)', () => {
+  const js = require('fs').readFileSync(path.join(__dirname, '../public/scripts/scripts.js'), 'utf-8');
+  assert.ok(/function slugifyHeading\(text\)/.test(js), 'не найдена функция slugifyHeading');
+  const fnMatch = js.match(/function mdToHtmlBlock\(md\)\s*\{[\s\S]*?\n\}/);
+  assert.ok(fnMatch, 'не найдена функция mdToHtmlBlock');
+  assert.ok(/nextId\(h\[2\]\)/.test(fnMatch[0]), 'mdToHtmlBlock не генерирует id для заголовков');
+  assert.ok(/class="md-h md-h\$\{lvl\}" id="\$\{id\}"/.test(fnMatch[0]), 'заголовок не получает атрибут id');
+});
+
+test('source-guard: scripts.js — mdToHtmlBlock() рендерит fenced code blocks (```) как <pre class="md-pre"> вместо схлопывания в один параграф', () => {
+  const js = require('fs').readFileSync(path.join(__dirname, '../public/scripts/scripts.js'), 'utf-8');
+  const fnMatch = js.match(/function mdToHtmlBlock\(md\)\s*\{[\s\S]*?\n\}/);
+  assert.ok(fnMatch, 'не найдена функция mdToHtmlBlock');
+  assert.ok(/\^```/.test(fnMatch[0]), 'mdToHtmlBlock не распознаёт открывающую ``` метку блока кода');
+  assert.ok(/<pre class="md-pre"><code>/.test(fnMatch[0]), 'блок кода не рендерится как <pre class="md-pre"><code>');
+});
+
+test('source-guard: styles.css — вкладка «Инструкции»: .md-pre для блоков кода (docs/guide.md содержит ASCII-схемы), .guide-body ограничивает ширину строки, #page-tools скроллит плавно к якорям', () => {
+  const css = require('fs').readFileSync(path.join(__dirname, '../public/styles.css'), 'utf-8');
+  assert.ok(/\.md-body \.md-pre\s*\{/.test(css), 'нет правила .md-body .md-pre');
+  assert.ok(/\.guide-body\s*\{[^}]*max-width/.test(css), '.guide-body не ограничивает max-width (широкая строка мешает чтению)');
+  assert.ok(/#page-tools\s*\{\s*scroll-behavior:\s*smooth;?\s*\}/.test(css), '#page-tools не задаёт scroll-behavior: smooth для перехода по якорям оглавления');
+});
+
 // ══════════════════════════════════════════════════════════════════════════════
 // UNIT — source-guard: Фаза 5 — тикеты 5.1 (кнопка «+») / 5.8 (вкладка «Фамильяр»)
 // ══════════════════════════════════════════════════════════════════════════════

@@ -7228,6 +7228,45 @@ button.chron-chip {
   color: var(--gold2);
 }
 
+.md-body .md-pre {
+  background: var(--bg4);
+  border: 1px solid var(--border2);
+  border-radius: var(--r-sm);
+  padding: 12px 16px;
+  margin: 0 0 14px;
+  overflow-x: auto;
+}
+
+.md-body .md-pre code {
+  font-family: var(--f-mono);
+  font-size: var(--fs-sm);
+  line-height: 1.5;
+  background: none;
+  padding: 0;
+  color: var(--text2);
+  white-space: pre;
+}
+
+/* Вкладка «Инструкции» (docs/guide.md внутри Инструментов) — оглавление
+   ведёт на реальные #-якоря (id на заголовках через slugifyHeading), поэтому
+   скроллящийся контейнер вкладки (.page у #page-tools) получает плавный
+   переход; prefers-reduced-motion уже глушит scroll-behavior глобально ниже. */
+#page-tools {
+  scroll-behavior: smooth;
+}
+
+.guide-body {
+  max-width: 760px;
+}
+
+.guide-body .md-h {
+  scroll-margin-top: 20px;
+}
+
+.guide-body .md-h2 {
+  margin-top: 34px;
+}
+
 .md-link {
   color: var(--text2);
   border-bottom: 1px dotted var(--text3);
