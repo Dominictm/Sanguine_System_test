@@ -5067,6 +5067,13 @@ test('source-guard: styles.css — вкладка «Инструкции»: .md-
   assert.ok(/#page-tools\s*\{\s*scroll-behavior:\s*smooth;?\s*\}/.test(css), '#page-tools не задаёт scroll-behavior: smooth для перехода по якорям оглавления');
 });
 
+test('source-guard: tour.js — последний шаг тура упоминает вкладку «Инструкции» (руководство пользователя в приложении)', () => {
+  const js = require('fs').readFileSync(path.join(__dirname, '../public/scripts/tour.js'), 'utf-8');
+  const lastStepMatch = js.match(/title:\s*'Инструменты Рассказчика'[\s\S]*?body:\s*'([^']+)'/);
+  assert.ok(lastStepMatch, 'не найден шаг тура «Инструменты Рассказчика»');
+  assert.ok(/Инструкции/.test(lastStepMatch[1]), 'текст шага не упоминает вкладку «Инструкции»');
+});
+
 // ══════════════════════════════════════════════════════════════════════════════
 // UNIT — source-guard: Фаза 5 — тикеты 5.1 (кнопка «+») / 5.8 (вкладка «Фамильяр»)
 // ══════════════════════════════════════════════════════════════════════════════
