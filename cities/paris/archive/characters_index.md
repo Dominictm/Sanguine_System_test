@@ -274,3 +274,4 @@
 - [Вероника Солис](../characters/vampires/veronika_solis/veronika_solis.md) — Вампир, Ласомбра
 - [Ричард](../characters/vampires/richard/richard.md) — Вампир, Тзимище
 - [Баали](../characters/vampires/baali/baali.md) — Вампир, Баабли
+- [Кот](../characters/mortals/kot/kot.md) — Смертный

@@ -233,13 +233,21 @@ async function _sessRenderAudio() {
   }));
   scored.sort((a, b) => (b.local ? 1 : 0) - (a.local ? 1 : 0));
   const activeId = typeof _audioActivePresetId !== 'undefined' ? _audioActivePresetId : null;
+  // Выпадающий список вместо строки на каждый пресет (запрос пользователя) —
+  // одна кнопка ▶/⏹ управляет ВЫБРАННЫМ в селекте пресетом: ⏹, если он же
+  // сейчас активен, иначе ▶ (запуск нового пресета сам останавливает старый —
+  // см. _audioPresetPlay/_audioLibStopAll, только один пресет активен разом).
+  // По умолчанию выбран активный пресет (если есть), иначе первый в списке —
+  // кнопка сразу управляет чем-то осмысленным без лишнего клика по селекту.
+  const selectedId = (activeId && scored.some(({ p }) => p.id === activeId)) ? activeId : scored[0].p.id;
   el.innerHTML = `
     <div class="sess-side-title">🎵 Аудио-пресеты</div>
-    ${scored.map(({ p, local }) => `
-      <div class="sess-preset${p.id === activeId ? ' playing' : ''}" data-preset-id="${escHtml(p.id)}">
-        <span class="sess-preset-name">${local ? '📍 ' : ''}${escHtml(p.name)}</span>
-        <button class="chron-toggle sess-preset-btn" data-sess-preset="${escHtml(p.id)}">${p.id === activeId ? '⏹' : '▶'}</button>
-      </div>`).join('')}`;
+    <div class="sess-preset-row">
+      <select class="form-control" id="sess-preset-sel">
+        ${scored.map(({ p, local }) => `<option value="${escHtml(p.id)}"${p.id === selectedId ? ' selected' : ''}>${local ? '📍 ' : ''}${escHtml(p.name)}</option>`).join('')}
+      </select>
+      <button class="chron-toggle sess-preset-btn" id="sess-preset-toggle" title="${selectedId === activeId ? 'Остановить' : 'Воспроизвести'}">${selectedId === activeId ? '⏹' : '▶'}</button>
+    </div>`;
 }
 
 // ── Сохранение заметок: общий хелпер кнопки «Сохранить» ────────────────────────
@@ -499,9 +507,10 @@ document.getElementById('page-session').addEventListener('click', async e => {
   const npc = e.target.closest('[data-sess-char]');
   if (npc) { openCharDetail(npc.dataset.sessChar); return; }
 
-  const presetBtn = e.target.closest('[data-sess-preset]');
-  if (presetBtn) {
-    const pid = presetBtn.dataset.sessPreset;
+  const presetToggle = e.target.closest('#sess-preset-toggle');
+  if (presetToggle) {
+    const pid = document.getElementById('sess-preset-sel')?.value;
+    if (!pid) return;
     const activeId = typeof _audioActivePresetId !== 'undefined' ? _audioActivePresetId : null;
     if (typeof _audioLibCache === 'undefined' || !_audioLibCache) await loadAudioLibrary();
     if (pid === activeId) _audioPresetStop();
@@ -509,4 +518,20 @@ document.getElementById('page-session').addEventListener('click', async e => {
     _sessRenderAudio();
     return;
   }
+});
+
+// Смена выбора в выпадающем списке пресетов сама ничего не запускает/не
+// останавливает (не удивлять GM звуком от одной прокрутки списка) — только
+// переключает подпись/иконку кнопки ▶/⏹ на актуальную для НОВОГО выбора.
+// #sess-preset-sel пересоздаётся при каждом _sessRenderAudio(), поэтому
+// слушатель делегирован на статичный #page-session, как и клик выше.
+document.getElementById('page-session').addEventListener('change', e => {
+  if (e.target.id !== 'sess-preset-sel') return;
+  const activeId = typeof _audioActivePresetId !== 'undefined' ? _audioActivePresetId : null;
+  const btn = document.getElementById('sess-preset-toggle');
+  if (!btn) return;
+  const isActive = e.target.value === activeId;
+  btn.textContent = isActive ? '⏹' : '▶';
+  const label = isActive ? 'Остановить' : 'Воспроизвести';
+  btn.title = label;
 });

@@ -68,6 +68,7 @@ function parseDiary(rawContent) {
  */
 function categorizeRel(desc) {
   const d = desc.toLowerCase();
+  if (/фамильяр/.test(d))                                 return 'familiar';
   if (/сестр|брат|мать|отец|семь|родств|племян/.test(d)) return 'family';
   if (/сир|создал|обратил|обратила/.test(d))              return 'sire';
   if (/чайлд|потомок/.test(d))                            return 'childe';

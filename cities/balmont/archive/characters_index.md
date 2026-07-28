@@ -5,3 +5,4 @@
 - [Граф Жубака](../characters/vampires/graf_zhubaka/graf_zhubaka.md) — Вампир, Ласомбра
 - [Дигураль](../characters/vampires/digural/digural.md) — продвинут из модуля progulki_po_metro
 - [Игер пипон](../characters/vampires/iger_pipon/iger_pipon.md) — Вампир, Салубри
+- [вапвап](../characters/werewolves/vapvap/vapvap.md) — Оборотень, вапвап

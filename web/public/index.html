@@ -183,11 +183,14 @@
     <!-- Graph -->
     <section id="page-graph" class="page">
       <div id="graph-toolbar">
-        <span class="graph-title">🕸 Граф отношений</span>
-        <button class="btn-icon" id="btn-reset" title="Сбросить масштаб и фильтры" aria-label="Сбросить масштаб и фильтры">↺</button>
-        <div class="graph-lineage-filter" id="graph-lineage-filter"></div>
-        <div class="graph-lineage-filter" id="graph-reltype-filter"></div>
-        <div class="graph-legend" id="graph-legend"></div>
+        <div class="graph-toolbar-row">
+          <span class="graph-title">🕸 Граф отношений</span>
+          <button class="btn-icon" id="btn-reset" title="Сбросить масштаб и фильтры" aria-label="Сбросить масштаб и фильтры">↺</button>
+          <div class="graph-lineage-filter" id="graph-lineage-filter"></div>
+        </div>
+        <div class="graph-toolbar-row">
+          <div class="graph-lineage-filter" id="graph-reltype-filter"></div>
+        </div>
       </div>
 
       <div id="graph-wrap">

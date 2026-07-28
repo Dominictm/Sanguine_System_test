@@ -11,6 +11,7 @@ const REL_COLORS = {
   family:     '#C94040',
   sire:       '#DC143C',
   childe:     '#DC143C',
+  familiar:   '#5B9A5B',
   ally:       '#4A8FD9',
   enemy:      '#E06000',
   loyalty:    '#B8860B',
@@ -26,6 +27,7 @@ const REL_LABELS = {
   family:     'Семья',
   sire:       'Сир/Чайлд',
   childe:     'Чайлд',
+  familiar:   'Фамильяр',
   ally:       'Союзник',
   enemy:      'Враг',
   loyalty:    'Преданность',
@@ -106,7 +108,6 @@ async function loadGraph() {
   if (_es) _es.remove();
 
   STATE.graph.data = data;
-  buildLegend();
   renderGraph(data);
   buildLineageFilter();
   buildRelTypeFilter();
@@ -133,6 +134,9 @@ function buildLineageFilter() {
 // По образцу buildLineageFilter(): чекбоксы только для типов, реально присутствующих
 // среди рёбер текущего графа (в т.ч. синтетический 'aggregate' в ?compact=true —
 // он тоже присутствует у рёбер в этом режиме, исключать искусственно не нужно).
+// Маркер цвета графа в конце подписи (запрос пользователя) — чип теперь сам
+// себе легенда, отдельная строка-легенда под фильтрами (buildLegend, была
+// ниже) стала бы чистым дублированием и убрана.
 function buildRelTypeFilter() {
   const present = new Set((STATE.graph.data?.links || []).map(l => l.type).filter(Boolean));
   const keys = Object.keys(REL_LABELS).filter(k => present.has(k));
@@ -141,6 +145,7 @@ function buildRelTypeFilter() {
     <label class="graph-filter-chip">
       <input type="checkbox" data-reltype-filter="${k}" checked>
       ${REL_LABELS[k]}
+      <span class="reltype-swatch" style="background:${REL_COLORS[k]}"></span>
     </label>`).join('');
 }
 
@@ -176,16 +181,6 @@ document.getElementById('graph-reltype-filter').addEventListener('change', e => 
   else STATE.graph.relTypeFilter.delete(key);
   applyGraphFilters();
 });
-
-function buildLegend() {
-  const types = ['family','sire','ally','enemy','loyalty','acquaintance','secret','neutral'];
-  document.getElementById('graph-legend').innerHTML = types.map(t =>
-    `<div class="legend-item">
-      <div class="legend-line" style="background:${REL_COLORS[t]}"></div>
-      ${REL_LABELS[t]}
-    </div>`
-  ).join('');
-}
 
 function renderGraph(data) {
   const wrap  = document.getElementById('graph-wrap');

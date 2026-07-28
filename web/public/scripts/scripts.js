@@ -185,7 +185,7 @@ const CLAN_COLORS = {
 // REL_COLORS/REL_LABELS/NODE_COLORS/MOCK_GRAPH moved to public/graph.js (E2.2).
 
 // Standard relation types offered in the «Отношения» editor (datalist)
-const REL_TYPE_OPTIONS = ['Семья', 'Сир/Чайлд', 'Союзник', 'Враг', 'Преданность', 'Нейтральный', 'Знакомый', 'Тайная связь'];
+const REL_TYPE_OPTIONS = ['Семья', 'Сир/Чайлд', 'Фамильяр', 'Союзник', 'Враг', 'Преданность', 'Нейтральный', 'Знакомый', 'Тайная связь'];
 
 // V20 generation range (3rd = eldest/Methuselah-tier down to 14th = thin-blooded), offered
 // as a dropdown wherever generation is entered/edited — keeps the value numeric and in-canon.

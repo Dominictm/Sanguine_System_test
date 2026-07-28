@@ -793,6 +793,56 @@ describe('Parsers — unit', () => {
       assert.equal(categorizeRel('просто знакомый'), 'acquaintance');
       assert.equal(categorizeRel('деловой партнёр'), 'neutral');
     });
+    // Запрос пользователя: «Фамильяр» — свой вид связи в списке «Отношения»,
+    // должен попадать в граф «Связи» отдельной категорией, а не «Нейтральный».
+    it('фамильяр → familiar (не путается с family/сир/чайлд)', () => {
+      assert.equal(categorizeRel('Фамильяр'), 'familiar');
+      assert.equal(categorizeRel('фамильяр — чёрный кот'), 'familiar');
+      assert.notEqual(categorizeRel('Фамильяр'), 'family');
+    });
+  });
+
+  describe('«Фамильяр» — стандартный вид связи (frontend)', () => {
+    it('source-guard: scripts.js — REL_TYPE_OPTIONS содержит «Фамильяр»', () => {
+      const js = require('fs').readFileSync(path.join(__dirname, '../public/scripts/scripts.js'), 'utf-8');
+      const m = js.match(/const REL_TYPE_OPTIONS = \[([^\]]*)\]/);
+      assert.ok(m, 'не найдена константа REL_TYPE_OPTIONS');
+      assert.ok(m[1].includes("'Фамильяр'"), 'REL_TYPE_OPTIONS не содержит «Фамильяр»');
+    });
+    it('source-guard: graph.js — familiar есть и в REL_COLORS, и в REL_LABELS (иначе граф покажет связь без цвета/подписи)', () => {
+      const js = require('fs').readFileSync(path.join(__dirname, '../public/scripts/graph.js'), 'utf-8');
+      const colorsMatch = js.match(/const REL_COLORS = \{[\s\S]*?\n\};/);
+      const labelsMatch = js.match(/const REL_LABELS = \{[\s\S]*?\n\};/);
+      assert.ok(colorsMatch && /familiar:\s*'#[0-9a-fA-F]{6}'/.test(colorsMatch[0]), 'REL_COLORS не задаёт цвет для familiar');
+      assert.ok(labelsMatch && /familiar:\s*'Фамильяр'/.test(labelsMatch[0]), 'REL_LABELS не задаёт подпись «Фамильяр» для familiar');
+      // familiar не должен случайно совпасть по цвету с уже занятыми категориями
+      // (family/sire/childe — красные тона) — иначе на графе будет неотличим.
+      const familiarColor = colorsMatch[0].match(/familiar:\s*'(#[0-9a-fA-F]{6})'/)[1];
+      const otherColors = [...colorsMatch[0].matchAll(/(\w+):\s*'(#[0-9a-fA-F]{6})'/g)]
+        .filter(([, k]) => k !== 'familiar').map(([, , v]) => v);
+      assert.ok(!otherColors.includes(familiarColor), 'цвет familiar совпадает с уже занятым цветом другого вида связи');
+    });
+    // Отдельная строка-легенда (buildLegend, жёстко заданный список типов —
+    // легко забыть добавить новый тип и получить рассинхрон с фильтром,
+    // ровно это и случилось при первой версии этого фикса, поймано вручную
+    // через CDP) убрана по запросу пользователя: каждый чип фильтра типа
+    // связи теперь сам показывает свой цвет (.reltype-swatch), легенда ему
+    // больше не нужна — цвет берётся из того же REL_COLORS[k], что и
+    // чекбоксы (Object.keys(REL_LABELS).filter(present)), рассинхрон
+    // структурно невозможен.
+    it('source-guard: graph.js — buildRelTypeFilter() рисует цветовой маркер (.reltype-swatch) из REL_COLORS у каждого чипа', () => {
+      const js = require('fs').readFileSync(path.join(__dirname, '../public/scripts/graph.js'), 'utf-8');
+      assert.ok(!js.includes('function buildLegend'), 'buildLegend() всё ещё существует — должна быть убрана как дублирующая .reltype-swatch в чипах фильтра');
+      assert.ok(!js.includes("getElementById('graph-legend')"), 'graph.js всё ещё ссылается на убранный #graph-legend');
+      const fnMatch = js.match(/function buildRelTypeFilter\(\) \{[\s\S]*?\n\}/);
+      assert.ok(fnMatch, 'не найдена функция buildRelTypeFilter');
+      assert.ok(/class="reltype-swatch" style="background:\$\{REL_COLORS\[k\]\}"/.test(fnMatch[0]),
+        'buildRelTypeFilter() не рисует .reltype-swatch с цветом из REL_COLORS[k] для каждого чипа');
+    });
+    it('source-guard: index.html — #graph-legend убран из разметки тулбара графа', () => {
+      const html = require('fs').readFileSync(path.join(__dirname, '../public/index.html'), 'utf-8');
+      assert.ok(!html.includes('id="graph-legend"'), '#graph-legend всё ещё в разметке — дублирует .reltype-swatch в чипах фильтра');
+    });
   });
 
   describe('parseCharacter', () => {
@@ -4892,11 +4942,29 @@ test('source-guard: graph.js — фильтр типов связи объеди
   assert.ok(resetHandler.includes('applyGraphFilters()'), 'btn-reset не вызывает applyGraphFilters()');
 });
 
-test('source-guard: styles.css — #graph-toolbar переносит строки (flex-wrap), не переполняется горизонтально', () => {
+test('source-guard: styles.css — #graph-toolbar — две строки (column), каждая .graph-toolbar-row переносит чипы (flex-wrap)', () => {
   const css = require('fs').readFileSync(path.join(__dirname, '../public/styles.css'), 'utf-8');
   const toolbarBlock = css.match(/#graph-toolbar\s*\{[^}]*\}/);
   assert.ok(toolbarBlock, 'нет правила #graph-toolbar в styles.css');
-  assert.ok(/flex-wrap:\s*wrap/.test(toolbarBlock[0]), '#graph-toolbar без flex-wrap: wrap — риск горизонтального переполнения с двумя рядами чипов');
+  assert.ok(/flex-direction:\s*column/.test(toolbarBlock[0]), '#graph-toolbar не задаёт flex-direction: column — строки фильтров не будут разделены (запрос пользователя: линейки WoD сверху, типы связей снизу)');
+  const rowBlock = css.match(/\.graph-toolbar-row\s*\{[^}]*\}/);
+  assert.ok(rowBlock, 'нет правила .graph-toolbar-row в styles.css');
+  assert.ok(/flex-wrap:\s*wrap/.test(rowBlock[0]), '.graph-toolbar-row без flex-wrap: wrap — риск горизонтального переполнения чипами');
+});
+
+// Запрос пользователя: разделить единую строку фильтров на две — линейки WoD
+// сверху, типы связей снизу.
+test('source-guard: index.html — #graph-lineage-filter и #graph-reltype-filter лежат в РАЗНЫХ .graph-toolbar-row', () => {
+  const html = require('fs').readFileSync(path.join(__dirname, '../public/index.html'), 'utf-8');
+  const toolbarMatch = html.match(/<div id="graph-toolbar">[\s\S]*?<\/div>\s*<\/div>\s*<\/div>/);
+  assert.ok(toolbarMatch, 'не найден блок #graph-toolbar');
+  const rows = toolbarMatch[0].match(/<div class="graph-toolbar-row">[\s\S]*?<\/div>/g);
+  assert.ok(rows && rows.length >= 2, 'должно быть минимум две .graph-toolbar-row внутри #graph-toolbar');
+  const lineageRow = rows.find(r => r.includes('id="graph-lineage-filter"'));
+  const reltypeRow = rows.find(r => r.includes('id="graph-reltype-filter"'));
+  assert.ok(lineageRow, '#graph-lineage-filter не найден ни в одной .graph-toolbar-row');
+  assert.ok(reltypeRow, '#graph-reltype-filter не найден ни в одной .graph-toolbar-row');
+  assert.notStrictEqual(lineageRow, reltypeRow, '#graph-lineage-filter и #graph-reltype-filter лежат в ОДНОЙ строке — должны быть разделены');
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -5352,6 +5420,38 @@ test('source-guard: styles.css — .sess-side sticky на десктопе, stat
   const sideInMq = mqMatch[0].match(/\.sess-side\s*\{[^}]*\}/);
   assert.ok(sideInMq, 'брейкпоинт 900px не переопределяет .sess-side (нужно отключить sticky на мобильном)');
   assert.ok(/position:\s*static/.test(sideInMq[0]), '.sess-side в брейкпоинте 900px не возвращает position: static');
+});
+
+// ── Аудио-пресеты на экране «Сессия» — выпадающий список вместо строки на
+//    каждый пресет (запрос пользователя) ─────────────────────────────────────
+
+test('source-guard: session-screen.js — _sessRenderAudio рендерит один <select> с пресетами вместо строк .sess-preset', () => {
+  const js = require('fs').readFileSync(path.join(__dirname, '../public/scripts/session-screen.js'), 'utf-8');
+  const fnMatch = js.match(/async function _sessRenderAudio\(\) \{[\s\S]*?\n\}/);
+  assert.ok(fnMatch, 'не найдена функция _sessRenderAudio');
+  const fn = fnMatch[0];
+  assert.ok(fn.includes('id="sess-preset-sel"'), 'нет <select id="sess-preset-sel"> со списком пресетов');
+  assert.ok(fn.includes('id="sess-preset-toggle"'), 'нет единой кнопки ▶/⏹ #sess-preset-toggle');
+  assert.ok(!/class="sess-preset["\s]/.test(fn), '_sessRenderAudio всё ещё рендерит старые строки .sess-preset — должен остаться только select');
+  assert.ok(/<option value="\$\{escHtml\(p\.id\)\}"/.test(fn), '<select> не строит <option> на каждый пресет');
+});
+
+test('source-guard: session-screen.js — кнопка ▶/⏹ пресета читает выбор из #sess-preset-sel.value (не из стухшего data-атрибута)', () => {
+  const js = require('fs').readFileSync(path.join(__dirname, '../public/scripts/session-screen.js'), 'utf-8');
+  const clickBody = js.match(/document\.getElementById\('page-session'\)\.addEventListener\('click', async e => \{[\s\S]*?\n\}\);/)[0];
+  assert.ok(clickBody.includes("closest('#sess-preset-toggle')"), 'делегированный клик не ловит #sess-preset-toggle');
+  assert.ok(clickBody.includes("getElementById('sess-preset-sel')?.value"), 'обработчик клика не читает pid из #sess-preset-sel.value');
+});
+
+test('source-guard: session-screen.js — смена выбора в #sess-preset-sel только переключает иконку кнопки, не запускает/останавливает пресет сама по себе', () => {
+  const js = require('fs').readFileSync(path.join(__dirname, '../public/scripts/session-screen.js'), 'utf-8');
+  const changeMatch = js.match(/document\.getElementById\('page-session'\)\.addEventListener\('change', e => \{[\s\S]*?\n\}\);/);
+  assert.ok(changeMatch, 'не найден делегированный обработчик change на #page-session для #sess-preset-sel');
+  const fn = changeMatch[0];
+  assert.ok(fn.includes("e.target.id !== 'sess-preset-sel'"), 'обработчик change не фильтрует по id === sess-preset-sel');
+  assert.ok(!/_audioPresetPlay|_audioPresetStop/.test(fn),
+    'обработчик change сам запускает/останавливает воспроизведение — выбор в списке не должен неожиданно менять звук без явного клика по ▶/⏹');
+  assert.ok(fn.includes("btn.textContent"), 'обработчик change не обновляет иконку кнопки ▶/⏹ под новый выбор');
 });
 
 // ── W5 тикет 3.7: «→ Записать сессию» ведёт на страницу модуля (вкладка

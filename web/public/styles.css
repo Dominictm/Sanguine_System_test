@@ -1349,24 +1349,24 @@ body {
   gap: 6px;
 }
 
-.sess-preset {
+/* Выпадающий список пресетов + одна кнопка ▶/⏹ вместо строки на каждый
+   пресет (компактнее в узкой боковой панели сессии). */
+.sess-preset-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 8px;
-  padding: 4px 0;
 }
 
-.sess-preset.playing .sess-preset-name {
-  color: var(--c-success);
-}
-
-.sess-preset-name {
+.sess-preset-row select {
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: var(--fs-body);
+  flex: 1;
+}
+
+.sess-preset-row .sess-preset-btn {
+  flex: 0 0 auto;
+  margin-top: 0;
+  padding: 10px 14px;
+  font-size: var(--fs-lg);
 }
 
 #sess-notes {
@@ -1969,16 +1969,25 @@ body {
 }
 
 /* ── Graph page ── */
+/* Две строки (запрос пользователя): линейки WoD сверху, типы связей снизу —
+   раньше обе строки фильтров и отдельная цветовая легенда были одним
+   flex-wrap рядом и на широком экране сливались в одну длинную строку. */
 #graph-toolbar {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 20px;
+  background: var(--bg2);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.graph-toolbar-row {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: 14px;
   row-gap: 10px;
-  padding: 12px 20px;
-  background: var(--bg2);
-  border-bottom: 1px solid var(--border);
-  flex-shrink: 0;
 }
 
 .graph-title {
@@ -2051,14 +2060,6 @@ body {
   transition: background .15s, border-color .15s, color .15s;
 }
 
-.graph-legend {
-  display: flex;
-  gap: 16px;
-  flex-wrap: wrap;
-  margin-left: auto;
-  align-items: center;
-}
-
 /* Фильтр по линейке WoD (фаза G, план 2026-07-16) и по типу связи (тикет 4.2) на
    графе связей — оба используют один и тот же ряд-контейнер и чип. */
 .graph-lineage-filter {
@@ -2087,25 +2088,17 @@ body {
   cursor: pointer;
 }
 
+/* Маркер цвета связи на графе — в конце чипа типа связи (запрос пользователя),
+   вместо отдельной строки-легенды под фильтрами (та дублировала бы то же самое). */
+.graph-filter-chip .reltype-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
 @media (pointer: coarse) {
   .graph-filter-chip { min-height: 44px; }
-}
-
-.legend-item {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: var(--fs-xl);
-  color: var(--text3);
-  font-family: var(--f-heading);
-  letter-spacing: .08em;
-  text-transform: uppercase;
-}
-
-.legend-line {
-  width: 20px;
-  height: 2px;
-  border-radius: var(--r-hairline);
 }
 
 #graph-wrap {
