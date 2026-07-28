@@ -2893,6 +2893,28 @@ describe('API — integration', () => {
         { method: 'POST', body: JSON.stringify({}) });
       assert.equal(status, 404);
     });
+    // Регрессия: модель иногда возвращает технически валидный JSON, но с
+    // мусорным/усечённым содержимым позитивного промта («[Блок 1]rews inside
+    // [Блок 2]... [Блок 3]...» — реальный кейс, который тихо сохранился поверх
+    // карточки персонажа «Золотая маска»/baali). _isBogusPrompt должна ловить
+    // это, но не давать ложных срабатываний на настоящие развёрнутые промты.
+    it('_isBogusPrompt (generation.js) ловит обрезанный/мусорный промт, не флагает настоящий', () => {
+      const src = require('fs').readFileSync(path.join(__dirname, '../routes/generation.js'), 'utf-8');
+      const fnMatch = src.match(/const _isBogusPrompt = text => \{[\s\S]*?\n {6}\};/);
+      assert.ok(fnMatch, 'не найдена функция _isBogusPrompt в generation.js');
+      const _isBogusPrompt = (new Function(`return (${fnMatch[0].replace(/^const _isBogusPrompt = /, '').replace(/;$/, '')})`))();
+
+      const bogus = '[Блок 1]rews inside\n[Блок 2]...\n[Блок 3]...';
+      assert.equal(_isBogusPrompt(bogus), true, 'реальный обрезанный ответ (баали/«Золотая маска») не распознан как мусорный');
+      assert.equal(_isBogusPrompt(''), true, 'пустая строка не распознана как мусорная');
+      assert.equal(_isBogusPrompt('[Блок 1]...\n[Блок 2] нормальный текст здесь достаточно длинный чтобы пройти\n[Блок 3] тоже достаточно длинный текст блока'), true,
+        'промт с одним пустым блоком-заглушкой («...») не распознан как мусорный');
+
+      const real = '[Блок 1] Tall feminine figure with pale almost lunar skin covered in thin streams of golden lacquer flowing from her neck across half her face, ornate golden skull-shaped mask concealing one eye.\n' +
+        '[Блок 2] Dramatic chiaroscuro lighting from below and side, warm amber rim light illuminating the golden lacquer and gold jewelry while deep black shadows swallow parts of the figure. Abstract flat color-wash background, deep crimson-red blended into black.\n' +
+        '[Блок 3] Dark fantasy digital painting, visible painterly brushstrokes, oil-paint texture, cinematic dramatic lighting, gothic noir atmosphere, concept art quality, masterpiece, highly detailed, 1023x1537';
+      assert.equal(_isBogusPrompt(real), false, 'настоящий развёрнутый промт ложно распознан как мусорный');
+    });
     it('POST generate-appearance — unknown char → 404', async () => {
       const { status } = await apiJson(
         `/api/characters/${encodeURIComponent(CHAR_UNKNOWN)}/generate-appearance${CITY}`,

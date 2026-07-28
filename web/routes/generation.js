@@ -359,10 +359,26 @@ Requirements:
         negative = (parsed.negative || '').trim();
       };
 
+      // Модель иногда возвращает технически валидный JSON, но с мусорным/
+      // усечённым содержимым позитивного промта (напр. «[Блок 1]rews inside
+      // [Блок 2]... [Блок 3]...» — обрезанный или деградировавший ответ). Раньше
+      // это тихо принималось как успех и сохранялось поверх карточки персонажа —
+      // тот же класс бага, что и _isBogusAppearance в этом же файле (см. выше).
+      // Проверяем, что все три блока на месте и в каждом есть содержательный
+      // текст, а не просто заглушка/многоточие.
+      const _isBogusPrompt = text => {
+        if (!text || text.trim().length < 150) return true;
+        const blocks = text.split(/\[Блок\s*\d+\]/).slice(1);
+        if (blocks.length < 3) return true;
+        return blocks.some(b => b.replace(/[.…\s]/g, '').length < 15);
+      };
+
       const out = await genTextWithRetry(gen, { system: systemPrompt, user: userPrompt, maxTokens: 2500 });
       parseResult(out.text);
 
       if (!positive) return res.status(500).json({ error: 'Модель не вернула промт. Попробуйте ещё раз.' });
+      if (_isBogusPrompt(positive))
+        return res.status(502).json({ error: 'Модель вернула нерелевантный или обрезанный промт. Попробуйте ещё раз или смените провайдера в настройках AI.' });
 
       res.json({ ok: true, positive, negative, source: out.source });
     } catch (e) {
