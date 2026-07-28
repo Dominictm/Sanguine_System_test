@@ -9394,6 +9394,16 @@ a.md-link-loc:hover {
   pointer-events: none;
 }
 
+/* .v20-auto-badge задаёт display:inline-block (авторское правило), которое
+   всегда перебивает UA-правило [hidden]{display:none} независимо от
+   специфичности (порядок origin важнее specificity) — без этого явного
+   переопределения dice.js's `unskilledBadge.hidden = !flag` физически ничего
+   не скрывал, бейдж «+2 — Не владеет» был виден постоянно. Тот же класс
+   бага, что и у .sess-scene-nav[hidden] (см. styles.css выше). */
+#dice-unskilled-badge[hidden] {
+  display: none;
+}
+
 .v20-mini-action {
   margin-left: 6px;
   padding: 1px 7px;

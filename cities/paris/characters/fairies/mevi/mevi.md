@@ -5,7 +5,7 @@
 ---
 
 - **Слаг:** mevi
-- **Родной город:** Париж
+- **Род:** Красная Шапка
 - **Линейка WoD:** Фея
 - **Пол:** Женский
 - **Раса:** Фэйри (Ченджлинг)
@@ -37,6 +37,7 @@
   [Блок 3] Dark fantasy digital painting, painterly brushstrokes, Vampire: The Masquerade aesthetic, gothic horror concept art, artstation masterpiece, highly detailed, cinematic composition, professional illustration, atmospheric and moody rendering, rich color palette dominated by deep crimsons and shadows, museum quality
 - **🚫 Негативный промт:**
   photorealistic photography, 3D render, CGI, anime, cartoon, blurry, low quality, deformed, blood, gore, wounds, injuries, violence, happy expression, bright cheerful colors, cute, innocent, anime style, digital art flattened, chibi proportions, smiling, outdoors daylight, modern clothing, toys, toys
+- **Принадлежность:** Персонаж игрока
 
 ---
 

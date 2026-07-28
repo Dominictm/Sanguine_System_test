@@ -22,6 +22,11 @@ function fileLabel(f) {
 async function loadThreads() {
   const el = document.getElementById('threads-list');
   el.innerHTML = '<div class="loading-state"><div class="spinner"></div>Загрузка...</div>';
+  // Считываем и сразу обнуляем _pendingThreadFocus ДО await fetch — иначе при
+  // сетевой ошибке код уходит в catch, минуя сброс, и намерение фокуса
+  // «утекает» на следующий (уже обычный) заход на «Нити».
+  const focus = _pendingThreadFocus;
+  _pendingThreadFocus = null;
   try {
     const threads = await fetch('/api/threads').then(r => r.json());
     const active = threads.filter(t => t.status === 'active');
@@ -60,9 +65,8 @@ async function loadThreads() {
     html += section('🟢', 'Закрытые', done);
     el.innerHTML = html || '<div class="loading-state" style="height:120px">Нитей нет</div>';
 
-    if (_pendingThreadFocus) {
-      const { id, file } = _pendingThreadFocus;
-      _pendingThreadFocus = null;
+    if (focus) {
+      const { id, file } = focus;
       const target = Array.from(el.querySelectorAll('.thread-card'))
         .find(c => c.dataset.id === String(id) && c.dataset.file === (file || ''));
       if (target) {

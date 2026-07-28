@@ -2776,6 +2776,21 @@ describe('API — integration', () => {
       assert.ok(/\.thread-card--focus\s*\{[^}]*var\(--accent\)/s.test(css),
         '.thread-card--focus не использует var(--accent)');
     });
+    // Перенесено с ветки worktree-patch-niti-broski-sessiya-svyazi-list (код-ревью,
+    // не попало в master при параллельной прямой реализации того же плана) —
+    // см. docs/audit/2026-07-28-session-feature-qa-report.md, обсуждение веток.
+    it('source-guard: loadThreads() считывает и обнуляет _pendingThreadFocus ДО await fetch (иначе утекает при сетевой ошибке)', () => {
+      const src = require('fs').readFileSync(path.join(__dirname, '../public/scripts/archive.js'), 'utf-8');
+      const fnMatch = src.match(/async function loadThreads\(\) \{[\s\S]*?\n\}/);
+      assert.ok(fnMatch, 'не найдена функция loadThreads');
+      const fn = fnMatch[0];
+      const resetIdx = fn.indexOf('_pendingThreadFocus = null');
+      const fetchIdx = fn.indexOf('await fetch(');
+      assert.ok(resetIdx !== -1, 'loadThreads() не обнуляет _pendingThreadFocus');
+      assert.ok(fetchIdx !== -1, 'loadThreads() не вызывает await fetch(...)');
+      assert.ok(resetIdx < fetchIdx,
+        '_pendingThreadFocus обнуляется ПОСЛЕ await fetch — при сетевой ошибке сброс попадёт в catch и намерение фокуса утечёт на следующий обычный заход');
+    });
   });
 
   // ── Diary — validation ─────────────────────────────────────────────────────
@@ -4755,6 +4770,25 @@ test('source-guard: dice.js — «Не владеет» (2.2): фильтр val>
   assert.ok(!/diffEl\.value = parseInt\(diffEl\.value/.test(js), 'база читается из текущего diffEl.value — риск накопления +2');
 });
 
+// Перенесено с ветки worktree-patch-niti-broski-sessiya-list (код-ревью, не
+// попало в master при параллельной прямой реализации того же плана) — см.
+// docs/audit/2026-07-28-session-feature-qa-report.md, обсуждение веток.
+// Регрессия: слушатель input/change на #dice-diff безусловно писал
+// diffEl.value в dataset.base — при активном «Не владеет» показанное значение
+// уже включает +2, и ручная правка поля («вижу 8, набираю 9») превращала
+// «чистую» базу 7 в 9, задваивая штраф при следующем вкл/выкл.
+test('source-guard: dice.js — ручной ввод #dice-diff вычитает активный штраф «Не владеет» перед записью в dataset.base (не задваивает +2)', () => {
+  const js = require('fs').readFileSync(path.join(__dirname, '../public/scripts/dice.js'), 'utf-8');
+  assert.ok(js.includes('function _diceOnDiffInput'), 'нет функции _diceOnDiffInput');
+  const fnMatch = js.match(/function _diceOnDiffInput\(\) \{[\s\S]*?\n {2}\}/);
+  assert.ok(fnMatch, 'не найдено тело _diceOnDiffInput');
+  assert.ok(/_diceUnskilled \? 2 : 0/.test(fnMatch[0]),
+    '_diceOnDiffInput не вычитает штраф +2 при активном _diceUnskilled перед записью в dataset.base');
+  assert.ok(js.includes("diffEl.addEventListener('input', _diceOnDiffInput)") &&
+    js.includes("diffEl.addEventListener('change', _diceOnDiffInput)"),
+    'слушатели input/change на #dice-diff не используют _diceOnDiffInput (риск вернуться к наивной записи diffEl.value как есть)');
+});
+
 test('source-guard: dice.js — индикатор автоматического +2 к сложности виден только при «Не владеет»', () => {
   const js = require('fs').readFileSync(path.join(__dirname, '../public/scripts/dice.js'), 'utf-8');
   const html = require('fs').readFileSync(path.join(__dirname, '../public/index.html'), 'utf-8');
@@ -4763,6 +4797,18 @@ test('source-guard: dice.js — индикатор автоматическог�
   assert.ok(/\bhidden\b/.test(badgeTag[0]), 'индикатор должен по умолчанию быть скрыт (атрибут hidden)');
   assert.ok(/\+2.*Не владеет/.test(badgeTag[1]), 'текст индикатора не «+2 — Не владеет»');
   assert.ok(js.includes('unskilledBadge.hidden = !flag'), 'индикатор не переключается по состоянию _diceUnskilled');
+});
+
+// Перенесено (обнаружено сверкой) с ветки worktree-patch-niti-broski-sessiya-list —
+// см. docs/audit/2026-07-28-session-feature-qa-report.md. .v20-auto-badge
+// задаёт display:inline-block (авторское правило), которое всегда перебивает
+// UA-правило [hidden]{display:none} независимо от специфичности (origin важнее
+// specificity) — без явного #dice-unskilled-badge[hidden] бейдж физически не
+// скрывался, несмотря на unskilledBadge.hidden = !flag в JS.
+test('source-guard: styles.css — #dice-unskilled-badge[hidden] явно скрыт (иначе .v20-auto-badge display перебивает UA [hidden])', () => {
+  const css = require('fs').readFileSync(path.join(__dirname, '../public/styles.css'), 'utf-8');
+  assert.ok(/#dice-unskilled-badge\[hidden\]\s*\{[\s\S]*?display:\s*none/.test(css),
+    'нет #dice-unskilled-badge[hidden] { display: none } — .v20-auto-badge { display: inline-block } перебьёт UA-правило [hidden]');
 });
 
 test('source-guard: dice.js/index.html — селект добродетелей (2.3) с 4 пунктами включая Силу воли', () => {
@@ -4853,6 +4899,24 @@ test('source-guard: char-detail.js — вкладка «Фамильяр» (5.8)
   assert.ok(js.includes('resolveCharByName'), 'вкладка «Фамильяр» не переиспользует resolveCharByName из archive.js');
   // Плейсхолдер для нерезолвящегося имени
   assert.ok(js.includes('не найден в реестре персонажей'), 'нет текста плейсхолдера для нерезолвящегося фамильяра');
+});
+
+// Перенесено с ветки worktree-patch-niti-broski-sessiya-list (код-ревью по
+// коммиту 135f693, не попало в master при параллельной прямой реализации
+// того же плана) — см. docs/audit/2026-07-28-session-feature-qa-report.md.
+// Если target связи-«фамильяра» по ошибке резолвится в самого владельца
+// карточки (опечатка/неверные данные), раньше рендерилась мини-карточка
+// «фамильяра», указывающая сама на себя, с кнопкой «Открыть карточку
+// целиком», просто перерисовывающей ту же модалку — не падало и не
+// зацикливалось, но вводило в заблуждение.
+test('source-guard: char-detail.js — самоссылка фамильяра (target резолвится в самого владельца) диагностируется, не рендерится как обычная карточка', () => {
+  const js = require('fs').readFileSync(path.join(__dirname, '../public/scripts/char-detail.js'), 'utf-8');
+  assert.ok(js.includes('familiarChar.name === c.name'), 'нет проверки familiarChar.name === c.name для самоссылки');
+  assert.ok(js.includes('Связь-фамильяр указывает на самого персонажа'), 'нет диагностического сообщения для самоссылки фамильяра');
+  const idx1 = js.indexOf('familiarChar.name === c.name');
+  const idx2 = js.indexOf('_familiarCardHtml(familiarChar)');
+  assert.ok(idx1 !== -1 && idx2 !== -1 && idx1 < idx2,
+    'проверка самоссылки должна идти ДО вызова _familiarCardHtml(familiarChar) в тернарной цепочке familiarPanelHtml');
 });
 
 // ══════════════════════════════════════════════════════════════════════════════

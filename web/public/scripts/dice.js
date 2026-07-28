@@ -62,8 +62,17 @@ if (typeof document !== 'undefined' && document.getElementById('dice-fab')) {
   // персонажа — никогда не читается из текущего diffEl.value внутри
   // _diceSetUnskilled, иначе повторное переключение накопит +2.
   diffEl.dataset.base = diffEl.value || '6';
-  diffEl.addEventListener('input', () => { diffEl.dataset.base = diffEl.value; });
-  diffEl.addEventListener('change', () => { diffEl.dataset.base = diffEl.value; });
+  // Ручной ввод в #dice-diff при активном «Не владеет»: пользователь видит и
+  // правит значение С УЖЕ ПРИМЕНЁННЫМ +2 (напр. база 6 → показано 8) — если
+  // записать введённое как есть, штраф задвоится при следующем выключении/
+  // включении флага (правишь «вижу 8, набираю 9» → база станет 9 вместо
+  // «чистых» 7). Перед записью в dataset.base вычитаем текущий штраф,
+  // восстанавливая «чистую» базу, которую реально имел в виду пользователь.
+  function _diceOnDiffInput() {
+    diffEl.dataset.base = String((parseInt(diffEl.value, 10) || 6) - (_diceUnskilled ? 2 : 0));
+  }
+  diffEl.addEventListener('input', _diceOnDiffInput);
+  diffEl.addEventListener('change', _diceOnDiffInput);
 
   function _diceSetUnskilled(flag) {
     _diceUnskilled = flag;

@@ -67,8 +67,14 @@ function openCharDetail(name) {
   // истины. resolveCharByName — общий фаззи-резолвер имени в реестре персонажей (archive.js).
   const familiarRel = (c.relationships || []).find(r => /фамильяр/i.test(r.description || ''));
   const familiarChar = familiarRel ? resolveCharByName(familiarRel.target) : null;
+  // Если target связи-«фамильяра» по ошибке резолвится в самого владельца карточки
+  // (опечатка/неверные данные) — это не осмысленная фича, а аномалия данных: без
+  // этой проверки рисовалась бы мини-карточка «фамильяра», указывающая сама на
+  // себя, с кнопкой «Открыть карточку целиком», просто перерисовывающей ту же модалку.
   const familiarPanelHtml = !familiarRel ? '' : !familiarChar
     ? `<div class="cdet-empty">Фамильяр «${escHtml(familiarRel.target)}» не найден в реестре персонажей. Заведите карточку с Принадлежностью «Фамильяр», чтобы она отобразилась здесь.</div>`
+    : familiarChar.name === c.name
+    ? `<div class="cdet-empty">Связь-фамильяр указывает на самого персонажа — проверьте описание связи в разделе «Отношения».</div>`
     : _familiarCardHtml(familiarChar);
 
   const portraitCol = c.imageUrl

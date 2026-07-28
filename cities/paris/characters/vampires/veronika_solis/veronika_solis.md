@@ -23,9 +23,10 @@
 - **🚫 Негативный промт:**
   photorealistic photography, anime, cartoon, watermark, text, blurry, deformed anatomy, extra limbs, bright white background, 3D render, CGI.
 - **Секта:** Анархи
-- **Поколение:** 9
+- **Поколение:** 9-е
 - **Год рождения:** 1756
 - **Год обращения:** 1781
+- **Принадлежность:** Персонаж мастера
 
 ---
 

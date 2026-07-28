@@ -25,6 +25,7 @@
   [Блок 3] Dark fantasy digital painting, painterly brushstrokes, Vampire: The Masquerade aesthetic, concept art quality, artstation masterpiece, professional character card illustration, moody and atmospheric rendering, rich color grading with desaturated tones, high detail, intricate facial features, dramatic chiaroscuro lighting
 - **🚫 Негативный промт:**
   photorealistic photography, 3D render, CGI, anime, cartoon, manga, blurry, low quality, deformed, distorted face, blood, gore, wounds, injuries, violence, smiling, happy expression, bright colors, daylight, cheerful, cute, childish artstyle, oversaturated, glowing effects, unrealistic proportions, malformed hands
+- **Принадлежность:** Персонаж мастера
 
 ---
 

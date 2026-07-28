@@ -9,7 +9,7 @@
 - **Линейка WoD:** Смертная (Гуль)
 - **Пол:** Женский
 - **Профессия:** Личный гуль Регента парижской капеллы
-- **Родственники:** [Джек](../../vampires/dzhek/dzhek.md) — старший брат (вампир Тремер)
+- **Родственники:** Джек— старший брат (вампир Тремер)
 - **Домен / Локация:** Капелла `L'Étude du 25` (Tour Cristal)
 - **Парижская иерархия:** н/п (гуль; не полноправный член Камарильи)
 - **Роль:** Личная помощница и гуль Софи Жонсьер; причина перевода Джека в Париж
@@ -26,6 +26,8 @@
   [Блок 3] Dark fantasy digital painting, visible painterly brushstrokes, textured oil-paint effect, cinematic composition, moody gothic atmosphere, Vampire the Masquerade aesthetic, concept art quality, painterly realism, artstation quality, masterpiece
 - **🚫 Негативный промт:**
   photorealistic photography, digital art, anime, cartoon, illustration, watermark, text overlay, blurry, low quality, artifacts, deformed anatomy, extra limbs, oversaturated colors, bright white background, 3D render, CGI, blood, gore, wounds, injuries.
+- **Иерархия в городе:** гуль; не полноправный член Камарильи
+- **Принадлежность:** Персонаж мастера
 
 ---
 

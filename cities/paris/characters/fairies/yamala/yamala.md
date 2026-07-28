@@ -1,11 +1,11 @@
-﻿# 🌹 Ямала
+# 🌹 Ямала
 
 > 🔗 [Все персонажи](../../../archive/characters_index.md)
 
 ---
 
 - **Слаг:** yamala
-- **Родной город:** Париж
+- **Род:** Красная Шапка
 - **Линейка WoD:** Фея
 - **Пол:** Женский
 - **Раса:** Фэйри (Ченджлинг)
@@ -27,6 +27,8 @@
   [Блок 3] Dark fantasy digital painting, visible painterly brushstrokes, textured oil-paint effect, cinematic composition, moody gothic atmosphere, Vampire the Masquerade aesthetic, concept art quality, painterly realism, artstation quality, masterpiece
 - **🚫 Негативный промт:**
   photorealistic photography, digital art, anime, cartoon, illustration, watermark, text overlay, blurry, low quality, artifacts, deformed anatomy, extra limbs, oversaturated colors, bright white background, 3D render, CGI.
+- **Фригольд / Локация:** Блуждающий. Для не-чар: английский паб с кабинками без дверей. Для фей: средневековая сказочная таверна. За баром обычно Квентин.
+- **Принадлежность:** Персонаж мастера
 
 ---
 

@@ -35,6 +35,8 @@
   [Блок 3] Dark fantasy digital painting, painterly brushstrokes, Vampire: The Masquerade concept art style, highly detailed textures, ArtStation masterpiece, moody oil painting aesthetic, dramatic character portrait.
 - **🚫 Негативный промт:**
   photorealistic photography, 3D render, CGI, anime, cartoon style, blurry, low quality, deformed faces, distorted features, blood, gore, wounds, injuries, scars, violence, disfigurement, asymmetrical, ugly, poorly drawn, amateur, airbrushed, oversaturated, plastic appearance, doll-like, porcelain doll, makeup caked, clown makeup, excessive eyeshadow, neon colors, bright pastels, anime eyes, cartoon proportions
+- **Иерархия в городе:** Примоген (Гангрел)
+- **Принадлежность:** Персонаж мастера
 
 ---
 
