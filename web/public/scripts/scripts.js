@@ -885,6 +885,7 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     if (tab === 'lib-merits')      loadMeritsLibrary('physical');
     if (tab === 'lib-flaws')       loadFlawsLibrary('физические');
     if (tab === 'lib-backgrounds') loadBackgroundsLibrary('general');
+    if (tab === 'guide')           loadGuideTab();
   });
 
   // Merits subtabs (physical/mental/social/supernatural)
@@ -1659,6 +1660,21 @@ function mdToHtmlBlock(md) {
     html += `<p class="md-p">${mdInline(buf.join(' '))}</p>`;
   }
   return html;
+}
+
+let _guideLoaded = false;
+async function loadGuideTab() {
+  if (_guideLoaded) return;
+  _guideLoaded = true;
+  const el = document.getElementById('guide-content');
+  try {
+    const data = await fetch('/api/guide').then(r => r.json());
+    if (!data.content) throw new Error('пусто');
+    el.innerHTML = `<div class="md-body guide-body">${mdToHtmlBlock(data.content)}</div>`;
+  } catch {
+    _guideLoaded = false;
+    el.innerHTML = `<div class="cdet-empty">Не удалось загрузить инструкции (docs/guide.md).</div>`;
+  }
 }
 
 // Bare canonical status words written without checking «Пол» (common at creation,

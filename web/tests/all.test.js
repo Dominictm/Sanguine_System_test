@@ -1914,6 +1914,12 @@ describe('API — integration', () => {
       assert.equal(typeof body, 'object');
       assert.ok(!Array.isArray(body));
     });
+    it('GET /api/guide → содержимое docs/guide.md', async () => {
+      const { status, body } = await apiJson('/api/guide');
+      assert.equal(status, 200);
+      assert.equal(typeof body.content, 'string');
+      assert.ok(body.content.length > 100);
+    });
 
     // ── Gemini: два вида учётных данных (API-ключ vs Vertex AI service account) ──
     describe('Gemini auth — api-key vs vertex', () => {
@@ -4965,6 +4971,68 @@ test('source-guard: index.html — #graph-lineage-filter и #graph-reltype-filte
   assert.ok(lineageRow, '#graph-lineage-filter не найден ни в одной .graph-toolbar-row');
   assert.ok(reltypeRow, '#graph-reltype-filter не найден ни в одной .graph-toolbar-row');
   assert.notStrictEqual(lineageRow, reltypeRow, '#graph-lineage-filter и #graph-reltype-filter лежат в ОДНОЙ строке — должны быть разделены');
+});
+
+// Баг с реального скриншота: бейджи линейки/статуса в боковой панели графа
+// связей наплывали поверх произвольной записи в списке «Связи» вместо того,
+// чтобы стоять сразу под именем персонажа. Причина — showInfoPanel()
+// переиспользовал .char-badges: та задаёт position:absolute; bottom:10px,
+// рассчитанный на карточку персонажа ФИКСИРОВАННОЙ высоты (пин к нижнему
+// левому углу карточки) — но #info-panel графа СКРОЛЛИТСЯ (overflow-y:auto,
+// высота = вся видимая область, не высота контента), и bottom:10px в таком
+// контейнере держит бейджи приклеенными к низу ОКНА панели, а не к месту в
+// потоке документа — визуально наплывает на что угодно, что там прокручено.
+test('source-guard: graph.js — showInfoPanel() не переиспользует .char-badges (абсолютное позиционирование под карточку персонажа наплывает на список связей в скроллящейся панели)', () => {
+  const js = require('fs').readFileSync(path.join(__dirname, '../public/scripts/graph.js'), 'utf-8');
+  const fnMatch = js.match(/function showInfoPanel\([\s\S]*?\n\}/);
+  assert.ok(fnMatch, 'не найдена функция showInfoPanel');
+  assert.ok(!fnMatch[0].includes('class="char-badges"'),
+    'showInfoPanel() всё ещё использует .char-badges — на скроллящейся #info-panel бейджи наплывут на произвольную запись списка «Связи»');
+  assert.ok(fnMatch[0].includes('class="info-badges"'), 'showInfoPanel() не использует замену .info-badges для бейджей линейки/статуса');
+});
+
+test('source-guard: styles.css — .info-badges в обычном потоке документа (без position:absolute, в отличие от .char-badges)', () => {
+  const css = require('fs').readFileSync(path.join(__dirname, '../public/styles.css'), 'utf-8');
+  const infoBadgesMatch = css.match(/\.info-badges\s*\{[^}]*\}/);
+  assert.ok(infoBadgesMatch, 'не найдено правило .info-badges');
+  assert.ok(!/position:\s*absolute/.test(infoBadgesMatch[0]),
+    '.info-badges задаёт position:absolute — унаследует тот же баг наплыва, что и .char-badges в скроллящейся #info-panel');
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// UNIT — source-guard: вкладка «Инструкции» в Инструментах (guide.md в приложении)
+// ══════════════════════════════════════════════════════════════════════════════
+
+test('source-guard: index.html — вкладка «Инструкции» (кнопка data-tab=guide + панель #tab-guide) на странице Инструментов', () => {
+  const html = require('fs').readFileSync(path.join(__dirname, '../public/index.html'), 'utf-8');
+  const toolsMatch = html.match(/<section id="page-tools"[\s\S]*?<\/section>/);
+  assert.ok(toolsMatch, 'не найдена секция #page-tools');
+  assert.ok(/data-tab="guide"/.test(toolsMatch[0]), 'нет кнопки вкладки data-tab="guide"');
+  assert.ok(/id="tab-guide"/.test(toolsMatch[0]), 'нет панели #tab-guide');
+  assert.ok(/id="guide-content"/.test(toolsMatch[0]), 'нет контейнера #guide-content под содержимое guide.md');
+});
+
+test('source-guard: scripts.js — переключение на вкладку guide вызывает loadGuideTab()', () => {
+  const js = require('fs').readFileSync(path.join(__dirname, '../public/scripts/scripts.js'), 'utf-8');
+  assert.ok(/if \(tab === 'guide'\)\s*loadGuideTab\(\)/.test(js),
+    'обработчик переключения вкладок не вызывает loadGuideTab() для tab === "guide"');
+});
+
+test('source-guard: scripts.js — loadGuideTab() читает /api/guide и рендерит через mdToHtmlBlock (переиспользует существующий конвертер с поддержкой таблиц)', () => {
+  const js = require('fs').readFileSync(path.join(__dirname, '../public/scripts/scripts.js'), 'utf-8');
+  const fnMatch = js.match(/async function loadGuideTab\(\)\s*\{[\s\S]*?\n\}/);
+  assert.ok(fnMatch, 'не найдена функция loadGuideTab');
+  assert.ok(/fetch\('\/api\/guide'\)/.test(fnMatch[0]), 'loadGuideTab не запрашивает /api/guide');
+  assert.ok(/mdToHtmlBlock\(/.test(fnMatch[0]), 'loadGuideTab не использует mdToHtmlBlock (нужен для рендера markdown-таблиц в guide.md)');
+});
+
+test('source-guard: routes/tools.js — GET /api/guide отдаёт содержимое docs/guide.md как {content}', () => {
+  const js = require('fs').readFileSync(path.join(__dirname, '../routes/tools.js'), 'utf-8');
+  const routeMatch = js.match(/router\.get\('\/api\/guide'[\s\S]*?\n\s*\}\);/);
+  assert.ok(routeMatch, 'не найден роут GET /api/guide');
+  assert.ok(/docs['"],\s*['"]guide\.md['"]/.test(routeMatch[0]) || /docs.*guide\.md/.test(routeMatch[0]),
+    'роут не читает docs/guide.md');
+  assert.ok(/res\.json\(\{\s*content/.test(routeMatch[0]), 'роут не возвращает { content }');
 });
 
 // ══════════════════════════════════════════════════════════════════════════════

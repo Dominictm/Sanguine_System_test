@@ -429,7 +429,7 @@ function showInfoPanel(d, links, nodes) {
     ${portraitHtml}
     <div class="info-name">${escHtml(d.id)}</div>
     <div class="info-meta">${escHtml(d.clan || d.lineage || '')}</div>
-    <div class="char-badges" style="margin-bottom:4px">
+    <div class="info-badges">
       <span class="badge badge-${d.lineage}">${LINEAGE_LABELS[d.lineage] || d.lineage}</span>
       ${d.status !== 'unknown' ? `<span class="badge badge-${d.status}">${escHtml(graphStatusLbl)}</span>` : ''}
     </div>

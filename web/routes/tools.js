@@ -775,6 +775,17 @@ module.exports = function toolsRouter({
     ps.on('close', code => { clearTimeout(timer); done({ available: code === 0, version: out.trim(), defaultModel: defaultClaudeModel() || null }); });
   });
 
+  // ── Инструкции (guide.md) ───────────────────────────────────────────────────
+
+  router.get('/api/guide', async (req, res) => {
+    try {
+      const text = await fs.readFile(path.join(ROOT, 'docs', 'guide.md'), 'utf-8');
+      res.json({ content: text });
+    } catch (e) {
+      serverError(res, e);
+    }
+  });
+
   // ── Settings (save .env + optional restart) ───────────────────────────────────
 
   router.get('/api/settings', async (req, res) => {
