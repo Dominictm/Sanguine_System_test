@@ -616,19 +616,37 @@ async function _patchModuleMain(modDir, mod, firstLoc) {
   await writeFileAtomic(p, txt, 'utf-8');
 }
 
-// ── Scene notes (scene_notes.md) — плоский список «## <heading>» разделов,
-// один на сцену, без вложенных `### `-подсекций. Структурно идентично
-// scenario.md без H3-детей, поэтому парсер/сериализатор переиспользуются
-// напрямую из lib/parsers (parseScenarioSections/serializeScenarioSections).
-// replaceScenarioSection() ничего не делает, если заголовок не найден (нет
-// такой сцены ещё) — эта тонкая обёртка добавляет апсерт-с-созданием для
-// случая «первая заметка к новой сцене».
-function _upsertScenarioLikeSection(raw, heading, body) {
+// ── Scene notes (scene_notes.md) — «## <сцена>» с вложенными «### Сессия N»,
+// по одной на каждую живую игровую сессию, в которой к сцене что-то дописали.
+// Сцена нередко доигрывается в несколько заходов (начата в Сессии 1,
+// продолжена в Сессии 3) — раньше на сцену был только один плоский текст, и
+// вторая запись тихо стирала первую. Структурно это та же вложенность `##`/
+// `###`, что и в scenario.md (см. lib/parsers/scenario.js splitH3Body/
+// parseScenarioSections), поэтому парсер/сериализатор переиспользуются
+// напрямую, отдельного формата не заводим. Заметки, сохранённые ДО этой
+// правки (плоское тело сцены без ###-детей) не мигрируются принудительно —
+// level-2 body сцены остаётся как есть, GET /scene-notes отдаёт его отдельной
+// записью без номера сессии (см. routes/modules/sessions.js), новые записи
+// только ДОБАВЛЯЮТСЯ к нему.
+function _upsertSceneNoteEntry(raw, sceneHeading, session, text) {
   const { preamble, sections } = parseScenarioSections(raw);
-  const idx = findScenarioSectionIndex(sections, heading);
-  const cleanBody = String(body == null ? '' : body).trim();
-  if (idx === -1) sections.push({ heading, body: cleanBody, level: 2, parent: null });
-  else sections[idx] = { ...sections[idx], body: cleanBody };
+  const entryHeading = `Сессия ${session}`;
+  const cleanBody = String(text == null ? '' : text).trim();
+  const sceneIdx = sections.findIndex(s => s.level === 2 && s.heading === sceneHeading);
+  if (sceneIdx === -1) {
+    sections.push({ heading: sceneHeading, body: '', level: 2, parent: null });
+    sections.push({ heading: entryHeading, body: cleanBody, level: 3, parent: sceneHeading });
+    return serializeScenarioSections(preamble, sections);
+  }
+  let i = sceneIdx + 1;
+  while (i < sections.length && sections[i].level === 3 && sections[i].parent === sceneHeading) {
+    if (sections[i].heading === entryHeading) {
+      sections[i] = { ...sections[i], body: cleanBody };
+      return serializeScenarioSections(preamble, sections);
+    }
+    i++;
+  }
+  sections.splice(i, 0, { heading: entryHeading, body: cleanBody, level: 3, parent: sceneHeading });
   return serializeScenarioSections(preamble, sections);
 }
 
@@ -728,5 +746,5 @@ module.exports = {
   _parseModuleLocSlugs, _writeModuleLocSlugs, _parseSessions, _cleanNpcName, _npcCardHref,
   _parseNpcEntries, _findNpcMdSection, _findNpcMdSections, _removeNpcEntry, _parseNpcMdGroups, _renderSessionBlock,
   _writeSessionsFile, _patchModuleMain, _claudeOnlyModel,
-  _upsertScenarioLikeSection, _upsertModuleSection, _readModuleSection,
+  _upsertSceneNoteEntry, _upsertModuleSection, _readModuleSection,
 };

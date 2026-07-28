@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="dark">
 <title>Sanguine System</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Cinzel+Decorative:wght@700&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=Share+Tech+Mono&display=swap" rel="stylesheet">
@@ -21,15 +22,21 @@
         <span class="t1">Sanguine</span>
         <span class="t2">System</span>
       </div>
-      <button type="button" class="tour-replay-btn" id="btn-tour" title="Тур по интерфейсу" aria-label="Запустить тур по интерфейсу">?</button>
+      <div class="sidebar-logo-actions">
+        <button type="button" class="tour-replay-btn" id="btn-tour" title="Тур по интерфейсу" aria-label="Запустить тур по интерфейсу">?</button>
+        <button type="button" class="sidebar-collapse-btn" id="btn-sidebar-collapse" title="Свернуть меню" aria-label="Свернуть боковое меню" aria-expanded="true">◂</button>
+      </div>
     </div>
 
     <div class="city-switch">
-      <div class="city-switch-head">
-        <label for="city-select">🏙️ Город</label>
-        <button type="button" class="city-switch-add" id="btn-city-add" title="Новый город" data-nav="city-new" data-tab="">+</button>
+      <div class="city-switch-select-wrap">
+        <select id="city-select" aria-label="Переключить город"></select>
+        <div class="city-switch-display" aria-hidden="true">
+          <span class="city-switch-name" id="city-switch-name"></span>
+          <span class="city-switch-year" id="city-switch-year"></span>
+        </div>
       </div>
-      <select id="city-select"></select>
+      <button type="button" class="city-switch-add" id="btn-city-add" title="Новый город" data-nav="city-new" data-tab="">+</button>
     </div>
 
     <nav class="nav-menu">
@@ -86,9 +93,6 @@
       </a>
     </nav>
 
-    <div class="sidebar-footer">
-      <span class="domain-badge" id="domain-label">⏳ Загрузка...</span>
-    </div>
   </aside>
 
   <!-- ── Main ── -->
@@ -589,15 +593,10 @@
       </div>
       <div class="sess-picker">
         <select class="form-control" id="sess-chr-sel"><option value="">— хроника —</option></select>
+        <select class="form-control" id="sess-mod-sel" disabled><option value="">— модуль —</option></select>
       </div>
-      <div id="sess-mod-cards" class="chd-mod-grid"></div>
       <div class="sess-grid">
         <div class="sess-main">
-          <div class="sess-scene-nav" id="sess-scene-nav" hidden>
-            <button class="chr-modal-btn" id="sess-prev">← Сцена</button>
-            <span id="sess-scene-label"></span>
-            <button class="chr-modal-btn" id="sess-next">Сцена →</button>
-          </div>
           <div id="sess-scenario"><div class="cdet-empty">Выбери хронику и модуль</div></div>
         </div>
         <aside class="sess-side">
@@ -606,6 +605,11 @@
           <div id="sess-scene-notes-wrap"></div>
           <div id="sess-notes-wrap"></div>
         </aside>
+      </div>
+      <div class="sess-scene-nav" id="sess-scene-nav" hidden>
+        <button class="sess-scene-btn" id="sess-prev" title="Предыдущая сцена" aria-label="Предыдущая сцена">←</button>
+        <span id="sess-scene-label"></span>
+        <button class="sess-scene-btn" id="sess-next" title="Следующая сцена" aria-label="Следующая сцена">→</button>
       </div>
     </section>
 

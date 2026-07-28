@@ -647,6 +647,3 @@ async function _deleteCity() {
   } catch (err) { showToast('Ошибка удаления: ' + err.message, 'error'); }
 }
 
-// Клик по бейджу активного домена в сайдбаре — открыть страницу города.
-document.getElementById('domain-label').addEventListener('click', () => openCityDetail(CITY));
-

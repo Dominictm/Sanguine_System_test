@@ -15,18 +15,128 @@ async function initCitySwitch() {
   const sel = document.getElementById('city-select');
   if (!sel) return;
   try {
-    const { cities = [], default: def } = await fetch('/api/cities').then(r => r.json());
+    const [{ cities = [], default: def }, summary] = await Promise.all([
+      fetch('/api/cities').then(r => r.json()),
+      fetch('/api/cities/summary').then(r => r.json()).catch(() => []),
+    ]);
     const list = cities.length ? cities : (def ? [def] : []);
     // If the active city isn't set/available, go to the server default (or first city).
     const urlCity = new URLSearchParams(location.search).get('city');
     if (!urlCity && list.length && !list.includes(CITY)) {
       location.search = 'city=' + encodeURIComponent(list.includes(def) ? def : list[0]); return;
     }
-    sel.innerHTML = list.map(c => `<option value="${c}"${c === CITY ? ' selected' : ''}>${c}</option>`).join('');
+    // Список опций (попап открытого select — одна строка «Город, Год» на
+    // пункт, как раньше) — берём готовое summary (display+год на город),
+    // с фолбэком на голый слаг, если /api/cities/summary недоступен или
+    // город ещё без city.md.
+    const bySlug = Object.fromEntries((summary || []).map(c => [c.slug, c]));
+    sel.innerHTML = list.map(slug => {
+      const info  = bySlug[slug];
+      const label = info ? `${info.display}${info.year ? `, ${info.year}` : ''}` : slug;
+      return `<option value="${escAttr(slug)}"${slug === CITY ? ' selected' : ''}>${escHtml(label)}</option>`;
+    }).join('');
     sel.onchange = () => { location.search = 'city=' + encodeURIComponent(sel.value); };
+
+    // Затишье-до-касания: сам select спрятан (только ловит клики/клавиатуру),
+    // видимую двухстрочную витрину «Город / Год» рисует .city-switch-display
+    // (см. styles.css) — смена города всегда идёт через полную навигацию
+    // (location.search=), так что достаточно выставить текст один раз при
+    // загрузке, на выбранный сейчас CITY.
+    const current = bySlug[CITY];
+    const nameEl = document.getElementById('city-switch-name');
+    const yearEl = document.getElementById('city-switch-year');
+    if (nameEl) nameEl.textContent = current ? current.display : CITY;
+    if (yearEl) yearEl.textContent = current?.year || '';
   } catch {}
 }
 document.addEventListener('DOMContentLoaded', initCitySwitch);
+
+// ═══════════════════════════════════════════════════════════════
+// Sidebar collapse (кнопка «◂» под туром) — сворачивает меню в узкую
+// иконочную полосу (те же правила, что у @media max-width:700px), состояние
+// переживает перезагрузку через localStorage.
+// ═══════════════════════════════════════════════════════════════
+(function () {
+  const KEY = 'sanguine-sidebar-collapsed';
+  const btn = document.getElementById('btn-sidebar-collapse');
+  const sidebar = document.getElementById('sidebar');
+  if (!btn || !sidebar) return;
+
+  function apply(collapsed) {
+    sidebar.classList.toggle('collapsed', collapsed);
+    btn.setAttribute('aria-expanded', String(!collapsed));
+    const label = collapsed ? 'Развернуть боковое меню' : 'Свернуть боковое меню';
+    btn.title = label;
+    btn.setAttribute('aria-label', label);
+  }
+
+  let collapsed = false;
+  try { collapsed = localStorage.getItem(KEY) === '1'; } catch {}
+  apply(collapsed);
+
+  btn.addEventListener('click', () => {
+    collapsed = !collapsed;
+    apply(collapsed);
+    try { localStorage.setItem(KEY, collapsed ? '1' : '0'); } catch {}
+  });
+})();
+
+// ═══════════════════════════════════════════════════════════════
+// Sidebar nav tooltips (свёрнутая панель) — .nav-tip создаётся один раз и
+// позиционируется через position:fixed по getBoundingClientRect() наведённого
+// пункта. Это не CSS ::after внутри .nav-item: .nav-menu держит
+// overflow-y:auto для прокрутки списка, а браузер по спеке не даёт оставить
+// overflow-x visible на элементе с overflow-y:auto (он обрежется до auto
+// вместе с ней) — любая всплывашка-потомок обрезалась бы по правому краю
+// узкой 52px колонки. position:fixed на отдельном элементе вне #sidebar эту
+// обрезку не наследует.
+// ═══════════════════════════════════════════════════════════════
+(function () {
+  const sidebar = document.getElementById('sidebar');
+  const items = document.querySelectorAll('.nav-item');
+  if (!sidebar || !items.length) return;
+
+  let tipEl = null;
+  function tip() {
+    if (!tipEl) {
+      tipEl = document.createElement('div');
+      tipEl.className = 'nav-tip';
+      document.body.appendChild(tipEl);
+    }
+    return tipEl;
+  }
+
+  function show(item) {
+    if (!sidebar.classList.contains('collapsed')) return;
+    const text = item.getAttribute('title');
+    if (!text) return;
+    // Прячем нативный browser-tooltip на время показа своего, чтобы не
+    // накладывались друг на друга; title возвращаем на mouseleave/blur.
+    item.dataset.navTitle = text;
+    item.removeAttribute('title');
+    const el = tip();
+    el.textContent = text;
+    const r = item.getBoundingClientRect();
+    el.style.top = (r.top + r.height / 2) + 'px';
+    el.style.left = (r.right + 9) + 'px';
+    el.classList.add('visible');
+  }
+
+  function hide(item) {
+    if (item.dataset.navTitle) {
+      item.setAttribute('title', item.dataset.navTitle);
+      delete item.dataset.navTitle;
+    }
+    if (tipEl) tipEl.classList.remove('visible');
+  }
+
+  items.forEach(item => {
+    item.addEventListener('mouseenter', () => show(item));
+    item.addEventListener('mouseleave', () => hide(item));
+    item.addEventListener('focus', () => show(item));
+    item.addEventListener('blur', () => hide(item));
+  });
+})();
 
 // ═══════════════════════════════════════════════════════════════
 // Constants
@@ -249,7 +359,6 @@ async function loadDashboard() {
       fetch('/api/status').then(r => r.json()),
       fetch('/api/threads' + (window.location.search || '')).then(r => r.json()).catch(() => null),
     ]);
-    document.getElementById('domain-label').innerHTML = `<span>${stats.domain || 'Домен'}</span>`;
     renderDashboard(stats, el, threads);
     loadIntegrity();
   } catch {

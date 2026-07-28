@@ -180,7 +180,10 @@ describe('UI — полный изолированный цикл города',
     await waitOutput('out-new-city', /создан/i);
     assert.ok(fs.existsSync(path.join(ROOT, 'cities', CITY, 'city.md')));
     await driver.get(`${BASE}/?city=${encodeURIComponent(CITY)}`);
-    await waitUntil(async () => (await (await id('domain-label')).getText()).length > 0);
+    await waitUntil(async () => {
+      const sel = new Select(await id('city-select'));
+      return (await sel.getFirstSelectedOption().then(o => o.getText())).length > 0;
+    });
   });
 
   it('создаёт локацию в тестовом городе через UI', async () => {

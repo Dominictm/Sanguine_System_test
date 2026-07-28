@@ -146,6 +146,7 @@ body {
 /* ── Scrollbar ── */
 ::-webkit-scrollbar {
   width: 5px;
+  height: 5px;
 }
 
 ::-webkit-scrollbar-track {
@@ -173,6 +174,7 @@ body {
   flex-direction: column;
   position: relative;
   overflow: hidden;
+  transition: width var(--dur-base) var(--ease), min-width var(--dur-base) var(--ease);
 }
 
 #sidebar::before {
@@ -191,6 +193,7 @@ body {
   align-items: center;
   gap: 10px;
   border-bottom: 1px solid var(--border);
+  transition: padding var(--dur-base) var(--ease), gap var(--dur-base) var(--ease);
 }
 
 .logo-drop {
@@ -213,6 +216,13 @@ body {
 
 .logo-text {
   line-height: 1.15;
+  max-width: 140px;
+  max-height: 40px;
+  opacity: 1;
+  overflow: hidden;
+  white-space: nowrap;
+  transition: max-width var(--dur-base) var(--ease), max-height var(--dur-base) var(--ease),
+    opacity var(--dur-fast) var(--ease);
 }
 
 .logo-text .t1 {
@@ -240,9 +250,14 @@ body {
   letter-spacing: .28em;
   text-transform: uppercase;
   color: var(--text3);
-  padding: 14px 18px 4px;
+  padding: 6px 18px 4px;
   border-top: 1px solid var(--border);
   margin-top: 8px;
+  max-height: 40px;
+  opacity: 1;
+  overflow: hidden;
+  transition: max-height var(--dur-base) var(--ease), padding var(--dur-base) var(--ease),
+    opacity var(--dur-fast) var(--ease);
 }
 
 .nav-group-label:first-child {
@@ -255,9 +270,16 @@ body {
   /* #sidebar is overflow:hidden (so its decorative ::before glow never
      scrolls); with 13 items + city switcher the list can exceed a short
      viewport (laptops at 1366×768 minus browser chrome, landscape tablets),
-     so the menu itself needs its own scroll instead of clipping silently. */
+     so the menu itself needs its own scroll instead of clipping silently.
+     overflow-x:hidden must be explicit (not the "visible" default) — per
+     the CSS overflow spec, an overflow-x left at "visible" next to a
+     non-visible overflow-y is silently forced to "auto" by the browser, so
+     whenever this list actually needs the vertical scrollbar (short window),
+     it would also grow an unwanted horizontal one squeezed into the 52px
+     collapsed rail. */
   overflow-y: auto;
-  padding: 18px 0;
+  overflow-x: hidden;
+  /*padding: 10px 0;*/
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -276,9 +298,21 @@ body {
   text-decoration: none;
   border-left: 2px solid transparent;
   background: linear-gradient(90deg, rgba(139, 0, 0, .05), transparent 75%);
-  transition: color .2s var(--ease), background .2s var(--ease), border-left-color .2s var(--ease);
+  transition: color .2s var(--ease), background .2s var(--ease), border-left-color .2s var(--ease),
+    padding var(--dur-base) var(--ease), gap var(--dur-base) var(--ease);
   cursor: pointer;
   user-select: none;
+}
+
+/* Подпись пункта — сжимается в 0 при сворачивании панели вместе с шириной
+   #sidebar (см. #sidebar.collapsed ниже), а не пропадает рывком через
+   display:none, чтобы значок плавно доезжал до центра колонки. */
+.nav-item span:last-child {
+  max-width: 160px;
+  opacity: 1;
+  overflow: hidden;
+  white-space: nowrap;
+  transition: max-width var(--dur-base) var(--ease), opacity var(--dur-fast) var(--ease);
 }
 
 .nav-item:hover {
@@ -298,23 +332,6 @@ body {
   opacity: .8;
 }
 
-.sidebar-footer {
-  padding: 16px 20px;
-  border-top: 1px solid var(--border);
-}
-
-.domain-badge {
-  font-family: var(--f-mono);
-  font-size: var(--fs-lg);
-  color: var(--text3);
-  letter-spacing: .05em;
-  display: block;
-}
-
-.domain-badge span {
-  color: var(--gold);
-}
-
 /* ── Main content ── */
 #main {
   flex: 1;
@@ -326,7 +343,7 @@ body {
   display: none;
   height: 100vh;
   overflow-y: auto;
-  padding: 36px 40px;
+  padding: 5px 15px 40px;
   /* Акцентное свечение из верхнего левого угла (как дальний отблеск свечи/
      факела) + базовый вертикальный переход фона — тот же приём глубины, что
      у градиента навигации и overlay-затемнения на карточке персонажа.
@@ -435,8 +452,8 @@ body {
 
 /* ── Page header ── */
 .page-header {
-  margin-bottom: 32px;
-  padding-bottom: 18px;
+  margin-bottom: 30px;
+ 
   border-bottom: 1px solid var(--border);
   display: flex;
   justify-content: center;
@@ -1132,46 +1149,22 @@ body {
   animation-delay: calc(var(--i, 0) * 30ms);
 }
 
-/* ── Страница города (фаза C): бейдж домена в сайдбаре кликабелен ── */
-.domain-badge {
-  cursor: pointer;
-}
-
-.domain-badge:hover {
-  color: var(--gold2);
-}
-
 /* ── Экран сессии ── */
+/* Одна строка: хроника, модуль (оба select), затем навигация по сценам —
+   выбор модуля через select (не карточки), чтобы вся связка «где мы сейчас»
+   помещалась в один компактный ряд над сценарием. */
 .sess-picker {
   display: flex;
+  align-items: center;
   gap: 10px;
   margin-bottom: 18px;
   flex-wrap: wrap;
 }
 
 .sess-picker select {
-  min-width: 220px;
+  min-width: 180px;
   flex: 1;
-  max-width: 340px;
-}
-
-/* Карточки модулей хроники (тикет 3.2) — переиспользуют .chd-mod-grid/
-   .chd-mod-card модалки хроники (см. renderModuleCardInChr в modules.js);
-   здесь отдельный контейнер под селектом хроники, а не внутри .sess-picker —
-   карточки (min 380px) не помещаются в узкую колонку селекта. */
-#sess-mod-cards {
-  margin-bottom: 18px;
-}
-
-#sess-mod-cards .chd-mod-del-btn {
-  display: none;
-}
-
-/* Восстановленный/выбранный модуль — визуально отличим от остальных карточек
-   списка (клик или восстановление из localStorage). */
-.chd-mod-card--active {
-  border-color: var(--gold2);
-  box-shadow: 0 0 0 1px var(--gold2);
+  max-width: 300px;
 }
 
 .sess-grid {
@@ -1213,21 +1206,72 @@ body {
   min-width: 0;
 }
 
+/* Закреплена по нижнему краю рабочей области сессии (.page у #page-session —
+   сам скролл-контейнер, тот же, что несёт .sess-side sticky-top выше), чтобы
+   навигация по сценам оставалась на виду при скролле длинного текста
+   сценария — не всплывающий оверлей поверх всей страницы (position:fixed
+   относительно вьюпорта), а именно низ этой конкретной рабочей области.
+   Отрицательные margin отменяют padding .page (5px 15px 40px), чтобы бар
+   прилегал вплотную к истинному нижнему/боковым краям, а не зависал с
+   пустым зазором ниже — свой padding восстанавливает отступ для контента. */
 .sess-scene-nav {
+  position: sticky;
+  bottom: 0;
+  z-index: var(--z-sticky);
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
-  gap: 12px;
-  margin-bottom: 12px;
+  justify-content: center;
+  gap: 8px;
+  /*margin: 20px -15px -40px;
+  padding: 12px 15px;
+  background: var(--bg);
+  border-top: 1px solid var(--border);
+  box-shadow: 0 -8px 20px rgb(0 0 0 / 30%); */
 }
 
-.sess-scene-nav .chr-modal-btn {
-  padding: 8px 16px;
+/* Явно, а не понадеявшись на UA-стиль [hidden] { display:none } — авторский
+   display:flex выше в каскаде всегда перевешивает UA-правило независимо от
+   специфичности (порядок origin важнее specificity), так что без этого
+   переопределения бар остался бы виден при nav.hidden = true. */
+.sess-scene-nav[hidden] {
+  display: none;
+}
+
+/* Только стрелки (без слова «Сцена») — размер подогнан под соседний
+   select#sess-mod-sel (.form-control: padding 10px 14px, fs-xl, border-radius
+   r-sm), чтобы вся строка «хроника → модуль → сцены» читалась одним рядом
+   одинаковых по высоте полей. */
+.sess-scene-btn {
+  /* line-height НЕ переопределяем (норма ~1.2, как у .form-control) — с
+     line-height:1 кнопка выходила на 4px ниже соседнего select при
+     одинаковых padding/font-size/border (проверено в браузере: 44px против
+     48px), хотя просили ровно совпадающий размер. */
+  padding: 5px 14px;
+  background:rgba(139, 0, 0, .18);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-family: var(--f-body);
+  font-size: var(--fs-xl);
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  transition: background .15s, border-color .15s, color .15s;
+}
+
+.sess-scene-btn:hover {
+  border-color: var(--accent2);
+  background: var(--bg4);
+}
+
+.sess-scene-btn:disabled {
+  opacity: .4;
+  cursor: default;
 }
 
 #sess-scene-label {
+  
   color: var(--text3);
   font-size: var(--fs-body);
+  white-space: nowrap;
 }
 
 .sess-block {
@@ -1266,6 +1310,37 @@ body {
   text-transform: uppercase;
   color: var(--text2);
   margin: 14px 0 8px;
+}
+
+/* История заметок сцены по прошлым сессиям (только чтение — редактируется
+   textarea ниже, привязанная к ТЕКУЩЕЙ сессии, см. _sessRenderSceneNote). */
+.sess-scene-note-history {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.sess-scene-note-entry {
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  padding: 8px 10px;
+}
+
+.sess-scene-note-entry-tag {
+  font-family: var(--f-heading);
+  font-size: var(--fs-3xs);
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: var(--gold);
+  margin-bottom: 4px;
+}
+
+.sess-scene-note-entry-text {
+  font-size: var(--fs-body);
+  color: var(--text2);
+  white-space: pre-wrap;
 }
 
 .sess-npc-list {
@@ -2499,9 +2574,9 @@ select.form-control {
 /* ── Primary button: shared box model with .chr-modal-btn (cluster C) ── */
 .btn-submit,
 .chr-modal-btn {
-  padding: 12px 28px;
+  padding: 4px 10px;
   font-family: var(--f-heading);
-  font-size: var(--fs-body);
+  font-size: var(--fs-lg);
   letter-spacing: .1em;
   text-transform: uppercase;
   border-radius: var(--r-sm);
@@ -2649,7 +2724,7 @@ select.form-control {
     min-width: 52px;
   }
 
-  .logo-text, .nav-item span:last-child, .sidebar-footer {
+  .logo-text, .nav-item span:last-child {
     display: none;
   }
 
@@ -2666,6 +2741,130 @@ select.form-control {
   }
 }
 
+/* Ручное сворачивание сайдбара (кнопка «◂» под туром) — отдельная иконочная
+   панель: только значки пунктов навигации, полное имя проекта заменяется
+   каплей крови, пояснение раздела всплывает при наведении/фокусе через
+   отдельный элемент .nav-tip (см. scripts.js) — НЕ через CSS ::after внутри
+   .nav-item: .nav-menu держит overflow-y:auto для прокрутки длинного списка,
+   а по спецификации CSS overflow-x у элемента с overflow-y:auto не может
+   остаться visible (браузер принудительно превращает его в auto и обрезает
+   всё, что пытается вылезти за узкую 52px колонку) — проверено вживую через
+   CDP, тултип с opacity:1 физически не прорисовывался. .nav-tip — position:
+   fixed относительно viewport, не потомок #sidebar/.nav-menu, поэтому их
+   overflow его не касается. Состояние сворачивания запоминается в
+   localStorage (см. scripts.js). */
+#sidebar.collapsed {
+  width: 52px;
+  min-width: 52px;
+}
+
+/* Подпись логотипа, кнопка тура и подписи пунктов не display:none — у всех
+   троих задана transition на max-width/max-height/opacity в их базовых
+   правилах выше, здесь только целевые значения. display:none обнулил бы их
+   мгновенно, независимо от transition, и анимация не была бы видна. */
+#sidebar.collapsed .logo-text {
+  /* max-height тоже нужно обнулять явно: колонка (flex-direction:column в
+     свёрнутом .sidebar-logo ниже) учитывает высоту этого блока даже когда его
+     ширина сжата в 0 — двухстрочный текст иначе продолжает раздвигать
+     капля/кнопка «развернуть» пустым местом. */
+  max-width: 0;
+  max-height: 0;
+  opacity: 0;
+}
+
+#sidebar.collapsed .nav-item span:last-child {
+  max-width: 0;
+  opacity: 0;
+}
+
+#sidebar.collapsed .tour-replay-btn {
+  max-height: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Капля крови + кнопка «развернуть обратно» — друг под другом по центру,
+   вместо строки «капля / название / тур / свернуть». flex-direction не
+   анимируется браузером в принципе, поэтому эта перестройка шапки — единственный
+   рывок в анимации сворачивания, остальное (ширина, подписи, разделители)
+   едет плавно. */
+#sidebar.collapsed .sidebar-logo {
+  padding: 20px 14px;
+  flex-direction: column;
+  gap: 6px;
+}
+
+#sidebar.collapsed .sidebar-logo-actions {
+  margin-left: 0;
+  /* Скрытая кнопка тура остаётся flex-элементом (max-height:0, а не
+     display:none — чтобы гаснуть плавно), но gap:6px иначе всё равно
+     вставляется рядом с ней, оставляя лишний зазор перед единственной
+     видимой кнопкой «развернуть». */
+  gap: 0;
+}
+
+/* Ярлыки групп («Мир»/«Игра»/«Архив») в иконочной колонке не помещаются —
+   оставляем только тонкий разделитель между группами (border-top уже задан
+   в .nav-group-label), без самого текста. */
+#sidebar.collapsed .nav-group-label {
+  max-height: 0;
+  padding: 0;
+  opacity: 0;
+}
+
+#sidebar.collapsed .nav-item {
+  padding: 9px 0;
+  gap: 0;
+  justify-content: center;
+  position: relative;
+}
+
+#sidebar.collapsed .city-switch {
+  max-height: 0;
+  padding: 0 20px;
+  margin-bottom: 0;
+  opacity: 0;
+  border-bottom-color: transparent;
+}
+
+/* Пояснение раздела для свёрнутой панели — тот же визуальный язык, что и
+   .field-tip (см. форму создания города): тёмная плашка, скруглённая рамка,
+   тень. В отличие от .field-tip это не ::after конкретного поля, а один
+   переиспользуемый элемент, создаваемый и позиционируемый через JS
+   (initSidebarNavTips() в scripts.js) с position:fixed — CSS ::after внутри
+   .nav-item сюда не годится: .nav-menu держит overflow-y:auto для прокрутки
+   списка, а по спеке overflow-x у такого элемента не может остаться visible
+   (браузер обрезает его в auto вместе с overflow-y), так что всплывашка
+   всегда обрезалась бы по правому краю 52px колонки. */
+.nav-tip {
+  position: fixed;
+  transform: translateY(-50%) translateX(-4px);
+  width: max-content;
+  max-width: min(240px, 60vw);
+  padding: 8px 12px;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  color: var(--text2);
+  font-family: var(--f-body);
+  font-size: var(--fs-lg);
+  font-weight: 400;
+  line-height: 1.3;
+  white-space: nowrap;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, .5);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity var(--dur-fast) var(--ease), transform var(--dur-fast) var(--ease);
+  z-index: var(--z-tooltip, 9600);
+}
+
+.nav-tip.visible {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(-50%) translateX(0);
+}
+
 /* Touch devices: guarantee a comfortable tap target (WCAG 2.5.5) on the
    compact buttons/inputs without enlarging anything on mouse-driven desktops. */
 @media (pointer: coarse) {
@@ -2678,7 +2877,7 @@ select.form-control {
   .city-edit-btn, .city-del-btn, .mod-gen-scenario-btn, .nav-item,
   .cdet-faction-chip, .modp-edit-btn,
   .tour-replay-btn, .city-switch-add, .chd-dir-btn, button.chron-chip,
-  .chron-toggle {
+  .chron-toggle, .sess-scene-btn, .modp-session-edit, .modp-session-delete {
     min-height: 44px;
   }
 
@@ -2689,8 +2888,9 @@ select.form-control {
 
   /* .btn-icon уже получает min-height: 44px выше; #btn-reset (тикет 4.1) теперь
      содержит только символ «↺» без текста — без явного min-width узкая иконочная
-     кнопка не дотягивает до 44px по ширине на touch. */
-  .btn-icon {
+     кнопка не дотягивает до 44px по ширине на touch. Та же история у стрелок
+     навигации сцен (только «←»/«→», без слова «Сцена»). */
+  .btn-icon, .sess-scene-btn {
     min-width: 44px;
   }
 
@@ -7553,32 +7753,130 @@ a.md-link-loc:hover {
   margin-bottom: 0;
 }
 
-/* City switcher (multi-city) */
+/* City switcher (multi-city) — «шёпот до касания»: в покое выглядит как
+   обычная надпись «Город, Год» (см. domain-badge, который эта надпись
+   заменила), при наведении/фокусе проявляется как настоящий select. */
 .city-switch {
-  padding: 0 20px 16px;
+  padding: 0 20px 0px;
   margin-bottom: 6px;
   border-bottom: 1px solid var(--border);
-}
-
-.city-switch-head {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
+  max-height: 80px;
+  opacity: 1;
+  overflow: hidden;
+  transition: max-height var(--dur-base) var(--ease), padding var(--dur-base) var(--ease),
+    margin var(--dur-base) var(--ease), opacity var(--dur-fast) var(--ease),
+    border-color var(--dur-fast) var(--ease);
 }
 
-.city-switch label {
-  display: block;
-  font-size: var(--fs-xl);
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
+.city-switch-select-wrap {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* Стрелка-подсказка, что это выпадающий список — сама тоже шепчет: невидима
+   в покое, проявляется вместе с рамкой селекта на hover/focus. */
+.city-switch-select-wrap::after {
+  content: '▾';
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
   color: var(--gold);
-  opacity: 0.8;
-  margin-bottom: 6px;
+  font-size: var(--fs-sm);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--dur-fast) var(--ease);
 }
 
-.city-switch-head label {
-  margin-bottom: 6px;
+.city-switch-select-wrap:hover::after,
+.city-switch-select-wrap:focus-within::after {
+  opacity: .7;
+}
+
+/* Сам select спрятан (прозрачный, но не display:none) — только ловит клик/
+   /клавиатуру и открывает нативный попап; всю видимую отрисовку берёт на
+   себя .city-switch-display ниже (двухстрочная витрина «Город» / «Год»,
+   которую в один <option> нативно не уложить). */
+.city-switch-select-wrap select {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  opacity: 0;
+  cursor: pointer;
+  /* Сам select прозрачный (см. выше), но открытый нативный попап со списком
+     городов рисуется браузером поверх всей страницы — глобальный
+     color-scheme:dark (:root) до него не всегда доходит надёжно, поэтому
+     дублируем здесь и явно красим <option>, чтобы попап не оставался
+     светлым дефолтом ОС поверх тёмного интерфейса. */
+  color-scheme: dark;
+}
+
+.city-switch-select-wrap select option {
+  background-color: var(--bg2);
+  color: var(--text);
+}
+
+.city-switch-select-wrap select:focus {
+  outline: none;
+}
+
+.city-switch-display {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 1px;
+  border: 1px solid transparent;
+  border-radius: var(--r-lg);
+  padding: 4px 22px 4px 2px;
+  pointer-events: none; /* клики проваливаются сквозь на спрятанный select */
+  transition: background var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease);
+}
+
+.city-switch-name {
+  font-family: var(--f-mono);
+  font-size: var(--fs-lg);
+  color: var(--gold);
+  letter-spacing: .05em;
+  /* Длинное название (напр. «Санкт-Петербург») не всегда влезает в узкую
+     колонку рядом с кнопкой «+» — в покое аккуратно обрезаем многоточием
+     вместо жёсткого клипа; на hover/focus «+» рядом схлопывается (см.
+     .city-switch-add ниже), отдавая всю строку под текст. */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: color var(--dur-fast) var(--ease);
+}
+
+.city-switch-year {
+  font-family: var(--f-mono);
+  font-size: var(--fs-3xs);
+  color: var(--text3);
+  letter-spacing: .1em;
+  transition: color var(--dur-fast) var(--ease);
+}
+
+.city-switch-select-wrap select:hover ~ .city-switch-display,
+.city-switch-select-wrap select:focus ~ .city-switch-display {
+  background: var(--bg2);
+  border-color: var(--crimson);
+}
+
+.city-switch-select-wrap select:focus ~ .city-switch-display {
+  border-color: var(--accent);
+  box-shadow: 0 0 6px var(--glow);
+}
+
+.city-switch-select-wrap select:hover ~ .city-switch-display .city-switch-name,
+.city-switch-select-wrap select:focus ~ .city-switch-display .city-switch-name {
+  color: var(--text);
 }
 
 .city-switch-add {
@@ -7586,6 +7884,7 @@ a.md-link-loc:hover {
   width: 24px;
   height: 24px;
   min-height: 0;
+  margin-left: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -7596,34 +7895,28 @@ a.md-link-loc:hover {
   font-size: var(--fs-sm);
   line-height: 1;
   cursor: pointer;
+  overflow: hidden;
+  transition: width var(--dur-base) var(--ease), margin-left var(--dur-base) var(--ease),
+              opacity var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
+}
+
+/* Пока выбор города в фокусе/под курсором — кнопка «+» схлопывается до 0,
+   отдавая свою долю строки соседнему select (flex:1 1 auto заберёт
+   освободившееся место сам, без доп. правил). Уводим курсор — «+» тут же
+   возвращается. */
+.city-switch-select-wrap:hover ~ .city-switch-add,
+.city-switch-select-wrap:focus-within ~ .city-switch-add {
+  width: 0;
+  min-width: 0;
+  margin-left: 0;
+  border-color: transparent;
+  opacity: 0;
+  pointer-events: none;
 }
 
 .city-switch-add:hover {
   border-color: var(--accent);
   color: var(--accent);
-}
-
-.city-switch select {
-  width: 100%;
-  background: var(--bg);
-  color: var(--text);
-  border: 1px solid var(--border);
-  border-radius: var(--r-lg);
-  padding: 7px 9px;
-  font-size: var(--fs-xl);
-  font-family: var(--f-body);
-  cursor: pointer;
-  text-transform: capitalize;
-}
-
-.city-switch select:hover {
-  border-color: var(--crimson);
-}
-
-.city-switch select:focus {
-  outline: none;
-  border-color: var(--accent);
-  box-shadow: 0 0 6px var(--glow);
 }
 
 /* ── Module Detail Page ─────────────────────────────────────────────────────── */
@@ -9589,7 +9882,11 @@ a.md-link-loc:hover {
 
 .audio-lib-col-cards {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  /* Один плеер (play/стоп/громкость + 4 иконки действий) на одной строке
+     физически не помещается в узкую колонку 2-up — при 44px тач-целях (см.
+     @media (pointer: coarse) ниже) контролы вылезали за рамки карточки.
+     Одна карточка на строку даёт им место без сжатия кнопок ниже минимума. */
+  grid-template-columns: repeat(1, minmax(0, 1fr));
   gap: 14px;
   align-items: start;
 }
@@ -9818,6 +10115,15 @@ a.md-link-loc:hover {
   display: flex;
   align-items: center;
   gap: 8px;
+  /* play/стоп/громкость + 4 иконки действия (44px тач-цели каждая, см.
+     @media (pointer: coarse) ниже) не всегда помещаются в одну строку —
+     на узком окне/повышенном масштабе браузера строка едет в свою
+     собственную горизонтальную прокрутку вместо того, чтобы визуально
+     вылезать за рамку карточки (.audio-card ниже без overflow сама этого
+     не сдерживает). */
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-bottom: 2px;
 }
 
 .audio-card-play-btn {
@@ -9848,6 +10154,7 @@ a.md-link-loc:hover {
 
 .audio-card-volume {
   flex: 1;
+  min-width: 60px;
   accent-color: var(--accent);
   height: 44px;
 }
@@ -9861,6 +10168,7 @@ a.md-link-loc:hover {
 .audio-card-icon-btn {
   width: 44px;
   height: 44px;
+  min-width: 44px;
   border: none;
   background: none;
   color: var(--text3);
@@ -10292,12 +10600,11 @@ a.md-link-loc:hover {
   color: var(--gold);
 }
 
-.modp-session-edit {
-  margin-left: auto;
+.modp-session-edit,
+.modp-session-delete {
   background: none;
   border: 1px solid var(--border);
   border-radius: var(--r-sm);
-  color: var(--gold);
   cursor: pointer;
   font-size: var(--fs-body);
   line-height: 1;
@@ -10306,10 +10613,25 @@ a.md-link-loc:hover {
   transition: background .15s, border-color .15s, opacity .15s;
 }
 
+.modp-session-edit {
+  margin-left: auto;
+  color: var(--gold);
+}
+
 .modp-session-edit:hover {
   opacity: 1;
   border-color: var(--gold);
   background: rgba(184, 134, 11, 0.08);
+}
+
+.modp-session-delete {
+  color: var(--c-danger-text);
+}
+
+.modp-session-delete:hover {
+  opacity: 1;
+  border-color: var(--c-danger);
+  background: rgba(139, 0, 0, .14);
 }
 
 .modp-session-scenes {
@@ -11480,12 +11802,25 @@ tr.rumor-told:hover .rumor-cb-cell {
 }
 
 /* ── Onboarding tour — ceremonial spotlight walkthrough ───────── */
-/* Replay trigger in the sidebar logo. Whisper-Until-Touched: gold only on hover. */
-.tour-replay-btn {
+/* Стопка «?» (тур) + «◂» (свернуть меню) в правом углу шапки сайдбара. */
+.sidebar-logo-actions {
   margin-left: auto;
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Replay trigger in the sidebar logo. Whisper-Until-Touched: gold only on hover. */
+.tour-replay-btn,
+.sidebar-collapse-btn {
   flex: 0 0 auto;
   width: 26px;
   height: 26px;
+  max-height: 26px;
+  opacity: 1;
+  overflow: hidden;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -11499,14 +11834,31 @@ tr.rumor-told:hover .rumor-cb-cell {
   cursor: pointer;
   transition: color var(--dur-fast) var(--ease),
     border-color var(--dur-fast) var(--ease),
-    background var(--dur-fast) var(--ease);
+    background var(--dur-fast) var(--ease),
+    max-height var(--dur-base) var(--ease),
+    opacity var(--dur-base) var(--ease);
 }
 
 .tour-replay-btn:hover,
-.tour-replay-btn:focus-visible {
+.tour-replay-btn:focus-visible,
+.sidebar-collapse-btn:hover,
+.sidebar-collapse-btn:focus-visible {
   color: var(--gold);
   border-color: var(--gold);
   background: rgba(184, 134, 11, .1);
+}
+
+/* Треугольник смотрит влево («свернуть» — меню уезжает влево-в-себя);
+   в свёрнутом состоянии (aria-expanded=false) разворачивается на 180°,
+   подсказывая обратное действие «развернуть». */
+.sidebar-collapse-btn {
+  font-size: 10px;
+  transition: transform var(--dur-base) var(--ease), color var(--dur-fast) var(--ease),
+    border-color var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease);
+}
+
+.sidebar-collapse-btn[aria-expanded="false"] {
+  transform: rotate(180deg);
 }
 
 /* Spotlight: a transparent rect whose huge solid-black shadow dims everything
@@ -11641,7 +11993,8 @@ tr.rumor-told:hover .rumor-cb-cell {
 }
 
 @media (pointer: coarse) {
-  .tour-replay-btn {
+  .tour-replay-btn,
+  .sidebar-collapse-btn {
     width: 44px;
     height: 44px;
   }

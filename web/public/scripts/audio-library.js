@@ -17,12 +17,12 @@ function _audioLibCardHtml(t) {
       <button type="button" class="audio-card-play-btn" data-audio-play aria-label="Играть/пауза">▶</button>
       <button type="button" class="audio-card-icon-btn" data-audio-stop aria-label="Остановить полностью">⏹</button>
       <input type="range" class="audio-card-volume" data-audio-volume min="0" max="1" step="0.01" value="${t.volume}">
-    </div>
-    <div class="audio-card-actions">
-      <button type="button" class="audio-card-icon-btn" data-audio-category aria-label="Сменить категорию (сейчас: ${isMusic ? 'фоновая музыка' : 'аудио эффект'})">${isMusic ? '🎵' : '🔊'}</button>
-      <button type="button" class="audio-card-icon-btn${loopOn ? ' active' : ''}" data-audio-loop aria-pressed="${loopOn}" aria-label="Зацикливание">🔁</button>
-      <button type="button" class="audio-card-icon-btn" data-audio-rename aria-label="Переименовать">✎</button>
-      <button type="button" class="audio-card-icon-btn" data-audio-delete aria-label="Удалить">🗑</button>
+      <div class="audio-card-actions">
+        <button type="button" class="audio-card-icon-btn" data-audio-category aria-label="Сменить категорию (сейчас: ${isMusic ? 'фоновая музыка' : 'аудио эффект'})">${isMusic ? '🎵' : '🔊'}</button>
+        <button type="button" class="audio-card-icon-btn${loopOn ? ' active' : ''}" data-audio-loop aria-pressed="${loopOn}" aria-label="Зацикливание">🔁</button>
+        <button type="button" class="audio-card-icon-btn" data-audio-rename aria-label="Переименовать">✎</button>
+        <button type="button" class="audio-card-icon-btn" data-audio-delete aria-label="Удалить">🗑</button>
+      </div>
     </div>
   </div>`;
 }
@@ -385,10 +385,10 @@ function _audioPresetCardHtml(p) {
       <div class="audio-preset-tracks">${tracksHtml}</div>
       <div class="audio-card-row">
         <button type="button" class="audio-card-play-btn${isActive ? ' playing' : ''}" data-preset-play aria-label="Запустить/остановить пресет">${isActive ? '⏸' : '▶'}</button>
-      </div>
-      <div class="audio-card-actions">
-        <button type="button" class="audio-card-icon-btn" data-preset-edit aria-label="Редактировать пресет">✎</button>
-        <button type="button" class="audio-card-icon-btn" data-preset-delete aria-label="Удалить пресет">🗑</button>
+        <div class="audio-card-actions">
+          <button type="button" class="audio-card-icon-btn" data-preset-edit aria-label="Редактировать пресет">✎</button>
+          <button type="button" class="audio-card-icon-btn" data-preset-delete aria-label="Удалить пресет">🗑</button>
+        </div>
       </div>
     </div>
   </div>`;

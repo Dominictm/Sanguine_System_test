@@ -4228,54 +4228,92 @@ describe('API — integration', () => {
       else await fs.unlink(path.join(modDir, 'scene_notes.md')).catch(() => {});
     });
 
-    describe('GET/PUT scene-notes (scene_notes.md) — тикет 3.5-BE', () => {
+    describe('GET/PUT scene-notes (scene_notes.md) — тикет 3.5-BE + запись сцены по сессиям', () => {
       it('PUT — неизвестный модуль → 404', async () => {
         const { status } = await apiJson(`/api/chronicles/__nochron__/modules/__nomod__/scene-note${CITY}`,
-          { method: 'PUT', body: JSON.stringify({ heading: 'Сцена 1', text: 'x' }) });
+          { method: 'PUT', body: JSON.stringify({ heading: 'Сцена 1', session: 1, text: 'x' }) });
         assert.equal(status, 404);
       });
       it('PUT — пустой heading → 400', async () => {
         if (!modDir) return;
         const { status } = await apiJson(`/api/chronicles/${encodeURIComponent(chr)}/modules/${encodeURIComponent(mod)}/scene-note${CITY}`,
-          { method: 'PUT', body: JSON.stringify({ text: 'x' }) });
+          { method: 'PUT', body: JSON.stringify({ session: 1, text: 'x' }) });
         assert.equal(status, 400);
       });
-      it('(1) PUT на несуществующий scene_notes.md создаёт его с одной секцией', async () => {
+      it('PUT — без номера сессии (или некорректный) → 400', async () => {
+        if (!modDir) return;
+        const { status } = await apiJson(`/api/chronicles/${encodeURIComponent(chr)}/modules/${encodeURIComponent(mod)}/scene-note${CITY}`,
+          { method: 'PUT', body: JSON.stringify({ heading: 'Сцена 1', text: 'x' }) });
+        assert.equal(status, 400);
+      });
+      it('(1) PUT на несуществующий scene_notes.md создаёт его с одной секцией и записью «### Сессия N»', async () => {
         if (!modDir) return;
         await fs.unlink(path.join(modDir, 'scene_notes.md')).catch(() => {});
         const put = await apiJson(`/api/chronicles/${encodeURIComponent(chr)}/modules/${encodeURIComponent(mod)}/scene-note${CITY}`,
-          { method: 'PUT', body: JSON.stringify({ heading: 'Сцена 1', text: 'Первая заметка.' }) });
+          { method: 'PUT', body: JSON.stringify({ heading: 'Сцена 1', session: 1, text: 'Первая заметка.' }) });
         assert.equal(put.status, 200);
         assert.ok(put.body.ok);
         const raw = await fs.readFile(path.join(modDir, 'scene_notes.md'), 'utf-8');
-        assert.match(raw, /## Сцена 1\n\nПервая заметка\./);
+        assert.match(raw, /## Сцена 1[\s\S]*### Сессия 1\n\nПервая заметка\./);
       });
       it('(2) второй PUT с другим heading добавляет вторую секцию, не трогая первую', async () => {
         if (!modDir) return;
         const put = await apiJson(`/api/chronicles/${encodeURIComponent(chr)}/modules/${encodeURIComponent(mod)}/scene-note${CITY}`,
-          { method: 'PUT', body: JSON.stringify({ heading: 'Сцена 2', text: 'Вторая заметка.' }) });
+          { method: 'PUT', body: JSON.stringify({ heading: 'Сцена 2', session: 1, text: 'Вторая заметка.' }) });
         assert.equal(put.status, 200);
         const raw = await fs.readFile(path.join(modDir, 'scene_notes.md'), 'utf-8');
-        assert.match(raw, /## Сцена 1\n\nПервая заметка\./);
-        assert.match(raw, /## Сцена 2\n\nВторая заметка\./);
+        assert.match(raw, /## Сцена 1[\s\S]*### Сессия 1\n\nПервая заметка\./);
+        assert.match(raw, /## Сцена 2[\s\S]*### Сессия 1\n\nВторая заметка\./);
       });
-      it('(3) повторный PUT с тем же heading заменяет только тело этой секции', async () => {
+      it('(3) повторный PUT с тем же heading И той же сессией заменяет только тело этой записи', async () => {
         if (!modDir) return;
         const put = await apiJson(`/api/chronicles/${encodeURIComponent(chr)}/modules/${encodeURIComponent(mod)}/scene-note${CITY}`,
-          { method: 'PUT', body: JSON.stringify({ heading: 'Сцена 1', text: 'Обновлённая первая заметка.' }) });
+          { method: 'PUT', body: JSON.stringify({ heading: 'Сцена 1', session: 1, text: 'Обновлённая первая заметка.' }) });
         assert.equal(put.status, 200);
         const raw = await fs.readFile(path.join(modDir, 'scene_notes.md'), 'utf-8');
-        assert.match(raw, /## Сцена 1\n\nОбновлённая первая заметка\./);
-        assert.doesNotMatch(raw, /## Сцена 1\n\nПервая заметка\./);
-        assert.match(raw, /## Сцена 2\n\nВторая заметка\./, 'вторая секция не должна была пострадать');
+        assert.match(raw, /### Сессия 1\n\nОбновлённая первая заметка\./);
+        assert.doesNotMatch(raw, /Первая заметка\.\n/, 'старый текст записи сессии 1 должен быть заменён, а не оставлен рядом');
+        assert.match(raw, /## Сцена 2[\s\S]*### Сессия 1\n\nВторая заметка\./, 'вторая секция не должна была пострадать');
       });
-      it('(4) GET возвращает объект с обоими ключами разом', async () => {
+      it('(5) PUT с тем же heading, но ДРУГОЙ сессией — добавляет вторую запись к той же сцене, не трогая первую (запрос пользователя: сцена может доигрываться в нескольких сессиях)', async () => {
+        if (!modDir) return;
+        const put = await apiJson(`/api/chronicles/${encodeURIComponent(chr)}/modules/${encodeURIComponent(mod)}/scene-note${CITY}`,
+          { method: 'PUT', body: JSON.stringify({ heading: 'Сцена 1', session: 3, text: 'Продолжение в сессии 3.' }) });
+        assert.equal(put.status, 200);
+        const raw = await fs.readFile(path.join(modDir, 'scene_notes.md'), 'utf-8');
+        assert.match(raw, /### Сессия 1\n\nОбновлённая первая заметка\./, 'запись сессии 1 должна остаться нетронутой');
+        assert.match(raw, /### Сессия 3\n\nПродолжение в сессии 3\./, 'не добавилась вторая запись для той же сцены');
+      });
+      it('(4) GET возвращает по каждой сцене СПИСОК записей с номерами сессий', async () => {
         if (!modDir) return;
         const { status, body } = await apiJson(
           `/api/chronicles/${encodeURIComponent(chr)}/modules/${encodeURIComponent(mod)}/scene-notes${CITY}`);
         assert.equal(status, 200);
-        assert.equal(body['Сцена 1'], 'Обновлённая первая заметка.');
-        assert.equal(body['Сцена 2'], 'Вторая заметка.');
+        assert.ok(Array.isArray(body['Сцена 1']), 'GET scene-notes не возвращает массив записей на сцену');
+        assert.deepEqual(body['Сцена 1'], [
+          { session: 1, text: 'Обновлённая первая заметка.' },
+          { session: 3, text: 'Продолжение в сессии 3.' },
+        ]);
+        assert.deepEqual(body['Сцена 2'], [{ session: 1, text: 'Вторая заметка.' }]);
+      });
+      it('(6) старый плоский формат (тело сцены без ###-детей) не теряется — отдаётся первой записью с session:null', async () => {
+        if (!modDir) return;
+        await fs.writeFile(path.join(modDir, 'scene_notes.md'),
+          '# Заметки сцен\n\n## Сцена 5\n\nСтарая заметка до появления сессий.\n', 'utf-8');
+        const { status, body } = await apiJson(
+          `/api/chronicles/${encodeURIComponent(chr)}/modules/${encodeURIComponent(mod)}/scene-notes${CITY}`);
+        assert.equal(status, 200);
+        assert.deepEqual(body['Сцена 5'], [{ session: null, text: 'Старая заметка до появления сессий.' }]);
+        // Новая запись сессии добавляется К старой, не замещая её
+        const put = await apiJson(`/api/chronicles/${encodeURIComponent(chr)}/modules/${encodeURIComponent(mod)}/scene-note${CITY}`,
+          { method: 'PUT', body: JSON.stringify({ heading: 'Сцена 5', session: 2, text: 'Новая запись сессии 2.' }) });
+        assert.equal(put.status, 200);
+        const after = await apiJson(
+          `/api/chronicles/${encodeURIComponent(chr)}/modules/${encodeURIComponent(mod)}/scene-notes${CITY}`);
+        assert.deepEqual(after.body['Сцена 5'], [
+          { session: null, text: 'Старая заметка до появления сессий.' },
+          { session: 2, text: 'Новая запись сессии 2.' },
+        ]);
       });
     });
 
@@ -4920,15 +4958,15 @@ test('source-guard: session-screen.js — явный хелпер _sessSyncScene
   assert.ok(js.includes('function _sessSyncSceneNavVisibility'), 'нет функции _sessSyncSceneNavVisibility');
   const fnMatch = js.match(/function _sessSyncSceneNavVisibility\(\)\s*\{[\s\S]*?\n\}/);
   assert.ok(fnMatch, 'не найдено тело _sessSyncSceneNavVisibility');
-  // Тикет 3.2: #sess-mod-sel заменён карточками #sess-mod-cards — «модуль
-  // выбран» теперь читается из модульной переменной _sessCurrentMod, а не
-  // .value несуществующего селекта (иначе exception при первом же вызове).
-  assert.ok(!/sess-mod-sel/.test(fnMatch[0]), '_sessSyncSceneNavVisibility всё ещё ссылается на удалённый #sess-mod-sel');
+  // «Модуль выбран» читается из модульной переменной _sessCurrentMod, а не
+  // #sess-mod-sel.value напрямую — та же переменная служит guard'ом от гонки
+  // устаревших асинхронных ответов в _sessLoadModule, так что оба места
+  // должны сверяться с одним источником истины.
   assert.ok(/chrSel\.value\s*&&\s*_sessCurrentMod\s*&&\s*_sessBlocks\.length/.test(fnMatch[0]),
     '_sessSyncSceneNavVisibility не проверяет chrSel.value && _sessCurrentMod && _sessBlocks.length');
   // Вызывается в конце _sessClearModule() и в начале/конце _sessLoadModule(),
   // а не только через побочный эффект веток — иначе риск регрессии при
-  // будущих правках (тикет 3.2 карточек модулей).
+  // будущих правках.
   const clearBody = js.match(/function _sessClearModule\(\)\s*\{[\s\S]*?\n\}/);
   assert.ok(clearBody && clearBody[0].includes('_sessSyncSceneNavVisibility()'), '_sessClearModule() не вызывает _sessSyncSceneNavVisibility()');
   const loadBody = js.match(/async function _sessLoadModule\([\s\S]*?\n\}/);
@@ -4936,45 +4974,76 @@ test('source-guard: session-screen.js — явный хелпер _sessSyncScene
   assert.ok(syncCalls.length >= 2, `_sessLoadModule() должен вызывать _sessSyncSceneNavVisibility() в начале и в конце (найдено ${syncCalls.length} вызовов)`);
 });
 
-// ── W4 тикет 3.2: модули карточками вместо <select> ───────────────────────────
+// ── Модули на «Сессии» выбираются <select>-ом, в одной строке с хроникой
+//    (карточки #sess-mod-cards из тикета 3.2 убраны по запросу пользователя —
+//    не помещались в компактный ряд полей) ────────────────────────────────
 
-test('source-guard: index.html — #sess-mod-sel заменён карточками #sess-mod-cards, #sess-chr-sel остаётся селектом', () => {
+test('source-guard: index.html — #sess-mod-sel select рядом с #sess-chr-sel в одной строке .sess-picker, карточек модулей нет', () => {
   const html = require('fs').readFileSync(path.join(__dirname, '../public/index.html'), 'utf-8');
-  assert.ok(!html.includes('id="sess-mod-sel"'), 'старый <select id="sess-mod-sel"> всё ещё в разметке');
-  assert.ok(html.includes('id="sess-mod-cards"'), 'нет контейнера карточек модулей #sess-mod-cards');
+  assert.ok(html.includes('id="sess-mod-sel"'), 'нет <select id="sess-mod-sel">');
   assert.ok(html.includes('id="sess-chr-sel"'), '#sess-chr-sel (выбор хроники) не должен исчезать — остаётся select');
-  const cardsMatch = html.match(/<div id="sess-mod-cards"[^>]*>/);
-  assert.ok(cardsMatch && /class="[^"]*\bchd-mod-grid\b/.test(cardsMatch[0]),
-    '#sess-mod-cards не переиспользует класс .chd-mod-grid (дублирование CSS вместо переиспользования)');
+  assert.ok(!html.includes('id="sess-mod-cards"'), 'контейнер карточек модулей #sess-mod-cards всё ещё в разметке');
+  const pickerMatch = html.match(/<div class="sess-picker">[\s\S]*?<\/div>\s*<\/div>/);
+  assert.ok(pickerMatch, 'не найден блок .sess-picker');
+  assert.ok(pickerMatch[0].includes('id="sess-chr-sel"') && pickerMatch[0].includes('id="sess-mod-sel"'),
+    '#sess-chr-sel и #sess-mod-sel должны быть внутри одного .sess-picker (одна строка)');
 });
 
-test('source-guard: session-screen.js — _sessLoadModules рендерит карточки модулей через renderModuleCardInChr в #sess-mod-cards', () => {
+// ── Навигация по сценам (#sess-scene-nav) закреплена по нижнему краю рабочей
+//    области сессии (position:sticky в её собственном скролл-контейнере
+//    .page), а не встроена в .sess-picker — чтобы оставаться на виду при
+//    скролле длинного текста сценария (запрос пользователя) ─────────────────
+
+test('source-guard: index.html — #sess-scene-nav вынесена из .sess-picker, лежит отдельным блоком в конце #page-session', () => {
+  const html = require('fs').readFileSync(path.join(__dirname, '../public/index.html'), 'utf-8');
+  const pickerMatch = html.match(/<div class="sess-picker">[\s\S]*?<\/div>\s*<\/div>/);
+  assert.ok(pickerMatch, 'не найден блок .sess-picker');
+  assert.ok(!pickerMatch[0].includes('id="sess-scene-nav"'),
+    '#sess-scene-nav больше не должна жить внутри .sess-picker — вынесена в отдельный sticky-блок');
+  const sectionMatch = html.match(/<section id="page-session"[\s\S]*?<\/section>/);
+  assert.ok(sectionMatch, 'не найдена секция #page-session');
+  assert.ok(sectionMatch[0].includes('id="sess-scene-nav"'), '#sess-scene-nav отсутствует внутри #page-session');
+  assert.ok(sectionMatch[0].includes('id="sess-prev"') && sectionMatch[0].includes('id="sess-next"'),
+    'кнопки навигации по сценам (#sess-prev/#sess-next) не найдены внутри #page-session');
+});
+
+test('source-guard: styles.css — .sess-scene-nav закреплена (position:sticky; bottom:0) и центрирована', () => {
+  const css = require('fs').readFileSync(path.join(__dirname, '../public/styles.css'), 'utf-8');
+  const navMatch = css.match(/\.sess-scene-nav\s*\{[\s\S]*?\n\}/);
+  assert.ok(navMatch, 'не найдено правило .sess-scene-nav');
+  assert.ok(/position:\s*sticky/.test(navMatch[0]), '.sess-scene-nav не position:sticky');
+  assert.ok(/bottom:\s*0/.test(navMatch[0]), '.sess-scene-nav не закреплена к bottom:0');
+  assert.ok(/justify-content:\s*center/.test(navMatch[0]), '.sess-scene-nav не центрирована (justify-content:center)');
+  // hidden выставляется через JS-свойство nav.hidden (session-screen.js) — без
+  // явного [hidden]{display:none} авторский display:flex выше в каскаде
+  // молча забивает UA-правило независимо от специфичности (порядок origin
+  // важнее specificity), и панель осталась бы видна при пустом состоянии.
+  assert.ok(/\.sess-scene-nav\[hidden\]\s*\{[\s\S]*?display:\s*none/.test(css),
+    'нет явного .sess-scene-nav[hidden] { display: none } — авторский display:flex выше по каскаду перевесит UA-правило [hidden]');
+});
+
+test('source-guard: session-screen.js — _sessLoadModules заполняет #sess-mod-sel опциями модулей (disabled на время загрузки)', () => {
   const js = require('fs').readFileSync(path.join(__dirname, '../public/scripts/session-screen.js'), 'utf-8');
-  // Комментарии могут упоминать старый id в качестве истории/документации —
-  // важно, чтобы кода, реально обращающегося к нему, не осталось.
-  assert.ok(!js.includes("getElementById('sess-mod-sel')"), 'session-screen.js всё ещё обращается к удалённому #sess-mod-sel через getElementById');
+  assert.ok(!js.includes("getElementById('sess-mod-cards')"), 'session-screen.js всё ещё обращается к удалённому #sess-mod-cards');
+  assert.ok(!js.includes('renderModuleCardInChr'), 'session-screen.js всё ещё рендерит карточки модулей (renderModuleCardInChr) — должен быть select');
   const fnMatch = js.match(/async function _sessLoadModules\([\s\S]*?\n\}/);
   assert.ok(fnMatch, 'не найдено тело _sessLoadModules');
-  assert.ok(fnMatch[0].includes('renderModuleCardInChr'), '_sessLoadModules не вызывает renderModuleCardInChr (модули.js) для рендера карточек');
-  assert.ok(fnMatch[0].includes("getElementById('sess-mod-cards')"), '_sessLoadModules не пишет в #sess-mod-cards');
+  assert.ok(fnMatch[0].includes("getElementById('sess-mod-sel')"), '_sessLoadModules не обращается к #sess-mod-sel');
+  assert.ok(/modSel\.disabled\s*=\s*true/.test(fnMatch[0]), '_sessLoadModules не отключает select на время загрузки списка модулей');
+  assert.ok(/modSel\.disabled\s*=\s*false/.test(fnMatch[0]), '_sessLoadModules не включает select обратно после загрузки');
+  assert.ok(/<option/.test(fnMatch[0]), '_sessLoadModules не строит <option> для списка модулей');
 });
 
-test('source-guard: session-screen.js — loading-state на время загрузки модулей и обучающий empty-state при нуле модулей', () => {
+test('source-guard: session-screen.js — восстановление выбранного модуля выставляет modSel.value, смена select открывает сессию через _sessLoadModule', () => {
   const js = require('fs').readFileSync(path.join(__dirname, '../public/scripts/session-screen.js'), 'utf-8');
-  const fnMatch = js.match(/async function _sessLoadModules\([\s\S]*?\n\}/);
-  assert.ok(fnMatch, 'не найдено тело _sessLoadModules');
-  assert.ok(/loading-state/.test(fnMatch[0]), '_sessLoadModules не показывает .loading-state на время fetch списка модулей');
-  assert.ok(/chars-empty/.test(fnMatch[0]), '_sessLoadModules не показывает обучающий empty-state (принцип .chars-empty) при нуле модулей');
-});
-
-test('source-guard: session-screen.js — восстановление выбранного модуля (chd-mod-card--active) и клик по карточке открывают сессию через _sessLoadModule', () => {
-  const js = require('fs').readFileSync(path.join(__dirname, '../public/scripts/session-screen.js'), 'utf-8');
-  assert.ok(js.includes('chd-mod-card--active'), 'нет модификатора .chd-mod-card--active для восстановленного/выбранного модуля');
-  const clickMatch = js.match(/document\.getElementById\('page-session'\)\.addEventListener\('click', async e => \{[\s\S]*?\n\}\);/);
-  assert.ok(clickMatch, 'не найден делегированный click-обработчик #page-session');
-  assert.ok(clickMatch[0].includes(".chd-mod-del-btn'"), 'делегированный клик по #page-session не защищён от .chd-mod-del-btn (кнопка удаления модуля должна игнорироваться)');
-  assert.ok(clickMatch[0].includes(".chd-mod-card'"), 'делегированный клик по #page-session не матчит .chd-mod-card');
-  assert.ok(/_sessLoadModule\(chr, mod\)/.test(clickMatch[0]), 'клик по карточке модуля не вызывает _sessLoadModule(chr, mod)');
+  const loadModulesFn = js.match(/async function _sessLoadModules\([\s\S]*?\n\}/);
+  assert.ok(loadModulesFn, 'не найдено тело _sessLoadModules');
+  assert.ok(/modSel\.value\s*=\s*preselect/.test(loadModulesFn[0]),
+    '_sessLoadModules не восстанавливает сохранённый модуль через modSel.value = preselect');
+  const changeMatch = js.match(/document\.getElementById\('sess-mod-sel'\)\.addEventListener\('change', async e => \{[\s\S]*?\n\}\);/);
+  assert.ok(changeMatch, 'не найден обработчик change на #sess-mod-sel');
+  assert.ok(/_sessLoadModule\(chr, e\.target\.value\)/.test(changeMatch[0]), 'смена #sess-mod-sel не вызывает _sessLoadModule(chr, e.target.value)');
+  assert.ok(/_sessClearModule\(\)/.test(changeMatch[0]), 'сброс #sess-mod-sel в пустое значение не вызывает _sessClearModule()');
 });
 
 test('source-guard: session-screen.js — _sessLoadModule защищён от гонки устаревших асинхронных ответов', () => {
@@ -5022,30 +5091,6 @@ test('source-guard: session-screen.js — _sessLoadModule защищён от г
   const firstGuardIdx = body.indexOf('if (_sessCurrentMod !== mod) return;');
   assert.ok(ensureIdx !== -1 && firstGuardIdx > ensureIdx && firstGuardIdx < fetchIdx,
     'await ensureCharsLoaded() не защищён guard-проверкой перед основным fetch');
-});
-
-test('source-guard: session-screen.js — клик по бейджу «Финал» на карточке модуля Сессии открывает превью финала (data-open-finale)', () => {
-  // Баг 3.2/Important: renderModuleCardInChr (modules.js) рендерит кликабельный
-  // (визуально) бейдж <span data-open-finale> для модулей с hasFinale — в
-  // модалке хроники (modules.js) клик по нему перехватывается раньше общего
-  // клика по карточке и открывает openFinalePreview. На странице Сессия
-  // делегированный обработчик #page-session этого не делал — клик по бейджу
-  // молча проваливался в общую логику «открыть модуль» (ложная аффорданс).
-  const js = require('fs').readFileSync(path.join(__dirname, '../public/scripts/session-screen.js'), 'utf-8');
-  const clickMatch = js.match(/document\.getElementById\('page-session'\)\.addEventListener\('click', async e => \{[\s\S]*?\n\}\);/);
-  assert.ok(clickMatch, 'не найден делегированный click-обработчик #page-session');
-  const body = clickMatch[0];
-  assert.ok(/\[data-open-finale\]/.test(body),
-    'делегированный клик по #page-session не матчит [data-open-finale] — бейдж «Финал» не обрабатывается');
-  assert.ok(/openFinalePreview\(/.test(body),
-    'делегированный клик по #page-session не вызывает openFinalePreview для бейджа «Финал»');
-  // Перехват бейджа обязан стоять РАНЬШЕ общей ветки .chd-mod-card — иначе
-  // общий клик по карточке (закрывающий closest() раньше) откроет модуль
-  // вместо превью финала, как это уже устроено в modules.js.
-  const finaleIdx  = body.indexOf('[data-open-finale]');
-  const modCardIdx = body.indexOf(".chd-mod-card'");
-  assert.ok(finaleIdx !== -1 && modCardIdx !== -1 && finaleIdx < modCardIdx,
-    'ветка [data-open-finale] должна перехватывать клик раньше общей ветки .chd-mod-card');
 });
 
 // ── W5 тикет 3.5-FE: блок «Заметка сцены» ─────────────────────────────────────
@@ -5194,11 +5239,15 @@ test('source-guard: session-screen.js — после guard совпадения 
     '_sessRenderNotes: после подтверждения актуальности модуля видимая #sess-notes не досинхронизируется с сохранённым text');
 });
 
-test('source-guard: styles.css — кнопка удаления модуля скрыта в #sess-mod-cards (Сессия — режим игры, не управления модулями)', () => {
+test('source-guard: styles.css — стрелки навигации по сценам (.sess-scene-btn) подогнаны под размер select-полей, без слова «Сцена»', () => {
   const css = require('fs').readFileSync(path.join(__dirname, '../public/styles.css'), 'utf-8');
-  const ruleMatch = css.match(/#sess-mod-cards \.chd-mod-del-btn\s*\{[^}]*\}/);
-  assert.ok(ruleMatch, 'не найдено правило #sess-mod-cards .chd-mod-del-btn');
-  assert.ok(/display:\s*none/.test(ruleMatch[0]), '#sess-mod-cards .chd-mod-del-btn не скрыт через display: none');
+  const html = require('fs').readFileSync(path.join(__dirname, '../public/index.html'), 'utf-8');
+  assert.ok(css.includes('.sess-scene-btn'), 'нет класса .sess-scene-btn для кнопок навигации по сценам');
+  const ruleMatch = css.match(/\.sess-scene-btn\s*\{[^}]*\}/);
+  assert.ok(ruleMatch, 'не найдено тело правила .sess-scene-btn');
+  assert.ok(/padding:\s*5px 14px/.test(ruleMatch[0]) && /font-size:\s*var\(--fs-xl\)/.test(ruleMatch[0]),
+    '.sess-scene-btn не подогнан под размер .form-control (padding/font-size)');
+  assert.ok(!/←\s*Сцена|Сцена\s*→/.test(html), 'кнопки навигации по сценам всё ещё содержат слово «Сцена» — должны быть только стрелки');
 });
 
 // ── W3 тикет 3.4: sticky-панель «Аудио-пресеты» + «Заметки сессии» ────────────
@@ -5252,13 +5301,81 @@ test('source-guard: session-screen.js — агрегат заметок для _
     '#sess-to-log не читает заметки сцен из _sessSceneNotesCache для агрегата');
   assert.ok(/_sessBlocks\.find\(/.test(fnBody),
     '#sess-to-log не сопоставляет отфильтрованные сцены с _sessBlocks (сырой heading — ключ кэша заметок)');
+  // Сцена хранит СПИСОК записей по сессиям (см. _sessCurrentSessionNum) — в
+  // агрегат должна попадать запись ИМЕННО текущей (ещё не записанной) сессии,
+  // а не вся история сцены (прошлые сессии уже отражены в своих записях).
+  assert.ok(/entries\.find\(\s*e\s*=>\s*e\.session\s*===\s*currentNum\s*\)/.test(fnBody),
+    '#sess-to-log не выбирает из истории сцены запись именно текущей сессии (entries.find по session === currentNum)');
 });
 
-test('source-guard: modules.js — объявляет общий хелпер _filterUnrecordedScenes и переиспользует его в renderModulePage (не дублирует фильтр)', () => {
+test('source-guard: session-screen.js — _sessCurrentSessionNum() = число уже записанных сессий + 1, используется и в заметке сцены, и в её сохранении', () => {
+  const js = require('fs').readFileSync(path.join(__dirname, '../public/scripts/session-screen.js'), 'utf-8');
+  const fnMatch = js.match(/function _sessCurrentSessionNum\(\) \{[\s\S]*?\n\}/);
+  assert.ok(fnMatch, 'не найдена функция _sessCurrentSessionNum');
+  assert.ok(/_sessDetail\?\.sessions\?\.length/.test(fnMatch[0]) && /\+\s*1/.test(fnMatch[0]),
+    '_sessCurrentSessionNum не вычисляется как (число сохранённых сессий) + 1');
+  const renderBody = js.match(/function _sessRenderSceneNote\(\) \{[\s\S]*?\n\}/)[0];
+  assert.ok(/_sessCurrentSessionNum\(\)/.test(renderBody),
+    '_sessRenderSceneNote не использует _sessCurrentSessionNum() — не сможет привязать заметку к текущей сессии');
+  assert.ok(/session:\s*session/.test(renderBody) || /body:\s*JSON\.stringify\(\{\s*heading:\s*h,\s*session/.test(renderBody),
+    '_sessRenderSceneNote не отправляет номер сессии в PUT /scene-note');
+});
+
+test('source-guard: session-screen.js — история прошлых записей сцены рендерится только для чтения (без своих textarea/кнопок)', () => {
+  const js = require('fs').readFileSync(path.join(__dirname, '../public/scripts/session-screen.js'), 'utf-8');
+  assert.ok(js.includes('function _sessSceneNoteHistoryHtml'), 'нет функции _sessSceneNoteHistoryHtml');
+  const fnBody = js.match(/function _sessSceneNoteHistoryHtml\([\s\S]*?\n\}/)[0];
+  assert.ok(!/<textarea|<button/.test(fnBody), '_sessSceneNoteHistoryHtml рендерит textarea/button — история должна быть только для чтения');
+  assert.ok(/escHtml\(/.test(fnBody), '_sessSceneNoteHistoryHtml не экранирует текст заметки (escHtml)');
+});
+
+test('source-guard: modules.js — объявляет общий хелпер _filterUnrecordedScenes (переиспользуется session-screen.js для агрегата префилла)', () => {
   const js = require('fs').readFileSync(path.join(__dirname, '../public/scripts/modules.js'), 'utf-8');
   assert.ok(js.includes('function _filterUnrecordedScenes('), 'нет функции _filterUnrecordedScenes');
-  assert.ok(/const sceneOpts = _filterUnrecordedScenes\(/.test(js),
-    'renderModulePage не переиспользует _filterUnrecordedScenes для sceneOpts (дублирует логику фильтра)');
+});
+
+// ── Ручной выбор сцены («+ Сцена/событие…») убран из формы «+ Запись сессии» —
+//    сцены и заметки к ним уже перечисляются на экране «Сессия» (запрос
+//    пользователя: дублирующий UI-элемент только путает) ─────────────────────
+
+test('source-guard: modules.js — форма «+ Запись сессии» больше не содержит ручного выбора сцены (#sess-scene-pick)', () => {
+  const js = require('fs').readFileSync(path.join(__dirname, '../public/scripts/modules.js'), 'utf-8');
+  assert.ok(!js.includes('sess-scene-pick'), 'modules.js всё ещё ссылается на убранный #sess-scene-pick');
+  assert.ok(!js.includes('SCENE_OFF_SCRIPT'), 'modules.js всё ещё ссылается на убранную константу SCENE_OFF_SCRIPT');
+  assert.ok(js.includes("id=\"sess-scenes\""), '#sess-scenes (свободный ввод «Сыграно сцен») не должен исчезать вместе с пикером');
+});
+
+// ── Удаление записи сессии (не только редактирование) ────────────────────────
+
+test('source-guard: modules.js — карточка записи сессии содержит кнопку удаления (.modp-session-delete), делегирование клика вызывает _deleteSessionEntry', () => {
+  const js = require('fs').readFileSync(path.join(__dirname, '../public/scripts/modules.js'), 'utf-8');
+  assert.ok(/class="modp-session-delete"[^>]*data-sess-idx/.test(js), 'нет кнопки .modp-session-delete с data-sess-idx в шаблоне карточки сессии');
+  const delegation = js.match(/document\.getElementById\('modp-panel-sessions'\)\.addEventListener\('click', e => \{[\s\S]*?\n\}\);/);
+  assert.ok(delegation, 'не найдено делегирование клика на #modp-panel-sessions');
+  assert.ok(/modp-session-delete/.test(delegation[0]) && /_deleteSessionEntry/.test(delegation[0]),
+    'делегирование клика не обрабатывает .modp-session-delete через _deleteSessionEntry');
+});
+
+test('source-guard: modules.js — _deleteSessionEntry подтверждает через showConfirm(danger) и шлёт DELETE на /session/:idx', () => {
+  const js = require('fs').readFileSync(path.join(__dirname, '../public/scripts/modules.js'), 'utf-8');
+  const fnMatch = js.match(/async function _deleteSessionEntry\([\s\S]*?\n\}/);
+  assert.ok(fnMatch, 'не найдена функция _deleteSessionEntry');
+  const fn = fnMatch[0];
+  assert.ok(/showConfirm\(/.test(fn) && /danger:\s*true/.test(fn), '_deleteSessionEntry не спрашивает подтверждение через showConfirm({danger:true})');
+  assert.ok(/method:\s*'DELETE'/.test(fn), '_deleteSessionEntry не шлёт DELETE-запрос');
+  assert.ok(/\/session\/\$\{idx\}/.test(fn), '_deleteSessionEntry не обращается к /session/:idx');
+  assert.ok(/_reloadModulePage\(\)/.test(fn), '_deleteSessionEntry не перезагружает страницу модуля после удаления');
+});
+
+test('source-guard: routes/modules/sessions.js — DELETE /api/chronicles/:chr/modules/:mod/session/:idx удаляет запись и пересчитывает нумерацию', () => {
+  const js = require('fs').readFileSync(path.join(__dirname, '../routes/modules/sessions.js'), 'utf-8');
+  const routeMatch = js.match(/router\.delete\('\/api\/chronicles\/:chr\/modules\/:mod\/session\/:idx',[\s\S]*?\n {2}\}\);/);
+  assert.ok(routeMatch, 'не найден DELETE-роут /api/chronicles/:chr/modules/:mod/session/:idx');
+  const route = routeMatch[0];
+  assert.ok(/sessions\.splice\(/.test(route), 'DELETE-роут не вырезает запись из массива sessions (splice)');
+  assert.ok(/_writeSessionsFile\(/.test(route), 'DELETE-роут не перезаписывает sessions.md через _writeSessionsFile (нумерация «Сессия N» пересчитывается по позиции в массиве)');
+  assert.ok(/i\s*<\s*0\s*\|\|\s*i\s*>=\s*sessions\.length/.test(route) || /!Number\.isInteger\(i\)/.test(route),
+    'DELETE-роут не проверяет валидность индекса (404 на несуществующую запись)');
 });
 
 test('source-guard: modules.js — объявляет модульную переменную _pendingModulePrefill и обрабатывает её в loadModulePage', () => {
@@ -5320,19 +5437,15 @@ test('source-guard: modules.js — применение _pendingModulePrefill н
 });
 
 // Регрессия ревью коммита 49d7bed (P2 design-аудит «карточки модулей недоступны
-// с клавиатуры»): keydown-обработчик .chd-mod-card, добавленный тем коммитом,
-// НЕ содержал ту же проверку-исключение .chd-mod-del-btn, что уже есть у
-// соседнего click-обработчика (modules.js:224) и у аналогичного keydown в
-// session-screen.js. Из-за этого Tab на кнопку удаления модуля → Enter вызывал
-// e.preventDefault() и открывал модуль вместо срабатывания удаления — клавиатурный
-// пользователь полностью терял возможность удалить модуль в модалке хроники
-// (в отличие от экрана Сессии, где эта кнопка скрыта CSS-ом и потому недостижима
-// с клавиатуры). Guard: оба keydown-обработчика должны игнорировать нажатия,
-// пришедшиеся на .chd-mod-del-btn, ДО preventDefault/открытия модуля — иначе
-// будущий рефакторинг может тихо откатить фикс в одном из двух мест.
-test('source-guard: modules.js и session-screen.js — оба keydown-обработчика .chd-mod-card защищены от .chd-mod-del-btn (паритет с click)', () => {
+// с клавиатуры»): keydown-обработчик .chd-mod-card в модалке хроники должен
+// игнорировать нажатия, пришедшиеся на .chd-mod-del-btn, ДО preventDefault/
+// открытия модуля — иначе Tab на кнопку удаления → Enter открывает модуль
+// вместо срабатывания удаления. Экран «Сессия» карточки модулей больше не
+// использует (модуль выбирается через select #sess-mod-sel, нативно доступный
+// с клавиатуры без отдельного keydown-обработчика) — паритет с session-screen.js
+// здесь больше не проверяем, он неприменим.
+test('source-guard: modules.js — keydown-обработчик .chd-mod-card защищён от .chd-mod-del-btn (паритет с click)', () => {
   const modulesJs = require('fs').readFileSync(path.join(__dirname, '../public/scripts/modules.js'), 'utf-8');
-  const sessionJs = require('fs').readFileSync(path.join(__dirname, '../public/scripts/session-screen.js'), 'utf-8');
 
   const modulesKeydown = modulesJs.match(/document\.getElementById\('chr-detail-body'\)\.addEventListener\('keydown', e => \{[\s\S]*?\n\}\);/);
   assert.ok(modulesKeydown, 'не найден делегированный keydown-обработчик #chr-detail-body (.chd-mod-card)');
@@ -5343,12 +5456,79 @@ test('source-guard: modules.js и session-screen.js — оба keydown-обра�
   assert.ok(modulesGuardIdx < modulesPreventIdx,
     'проверка .chd-mod-del-btn в keydown #chr-detail-body должна идти ДО e.preventDefault()/открытия модуля');
 
-  const sessionKeydown = sessionJs.match(/document\.getElementById\('page-session'\)\.addEventListener\('keydown', async e => \{[\s\S]*?\n\}\);/);
-  assert.ok(sessionKeydown, 'не найден делегированный keydown-обработчик #page-session (.chd-mod-card)');
-  const sessionGuardIdx = sessionKeydown[0].indexOf(".chd-mod-del-btn'");
-  const sessionPreventIdx = sessionKeydown[0].indexOf('e.preventDefault()');
-  assert.ok(sessionGuardIdx !== -1,
-    'keydown-обработчик #page-session не защищён от .chd-mod-del-btn (паритет с modules.js должен сохраняться при рефакторинге)');
-  assert.ok(sessionGuardIdx < sessionPreventIdx,
-    'проверка .chd-mod-del-btn в keydown #page-session должна идти ДО e.preventDefault()/открытия сессии');
+  const sessionJs = require('fs').readFileSync(path.join(__dirname, '../public/scripts/session-screen.js'), 'utf-8');
+  assert.ok(!sessionJs.includes('.chd-mod-card'),
+    'session-screen.js всё ещё ссылается на .chd-mod-card — карточки модулей на Сессии заменены select-ом, мёртвый код');
+});
+
+// ══════════════════════════════════════════════════════════════════════════
+// Фиксы по итогам docs/audit/2026-07-28-session-feature-qa-report.md
+// ══════════════════════════════════════════════════════════════════════════
+
+// ── Находка №1: дублирующиеся confirm-диалоги при быстром двойном клике ─────
+
+test('source-guard: utils.js — showConfirm() защищён от повторного вызова, пока предыдущий диалог не резолвился', () => {
+  const js = require('fs').readFileSync(path.join(__dirname, '../public/scripts/utils.js'), 'utf-8');
+  assert.ok(/let _confirmOverlay\s*=\s*null/.test(js), 'нет модульной переменной _confirmOverlay = null');
+  const fnMatch = js.match(/function showConfirm\([\s\S]*?\n\}/);
+  assert.ok(fnMatch, 'не найдена функция showConfirm');
+  const fn = fnMatch[0];
+  const guardIdx  = fn.indexOf('if (_confirmOverlay)');
+  const createIdx = fn.indexOf("ov.id = 'confirm-overlay'");
+  assert.ok(guardIdx !== -1, 'showConfirm не проверяет уже открытый _confirmOverlay в начале');
+  assert.ok(guardIdx !== -1 && createIdx !== -1 && guardIdx < createIdx,
+    'guard от повторного вызова должен идти ДО создания нового #confirm-overlay');
+  assert.ok(/_confirmOverlay\s*=\s*ov/.test(fn), 'showConfirm не запоминает открытый оверлей в _confirmOverlay');
+  assert.ok(/_confirmOverlay\s*=\s*null/.test(fn), 'cleanup() не сбрасывает _confirmOverlay обратно в null — второй showConfirm() навсегда останется заблокирован');
+});
+
+// ── Находка №2: сбой dev-сервера без диагностируемого следа ─────────────────
+
+test('source-guard: wrapper.js — дублирует stdout/stderr в файловый лог (не только inherit в терминал)', () => {
+  const js = require('fs').readFileSync(path.join(__dirname, '../wrapper.js'), 'utf-8');
+  assert.ok(/stdio:\s*\[\s*'inherit'\s*,\s*'pipe'\s*,\s*'pipe'\s*\]/.test(js),
+    'wrapper.js не переключил stdout/stderr на pipe — без этого их нельзя продублировать в файл');
+  assert.ok(js.includes('createWriteStream'), 'wrapper.js не пишет лог в файл (fs.createWriteStream)');
+  assert.ok(js.includes('LOG_DIR'), 'нет константы LOG_DIR для директории лога');
+});
+
+test('source-guard: wrapper.js — неожиданный крэш (не наш restart-код, не наш Ctrl-C) автоперезапускается с лимитом попыток', () => {
+  const js = require('fs').readFileSync(path.join(__dirname, '../wrapper.js'), 'utf-8');
+  assert.ok(/let _shuttingDown\s*=\s*false/.test(js), 'нет флага _shuttingDown, отличающего наш Ctrl-C/SIGTERM от неожиданного падения');
+  assert.ok(/_shuttingDown\s*=\s*true/.test(js), 'обработчики SIGINT/SIGTERM не выставляют _shuttingDown = true');
+  assert.ok(js.includes('CRASH_LIMIT'), 'нет лимита попыток автоперезапуска (CRASH_LIMIT) — риск бесконечного цикла падений');
+  const exitMatch = js.match(/_child\.on\('exit', \(code, signal\) => \{[\s\S]*?\n  \}\);/);
+  assert.ok(exitMatch, 'не найден обработчик exit дочернего процесса');
+  const fn = exitMatch[0];
+  const restartIdx    = fn.indexOf('code === RESTART_CODE');
+  const shuttingIdx   = fn.indexOf('_shuttingDown');
+  const crashCountIdx = fn.indexOf('_crashCount++');
+  assert.ok(restartIdx !== -1 && shuttingIdx !== -1 && crashCountIdx !== -1 && restartIdx < shuttingIdx && shuttingIdx < crashCountIdx,
+    'порядок проверок в exit-обработчике должен быть: RESTART_CODE → _shuttingDown → учёт крэша (иначе наш собственный Ctrl-C может попасть под авто-перезапуск)');
+});
+
+// ── Находка №3: кнопки навигации по сценам не получают disabled на границах ──
+
+test('source-guard: session-screen.js — #sess-prev/#sess-next получают disabled на границах сценария', () => {
+  const js = require('fs').readFileSync(path.join(__dirname, '../public/scripts/session-screen.js'), 'utf-8');
+  const fnMatch = js.match(/function _sessRenderScenario\(\) \{[\s\S]*?\n\}/);
+  assert.ok(fnMatch, 'не найдена функция _sessRenderScenario');
+  const fn = fnMatch[0];
+  assert.ok(/getElementById\('sess-prev'\)\.disabled\s*=\s*\(_sessScene === 0\)/.test(fn),
+    '_sessRenderScenario не выставляет #sess-prev.disabled на первой сцене');
+  assert.ok(/getElementById\('sess-next'\)\.disabled\s*=\s*\(_sessScene === _sessBlocks\.length - 1\)/.test(fn),
+    '_sessRenderScenario не выставляет #sess-next.disabled на последней сцене');
+});
+
+// ── Находка №4: заметки на «не-сценных» блоках молча пропадали из агрегата ──
+
+test('source-guard: session-screen.js — заметки без формального совпадения со сценой попадают в агрегат отдельным блоком «Прочее», а не пропадают', () => {
+  const js = require('fs').readFileSync(path.join(__dirname, '../public/scripts/session-screen.js'), 'utf-8');
+  const fnBody = js.match(/function _sessRenderNotes\(\) \{[\s\S]*?\n\}/)[0];
+  assert.ok(fnBody.includes('includedHeadings'), 'нет множества includedHeadings для отслеживания уже учтённых формальных сцен');
+  assert.ok(/for \(const block of _sessBlocks\)/.test(fnBody),
+    'нет второго прохода по ВСЕМ _sessBlocks (не только по unrecorded) для сбора заметок без формального совпадения');
+  assert.ok(/includedHeadings\.has\(block\.heading\)/.test(fnBody),
+    'второй проход не пропускает уже учтённые в основном списке блоки — рискует задвоить заметку');
+  assert.ok(/Прочее/.test(fnBody), 'нет блока «Прочее» в агрегате для заметок без формального совпадения');
 });

@@ -38,7 +38,22 @@ function showToast(message, type = 'info', duration = 4000) {
   }, duration);
 }
 
+// Единственный открытый оверлей (или null) — защита от повторного вызова
+// showConfirm() до того, как предыдущий диалог резолвится (двойной клик по
+// кнопке-триггеру, дважды вызывающей showConfirm без ожидания первого
+// результата). Без этого гварда каждый вызов создавал НОВЫЙ
+// <div id="confirm-overlay"> (дублирующийся id — невалидный HTML) поверх
+// предыдущего; после подтверждения верхнего нижний оставался на экране
+// полностью интерактивной «сиротой», ссылающейся на устаревшее состояние
+// (например, индекс уже удалённой записи) — см.
+// docs/audit/2026-07-28-session-feature-qa-report.md, находка №1.
+let _confirmOverlay = null;
+
 function showConfirm(message, { danger = false, confirmText = 'Подтвердить', cancelText = 'Отмена' } = {}) {
+  if (_confirmOverlay) {
+    _confirmOverlay.querySelector('#_conf-ok')?.focus();
+    return Promise.resolve(false); // диалог уже открыт — второй (дублирующий) вызов молча отклоняется
+  }
   return new Promise(resolve => {
     const ov = document.createElement('div');
     ov.id = 'confirm-overlay';
@@ -54,7 +69,8 @@ function showConfirm(message, { danger = false, confirmText = 'Подтверд�
         </div>
       </div>`;
     document.body.appendChild(ov);
-    const cleanup = (result) => { ov.remove(); document.removeEventListener('keydown', onKey); resolve(result); };
+    _confirmOverlay = ov;
+    const cleanup = (result) => { ov.remove(); _confirmOverlay = null; document.removeEventListener('keydown', onKey); resolve(result); };
     const onKey = (e) => { if (e.key === 'Escape') cleanup(false); };
     document.addEventListener('keydown', onKey);
     ov.querySelector('#_conf-ok').onclick     = () => cleanup(true);

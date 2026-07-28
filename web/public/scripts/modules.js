@@ -1142,9 +1142,6 @@ async function loadModulePage() {
   }
 }
 
-// Permanent scene-picker option — игроки могут отступать от сценария (VtM)
-const SCENE_OFF_SCRIPT = 'События вне сценария';
-
 // Scenes from the scenario that are NOT already covered by any earlier session
 // record of this module — используется и формой «+ Запись сессии»
 // (renderModulePage → sceneSelect), и агрегатом заметок при переходе с экрана
@@ -1675,21 +1672,12 @@ function renderModulePage(data) {
             <span class="modp-session-title">${escHtml(s.title)}</span>
             ${s.status ? `<span class="modp-session-status">${escHtml(s.status)}</span>` : ''}
             <button class="modp-session-edit" data-sess-idx="${i}" title="Редактировать">✏️</button>
+            <button class="modp-session-delete" data-sess-idx="${i}" title="Удалить запись">🗑</button>
           </div>
           ${s.scenes ? `<div class="modp-session-scenes">🎬 Сыграно сцен: ${escHtml(s.scenes)}</div>` : ''}
           ${s.body ? `<div class="modp-session-body">${mdToHtmlPlain(s.body)}</div>` : ''}
         </div>`).join('')
     : '<div class="modp-empty"><div class="modp-empty-icon">🎲</div>Сессий пока нет — добавь первую запись выше</div>';
-
-  // Scenes from the scenario, excluding those already recorded in earlier sessions.
-  // «События вне сценария» is a permanent option — игроки могут отступать от сценария.
-  const sceneOpts = _filterUnrecordedScenes(data.scenes, sessions);
-  const attr = s => escHtml(s).replace(/"/g, '&quot;');
-  const sceneSelect = `<select id="sess-scene-pick" class="modp-sf-input" title="Добавить сцену или внесценарное событие">
-         <option value="">${sceneOpts.length ? '+ Сцена / событие…' : ((data.scenes && data.scenes.length) ? '✓ Все сцены сыграны — выбери:' : '+ Событие…')}</option>
-         ${sceneOpts.map(l => `<option value="${attr(l)}">${escHtml(l)}</option>`).join('')}
-         <option value="${attr(SCENE_OFF_SCRIPT)}">⚡ ${escHtml(SCENE_OFF_SCRIPT)}</option>
-       </select>`;
 
   document.getElementById('modp-panel-sessions').innerHTML = `
     <div class="modp-session-form">
@@ -1700,9 +1688,8 @@ function renderModulePage(data) {
           <option>🟡 В процессе</option>
           <option>🟢 Завершён</option>
         </select>
-        ${sceneSelect}
       </div>
-      <input id="sess-scenes" class="modp-sf-input" placeholder="Сыграно сцен (выбери из меню или впиши вручную)">
+      <input id="sess-scenes" class="modp-sf-input" placeholder="Сыграно сцен (через запятую)">
       <textarea id="sess-notes" class="modp-sf-input modp-sf-area" rows="4" placeholder="Что произошло за сессию: события, решения котери, последствия"></textarea>
       <div class="modp-sf-btns">
         <button id="sess-add-btn" class="modp-gen-btn">Добавить запись</button>
@@ -1718,20 +1705,6 @@ function renderModulePage(data) {
     const notes  = document.getElementById('sess-notes')?.value.trim() || '';
     const text   = [scenes && `Сыграно: ${scenes}`, notes].filter(Boolean).join('\n');
     _runCanonCheck(text, document.getElementById('sess-canon-result'), document.getElementById('sess-canon-btn'), '🔍 Проверить канон');
-  });
-
-  const scenePick = document.getElementById('sess-scene-pick');
-  if (scenePick) scenePick.addEventListener('change', () => {
-    const opt = scenePick.selectedOptions[0];
-    const val = scenePick.value;
-    if (!val) return;
-    const inp   = document.getElementById('sess-scenes');
-    const parts = inp.value.trim() ? inp.value.split(/\s*,\s*/).filter(Boolean) : [];
-    if (!parts.includes(val)) parts.push(val);
-    inp.value = parts.join(', ');
-    // scenario scenes can be picked once (removed); «События вне сценария» stays
-    if (opt && val !== SCENE_OFF_SCRIPT) opt.remove();
-    scenePick.value = '';
   });
 
   // ── СОБЫТИЯ ──
@@ -2299,10 +2272,36 @@ async function _saveSessionEdit(idx) {
   }
 }
 
-// Edit-button delegation on the (static) sessions panel — survives innerHTML rebuilds
+// Delete a recorded session entry outright (not just edit) — remaining entries'
+// «Сессия N» numbering is derived from array position on every write
+// (_writeSessionsFile, shared.js), so a delete from the middle renumbers the
+// rest automatically, same as the server already does for edits.
+async function _deleteSessionEntry(idx) {
+  if (!STATE.currentModule) return;
+  const s = (STATE.currentModuleData?.sessions || [])[idx];
+  if (!s) return;
+  if (!await showConfirm(`Удалить запись «${s.title}»? Это необратимо.`, { danger: true, confirmText: 'Удалить' })) return;
+  const { chronicle, name } = STATE.currentModule;
+  try {
+    const qs = window.location.search;
+    const r = await fetch(
+      `/api/chronicles/${encodeURIComponent(chronicle)}/modules/${encodeURIComponent(name)}/session/${idx}${qs}`,
+      { method: 'DELETE' }
+    );
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok || !d.ok) throw new Error(d.error || r.statusText);
+    await _reloadModulePage();
+  } catch (e) {
+    showToast('Ошибка: ' + e.message, 'error');
+  }
+}
+
+// Edit/delete-button delegation on the (static) sessions panel — survives innerHTML rebuilds
 document.getElementById('modp-panel-sessions').addEventListener('click', e => {
   const editBtn = e.target.closest('.modp-session-edit');
-  if (editBtn) _editSessionEntry(+editBtn.dataset.sessIdx);
+  if (editBtn) { _editSessionEntry(+editBtn.dataset.sessIdx); return; }
+  const delBtn = e.target.closest('.modp-session-delete');
+  if (delBtn) _deleteSessionEntry(+delBtn.dataset.sessIdx);
 });
 
 // НПС-panel delegation — open card on name click, generate replies, manage sheets

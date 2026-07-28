@@ -152,9 +152,12 @@ describe('UI — Selenium (Chrome)', () => {
       assert.ok(await count('.nav-item') >= NAV_PAGES.length, 'не все пункты меню');
     });
 
-    it('domain-label прогружается (не «Загрузка»)', async () => {
-      await driver.wait(async () =>
-        !/Загрузка/.test(await (await id_('domain-label')).getText()), 15000);
+    it('переключатель города прогружается — выбранная опция это «Город, Год», не пустышка/слаг', async () => {
+      await driver.wait(async () => {
+        const sel = new Select(await id_('city-select'));
+        const text = await sel.getFirstSelectedOption().then(o => o.getText());
+        return text.length > 0 && !/Загрузка/.test(text);
+      }, 15000);
     });
 
     it('заход без ?city= редиректит на активный город', async () => {

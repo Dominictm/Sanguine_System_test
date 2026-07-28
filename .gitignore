@@ -4,6 +4,7 @@ tests/report_*.html
 web/tests/report*.html
 web/tests/node_modules/
 web/server.log
+web/logs/
 web/nul
 *.jpg
 *.jpeg
