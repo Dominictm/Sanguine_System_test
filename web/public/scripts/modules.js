@@ -1193,7 +1193,7 @@ function _renderModuleNpcCards(groups) {
     const textBlock = `
       <div class="char-name">${escHtml(e.name)}</div>
       <div class="char-clan">${escHtml(subtitle)}</div>`;
-    const attrs = clickable ? `data-open-char="${escAttr(known.name)}"` : '';
+    const attrs = clickable ? `data-open-char="${escAttr(known.slug)}"` : '';
     const staticCls = clickable ? '' : ' modp-npc-card-static';
     const delGroup = e.sheetScope === 'module' ? 'modular' : 'canon';
     // Без event.stopPropagation() — обработчик клика на #modp-panel-npcs уже
@@ -1224,7 +1224,7 @@ function _renderModuleNpcGroups(groups) {
     const entries = g.entries.map(e => {
       const known    = _findCharByName(e.name);
       const nameHtml = known
-        ? `<a class="modp-npc-name modp-npc-link" data-open-char="${escAttr(known.name)}" title="Открыть карточку">${escHtml(e.name)}</a>`
+        ? `<a class="modp-npc-name modp-npc-link" data-open-char="${escAttr(known.slug)}" title="Открыть карточку">${escHtml(e.name)}</a>`
         : `<span class="modp-npc-name">${escHtml(e.name)}</span>`;
       const desc     = (e.desc || '').trim();
       const descHtml = (desc && !NPC_DESC_NOISE.test(desc))
@@ -2477,7 +2477,7 @@ async function _onModuleSheetBtn(btn) {
   const scope = wrap.dataset.sheetScope;
   const ctx = scope === 'module'
     ? { scope: 'module', label: wrap.dataset.sheetName, chr: STATE.currentModule.chronicle, mod: STATE.currentModule.name, slug: wrap.dataset.sheetSlug, onSaved: loadModulePage }
-    : { scope: 'character', name: wrap.dataset.sheetName, label: wrap.dataset.sheetName, onSaved: loadModulePage };
+    : { scope: 'character', name: wrap.dataset.sheetName, slug: wrap.dataset.sheetSlug, label: wrap.dataset.sheetName, onSaved: loadModulePage };
   const act = btn.dataset.sheetAct;
   if (act === 'view') { openSheetOverlay(ctx, 'view'); return; }
   if (act === 'edit') { openSheetOverlay(ctx, 'edit'); return; }
@@ -2809,10 +2809,7 @@ document.addEventListener('click', e => {
   if (charLink) {
     e.preventDefault();
     const slug = charLink.dataset.charSlug;
-    ensureCharsLoaded().then(() => {
-      const char = (STATE.characters || []).find(c => c.slug === slug);
-      if (char) openCharDetail(char.name);
-    });
+    ensureCharsLoaded().then(() => openCharDetail(slug));
     return;
   }
   const locLink = e.target.closest('.md-link-loc');

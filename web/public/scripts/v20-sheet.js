@@ -1964,7 +1964,7 @@ async function _v20Save() {
   _v20Model.bloodPerTurn = _num(_v20Model.bloodPerTurn, 0);
   _v20Model.bloodPoolCount = _num(_v20Model.bloodPoolCount, 0);
   try {
-    const r = await fetch(`/api/characters/${encodeURIComponent(_charSlug(_v20Ctx.name))}/sheet-data${location.search}`,
+    const r = await fetch(`/api/characters/${encodeURIComponent(_v20Ctx.slug)}/sheet-data${location.search}`,
       { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ data: _v20Model }) }
     ).then(r => r.json());
     if (!r.ok) throw new Error(r.error || 'не удалось');
@@ -1978,8 +1978,7 @@ async function _v20Save() {
 }
 
 function _v20ExportFoundry() {
-  const slug = _charSlug(_v20Ctx.name);
-  window.location.href = `/api/characters/${encodeURIComponent(slug)}/export-foundry${location.search}`;
+  window.location.href = `/api/characters/${encodeURIComponent(_v20Ctx.slug)}/export-foundry${location.search}`;
 }
 
 async function _v20ImportFoundryFile(file) {
@@ -1991,7 +1990,7 @@ async function _v20ImportFoundryFile(file) {
     showToast('Не удалось прочитать JSON-файл: ' + e.message, 'error');
     return;
   }
-  const slug = _charSlug(_v20Ctx.name);
+  const slug = _v20Ctx.slug;
   try {
     const r = await fetch(`/api/characters/${encodeURIComponent(slug)}/import-foundry${location.search}`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -2021,10 +2020,10 @@ async function _v20Regen(btn) {
   else if (!_v20DirtyFlag && !await showConfirm('Перегенерировать числа из ИИ-листа? Текущие значения формы будут заменены.', { confirmText: 'Перегенерировать' })) return;
   const old = btn.textContent; btn.disabled = true; btn.textContent = '⏳ ИИ…';
   try {
-    const ok = await _generateSheet({ scope: 'character', name: _v20Ctx.name }, null);
+    const ok = await _generateSheet({ scope: 'character', name: _v20Ctx.name, slug: _v20Ctx.slug }, null);
     if (!ok) throw new Error('генерация не удалась');
     const q = location.search ? location.search + '&fromMd=1' : '?fromMd=1';
-    const d = await fetch(`/api/characters/${encodeURIComponent(_charSlug(_v20Ctx.name))}/sheet-data${q}`).then(r => r.json());
+    const d = await fetch(`/api/characters/${encodeURIComponent(_v20Ctx.slug)}/sheet-data${q}`).then(r => r.json());
     _v20Model = _v20ModelFrom(d);
     _v20DirtyFlag = false;
     _v20RenderSheet(document.getElementById('cdet-sheet-panel'), _v20Ctx.name);
@@ -2036,28 +2035,31 @@ async function _v20Regen(btn) {
 
 let _v20Model = null, _v20Ctx = null, _v20DirtyFlag = false;
 let _v20LibraryCache = { discipline: null, numina: null, meritflaw: null, background: null };
-async function _loadCharSheet(charName) {
+async function _loadCharSheet(charSlug) {
   const panel = document.getElementById('cdet-sheet-panel');
   if (!panel) return;
   panel.dataset.loaded = '1';
   panel.innerHTML = '<div class="loading-state"><div class="spinner"></div>Загрузка листа…</div>';
   // Card-level birthYear/embraceYear (already parsed by parseCharacter, см. web/lib/parsers.js)
   // — used to auto-fill description.apparentAge = embraceYear − birthYear (Шаг: апп. возраст).
-  const card = (STATE.characters || []).find(ch => ch.name === charName) || null;
-  _v20Ctx = { name: charName, card }; _v20DirtyFlag = false; _v20XpMode = false;
+  const card = (STATE.characters || []).find(ch => ch.slug === charSlug) || null;
+  // FIX-4b (docs/audit/2026-07-28-fix-plan.md): slug — стабильная идентичность для
+  // запросов к API; name остаётся только для отображения (может совпадать у двух
+  // разных персонажей).
+  _v20Ctx = { name: card?.name || charSlug, slug: charSlug, card }; _v20DirtyFlag = false; _v20XpMode = false;
   let d;
   try {
     // Prefetch in parallel (cached after first call) so the ℹ-lookup buttons in psyRow/discRow
     // already know which rows match the library on the very first render, not only after the
     // user opens the 📚 reference modal once.
     [d] = await Promise.all([
-      fetch(`/api/characters/${encodeURIComponent(_charSlug(charName))}/sheet-data${location.search}`).then(r => r.json()),
+      fetch(`/api/characters/${encodeURIComponent(charSlug)}/sheet-data${location.search}`).then(r => r.json()),
       ensurePsychics(),
     ]);
   }
   catch (e) { panel.innerHTML = `<div class="cdet-empty">Ошибка загрузки: ${escHtml(e.message)}</div>`; return; }
   _v20Model = _v20ModelFrom(d);
-  _v20RenderSheet(panel, charName);
+  _v20RenderSheet(panel, charSlug);
 }
 
 // ═══════════════════ V20 sheet: generate · view · edit (dot-radio) ═══════════════════
@@ -2068,7 +2070,7 @@ function _sheetApi(ctx) {
     const base = `/api/chronicles/${encodeURIComponent(ctx.chr)}/modules/${encodeURIComponent(ctx.mod)}/npc/${encodeURIComponent(ctx.slug)}/sheet`;
     return { get: base + qs, gen: base + '/generate' + qs, put: base + qs };
   }
-  const base = `/api/characters/${encodeURIComponent(_charSlug(ctx.name))}/sheet`;
+  const base = `/api/characters/${encodeURIComponent(ctx.slug)}/sheet`;
   return { get: base + qs, gen: base + '/generate' + qs, put: base + qs };
 }
 
@@ -2364,7 +2366,7 @@ async function _generateSheet(ctx, btn) {
   finally { if (btn) { btn.disabled = false; btn.textContent = old; } }
 }
 
-async function _diaryGenerate(charName) {
+async function _diaryGenerate(charSlug) {
   const period = document.getElementById('diary-period').value.trim();
   if (!period) { _diaryMsg('Укажи период (ГГГГ-ММ)', false); return; }
   const btn = document.getElementById('diary-gen'); const old = btn.textContent;
@@ -2374,7 +2376,7 @@ async function _diaryGenerate(charName) {
     const pref         = _getPref(featPrefs, 'prose', 'openrouter');
     const preferSource = pref.provider;
     const orModel      = preferSource === 'openrouter' ? (pref.model || null) : null;
-    const r = await fetch(`/api/characters/${encodeURIComponent(_charSlug(charName))}/diary/generate`,
+    const r = await fetch(`/api/characters/${encodeURIComponent(charSlug)}/diary/generate`,
       { method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ period, session: document.getElementById('diary-session').value.trim(), hint: document.getElementById('diary-hint').value.trim(), preferSource, orModel }) }).then(r => r.json());
     if (r.error) { _diaryMsg(r.error, false); return; }
@@ -2384,7 +2386,7 @@ async function _diaryGenerate(charName) {
   finally { btn.disabled = false; btn.textContent = old; }
 }
 
-async function _diarySave(charName) {
+async function _diarySave(charSlug) {
   const period = document.getElementById('diary-period').value.trim();
   const text   = document.getElementById('diary-text').value.trim();
   if (!period) { _diaryMsg('Укажи период (ГГГГ-ММ)', false); return; }
@@ -2392,13 +2394,13 @@ async function _diarySave(charName) {
   const btn = document.getElementById('diary-save'); const old = btn.textContent;
   btn.disabled = true; btn.textContent = '⏳…';
   try {
-    const r = await fetch(`/api/characters/${encodeURIComponent(_charSlug(charName))}/diary`,
+    const r = await fetch(`/api/characters/${encodeURIComponent(charSlug)}/diary`,
       { method: 'PUT', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ period, session: document.getElementById('diary-session').value.trim(), text }) }).then(r => r.json());
     if (r.error) { _diaryMsg(r.error, false); return; }
     _diaryMsg('✓ Сохранено');
     STATE.characters = []; await ensureCharsLoaded();
-    const c = STATE.characters.find(ch => ch.name === charName);
+    const c = STATE.characters.find(ch => ch.slug === charSlug);
     const panel = document.querySelector('#char-detail-content [data-panel="diaries"]');
     if (panel && c) panel.innerHTML = renderDiaryList(c);
   } catch (e) { _diaryMsg('Ошибка: ' + e.message, false); }

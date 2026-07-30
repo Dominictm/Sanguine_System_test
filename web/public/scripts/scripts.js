@@ -633,13 +633,13 @@ function renderChars() {
     const delay = `style="animation-delay:${Math.min(i, 12) * 30}ms"`;
 
     if (c.imageUrl) {
-      return `<div class="char-card has-art" data-name="${escHtml(c.name)}" ${delay}>
+      return `<div class="char-card has-art" data-slug="${escHtml(c.slug)}" ${delay}>
         <img class="char-card-art" src="${escAttr(c.imageUrl)}" alt="${escHtml(c.name)}" loading="lazy" decoding="async">
         <div class="char-card-overlay">${textBlock}</div>
         ${stRow}
       </div>`;
     }
-    return `<div class="char-card" data-name="${escHtml(c.name)}" ${delay}>
+    return `<div class="char-card" data-slug="${escHtml(c.slug)}" ${delay}>
       <span class="char-lineage-icon">${icon}</span>
       ${stRow}
       ${textBlock}
@@ -655,9 +655,9 @@ const _foundryBulkSelected = new Set();  // slugs
 function _foundryBulkSupportedLineages() { return ['vampire', 'mortal']; }
 
 function _foundryBulkApplyCardClasses() {
-  for (const card of document.querySelectorAll('.char-card[data-name]')) {
-    const name = card.dataset.name;
-    const c = STATE.characters.find(x => x.name === name);
+  for (const card of document.querySelectorAll('.char-card[data-slug]')) {
+    const slug = card.dataset.slug;
+    const c = STATE.characters.find(x => x.slug === slug);
     card.classList.remove('fdry-selectable', 'fdry-selected', 'fdry-disabled');
     if (!_foundryBulkMode || !c) continue;
     if (_foundryBulkSupportedLineages().includes(c.lineage)) {
@@ -683,8 +683,8 @@ function _foundryBulkUpdateButton() {
   if (cancelBtn) cancelBtn.style.display = '';
 }
 
-function _foundryBulkToggleCard(name) {
-  const c = STATE.characters.find(x => x.name === name);
+function _foundryBulkToggleCard(slug) {
+  const c = STATE.characters.find(x => x.slug === slug);
   if (!c || !_foundryBulkSupportedLineages().includes(c.lineage)) return;
   if (_foundryBulkSelected.has(c.slug)) _foundryBulkSelected.delete(c.slug);
   else _foundryBulkSelected.add(c.slug);
@@ -749,18 +749,18 @@ document.getElementById('search-input').addEventListener('input', e => {
 const GRID_MIN = 12_000;   // мин. интервал между сменами (12 с)
 const GRID_MAX = 50_000;   // макс. интервал (50 с)
 
-let _gridImages  = {};   // name → [url, ...]
-let _gridIdxs    = {};   // name → current index
-let _gridTimers  = {};   // name → pending timeoutID
+let _gridImages  = {};   // slug → [url, ...]
+let _gridIdxs    = {};   // slug → current index
+let _gridTimers  = {};   // slug → pending timeoutID
 
 function _clearGridTimers() {
   for (const id of Object.values(_gridTimers)) clearTimeout(id);
   _gridTimers = {};
 }
 
-function _scheduleCard(name) {
+function _scheduleCard(slug) {
   const delay = GRID_MIN + Math.floor(Math.random() * (GRID_MAX - GRID_MIN));
-  _gridTimers[name] = setTimeout(() => _advanceCard(name), delay);
+  _gridTimers[slug] = setTimeout(() => _advanceCard(slug), delay);
 }
 
 async function initGridCarousels() {
@@ -780,16 +780,16 @@ async function initGridCarousels() {
   _injectGridDims();
 
   // Каждая карточка стартует в свой случайный момент, независимо
-  for (const name of Object.keys(_gridImages)) {
-    if ((_gridImages[name]?.length || 0) < 2) continue;
+  for (const slug of Object.keys(_gridImages)) {
+    if ((_gridImages[slug]?.length || 0) < 2) continue;
     const initDelay = Math.floor(Math.random() * GRID_MAX);
-    _gridTimers[name] = setTimeout(() => _advanceCard(name), initDelay);
+    _gridTimers[slug] = setTimeout(() => _advanceCard(slug), initDelay);
   }
 }
 
 function _injectGridDims() {
-  for (const name of Object.keys(_gridImages)) {
-    const card = document.querySelector(`.char-card[data-name="${CSS.escape(name)}"]`);
+  for (const slug of Object.keys(_gridImages)) {
+    const card = document.querySelector(`.char-card[data-slug="${CSS.escape(slug)}"]`);
     if (!card || card.querySelector('.char-card-dim')) continue;
     // Ресинк «текущего» индекса с тем, что реально отрисовано: карточка
     // изначально показывает c.imageUrl (бэкенд берёт ПОСЛЕДНИЙ отсортированный
@@ -800,8 +800,8 @@ function _injectGridDims() {
     // возвращая imageUrl, так что старый индекс тут же снова устаревает.
     const img = card.querySelector('.char-card-art');
     if (img) {
-      const idx = (_gridImages[name] || []).indexOf(img.getAttribute('src'));
-      _gridIdxs[name] = idx === -1 ? 0 : idx;
+      const idx = (_gridImages[slug] || []).indexOf(img.getAttribute('src'));
+      _gridIdxs[slug] = idx === -1 ? 0 : idx;
     }
     const dim = document.createElement('div');
     dim.className = 'char-card-dim';
@@ -809,29 +809,29 @@ function _injectGridDims() {
   }
 }
 
-function _advanceCard(name) {
-  const images = _gridImages[name];
+function _advanceCard(slug) {
+  const images = _gridImages[slug];
   if (!images || images.length < 2) return;
-  const card = document.querySelector(`.char-card[data-name="${CSS.escape(name)}"]`);
+  const card = document.querySelector(`.char-card[data-slug="${CSS.escape(slug)}"]`);
   // Карточка сейчас не в DOM (скрыта фильтром/поиском по имени) — не бросаем
   // цикл насовсем: без переброса таймера карусель этого персонажа умирала бы
   // навсегда при первом же срабатывании под фильтром, т.к. больше ничто её не
   // перезапустит (initGridCarousels вызывается только один раз за визит на
   // страницу). Планируем следующую попытку и выходим.
-  if (!card) { _scheduleCard(name); return; }
+  if (!card) { _scheduleCard(slug); return; }
   const img = card.querySelector('.char-card-art');
   const dim = card.querySelector('.char-card-dim');
-  if (!img || !dim) { _scheduleCard(name); return; }
+  if (!img || !dim) { _scheduleCard(slug); return; }
 
   dim.classList.add('dark');
   setTimeout(() => {
     let next;
-    do { next = Math.floor(Math.random() * images.length); } while (next === _gridIdxs[name]);
-    _gridIdxs[name] = next;
+    do { next = Math.floor(Math.random() * images.length); } while (next === _gridIdxs[slug]);
+    _gridIdxs[slug] = next;
     img.src = images[next];
     setTimeout(() => {
       dim.classList.remove('dark');
-      _scheduleCard(name); // следующий интервал — снова случайный
+      _scheduleCard(slug); // следующий интервал — снова случайный
     }, 300);
   }, 2100);
 }
@@ -2148,13 +2148,13 @@ function requiredInfoFor(lineage) {
   const k = REQUIRED_INFO_KEY[lineage];
   return new Set(k ? [k] : []);
 }
-// Линейка персонажа по имени (для режима редактирования, где под рукой только имя).
-function _lineageOf(name) {
-  return (STATE.characters.find(c => c.name === name) || {}).lineage || 'vampire';
+// Линейка персонажа по slug (для режима редактирования, где под рукой только он).
+function _lineageOf(slug) {
+  return (STATE.characters.find(c => c.slug === slug) || {}).lineage || 'vampire';
 }
 
 function renderDiaryList(c) {
-  const ch = escHtml(c.name);
+  const ch = escHtml(c.slug);
   const items = c.diaries?.length
     ? `<div class="diaries-list">${c.diaries.map(d => `
         <div class="diary-item" data-char="${ch}" data-file="${escHtml(d.file)}" data-title="${escHtml(d.title)}">
@@ -2204,37 +2204,37 @@ function formatDiaryText(text) {
 // dataset) have something to read from and write back into.
 let _diaryEntryState = null;
 
-function _diaryEntryToolbar(charName, file, data) {
+function _diaryEntryToolbar(charSlug, file, data) {
   const title = data.session || data.title || '';
   const period = file.replace(/^journal\//, '').replace(/\.md$/, '');
   const canEdit = data.format !== 'retrospective';
   return `
     <div class="diary-entry-toolbar">
-      <button class="diary-back" data-char="${escHtml(charName)}">← Все дневники</button>
+      <button class="diary-back" data-char="${escHtml(charSlug)}">← Все дневники</button>
       <div class="diary-entry-toolbar-actions">
-        ${canEdit ? `<button class="cdet-edit-btn diary-entry-edit-btn" data-char="${escHtml(charName)}" data-file="${escHtml(file)}" data-period="${escHtml(period)}">✏ Редактировать</button>` : ''}
-        <button class="diary-entry-del-btn" data-char="${escHtml(charName)}" data-file="${escHtml(file)}" data-title="${escHtml(title)}" title="Удалить запись">🗑 Удалить</button>
+        ${canEdit ? `<button class="cdet-edit-btn diary-entry-edit-btn" data-char="${escHtml(charSlug)}" data-file="${escHtml(file)}" data-period="${escHtml(period)}">✏ Редактировать</button>` : ''}
+        <button class="diary-entry-del-btn" data-char="${escHtml(charSlug)}" data-file="${escHtml(file)}" data-title="${escHtml(title)}" title="Удалить запись">🗑 Удалить</button>
       </div>
     </div>`;
 }
 
-async function loadDiaryEntry(charName, file) {
+async function loadDiaryEntry(charSlug, file) {
   const panel = document.querySelector('#char-detail-content [data-panel="diaries"]');
   if (!panel) return;
   panel.innerHTML = '<div class="diary-loading"><div class="spinner"></div>Загрузка...</div>';
   try {
     const data = await fetch(
-      `/api/characters/${encodeURIComponent(_charSlug(charName))}/diary?file=${encodeURIComponent(file)}`
+      `/api/characters/${encodeURIComponent(charSlug)}/diary?file=${encodeURIComponent(file)}`
     ).then(r => r.json());
     if (data.error) throw new Error(data.error);
     const panels = panel.closest('.cdet-panels');
     if (panels) panels.scrollTop = 0;
 
-    _diaryEntryState = { charName, file, data };
+    _diaryEntryState = { charSlug, file, data };
 
     if (data.format === 'retrospective') {
       panel.innerHTML = `
-        ${_diaryEntryToolbar(charName, file, data)}
+        ${_diaryEntryToolbar(charSlug, file, data)}
         ${data.title ? `<div class="diary-retro-title">${escHtml(data.title)}</div>` : ''}
         ${(data.sections || []).map(s => `
           <div class="diary-retro-section">
@@ -2245,7 +2245,7 @@ async function loadDiaryEntry(charName, file) {
         `).join('')}`;
     } else {
       panel.innerHTML = `
-        ${_diaryEntryToolbar(charName, file, data)}
+        ${_diaryEntryToolbar(charSlug, file, data)}
         ${data.session   ? `<div class="diary-session">📅 ${escHtml(data.session)}</div>`   : ''}
         ${data.location  ? `<div class="diary-meta">📍 ${escHtml(data.location)}</div>`      : ''}
         ${data.tone      ? `<div class="diary-meta">🎭 ${escHtml(data.tone)}</div>`          : ''}
@@ -2261,7 +2261,7 @@ async function loadDiaryEntry(charName, file) {
     const panels = panel.closest('.cdet-panels');
     if (panels) panels.scrollTop = 0;
     panel.innerHTML = `
-      <button class="diary-back" data-char="${escHtml(charName)}">← Все дневники</button>
+      <button class="diary-back" data-char="${escHtml(charSlug)}">← Все дневники</button>
       <div class="cdet-empty">Ошибка загрузки: ${escHtml(err.message)}</div>`;
   }
 }
@@ -2271,26 +2271,26 @@ function _enterDiaryEntryEdit() {
   if (!st) return;
   const panel = document.querySelector('#char-detail-content [data-panel="diaries"]');
   if (!panel) return;
-  const { charName, file, data } = st;
+  const { charSlug, file, data } = st;
   const period = file.replace(/^journal\//, '').replace(/\.md$/, '');
 
   panel.innerHTML = `
     <div class="diary-entry-toolbar">
-      <button class="diary-back" data-char="${escHtml(charName)}">← Все дневники</button>
+      <button class="diary-back" data-char="${escHtml(charSlug)}">← Все дневники</button>
     </div>
     <div class="cdet-section-title">Заголовок записи</div>
     <input class="form-control" id="diary-entry-session-ta" value="${escAttr(data.session || '')}" placeholder="Ноябрь 2010, ночь на манеже">
     <div class="cdet-section-title" style="margin-top:12px">Текст записи</div>
     <textarea class="cdet-edit-textarea" id="diary-entry-text-ta" rows="14">${escHtml(data.text || '')}</textarea>
     <div class="cdet-edit-bar show" id="diary-entry-edit-bar">
-      <button class="cdet-gen-prompt-btn diary-entry-regen-btn" data-char="${escHtml(charName)}" data-period="${escHtml(period)}">🔄 Перегенерировать</button>
-      <button class="cdet-save-btn diary-entry-save-btn" data-char="${escHtml(charName)}" data-period="${escHtml(period)}" data-file="${escHtml(file)}">Сохранить</button>
-      <button class="cdet-cancel-btn diary-entry-cancel-btn" data-char="${escHtml(charName)}" data-file="${escHtml(file)}">Отмена</button>
+      <button class="cdet-gen-prompt-btn diary-entry-regen-btn" data-char="${escHtml(charSlug)}" data-period="${escHtml(period)}">🔄 Перегенерировать</button>
+      <button class="cdet-save-btn diary-entry-save-btn" data-char="${escHtml(charSlug)}" data-period="${escHtml(period)}" data-file="${escHtml(file)}">Сохранить</button>
+      <button class="cdet-cancel-btn diary-entry-cancel-btn" data-char="${escHtml(charSlug)}" data-file="${escHtml(file)}">Отмена</button>
       <span class="cdet-save-msg" id="diary-entry-save-msg">✓ Сохранено</span>
     </div>`;
 }
 
-async function _regenerateDiaryEntry(charName, period) {
+async function _regenerateDiaryEntry(charSlug, period) {
   const btn = document.querySelector('.diary-entry-regen-btn');
   const textTa = document.getElementById('diary-entry-text-ta');
   const sessionTa = document.getElementById('diary-entry-session-ta');
@@ -2305,7 +2305,7 @@ async function _regenerateDiaryEntry(charName, period) {
     const pref         = _getPref(featPrefs, 'prose', 'openrouter');
     const preferSource = pref.provider;
     const orModel      = preferSource === 'openrouter' ? (pref.model || null) : null;
-    const r = await fetch(`/api/characters/${encodeURIComponent(_charSlug(charName))}/diary/generate`,
+    const r = await fetch(`/api/characters/${encodeURIComponent(charSlug)}/diary/generate`,
       { method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ period, session: sessionTa?.value.trim() || '', draft, preferSource, orModel }) }).then(r => r.json());
     if (r.error) { showToast('Ошибка генерации: ' + r.error, 'error'); return; }
@@ -2317,7 +2317,7 @@ async function _regenerateDiaryEntry(charName, period) {
   }
 }
 
-async function _saveDiaryEntryEdit(charName, period, file) {
+async function _saveDiaryEntryEdit(charSlug, period, file) {
   const textTa = document.getElementById('diary-entry-text-ta');
   const sessionTa = document.getElementById('diary-entry-session-ta');
   const text = textTa?.value.trim() || '';
@@ -2326,12 +2326,12 @@ async function _saveDiaryEntryEdit(charName, period, file) {
   const btn = document.querySelector('.diary-entry-save-btn');
   if (btn) { btn.disabled = true; btn.textContent = '⏳...'; }
   try {
-    const r = await fetch(`/api/characters/${encodeURIComponent(_charSlug(charName))}/diary`,
+    const r = await fetch(`/api/characters/${encodeURIComponent(charSlug)}/diary`,
       { method: 'PUT', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ period, session: sessionTa?.value.trim() || '', text, mode: 'replace' }) }).then(r => r.json());
     if (r.error) { showToast('Ошибка сохранения: ' + r.error, 'error'); return; }
     STATE.characters = []; await ensureCharsLoaded();
-    await loadDiaryEntry(charName, file);
+    await loadDiaryEntry(charSlug, file);
   } catch (e) {
     showToast('Ошибка: ' + e.message, 'error');
   } finally {
@@ -2339,14 +2339,14 @@ async function _saveDiaryEntryEdit(charName, period, file) {
   }
 }
 
-async function _deleteDiaryEntry(charName, file, title) {
+async function _deleteDiaryEntry(charSlug, file, title) {
   if (!await showConfirm(`Удалить запись дневника «${title || file}»?\nДействие необратимо.`, { danger: true, confirmText: 'Удалить' })) return;
   try {
-    const r = await fetch(`/api/characters/${encodeURIComponent(_charSlug(charName))}/diary?file=${encodeURIComponent(file)}`,
+    const r = await fetch(`/api/characters/${encodeURIComponent(charSlug)}/diary?file=${encodeURIComponent(file)}`,
       { method: 'DELETE' }).then(r => r.json());
     if (!r.ok) { showToast('Ошибка удаления: ' + (r.error || ''), 'error'); return; }
     STATE.characters = []; await ensureCharsLoaded();
-    const c = STATE.characters.find(ch => ch.name === charName);
+    const c = STATE.characters.find(ch => ch.slug === charSlug);
     const panel = document.querySelector('#char-detail-content [data-panel="diaries"]');
     if (panel && c) panel.innerHTML = renderDiaryList(c);
   } catch (e) {
@@ -2355,9 +2355,11 @@ async function _deleteDiaryEntry(charName, file, title) {
 }
 
 // Soft-delete a character: preview affected refs, confirm, then DELETE.
-async function _confirmDeleteChar(name) {
+async function _confirmDeleteChar(slug) {
+  const c = STATE.characters.find(ch => ch.slug === slug);
+  const name = c?.name || slug;
   let pv;
-  try { pv = await fetch(`/api/characters/${encodeURIComponent(_charSlug(name))}/delete-preview${location.search}`).then(r => r.json()); }
+  try { pv = await fetch(`/api/characters/${encodeURIComponent(slug)}/delete-preview${location.search}`).then(r => r.json()); }
   catch (e) { showToast('Не удалось получить предпросмотр: ' + e.message, 'error'); return; }
   if (pv.error) { showToast(pv.error, 'error'); return; }
 
@@ -2393,7 +2395,7 @@ async function _confirmDeleteChar(name) {
     const btn = ov.querySelector('[data-act="ok"]');
     btn.disabled = true; btn.textContent = '⏳ Удаление…';
     try {
-      const d = await fetch(`/api/characters/${encodeURIComponent(_charSlug(name))}${location.search}`, { method: 'DELETE' })
+      const d = await fetch(`/api/characters/${encodeURIComponent(slug)}${location.search}`, { method: 'DELETE' })
         .then(r => r.json());
       if (!d.ok) throw new Error(d.error || 'Ошибка');
       close();

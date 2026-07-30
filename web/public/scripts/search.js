@@ -56,7 +56,7 @@ function _renderSearchResults(data, el, subEl) {
 
   if ((data.results.characters || []).length) {
     const rows = data.results.characters.map(c => `
-      <div class="srch-row srch-char" data-name="${escHtml(c.name)}">
+      <div class="srch-row srch-char" data-slug="${escHtml(c.slug)}">
         <div class="srch-row-icon">🎭</div>
         <div class="srch-row-body">
           <div class="srch-row-title">${hl(c.name)} <span class="srch-row-tag">${escHtml(c.lineage)}</span></div>
@@ -122,7 +122,7 @@ function _renderSearchResults(data, el, subEl) {
   // Click handlers
   el.querySelectorAll('.srch-char').forEach(row => {
     row.querySelector('.srch-open-btn')?.addEventListener('click', () => {
-      ensureCharsLoaded().then(() => openCharDetail(row.dataset.name));
+      ensureCharsLoaded().then(() => openCharDetail(row.dataset.slug));
     });
   });
   el.querySelectorAll('.srch-loc').forEach(row => {

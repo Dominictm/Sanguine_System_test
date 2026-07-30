@@ -209,7 +209,7 @@ function _sessRenderNpcs() {
       ${people.map(p => {
         const known = typeof resolveCharByName === 'function' ? resolveCharByName(p.name) : null;
         return known
-          ? `<button class="chron-chip sess-npc-chip" data-sess-char="${escHtml(known.name)}" title="${escHtml(p.role || '')}">${escHtml(p.name)}</button>`
+          ? `<button class="chron-chip sess-npc-chip" data-sess-char="${escHtml(known.slug)}" title="${escHtml(p.role || '')}">${escHtml(p.name)}</button>`
           : `<span class="chron-chip" title="${escHtml(p.role || '')}">${escHtml(p.name)}</span>`;
       }).join('')}
     </div>`;

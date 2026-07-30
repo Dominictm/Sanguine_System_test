@@ -746,7 +746,7 @@ function renderTimeline(events) {
       const char = resolveCharByName(p.name);
       if (char) {
         const icon = LINEAGE_ICONS[char.lineage] || '👤';
-        return `<button class="chron-chip chip-char" data-char="${escHtml(char.name)}" title="${escHtml(p.text)}">${icon} ${escHtml(p.name)}</button>`;
+        return `<button class="chron-chip chip-char" data-char="${escHtml(char.slug)}" title="${escHtml(p.text)}">${icon} ${escHtml(p.name)}</button>`;
       }
       return `<span class="chron-chip" title="${escHtml(p.text)}">${escHtml(p.name)}</span>`;
     }).join('');

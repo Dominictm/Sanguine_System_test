@@ -22,13 +22,18 @@ function _familiarCardHtml(fc) {
           ${stType !== 'unknown' ? `<span class="badge badge-${stType}">${stLbl}</span>` : ''}
         </div>
         <div class="cdet-fields cdet-familiar-fields">${fields}</div>
-        <button type="button" class="cdet-familiar-open-btn" data-open-familiar="${escAttr(fc.name)}">Открыть карточку целиком</button>
+        <button type="button" class="cdet-familiar-open-btn" data-open-familiar="${escHtml(fc.slug)}">Открыть карточку целиком</button>
       </div>
     </div>`;
 }
 
-function openCharDetail(name) {
-  const c = STATE.characters.find(ch => ch.name === name);
+// FIX-4b (docs/audit/2026-07-28-fix-plan.md): резолвим по slug, не по name —
+// два персонажа с одинаковым именем (переименование сейчас блокируется FIX-4a,
+// но в старых данных коллизия могла остаться) раньше всегда открывали ПЕРВОГО
+// по порядку из STATE.characters, независимо от того, по какой карточке
+// кликнули; второй персонаж был недостижим через интерфейс вообще.
+function openCharDetail(slug) {
+  const c = STATE.characters.find(ch => ch.slug === slug);
   if (!c) return;
 
   const icon   = LINEAGE_ICONS[c.lineage] || '👤';
@@ -73,7 +78,7 @@ function openCharDetail(name) {
   // себя, с кнопкой «Открыть карточку целиком», просто перерисовывающей ту же модалку.
   const familiarPanelHtml = !familiarRel ? '' : !familiarChar
     ? `<div class="cdet-empty">Фамильяр «${escHtml(familiarRel.target)}» не найден в реестре персонажей. Заведите карточку с Принадлежностью «Фамильяр», чтобы она отобразилась здесь.</div>`
-    : familiarChar.name === c.name
+    : familiarChar.slug === c.slug
     ? `<div class="cdet-empty">Связь-фамильяр указывает на самого персонажа — проверьте описание связи в разделе «Отношения».</div>`
     : _familiarCardHtml(familiarChar);
 
@@ -120,14 +125,14 @@ function openCharDetail(name) {
           ${stType !== 'unknown' ? `<span class="badge badge-${stType}">${stLbl}</span>` : ''}
         </div>
         ${c.statusDetails ? `<div class="cdet-status-details">${escHtml(c.statusDetails)}</div>` : ''}
-        <button class="cdet-delete-btn" id="cdet-delete-btn" data-char="${escHtml(c.name)}" title="Удалить персонажа">🗑</button>
+        <button class="cdet-delete-btn" id="cdet-delete-btn" data-char="${escHtml(c.slug)}" title="Удалить персонажа">🗑</button>
       </div>
       <div class="cdet-tab-bar">
         <button class="cdet-tab active" data-tab="info">Информация</button>
         <button class="cdet-tab" data-tab="bio">Биография</button>
         <button class="cdet-tab" data-tab="rels">Отношения</button>
         <button class="cdet-tab" data-tab="diaries">Дневники${c.diaries?.length ? ` (${c.diaries.length})` : ''}</button>
-        <button class="cdet-tab" data-tab="sheet" data-char="${escHtml(c.name)}">Лист V20</button>
+        <button class="cdet-tab" data-tab="sheet" data-char="${escHtml(c.slug)}">Лист V20</button>
         <button class="cdet-tab" data-tab="desc">Описание</button>
         ${familiarRel ? `<button class="cdet-tab" data-tab="familiar">Фамильяр</button>` : ''}
       </div>
@@ -136,7 +141,7 @@ function openCharDetail(name) {
           ${c.presence ? `<div class="cdet-presence">🌍 <b>Присутствие:</b> ${escHtml(c.presence)}</div>` : ''}
           ${c.aliases ? `<div class="cdet-presence cdet-aliases">🎭 <b>Алиасы:</b> ${escHtml(c.aliases)}</div>` : ''}
           <div class="cdet-info-header">
-            <button class="cdet-edit-btn" id="cdet-edit-btn" data-char="${escHtml(c.name)}">✏ Редактировать</button>
+            <button class="cdet-edit-btn" id="cdet-edit-btn" data-char="${escHtml(c.slug)}">✏ Редактировать</button>
           </div>
           <div class="cdet-fields" id="cdet-info-fields">${infoFields}</div>
           <div class="cdet-edit-bar" id="cdet-edit-bar">
@@ -147,7 +152,7 @@ function openCharDetail(name) {
         </div>
         <div class="cdet-panel" data-panel="bio">
           <div class="cdet-info-header">
-            <button class="cdet-edit-btn" data-editpanel="bio" data-char="${escHtml(c.name)}">✏ Редактировать</button>
+            <button class="cdet-edit-btn" data-editpanel="bio" data-char="${escHtml(c.slug)}">✏ Редактировать</button>
           </div>
           <div id="cdet-bio-view">
             ${c.biography && !c.biography.includes('⚠️')
@@ -156,19 +161,19 @@ function openCharDetail(name) {
           </div>
           <div id="cdet-bio-edit" style="display:none">
             <div class="cdet-info-header" style="margin-bottom:8px">
-              <button class="cdet-gen-prompt-btn" id="cdet-gen-biography" data-char="${escHtml(c.name)}" title="Сгенерировать биографию по вкладкам «Информация» и «Отношения»">📖 Сгенерировать биографию</button>
+              <button class="cdet-gen-prompt-btn" id="cdet-gen-biography" data-char="${escHtml(c.slug)}" title="Сгенерировать биографию по вкладкам «Информация» и «Отношения»">📖 Сгенерировать биографию</button>
             </div>
             <textarea class="cdet-edit-textarea" id="cdet-bio-ta" rows="10" placeholder="Биография персонажа...">${c.biography && !c.biography.includes('⚠️') ? escHtml(c.biography) : ''}</textarea>
           </div>
           <div class="cdet-edit-bar" id="cdet-bio-bar">
-            <button class="cdet-save-btn" data-savepanel="bio" data-char="${escHtml(c.name)}">Сохранить</button>
+            <button class="cdet-save-btn" data-savepanel="bio" data-char="${escHtml(c.slug)}">Сохранить</button>
             <button class="cdet-cancel-btn" data-cancelpanel="bio">Отмена</button>
             <span class="cdet-save-msg" id="cdet-bio-msg">✓ Сохранено</span>
           </div>
         </div>
         <div class="cdet-panel" data-panel="rels">
           <div class="cdet-info-header">
-            <button class="cdet-edit-btn" data-editpanel="rels" data-char="${escHtml(c.name)}">✏ Редактировать</button>
+            <button class="cdet-edit-btn" data-editpanel="rels" data-char="${escHtml(c.slug)}">✏ Редактировать</button>
           </div>
           <div id="cdet-rels-view">
             ${relsHtml ? `<div class="cdet-rels-list">${relsHtml}</div>` : '<div class="cdet-empty">Нет известных связей</div>'}
@@ -177,11 +182,11 @@ function openCharDetail(name) {
             <div class="cdet-rels-hint">Имя — выбери из списка или впиши своё. Вид отношений — из списка или свой.</div>
             <div id="cdet-rels-rows">${(c.relationships||[]).map(r => _relRowHtml(r.target, r.description)).join('')}</div>
             <button class="cdet-rel-add-btn" id="cdet-rel-add-btn" type="button">+ Добавить связь</button>
-            <datalist id="cdet-rel-names">${(STATE.characters||[]).filter(x => x.name !== c.name).map(x => `<option value="${escAttr(x.name)}">`).join('')}</datalist>
+            <datalist id="cdet-rel-names">${(STATE.characters||[]).filter(x => x.slug !== c.slug).map(x => `<option value="${escAttr(x.name)}">`).join('')}</datalist>
             <datalist id="cdet-rel-types">${REL_TYPE_OPTIONS.map(t => `<option value="${escAttr(t)}">`).join('')}</datalist>
           </div>
           <div class="cdet-edit-bar" id="cdet-rels-bar">
-            <button class="cdet-save-btn" data-savepanel="rels" data-char="${escHtml(c.name)}">Сохранить</button>
+            <button class="cdet-save-btn" data-savepanel="rels" data-char="${escHtml(c.slug)}">Сохранить</button>
             <button class="cdet-cancel-btn" data-cancelpanel="rels">Отмена</button>
             <span class="cdet-save-msg" id="cdet-rels-msg">✓ Сохранено</span>
           </div>
@@ -194,10 +199,10 @@ function openCharDetail(name) {
         </div>
         <div class="cdet-panel" data-panel="desc">
           <div class="cdet-info-header" style="gap:8px">
-            <button class="cdet-gen-appearance-btn" id="cdet-gen-appearance" data-char="${escHtml(c.name)}" title="Сгенерировать описание внешности по артам персонажа (Claude Vision)">👁 Внешность по арту</button>
-            <button class="cdet-gen-prompt-btn" id="cdet-gen-personality" data-char="${escHtml(c.name)}" title="Сгенерировать характер и голос по внешности и биографии">🎭 Характер и голос</button>
-            <button class="cdet-gen-prompt-btn" id="cdet-gen-prompt" data-char="${escHtml(c.name)}" title="Сгенерировать промт на основе внешности персонажа">🎨 Промт</button>
-            <button class="cdet-edit-btn" data-editpanel="desc" data-char="${escHtml(c.name)}">✏ Редактировать</button>
+            <button class="cdet-gen-appearance-btn" id="cdet-gen-appearance" data-char="${escHtml(c.slug)}" title="Сгенерировать описание внешности по артам персонажа (Claude Vision)">👁 Внешность по арту</button>
+            <button class="cdet-gen-prompt-btn" id="cdet-gen-personality" data-char="${escHtml(c.slug)}" title="Сгенерировать характер и голос по внешности и биографии">🎭 Характер и голос</button>
+            <button class="cdet-gen-prompt-btn" id="cdet-gen-prompt" data-char="${escHtml(c.slug)}" title="Сгенерировать промт на основе внешности персонажа">🎨 Промт</button>
+            <button class="cdet-edit-btn" data-editpanel="desc" data-char="${escHtml(c.slug)}">✏ Редактировать</button>
           </div>
           <div id="cdet-desc-view">
             ${descHtml || '<div class="cdet-empty">Описание не заполнено</div>'}
@@ -216,19 +221,19 @@ function openCharDetail(name) {
             <textarea class="cdet-edit-textarea" id="cdet-negprompt-ta" rows="3" placeholder="photorealistic, ...">${c.negativePrompt ? escHtml(c.negativePrompt) : ''}</textarea>
           </div>
           <div class="cdet-edit-bar" id="cdet-desc-bar">
-            <button class="cdet-save-btn" data-savepanel="desc" data-char="${escHtml(c.name)}">Сохранить</button>
+            <button class="cdet-save-btn" data-savepanel="desc" data-char="${escHtml(c.slug)}">Сохранить</button>
             <button class="cdet-cancel-btn" data-cancelpanel="desc">Отмена</button>
             <span class="cdet-save-msg" id="cdet-desc-msg">✓ Сохранено</span>
           </div>
           <div class="cdet-upload-row">
-            <button class="cdet-upload-btn" data-char="${escHtml(c.name)}">📷 Загрузить изображение</button>
+            <button class="cdet-upload-btn" data-char="${escHtml(c.slug)}">📷 Загрузить изображение</button>
           </div>
           <div class="cdet-divider"></div>
           <div class="cdet-dialogue">
             <div class="cdet-section-title">💬 Реплики НПС в сцене</div>
             <div class="cdet-dialogue-hint">Голос персонажа + клановый стиль (diary_rules.md). Опиши ситуацию — ИИ выдаст реплики в характере.</div>
             <textarea class="cdet-edit-textarea" id="cdet-dlg-situation" rows="2" placeholder="Ситуация: напр. «Князь требует объяснений на Элизиуме»"></textarea>
-            <button class="cdet-gen-prompt-btn" id="cdet-gen-dialogue" data-char="${escHtml(c.name)}">💬 Сгенерировать реплики</button>
+            <button class="cdet-gen-prompt-btn" id="cdet-gen-dialogue" data-char="${escHtml(c.slug)}">💬 Сгенерировать реплики</button>
             <div id="cdet-dlg-result" class="cdet-dialogue-result" style="display:none"></div>
           </div>
         </div>
@@ -237,14 +242,14 @@ function openCharDetail(name) {
     </div>`;
 
   openModal('char-detail-modal');
-  if (c.imageUrl) initCarousel(c.name);
+  if (c.imageUrl) initCarousel(c.slug);
 }
 
 document.getElementById('chars-grid').addEventListener('click', e => {
-  const card = e.target.closest('.char-card[data-name]');
+  const card = e.target.closest('.char-card[data-slug]');
   if (!card) return;
-  if (_foundryBulkMode) { _foundryBulkToggleCard(card.dataset.name); return; }
-  openCharDetail(card.dataset.name);
+  if (_foundryBulkMode) { _foundryBulkToggleCard(card.dataset.slug); return; }
+  openCharDetail(card.dataset.slug);
 });
 
 const charDetailModal = document.getElementById('char-detail-modal');
@@ -333,7 +338,7 @@ document.getElementById('char-detail-content').addEventListener('click', e => {
 
   const diaryBack = e.target.closest('.diary-back');
   if (diaryBack) {
-    const c = STATE.characters.find(ch => ch.name === diaryBack.dataset.char);
+    const c = STATE.characters.find(ch => ch.slug === diaryBack.dataset.char);
     const panel = document.querySelector('#char-detail-content [data-panel="diaries"]');
     if (panel && c) {
       panel.innerHTML = renderDiaryList(c);
@@ -367,13 +372,13 @@ let _carouselTimer  = null;
 let _carouselImages = [];
 let _carouselIdx    = 0;
 
-async function initCarousel(charName) {
+async function initCarousel(charSlug) {
   // Stop previous carousel
   if (_carouselTimer) { clearInterval(_carouselTimer); _carouselTimer = null; }
   _carouselImages = [];
   _carouselIdx = 0;
 
-  const resp = await fetch(`/api/characters/${encodeURIComponent(_charSlug(charName))}/images${window.location.search}`)
+  const resp = await fetch(`/api/characters/${encodeURIComponent(charSlug)}/images${window.location.search}`)
     .catch(() => null);
   if (!resp?.ok) return;
   const { images } = await resp.json().catch(() => ({}));
@@ -468,12 +473,12 @@ function _togglePanelEdit(panel, on) {
   if (btn) { btn.classList.toggle('active', on); btn.textContent = on ? '✏ Режим редактирования' : '✏ Редактировать'; }
   if (on) {
     if (panel === 'desc') {
-      const charName = document.querySelector('[data-editpanel="desc"][data-char]')?.dataset.char;
-      if (charName) _loadDescImages(charName);
+      const charSlug = document.querySelector('[data-editpanel="desc"][data-char]')?.dataset.char;
+      if (charSlug) _loadDescImages(charSlug);
     } else if (panel === 'rels') {
       // Rebuild rows from the latest saved relationships (discard prior unsaved edits)
-      const charName = document.querySelector('[data-editpanel="rels"][data-char]')?.dataset.char;
-      const ch  = STATE.characters.find(c => c.name === charName);
+      const charSlug = document.querySelector('[data-editpanel="rels"][data-char]')?.dataset.char;
+      const ch  = STATE.characters.find(c => c.slug === charSlug);
       const rows = document.getElementById('cdet-rels-rows');
       if (ch && rows) rows.innerHTML = (ch.relationships || []).map(r => _relRowHtml(r.target, r.description)).join('');
       rows?.querySelector('.cdet-rel-name-inp')?.focus();
@@ -483,7 +488,7 @@ function _togglePanelEdit(panel, on) {
   }
 }
 
-async function _savePanelEdit(panel, charName) {
+async function _savePanelEdit(panel, charSlug) {
   const bar  = document.getElementById(`cdet-${panel}-bar`);
   const msg  = document.getElementById(`cdet-${panel}-msg`);
   const save = bar?.querySelector('.cdet-save-btn');
@@ -498,13 +503,13 @@ async function _savePanelEdit(panel, charName) {
   try {
     if (panel === 'bio') {
       const bio = document.getElementById('cdet-bio-ta')?.value.trim() || '';
-      const r = await fetch(`/api/characters/${encodeURIComponent(_charSlug(charName))}/fields${qs}`,
+      const r = await fetch(`/api/characters/${encodeURIComponent(charSlug)}/fields${qs}`,
         { method: 'PUT', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ fields: { biography: bio } }) });
       const d = await r.json();
       ok = d.ok;
       if (ok) {
-        const ch = STATE.characters.find(c => c.name === charName);
+        const ch = STATE.characters.find(c => c.slug === charSlug);
         if (ch) ch.biography = bio;
         document.getElementById('cdet-bio-view').innerHTML =
           bio ? `<div class="cdet-bio">${escHtml(bio)}</div>` : '<div class="cdet-empty">Биография не заполнена</div>';
@@ -516,7 +521,7 @@ async function _savePanelEdit(panel, charName) {
         if (!target) return null;
         return desc ? `${target} — ${desc}` : target;
       }).filter(Boolean);
-      const r = await fetch(`/api/characters/${encodeURIComponent(_charSlug(charName))}/relations${qs}`,
+      const r = await fetch(`/api/characters/${encodeURIComponent(charSlug)}/relations${qs}`,
         { method: 'PUT', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ lines }) });
       const d = await r.json();
@@ -529,7 +534,7 @@ async function _savePanelEdit(panel, charName) {
             ? { target: l.slice(0, idx).trim(), description: l.slice(idx + 3).trim() }
             : { target: l.trim(), description: '' };
         });
-        const ch = STATE.characters.find(c => c.name === charName);
+        const ch = STATE.characters.find(c => c.slug === charSlug);
         if (ch) ch.relationships = rels;
         const relsHtml = rels.map(r => `
           <div class="cdet-rel">
@@ -550,13 +555,13 @@ async function _savePanelEdit(panel, charName) {
       // treats "absent" as "leave untouched") never persisted the clear, so the panel
       // showed empty while the old value silently survived on disk until reload.
       const fields = { appearance, voice, personality, imagePrompt, negativePrompt };
-      const r = await fetch(`/api/characters/${encodeURIComponent(_charSlug(charName))}/fields${qs}`,
+      const r = await fetch(`/api/characters/${encodeURIComponent(charSlug)}/fields${qs}`,
         { method: 'PUT', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ fields }) });
       const d = await r.json();
       ok = d.ok;
       if (ok) {
-        const ch = STATE.characters.find(c => c.name === charName);
+        const ch = STATE.characters.find(c => c.slug === charSlug);
         if (ch) Object.assign(ch, { appearance, voice, personality, imagePrompt, negativePrompt });
         // Refresh desc view
         const descHtml = [
@@ -578,7 +583,7 @@ async function _savePanelEdit(panel, charName) {
   }
 }
 
-async function _generateAppearance(charName) {
+async function _generateAppearance(charSlug) {
   if (_genAppearanceRunning) return;
   _genAppearanceRunning = true;
   const btn = document.getElementById('cdet-gen-appearance');
@@ -594,7 +599,7 @@ async function _generateAppearance(charName) {
 
     // 1. Генерируем внешность через Vision API
     const resp = await fetch(
-      `/api/characters/${encodeURIComponent(_charSlug(charName))}/generate-appearance${qs}`,
+      `/api/characters/${encodeURIComponent(charSlug)}/generate-appearance${qs}`,
       { method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ model: claudeModel, preferSource, orModel }) }
     );
@@ -608,7 +613,7 @@ async function _generateAppearance(charName) {
     // 2. Автосохраняем в карточку персонажа
     if (btn) btn.textContent = '💾 Сохранение...';
     const saveResp = await fetch(
-      `/api/characters/${encodeURIComponent(_charSlug(charName))}/fields${qs}`,
+      `/api/characters/${encodeURIComponent(charSlug)}/fields${qs}`,
       { method: 'PUT', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ fields: { appearance: d.appearance } }) }
     );
@@ -616,7 +621,7 @@ async function _generateAppearance(charName) {
     if (!saveData.ok) { showToast('Ошибка сохранения: ' + (saveData.error || ''), 'error'); return; }
 
     // 3. Обновляем STATE
-    const ch = STATE.characters.find(c => c.name === charName);
+    const ch = STATE.characters.find(c => c.slug === charSlug);
     if (ch) ch.appearance = d.appearance;
 
     // 4. Обновляем вкладку Описание (view-режим)
@@ -652,12 +657,12 @@ async function _generateAppearance(charName) {
   }
 }
 
-async function _loadDescImages(charName) {
+async function _loadDescImages(charSlug) {
   const gallery = document.getElementById('cdet-img-gallery');
   if (!gallery) return;
   gallery.innerHTML = '<div class="cdet-img-gallery-loading">Загрузка…</div>';
 
-  const resp = await fetch(`/api/characters/${encodeURIComponent(_charSlug(charName))}/images${window.location.search}`).catch(() => null);
+  const resp = await fetch(`/api/characters/${encodeURIComponent(charSlug)}/images${window.location.search}`).catch(() => null);
   if (!resp?.ok) { gallery.innerHTML = ''; return; }
   const { images } = await resp.json().catch(() => ({}));
 
@@ -674,20 +679,20 @@ async function _loadDescImages(charName) {
         return `<div class="cdet-img-thumb-wrap">
           <img class="cdet-img-thumb" src="${url}" alt="${escHtml(filename)}" loading="lazy" decoding="async">
           <span class="cdet-img-thumb-name">${escHtml(filename)}</span>
-          <button class="cdet-img-del-btn" data-char="${escHtml(charName)}" data-file="${escHtml(filename)}" title="Удалить">✕</button>
+          <button class="cdet-img-del-btn" data-char="${escHtml(charSlug)}" data-file="${escHtml(filename)}" title="Удалить">✕</button>
         </div>`;
       }).join('')}
     </div>
     <div class="cdet-divider"></div>`;
 }
 
-async function _deleteCharImage(charName, filename) {
+async function _deleteCharImage(charSlug, filename) {
   if (!await showConfirm(`Удалить «${filename}»?\nДействие необратимо.`, { danger: true, confirmText: 'Удалить' })) return;
 
   const qs = window.location.search;
   try {
     const resp = await fetch(
-      `/api/characters/${encodeURIComponent(_charSlug(charName))}/images/${encodeURIComponent(filename)}${qs}`,
+      `/api/characters/${encodeURIComponent(charSlug)}/images/${encodeURIComponent(filename)}${qs}`,
       { method: 'DELETE' }
     );
     const d = await resp.json();
@@ -724,8 +729,8 @@ async function _deleteCharImage(charName, filename) {
     }
 
     // Invalidate grid cache
-    if (_gridImages[charName]) {
-      _gridImages[charName] = _gridImages[charName].filter(u => !u.includes(encodedFile) && !u.includes(filename));
+    if (_gridImages[charSlug]) {
+      _gridImages[charSlug] = _gridImages[charSlug].filter(u => !u.includes(encodedFile) && !u.includes(filename));
     }
   } catch (e) {
     showToast('Ошибка: ' + e.message, 'error');
@@ -735,7 +740,7 @@ async function _deleteCharImage(charName, filename) {
 let _genPromptRunning = false;
 
 // Generate in-character NPC dialogue lines (Voice + clan style)
-async function _genDialogue(charName) {
+async function _genDialogue(charSlug) {
   const sitEl = document.getElementById('cdet-dlg-situation');
   const box   = document.getElementById('cdet-dlg-result');
   const btn   = document.getElementById('cdet-gen-dialogue');
@@ -749,7 +754,7 @@ async function _genDialogue(charName) {
     const qs    = window.location.search;
     const prefs = JSON.parse(localStorage.getItem('ai-feature-prefs') || '{}');
     const pref  = _getPref(prefs, 'dialogue', 'openrouter');
-    const d = await fetch(`/api/characters/${encodeURIComponent(_charSlug(charName))}/dialogue${qs}`,
+    const d = await fetch(`/api/characters/${encodeURIComponent(charSlug)}/dialogue${qs}`,
       { method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ situation, source: pref.provider, model: pref.model }) }
     ).then(r => r.json());
@@ -798,10 +803,10 @@ function _copyImagePrompt(btn) {
   navigator.clipboard.writeText(payload).then(() => flash(true)).catch(() => flash(false));
 }
 
-async function _generatePrompt(charName) {
+async function _generatePrompt(charSlug) {
   if (_genPromptRunning) return;
 
-  const c = STATE.characters.find(ch => ch.name === charName);
+  const c = STATE.characters.find(ch => ch.slug === charSlug);
   if (!c) return;
 
   // Treat placeholder markers (⏳ Заполнить… / ⚠️ Требуется уточнение) as "no prompt yet".
@@ -822,7 +827,7 @@ async function _generatePrompt(charName) {
     const preferSource = _promptPref.provider;
     const orModel    = preferSource === 'openrouter' ? (_promptPref.model || null) : null;
 
-    const resp = await fetch(`/api/characters/${encodeURIComponent(_charSlug(charName))}/generate-prompt${qs}`, {
+    const resp = await fetch(`/api/characters/${encodeURIComponent(charSlug)}/generate-prompt${qs}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ preferSource, orModel }),
@@ -838,7 +843,7 @@ async function _generatePrompt(charName) {
       return;
     }
 
-    const saveResp = await fetch(`/api/characters/${encodeURIComponent(_charSlug(charName))}/fields${qs}`, {
+    const saveResp = await fetch(`/api/characters/${encodeURIComponent(charSlug)}/fields${qs}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ fields: { imagePrompt: d.positive, negativePrompt: d.negative } }),
@@ -876,10 +881,10 @@ async function _generatePrompt(charName) {
 
 let _genPersonalityRunning = false;
 
-async function _generatePersonality(charName) {
+async function _generatePersonality(charSlug) {
   if (_genPersonalityRunning) return;
 
-  const c = STATE.characters.find(ch => ch.name === charName);
+  const c = STATE.characters.find(ch => ch.slug === charSlug);
   if (!c) return;
 
   const hasAppearance = c.appearance && !c.appearance.includes('⚠️');
@@ -905,7 +910,7 @@ async function _generatePersonality(charName) {
     const preferSource  = _persPref.provider;
     const orModel       = preferSource === 'openrouter' ? (_persPref.model || null) : null;
 
-    const resp = await fetch(`/api/characters/${encodeURIComponent(_charSlug(charName))}/generate-personality${qs}`, {
+    const resp = await fetch(`/api/characters/${encodeURIComponent(charSlug)}/generate-personality${qs}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ preferSource, orModel }),
@@ -923,7 +928,7 @@ async function _generatePersonality(charName) {
 
     const fields = { personality: d.personality };
     if (d.voice) fields.voice = d.voice;
-    const saveResp = await fetch(`/api/characters/${encodeURIComponent(_charSlug(charName))}/fields${qs}`, {
+    const saveResp = await fetch(`/api/characters/${encodeURIComponent(charSlug)}/fields${qs}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ fields }),
@@ -961,10 +966,10 @@ async function _generatePersonality(charName) {
 
 let _genBiographyRunning = false;
 
-async function _generateBiography(charName) {
+async function _generateBiography(charSlug) {
   if (_genBiographyRunning) return;
 
-  const c = STATE.characters.find(ch => ch.name === charName);
+  const c = STATE.characters.find(ch => ch.slug === charSlug);
   if (!c) return;
 
   const existingBio = (c.biography || '').trim();
@@ -983,7 +988,7 @@ async function _generateBiography(charName) {
     const preferSource = _bioPref.provider;
     const orModel       = preferSource === 'openrouter' ? (_bioPref.model || null) : null;
 
-    const resp = await fetch(`/api/characters/${encodeURIComponent(_charSlug(charName))}/generate-biography${qs}`, {
+    const resp = await fetch(`/api/characters/${encodeURIComponent(charSlug)}/generate-biography${qs}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ preferSource, orModel }),
@@ -999,7 +1004,7 @@ async function _generateBiography(charName) {
       return;
     }
 
-    const saveResp = await fetch(`/api/characters/${encodeURIComponent(_charSlug(charName))}/fields${qs}`, {
+    const saveResp = await fetch(`/api/characters/${encodeURIComponent(charSlug)}/fields${qs}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ fields: { biography: d.biography } }),
@@ -1022,14 +1027,19 @@ async function _generateBiography(charName) {
 }
 
 // ── Info field editing ────────────────────────────────────────────────────────
-let _editCharName   = null;
+// _editCharSlug — стабильная идентичность редактируемого персонажа (slug не
+// меняется при переименовании, в отличие от имени — FIX-4b,
+// docs/audit/2026-07-28-fix-plan.md). _editOrigName нужен только чтобы
+// восстановить отображаемое имя в шапке при отмене, к идентичности отношения
+// не имеет.
+let _editCharSlug   = null;
 let _editOrigName   = null;
 let _editOrigValues = {};
 let _genAppearanceRunning = false;
 
-function _enterInfoEdit(charName) {
-  _editCharName = charName;
-  _editOrigName = charName;
+function _enterInfoEdit(charSlug) {
+  _editCharSlug = charSlug;
+  _editOrigName = STATE.characters.find(c => c.slug === charSlug)?.name || '';
   _editOrigValues = {};
 
   const grid = document.getElementById('cdet-info-fields');
@@ -1045,7 +1055,7 @@ function _enterInfoEdit(charName) {
     const nameInput = document.createElement('input');
     nameInput.className = 'cdet-name-input';
     nameInput.id = 'cdet-name-input';
-    nameInput.value = charName;
+    nameInput.value = _editOrigName;
     nameInput.placeholder = 'Имя персонажа';
     nameEl.replaceWith(nameInput);
   }
@@ -1135,7 +1145,7 @@ function _exitInfoEdit(saved) {
   }
 
   // Restore value cells (+ re-apply view-mode hiding of empty optional fields)
-  const _lineage   = _lineageOf(_editCharName || _editOrigName);
+  const _lineage   = _lineageOf(_editCharSlug);
   const _reqFields = requiredInfoFor(_lineage);
   const _fieldSet  = infoFieldsFor(_lineage);
   grid.querySelectorAll('.cdet-field-input').forEach(input => {
@@ -1163,7 +1173,7 @@ function _exitInfoEdit(saved) {
   btn.classList.remove('active');
   btn.textContent = '✏ Редактировать';
   bar.classList.remove('show');
-  _editCharName = null;
+  _editCharSlug = null;
   _editOrigName = null;
 }
 
@@ -1171,15 +1181,15 @@ async function _saveInfoFields() {
   const grid    = document.getElementById('cdet-info-fields');
   const saveBtn = document.getElementById('cdet-save-btn');
   const msg     = document.getElementById('cdet-save-msg');
-  if (!grid || !_editCharName) return;
+  if (!grid || !_editCharSlug) return;
 
-  const prevName = _editCharName;
+  const slug = _editCharSlug;
   const fields = {};
 
   // Collect name from header input if changed
   const nameInput = document.getElementById('cdet-name-input');
   const newName = nameInput?.value.trim();
-  if (newName && newName !== prevName) fields.name = newName;
+  if (newName && newName !== _editOrigName) fields.name = newName;
 
   grid.querySelectorAll('.cdet-field-input').forEach(inp => {
     const v = inp.value.trim();
@@ -1191,36 +1201,24 @@ async function _saveInfoFields() {
 
   try {
     const resp = await fetch(
-      `/api/characters/${encodeURIComponent(_charSlug(prevName))}/fields${window.location.search}`,
+      `/api/characters/${encodeURIComponent(slug)}/fields${window.location.search}`,
       { method: 'PUT', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ fields }) }
     );
     const d = await resp.json();
     if (d.ok) {
-      const finalName = fields.name || prevName;
-
       // Update STATE cache
-      const ch = STATE.characters.find(c => c.name === prevName);
-      if (ch) {
-        if (fields.name) ch.name = fields.name;
-        Object.assign(ch, Object.fromEntries(
-          Object.entries(fields).filter(([k]) => k !== 'name').map(([k, v]) => [k, v])
-        ));
-      }
+      const ch = STATE.characters.find(c => c.slug === slug);
+      if (ch) Object.assign(ch, fields);
 
-      // Sync grid card when name changed
+      // Sync grid card display text when name changed — slug (the identity
+      // key on the card and every data-char in this modal) never changes on
+      // rename, so unlike before nothing else needs re-keying here.
       if (fields.name) {
-        const gridCard = document.querySelector(`.char-card[data-name="${CSS.escape(prevName)}"]`);
-        if (gridCard) {
-          gridCard.dataset.name = finalName;
-          const gridNameEl = gridCard.querySelector('.char-name');
-          if (gridNameEl) gridNameEl.textContent = finalName;
-        }
-        // Update data-char on modal buttons so subsequent saves work
-        document.querySelectorAll('#char-detail-content [data-char]').forEach(el => {
-          if (el.dataset.char === prevName) el.dataset.char = finalName;
-        });
-        _editCharName = finalName;
+        const gridCard = document.querySelector(`.char-card[data-slug="${CSS.escape(slug)}"]`);
+        const gridNameEl = gridCard?.querySelector('.char-name');
+        if (gridNameEl) gridNameEl.textContent = fields.name;
+        _editOrigName = fields.name;
       }
 
       _exitInfoEdit(true);
@@ -1237,7 +1235,7 @@ async function _saveInfoFields() {
   }
 }
 
-async function triggerImageUpload(charName) {
+async function triggerImageUpload(charSlug) {
   const input = document.createElement('input');
   input.type  = 'file';
   input.accept = 'image/jpeg,image/png,image/webp,image/gif';
@@ -1254,7 +1252,7 @@ async function triggerImageUpload(charName) {
         r.onerror = rej;
         r.readAsDataURL(file);
       });
-      const resp   = await fetch(`/api/characters/${encodeURIComponent(_charSlug(charName))}/upload-image`, {
+      const resp   = await fetch(`/api/characters/${encodeURIComponent(charSlug)}/upload-image`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ base64, ext })
@@ -1262,19 +1260,19 @@ async function triggerImageUpload(charName) {
       const result = await resp.json();
       if (result.success) {
         const newUrl = result.url + '?t=' + Date.now();
+        // Patch the character in STATE so the card and modal re-open correctly
+        const charInState = STATE.characters.find(ch => ch.slug === charSlug);
+        if (charInState) charInState.imageUrl = newUrl;
         // Update portrait in modal immediately
         const col = document.getElementById('cdet-portrait-col');
         if (col) col.innerHTML = `<div class="cdet-carousel" id="cdet-carousel">
-          <img class="cdet-carousel-img" id="cdet-carousel-img" src="${escAttr(newUrl)}" alt="${escHtml(charName)}">
+          <img class="cdet-carousel-img" id="cdet-carousel-img" src="${escAttr(newUrl)}" alt="${escHtml(charInState?.name || '')}">
           <div class="cdet-carousel-overlay" id="cdet-carousel-overlay"></div>
           <button class="cdet-carousel-btn prev" id="cdet-carousel-prev" title="Предыдущее">&#8249;</button>
           <button class="cdet-carousel-btn next" id="cdet-carousel-next" title="Следующее">&#8250;</button>
           <div class="cdet-carousel-dots" id="cdet-carousel-dots"></div>
          </div>`;
-        initCarousel(charName);
-        // Patch the character in STATE so the card and modal re-open correctly
-        const charInState = STATE.characters.find(ch => ch.name === charName);
-        if (charInState) charInState.imageUrl = newUrl;
+        initCarousel(charSlug);
         // Re-render cards if user is on the characters page
         if (STATE.page === 'characters') renderChars();
         const b = document.querySelector('.cdet-upload-btn');

@@ -2090,6 +2090,7 @@ describe('API — integration', () => {
       assert.equal(typeof body, 'object');
       assert.ok(!Array.isArray(body));
     });
+
     it('GET /:name/sheet — no sheet → {exists: false}', async () => {
       const { status, body } = await apiJson(`/api/characters/${CHAR_GERSON}/sheet${CITY}`);
       assert.equal(status, 200);
@@ -3187,6 +3188,73 @@ describe('API — integration', () => {
 
   // ── Image upload ──────────────────────────────────────────────────────────────
   describe('Image upload', () => {
+    // FIX-4b (docs/audit/2026-07-28-fix-plan.md): ключ должен быть slug, не
+    // отображаемое имя — иначе два персонажа с одинаковым именем в грид-карусели
+    // читают/пишут одну и ту же запись в этом словаре.
+    it('GET /api/characters/all-images — ключ словаря это slug, а не отображаемое имя (только при 2+ арта)', async () => {
+      const cardPath = path.join(CITY_ROOT, 'characters', 'vampires', CHAR_GERSON, `${CHAR_GERSON}.md`);
+      const originalCard = await fs.readFile(cardPath, 'utf-8');
+      const uploaded = [];
+      try {
+        for (const ext of ['png', 'webp']) {
+          const { status, body } = await apiJson(
+            `/api/characters/${CHAR_GERSON}/upload-image${CITY}`,
+            { method: 'POST', body: JSON.stringify({
+              base64: ext === 'png' ? 'iVBORw0KGgo=' : 'UklGRhIAAABXRUJQVlA4TAYAAAAvAAAAAAfQ//73v/+BiOh/AAA=',
+              ext,
+            }) });
+          assert.equal(status, 200, body.error);
+          uploaded.push(body.filename);
+        }
+        const { body: allImages } = await apiJson(`/api/characters/all-images${CITY}`);
+        assert.ok(Object.prototype.hasOwnProperty.call(allImages, CHAR_GERSON),
+          `ожидался ключ "${CHAR_GERSON}" (slug) — получены ключи: ${Object.keys(allImages).join(', ')}`);
+      } finally {
+        // DELETE-эндпоинт чистит файл и ссылку в «## 🖼️ Изображения», и
+        // инвалидирует серверный кэш персонажей — но не гарантирует побайтово
+        // тот же trailing whitespace, что был в файле до теста (не его забота).
+        // Восстанавливаем карточку явным снапшотом, а не полагаемся на это.
+        for (const f of uploaded) {
+          await apiJson(`/api/characters/${CHAR_GERSON}/images/${encodeURIComponent(f)}${CITY}`, { method: 'DELETE' });
+        }
+        await fs.writeFile(cardPath, originalCard, 'utf-8');
+      }
+    });
+
+    // Найдено как побочный эффект написания предыдущего теста: у CHAR_GERSON
+    // секция «## 🖼️ Изображения» — последняя в карточке (нет следующего ##),
+    // и `tail`-ветка регекса, добавляющей новую строку с артом, раньше
+    // ре-вставляла УЖЕ захваченный (и не тронутый) хвостовой whitespace поверх
+    // ещё одного добавленного \n — при каждой загрузке карточка накапливала
+    // на одну пустую строку в конце больше, независимо от последующего
+    // удаления файла. Безобидно по отдельности, но росло без предела при
+    // повторных загрузках (в т.ч. этим же тест-сьютом при каждом запуске).
+    it('POST /upload-image (2×) на карточку без секции ПОСЛЕ «## 🖼️ Изображения» не накапливает пустые строки в конце файла', async () => {
+      const cardPath = path.join(CITY_ROOT, 'characters', 'vampires', CHAR_GERSON, `${CHAR_GERSON}.md`);
+      const originalCard = await fs.readFile(cardPath, 'utf-8');
+      const uploaded = [];
+      try {
+        for (const ext of ['png', 'webp']) {
+          const { status, body } = await apiJson(
+            `/api/characters/${CHAR_GERSON}/upload-image${CITY}`,
+            { method: 'POST', body: JSON.stringify({
+              base64: ext === 'png' ? 'iVBORw0KGgo=' : 'UklGRhIAAABXRUJQVlA4TAYAAAAvAAAAAAfQ//73v/+BiOh/AAA=',
+              ext,
+            }) });
+          assert.equal(status, 200, body.error);
+          uploaded.push(body.filename);
+        }
+        const afterUploads = await fs.readFile(cardPath, 'utf-8');
+        assert.ok(!/\n{4,}$/.test(afterUploads),
+          'после двух загрузок подряд карточка не должна заканчиваться 4+ переносами строк подряд (было — накопление пустых строк)');
+      } finally {
+        for (const f of uploaded) {
+          await apiJson(`/api/characters/${CHAR_GERSON}/images/${encodeURIComponent(f)}${CITY}`, { method: 'DELETE' });
+        }
+        await fs.writeFile(cardPath, originalCard, 'utf-8');
+      }
+    });
+
     it('POST /upload-image — неизвестный персонаж → 404', async () => {
       const { status } = await apiJson(
         `/api/characters/${encodeURIComponent(CHAR_UNKNOWN)}/upload-image${CITY}`,
@@ -5211,9 +5279,11 @@ test('source-guard: char-detail.js — вкладка «Фамильяр» (5.8)
 // зацикливалось, но вводило в заблуждение.
 test('source-guard: char-detail.js — самоссылка фамильяра (target резолвится в самого владельца) диагностируется, не рендерится как обычная карточка', () => {
   const js = require('fs').readFileSync(path.join(__dirname, '../public/scripts/char-detail.js'), 'utf-8');
-  assert.ok(js.includes('familiarChar.name === c.name'), 'нет проверки familiarChar.name === c.name для самоссылки');
+  // FIX-4b (docs/audit/2026-07-28-fix-plan.md): сравнение по slug, не по name —
+  // два персонажа могут делить имя, slug всегда уникален.
+  assert.ok(js.includes('familiarChar.slug === c.slug'), 'нет проверки familiarChar.slug === c.slug для самоссылки');
   assert.ok(js.includes('Связь-фамильяр указывает на самого персонажа'), 'нет диагностического сообщения для самоссылки фамильяра');
-  const idx1 = js.indexOf('familiarChar.name === c.name');
+  const idx1 = js.indexOf('familiarChar.slug === c.slug');
   const idx2 = js.indexOf('_familiarCardHtml(familiarChar)');
   assert.ok(idx1 !== -1 && idx2 !== -1 && idx1 < idx2,
     'проверка самоссылки должна идти ДО вызова _familiarCardHtml(familiarChar) в тернарной цепочке familiarPanelHtml');
@@ -6254,6 +6324,57 @@ describe('FIX-9: линейка-специфичные поля создания
   });
 });
 
+// FIX-4b (docs/audit/2026-07-28-fix-plan.md): пользовательский аудит-скрипт,
+// который стоит прогнать после обновления — находит коллизии имён, оставшиеся
+// в старых данных с ДО-фикса времён (сейчас интерфейс их уже не ломает, но
+// скрипт помогает решить, стоит ли переименовать одного из персонажей).
+// Скрипт — CLI с process.exit() внутри, поэтому запускается child-процессом,
+// а не через require() (иначе process.exit() убьёт сам test-runner).
+describe('tools/check_duplicate_names.js — аудит коллизий имён после обновления', () => {
+  const { execFileSync } = require('child_process');
+  const scriptPath = path.join(__dirname, '../../tools/check_duplicate_names.js');
+  const tmpCity = path.join(__dirname, '../../cities/__dupnametest__');
+
+  const run = (city) => {
+    try {
+      const out = execFileSync('node', [scriptPath, city], { encoding: 'utf-8' });
+      return { out, code: 0 };
+    } catch (e) {
+      return { out: e.stdout || '', code: e.status };
+    }
+  };
+
+  it('город без коллизий — сообщает, что чинить нечего', async () => {
+    await fs.mkdir(path.join(tmpCity, 'characters', 'vampires', 'char_a'), { recursive: true });
+    await fs.writeFile(path.join(tmpCity, 'city.md'), '# Тестгород — сеттинг города\n', 'utf-8');
+    await fs.writeFile(path.join(tmpCity, 'characters', 'vampires', 'char_a', 'char_a.md'), '# 🧛 Персонаж А\n', 'utf-8');
+    try {
+      const { out, code } = run('__dupnametest__');
+      assert.equal(code, 0);
+      assert.match(out, /коллизий имён не найдено/);
+    } finally {
+      await fs.rm(tmpCity, { recursive: true, force: true });
+    }
+  });
+
+  it('два персонажа с одинаковым H1-именем в разных папках — находит обоих, называет их пути', async () => {
+    await fs.mkdir(path.join(tmpCity, 'characters', 'vampires', 'char_a'), { recursive: true });
+    await fs.mkdir(path.join(tmpCity, 'characters', 'mortals', 'char_b'), { recursive: true });
+    await fs.writeFile(path.join(tmpCity, 'city.md'), '# Тестгород — сеттинг города\n', 'utf-8');
+    await fs.writeFile(path.join(tmpCity, 'characters', 'vampires', 'char_a', 'char_a.md'), '# 🧛 Одинаковое Имя\n', 'utf-8');
+    await fs.writeFile(path.join(tmpCity, 'characters', 'mortals', 'char_b', 'char_b.md'), '# 🧑 Одинаковое Имя\n', 'utf-8');
+    try {
+      const { out, code } = run('__dupnametest__');
+      assert.equal(code, 0, 'скрипт только сообщает — не должен завершаться с ошибкой');
+      assert.match(out, /Одинаковое Имя/);
+      assert.match(out, /vampires\/char_a\/char_a\.md/);
+      assert.match(out, /mortals\/char_b\/char_b\.md/);
+    } finally {
+      await fs.rm(tmpCity, { recursive: true, force: true });
+    }
+  });
+});
+
 describe('FIX-11: getCityDisplayName находит city.md (не падает в фолбэк на сырой слаг)', () => {
   const tmpCity = path.join(__dirname, '../../cities/__fix11test__');
   before(async () => {
@@ -6329,4 +6450,54 @@ test('source-guard: generation.js — generate-prompt передаёт isValid �
   assert.ok(routeMatch, 'не найден маршрут generate-prompt');
   assert.match(routeMatch[0], /isValid:\s*isValidPromptResponse/,
     'generate-prompt должен передавать isValid в genTextWithRetry, иначе мусорный ответ одной бесплатной модели сразу роняет запрос 500-й ошибкой без повтора');
+});
+
+// FIX-4b (docs/audit/2026-07-28-fix-plan.md): переход список→модалка персонажа и
+// все действия внутри неё (сохранение полей, генерация, дневники, Лист V20,
+// удаление) резолвятся по slug, а не по отображаемому имени — при совпадении
+// имён двух персонажей клик по карточке раньше всегда открывал ПЕРВОГО по
+// порядку в STATE.characters, а не того, по которому кликнули, и второй
+// персонаж был недостижим через интерфейс вообще.
+test('source-guard: char-detail.js — openCharDetail резолвит персонажа по slug, не по name', () => {
+  const js = require('fs').readFileSync(path.join(__dirname, '../public/scripts/char-detail.js'), 'utf-8');
+  const fnMatch = js.match(/function openCharDetail\(slug\) \{[\s\S]*?\n\}/);
+  assert.ok(fnMatch, 'openCharDetail должен принимать slug как параметр (не name)');
+  assert.match(fnMatch[0], /ch\.slug === slug/, 'openCharDetail должен искать персонажа по slug');
+});
+
+test('source-guard: scripts.js — карточка персонажа в гриде и его клик-обработчик используют data-slug, не data-name', () => {
+  const js = require('fs').readFileSync(path.join(__dirname, '../public/scripts/scripts.js'), 'utf-8');
+  assert.ok(!/char-card[^`]*data-name=/.test(js), '.char-card не должен снова получить data-name как ключ идентичности');
+  assert.match(js, /char-card[^`]*data-slug="\$\{escHtml\(c\.slug\)\}"/, '.char-card должен нести data-slug для резолвинга по slug');
+});
+
+test('source-guard: char-detail.js — клик по карточке в гриде читает card.dataset.slug', () => {
+  const js = require('fs').readFileSync(path.join(__dirname, '../public/scripts/char-detail.js'), 'utf-8');
+  assert.match(js, /closest\('\.char-card\[data-slug\]'\)/, 'делегированный клик-обработчик должен искать .char-card[data-slug]');
+  assert.match(js, /openCharDetail\(card\.dataset\.slug\)/, 'клик по карточке должен передавать slug в openCharDetail');
+});
+
+test('source-guard: char-detail.js — переименование персонажа (_saveInfoFields) хранит идентичность в slug, не пересчитывает её при смене имени', () => {
+  const js = require('fs').readFileSync(path.join(__dirname, '../public/scripts/char-detail.js'), 'utf-8');
+  assert.match(js, /let _editCharSlug\s*=\s*null/, 'идентичность редактируемого персонажа должна храниться как slug (_editCharSlug), а не имя');
+  const fnMatch = js.match(/async function _saveInfoFields\(\) \{[\s\S]*?\n\}/);
+  assert.ok(fnMatch, 'не найдена _saveInfoFields');
+  assert.ok(!/data-name="\$\{CSS\.escape\(prevName\)\}"/.test(fnMatch[0]),
+    'после переименования не должно быть re-key по data-name/prevName — slug не меняется при переименовании');
+});
+
+test('source-guard: v20-sheet.js — контекст листа V20 (_v20Ctx) несёт slug, sheet-API строится по нему, не по _charSlug(name)', () => {
+  const js = require('fs').readFileSync(path.join(__dirname, '../public/scripts/v20-sheet.js'), 'utf-8');
+  assert.match(js, /_v20Ctx = \{ name: [^,]+, slug: charSlug, card \}/, '_v20Ctx должен нести slug рядом с name');
+  const apiMatch = js.match(/function _sheetApi\(ctx\) \{[\s\S]*?\n\}/);
+  assert.ok(apiMatch, 'не найдена _sheetApi');
+  assert.match(apiMatch[0], /ctx\.slug/, '_sheetApi должен строить URL персонажа по ctx.slug');
+  assert.ok(!/_charSlug\(/.test(js), 'v20-sheet.js не должен вызывать _charSlug() — идентичность уже приходит как slug');
+});
+
+test('source-guard: routes/characters.js — GET all-images ключует словарь по slug персонажа, не по имени', () => {
+  const js = require('fs').readFileSync(path.join(__dirname, '../routes/characters.js'), 'utf-8');
+  const routeMatch = js.match(/router\.get\('\/api\/characters\/all-images'[\s\S]*?\n  \}\);/);
+  assert.ok(routeMatch, 'не найден маршрут all-images');
+  assert.match(routeMatch[0], /result\[char\.slug\]\s*=\s*images/, 'ключ словаря должен быть char.slug, не char.name');
 });

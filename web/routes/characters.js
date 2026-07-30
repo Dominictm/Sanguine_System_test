@@ -202,7 +202,7 @@ module.exports = function charactersRouter({
           .filter(f => /\.(jpg|jpeg|png|webp|gif)$/i.test(f))
           .sort()
           .map(f => `/city-img/${city}/characters/${char.lineageFolder}/${encodeURIComponent(char.slug)}/art/${encodeURIComponent(f)}`);
-        if (images.length > 1) result[char.name] = images;
+        if (images.length > 1) result[char.slug] = images;
       }));
       res.json(result);
     } catch (e) { serverError(res, e); }
@@ -615,10 +615,21 @@ module.exports = function charactersRouter({
         if (card.includes('⏳ Изображение не предоставлено')) {
           card = card.replace('- ⏳ Изображение не предоставлено', newLine);
         } else {
-          // Append inside ## 🖼️ Изображения section (before next ## or end of file)
+          // Append inside ## 🖼️ Изображения section (before next ## or end of file).
+          // When this is the LAST section (no следующего ##), `tail` is `\s*$` —
+          // greedy, so it swallows ALL trailing blank lines already in the file.
+          // Re-pasting `tail` verbatim after also adding our own `\n` before it
+          // grew that trailing whitespace by one line on every single upload —
+          // harmless individually, but a card that gets several images over time
+          // (e.g. this route hit repeatedly, as in the test suite) accumulates
+          // an ever-longer run of blank lines at EOF. Normalise EOF trailing
+          // whitespace to exactly one `\n` instead of re-appending the old tail;
+          // the `\n##` case (image section isn't last) is unaffected.
           card = card.replace(/(## 🖼️ Изображения\n)([\s\S]*?)(\n##|\s*$)/, (_, hdr, body, tail) => {
             const trimmed = body.replace(/\n+$/, '');
-            return `${hdr}${trimmed}\n${newLine}\n${tail}`;
+            return tail.startsWith('\n##')
+              ? `${hdr}${trimmed}\n${newLine}\n${tail}`
+              : `${hdr}${trimmed}\n${newLine}\n`;
           });
         }
         await writeFileAtomic(cardPath, card, 'utf-8');
