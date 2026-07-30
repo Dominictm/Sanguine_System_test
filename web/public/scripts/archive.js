@@ -202,7 +202,12 @@ function renderChronicle() {
     loadTimelineForm();
     return;
   }
-  sub.textContent = `${evCount} событий`;
+  // FIX-8 (docs/audit/2026-07-28-fix-plan.md): согласование числа — тот же
+  // паттерн, что уже используется для «месяц/месяца/месяцев» в scripts.js и
+  // «успех/успеха/успехов» в dice.js.
+  const evWord = evCount % 10 === 1 && evCount % 100 !== 11 ? 'событие'
+    : (evCount % 10 >= 2 && evCount % 10 <= 4 && (evCount % 100 < 12 || evCount % 100 > 14) ? 'события' : 'событий');
+  sub.textContent = `${evCount} ${evWord}`;
   el.innerHTML = renderTimeline(data.events || []);
 }
 

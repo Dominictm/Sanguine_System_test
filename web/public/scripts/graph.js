@@ -278,6 +278,14 @@ function renderGraph(data) {
     .attr('stroke-opacity', .55)
     .attr('marker-end', d => `url(#arr-${d.type})`);
 
+  // FIX-13: наведение на ребро показывает подпись С ОБЕИХ сторон, если они
+  // разные («Персонаж А: враг» / «Персонаж Б: должник») — раньше вторая
+  // сторона просто не попадала в граф.
+  link.append('title')
+    .text(d => d.description2
+      ? `${d.fromChar}: ${d.label}\n${d.fromChar2}: ${d.label2}`
+      : `${d.fromChar}: ${d.label}`);
+
   // ── Nodes ──
   const nodeG = g.append('g').attr('class', 'nodes')
     .selectAll('g').data(nodes).join('g')
@@ -400,8 +408,13 @@ function showInfoPanel(d, links, nodes) {
   for (const l of outLinks) {
     const isSource = l.source.id === d.id;
     const other    = isSource ? l.target.id : l.source.id;
-    const desc     = isSource ? l.description : `← ${l.description}`;
-    const type     = l.type;
+    // FIX-13: если у обеих сторон пары — свой текст связи (например «враг» у
+    // одного и «должник» у другого), показываем СВОИ слова того персонажа, чью
+    // карточку сейчас смотрим (fromChar/fromChar2), а не молча текст соседа со
+    // стрелкой — раньше вторая версия вообще терялась при построении графа.
+    const own  = d.id === l.fromChar2;
+    const desc = own ? l.description2 : (d.id === l.fromChar ? l.description : `← ${l.description}`);
+    const type = own ? (l.type2 || l.type) : l.type;
     if (!relsByType[type]) relsByType[type] = [];
     relsByType[type].push({ other, desc });
   }

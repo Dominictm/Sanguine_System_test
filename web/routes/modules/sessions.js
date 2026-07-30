@@ -17,6 +17,7 @@ const {
   _parseNpcEntries, _findNpcMdSection, _removeNpcEntry, _parseNpcMdGroups, _renderSessionBlock,
   _writeSessionsFile, _patchModuleMain,
   _upsertSceneNoteEntry, _upsertModuleSection, _readModuleSection,
+  unescapeFreeformBody,
 } = require('./shared');
 
 module.exports = function sessionsRouter() {
@@ -127,10 +128,10 @@ module.exports = function sessionsRouter() {
         const entries = [];
         // Заметка, сохранённая ДО разбивки по сессиям (плоское тело без
         // ###-детей) — не теряем, отдаём первой записью без номера сессии.
-        if (s.body) entries.push({ session: null, text: s.body });
+        if (s.body) entries.push({ session: null, text: unescapeFreeformBody(s.body) });
         for (let j = i + 1; j < sections.length && sections[j].level === 3 && sections[j].parent === s.heading; j++) {
           const m = sections[j].heading.match(/^Сессия\s+(\d+)$/);
-          entries.push({ session: m ? parseInt(m[1], 10) : null, text: sections[j].body });
+          entries.push({ session: m ? parseInt(m[1], 10) : null, text: unescapeFreeformBody(sections[j].body) });
         }
         notesByHeading[s.heading] = entries;
       }

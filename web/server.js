@@ -82,7 +82,12 @@ app.use(express.json({ limit: '20mb' }));
 // still revalidate after it expires, so edits during development surface within minutes.
 app.use(express.static(path.join(__dirname, 'public'), { maxAge: '5m' }));
 // Serve images straight out of cities/<city>/… (characters/<lin>/<slug>/art/, locations/…)
-app.use('/city-img', express.static(CITIES_DIR, { maxAge: '1h' }));
+// nosniff: uploaded art is validated (magic bytes, see lib/http.js validateImageUpload)
+// but this is defense-in-depth — never let a browser guess/execute content-type here.
+app.use('/city-img', express.static(CITIES_DIR, {
+  maxAge: '1h',
+  setHeaders: res => res.set('X-Content-Type-Options', 'nosniff'),
+}));
 // Serve uploaded soundboard audio files straight out of cities/audio/ (routes/audio.js).
 app.use('/audio-lib', express.static(AUDIO_DIR, { maxAge: '1h' }));
 
@@ -632,14 +637,31 @@ const _oaModels = gen => (gen.source === 'openai' ? [gen.model] : [gen.model, ..
 // Plain-text generation with 429/529 retry (Claude) + automatic OpenRouter fallback.
 // Anthropic subscription/API keys rate-limit aggressively; this keeps short generations
 // (NPC replies, etc.) from hard-failing — it backs off, then falls back to a free model.
-async function genTextWithRetry(gen, { system, user, maxTokens = 900, fallbackOR = true, model = null }) {
+async function genTextWithRetry(gen, { system, user, maxTokens = 900, fallbackOR = true, model = null, isValid = null }) {
   const useModel = model || gen.model;
   if (gen.source === 'gemini') {
     const text = await generateGeminiText(system, user, { model: useModel, maxTokens });
     return { text, source: 'gemini', model: useModel };
   }
   if (_isOA(gen)) {
-    return { text: await _oaCall(gen)(useModel, system, user, [], 75000, maxTokens), source: gen.source, model: useModel };
+    // Раньше здесь был один вызов одной модели без повторов — в отличие от
+    // Anthropic-ветки ниже (retry + fallback), из-за чего одна неудачная/мусорная
+    // (частый случай для бесплатных моделей OpenRouter) попытка сразу роняла запрос
+    // 500-й ошибкой. Перебираем тот же список fallback-моделей, что и generate-appearance.
+    const models = _oaModels(gen);
+    let lastErr, lastBad;
+    for (const m of models) {
+      try {
+        const text = await _oaCall(gen)(m, system, user, [], 75000, maxTokens);
+        if (isValid && !isValid(text)) { lastBad = { text, model: m }; continue; }
+        return { text, source: gen.source, model: m };
+      } catch (e) {
+        lastErr = e;
+        if (e.status === 429) await new Promise(r => setTimeout(r, 800));
+      }
+    }
+    if (lastBad) return { text: lastBad.text, source: gen.source, model: lastBad.model };
+    throw lastErr;
   }
   const delays = [1000, 3000, 6000];
   for (let attempt = 0; ; attempt++) {

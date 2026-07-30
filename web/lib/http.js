@@ -25,6 +25,39 @@ function serverError(res, e) {
   if (!res.headersSent) res.status(500).json({ error: 'Внутренняя ошибка сервера — подробности в логе сервера.' });
 }
 
+// ── Валидация загружаемого изображения (арт персонажа/локации) ───────────────
+// Клиентские accept="image/..." и поле ext — только подсказка UI, не защита:
+// сервер обязан сам проверить и расширение (белый список), и то, что байты
+// действительно начинаются с magic-number заявленного формата — иначе можно
+// сохранить произвольный файл (html/svg/js) под безобидным на вид полем
+// «Арт» и получить его назад через express.static с угадываемым Content-Type.
+const IMAGE_EXT_WHITELIST = new Set(['jpg', 'jpeg', 'png', 'webp', 'gif']);
+function validateImageUpload(base64, ext) {
+  const safeExt = String(ext || '').toLowerCase().replace(/[^a-z]/g, '');
+  if (!IMAGE_EXT_WHITELIST.has(safeExt))
+    return { ok: false, error: 'Недопустимый формат файла (только jpg/jpeg/png/webp/gif)' };
+
+  let buf;
+  try { buf = Buffer.from(String(base64 || ''), 'base64'); } catch { buf = null; }
+  if (!buf || buf.length === 0)
+    return { ok: false, error: 'Некорректные данные изображения' };
+
+  // Each check only requires as many bytes as its own signature — a short-but-genuine
+  // PNG header shouldn't be rejected just because it's shorter than WEBP's 12-byte one.
+  const isJpeg = buf.length >= 3 && buf[0] === 0xFF && buf[1] === 0xD8 && buf[2] === 0xFF;
+  const isPng  = buf.length >= 8 && buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4E && buf[3] === 0x47
+                 && buf[4] === 0x0D && buf[5] === 0x0A && buf[6] === 0x1A && buf[7] === 0x0A;
+  const isGif  = buf.length >= 6 && buf[0] === 0x47 && buf[1] === 0x49 && buf[2] === 0x46 && buf[3] === 0x38
+                 && (buf[4] === 0x37 || buf[4] === 0x39) && buf[5] === 0x61; // "GIF87a" / "GIF89a"
+  const isWebp = buf.length >= 12 && buf[0] === 0x52 && buf[1] === 0x49 && buf[2] === 0x46 && buf[3] === 0x46 &&
+                 buf[8] === 0x57 && buf[9] === 0x45 && buf[10] === 0x42 && buf[11] === 0x50; // "RIFF"...."WEBP"
+  const matchesExt = { jpg: isJpeg, jpeg: isJpeg, png: isPng, gif: isGif, webp: isWebp }[safeExt];
+  if (!matchesExt)
+    return { ok: false, error: 'Содержимое файла не похоже на изображение заявленного формата' };
+
+  return { ok: true, ext: safeExt, buffer: buf };
+}
+
 // ── Rate-limit для AI-генерации ───────────────────────────────────────────────
 // Простой in-memory скользящий счётчик: 20 AI-вызовов в минуту с одного IP.
 // Защищает бюджет провайдеров от случайного спама (двойные клики, зацикленный скрипт).
@@ -94,4 +127,4 @@ function _logAiFail(label, err, gen) {
   console.warn(`${C.yellow}[ai-fail]${C.reset} ${label} — ${C.cyan}${gen?.source || '?'}${C.reset}${gen?.model ? ` (${gen.model})` : ''} — ${C.red}${status}${C.reset} ${err?.message || err}`);
 }
 
-module.exports = { C, serverError, aiRateLimit, callAnthropicWithRetry, _logAiCall, _logAiFail };
+module.exports = { C, serverError, aiRateLimit, callAnthropicWithRetry, _logAiCall, _logAiFail, validateImageUpload };

@@ -275,3 +275,5 @@
 - [Ричард](../characters/vampires/richard/richard.md) — Вампир, Тзимище
 - [Баали](../characters/vampires/baali/baali.md) — Вампир, Баабли
 - [Кот](../characters/mortals/kot/kot.md) — Смертный
+- [Реми Этьен Лебо](../characters/vampires/remi_eten_lebo/remi_eten_lebo.md) — Вампир, Тореадор
+- [Фальторе](../characters/fairies/faltore/faltore.md) — Фея / Ченджлинг, Слуа (Sluagh)

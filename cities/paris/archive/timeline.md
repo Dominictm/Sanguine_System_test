@@ -107,7 +107,7 @@
 
 | Персонаж | Помнит | Не помнит / Отсутствовал |
 | --- | --- | --- |
-| [Вийон](../characters/vampires/fransua_viyon/fransua_viyon.md) | Всё — от Двора Любви до 2010 | — | 📚 |  |
+| [Вийон](../characters/vampires/fransua_viyon/fransua_viyon.md) | Всё — от Двора Любви до 2010 | — 📚 |
 | [Катерина Сфорца](../characters/vampires/katerina_sfortsa/katerina_sfortsa.md) | Революцию, обе войны, Коммуну | Личность до 1990-х под вопросом (слух #4) |
 | [Ален Дюбуа](../characters/vampires/alen_dyubua/alen_dyubua.md) | Обращён: уточнить в карточке | — |
 | [Филиппа де Россет](../characters/vampires/filippa_de_rosset/filippa_de_rosset.md) | Средневековье, 1313+; где была 1609–2010 — неизвестно | В Париже 1609–2010: отсутствовала |

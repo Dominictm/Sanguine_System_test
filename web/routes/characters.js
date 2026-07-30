@@ -10,14 +10,14 @@
 const express = require('express');
 const path    = require('path');
 const fs      = require('fs').promises;
-const { serverError, aiRateLimit } = require('../lib/http');
+const { serverError, aiRateLimit, validateImageUpload } = require('../lib/http');
 const {
   ROOT, cityDir, charsDir, chroniclesDir, archiveDir, reqCity, writeFileAtomic, invalidateChars,
   getAllCharacters, mapLimit, LINEAGE_MAP,
   EDITABLE_FIELD_MAP, SHEET_HEADER_FROM_CARD, _setSheetHeaderCell,
   _nameMatch, _findModularNpcCard,
 } = require('../lib/db');
-const { slugify, writePrompt, parseDiary, periodLabel, parseCharacter } = require('../lib/parsers');
+const { slugify, writePrompt, parseDiary, periodLabel, parseCharacter, sanitizeInlineText } = require('../lib/parsers');
 const { loadLiteraryStyle } = require('../lib/context_builder');
 const { mapCharacterToFoundryActor, FOUNDRY_SUPPORTED_LINEAGES } = require('../lib/foundry-export');
 const { mapFoundryActorToSheetData } = require('../lib/foundry-import');
@@ -230,12 +230,24 @@ module.exports = function charactersRouter({
         if (key === 'name') {
           const newName = String(rawValue).replace(/\n+/g, ' ').trim();
           if (!newName) continue;
-          const before = card;
+          // FIX-4a (docs/audit/2026-07-28-fix-plan.md): a rename colliding with an
+          // existing character's name used to go through silently — since the UI
+          // resolves characters by display name in several places (openCharDetail,
+          // _charSlug), the SECOND same-named character became unreachable through
+          // the interface entirely. Mirrors the slug-uniqueness check already done
+          // on POST /api/characters.
+          if (newName !== char.name && chars.some(c => c.slug !== char.slug && c.name === newName))
+            return res.status(409).json({ error: `Персонаж «${newName}» уже существует` });
+          // Track an actual regex match rather than comparing before/after strings —
+          // renaming to the SAME name (a legitimate no-op) produces byte-identical
+          // output too, which the old before/after comparison couldn't tell apart
+          // from "the H1 pattern never matched", falsely returning 422 on a no-op rename.
+          let h1Matched = false;
           card = card.replace(
             /^(#\s+[^\wЀ-ӿ]*)([\wЀ-ӿ].+)$/m,
-            (_, prefix) => `${prefix}${newName}`
+            (_, prefix) => { h1Matched = true; return `${prefix}${newName}`; }
           );
-          if (card === before)  // H1 not found — fail loudly instead of silent no-op
+          if (!h1Matched)  // H1 not found — fail loudly instead of silent no-op
             return res.status(422).json({ error: 'Не найден заголовок (H1) карточки для переименования' });
           continue;
         }
@@ -290,7 +302,10 @@ module.exports = function charactersRouter({
       const cardPath = path.join(charsDir(city), char.lineageFolder, char.slug, `${char.slug}.md`);
       let card = await fs.readFile(cardPath, 'utf-8');
 
-      const bullets = lines.filter(l => l.trim()).map(l => `  - ${l.trim()}`).join('\n');
+      // sanitizeInlineText collapses embedded newlines — otherwise the tail of a line
+      // becomes an orphaned bullet outside «Отношения:», surviving even a full clear
+      // (FIX-2, docs/audit/2026-07-28-fix-plan.md).
+      const bullets = lines.map(sanitizeInlineText).filter(Boolean).map(l => `  - ${l}`).join('\n');
       const newBlock = `- **Отношения:**\n${bullets || '  - —'}`;
 
       const relRe = /- \*\*Отношения:\*\*\n((?:[ \t]+- .+\n?)+)/;
@@ -317,18 +332,34 @@ module.exports = function charactersRouter({
       const city = reqCity(req);
       const b    = req.body || {};
       const name = String(b.name || '').trim();
-      const folder = _LIN_FOLDER[b.lineage] || 'mortals';
+      // FIX-5 (docs/audit/2026-07-28-fix-plan.md): an unrecognized/missing lineage
+      // used to fall back to 'mortals' silently — unreachable from the UI (the
+      // <select> only ever sends one of the 6 valid values) but a real risk for any
+      // direct API caller, creating a character under the wrong lineage with no error.
+      if (!_LIN_FOLDER[b.lineage]) return res.status(400).json({ error: `Неизвестная линейка: ${b.lineage}` });
+      const folder = _LIN_FOLDER[b.lineage];
       const isVamp = folder === 'vampires';
       const clan = String(b.clan || '').trim();
       const sect = String(b.sect || '').trim();
       const gender = String(b.gender || '').trim();
 
       if (!name) return res.status(400).json({ error: 'Укажи имя персонажа' });
+      // FIX-6 (docs/audit/2026-07-28-fix-plan.md): an unbounded name slugifies into an
+      // equally long folder name — past ~250 chars this blows Windows' legacy MAX_PATH
+      // and fs.mkdir throws ENOENT, surfacing as a raw 500 instead of a clear message.
+      if (name.length > 100) return res.status(400).json({ error: 'Имя персонажа слишком длинное (максимум 100 символов)' });
       if (!GENDER.includes(gender)) return res.status(400).json({ error: 'Укажи пол персонажа (Мужской/Женский)' });
       if (isVamp && !clan) return res.status(400).json({ error: 'Клан обязателен для вампира' });
       if (isVamp && !sect) return res.status(400).json({ error: 'Секта обязательна для вампира' });
       if (folder === 'fairies' && !String(b.seeming || '').trim())
         return res.status(400).json({ error: 'Обличье (Seeming) обязательно для феи' });
+      // FIX-9 (docs/audit/2026-07-28-fix-plan.md): Оборотень/Маг получают
+      // собственные обязательные поля (Племя/Традиция), как Вампир (Клан) и
+      // Фея (Обличье) — раньше не имели ничего специфичного для линейки.
+      if (folder === 'werewolves' && !String(b.tribe || '').trim())
+        return res.status(400).json({ error: 'Племя обязательно для оборотня' });
+      if (folder === 'mages' && !String(b.tradition || '').trim())
+        return res.status(400).json({ error: 'Традиция обязательна для мага' });
 
       const slug = slugify(name);
       if (!slug) return res.status(400).json({ error: 'Не удалось сформировать slug из имени' });
@@ -348,9 +379,12 @@ module.exports = function charactersRouter({
       const gen = one(b.generation), by = one(b.birthYear), ey = one(b.embraceYear), sire = one(b.sire);
       const nature = one(b.nature), demeanor = one(b.demeanor), concept = one(b.concept);
       const seeming = one(b.seeming), court = one(b.court), house = one(b.house), role = one(b.role);
+      const tribe = one(b.tribe), auspice = one(b.auspice), tradition = one(b.tradition);
       const bio = one(b.biography), app_ = one(b.appearance);
       const belonging = one(b.belonging) || 'Персонаж мастера';
       const isFairy = folder === 'fairies';
+      const isWerewolf = folder === 'werewolves';
+      const isMage = folder === 'mages';
       const hasNatureDemeanor = isVamp || folder === 'mortals' || isFairy;
 
       const fields = [
@@ -371,6 +405,13 @@ module.exports = function charactersRouter({
         fields.push(`- **Обличье:** ${seeming || '⚠️ Не указано'}`);
         if (court) fields.push(`- **Двор:** ${court}`);
         if (house) fields.push(`- **Дом:** ${house}`);
+      }
+      if (isWerewolf) {
+        fields.push(`- **Племя:** ${tribe || '⚠️ Не указано'}`);
+        if (auspice) fields.push(`- **Каста:** ${auspice}`);
+      }
+      if (isMage) {
+        fields.push(`- **Традиция:** ${tradition || '⚠️ Не указана'}`);
       }
       if (hasNatureDemeanor) {
         fields.push(`- **Натура:** ${nature || '⚠️ Не указана'}`);
@@ -547,9 +588,12 @@ module.exports = function charactersRouter({
       const char  = chars.find(c => c.slug === slug);
       if (!char) return res.status(404).json({ error: 'Персонаж не найден' });
 
+      const validated = validateImageUpload(base64, ext);
+      if (!validated.ok) return res.status(400).json({ error: validated.error });
+      const safeExt = validated.ext;
+
       const artDir  = path.join(charsDir(city), char.lineageFolder, char.slug, 'art');
       await fs.mkdir(artDir, { recursive: true });
-      const safeExt = (ext || 'jpg').toLowerCase().replace(/[^a-z]/g, '') || 'jpg';
 
       // Find next sequential number: slug_01, slug_02, …
       const existing = await fs.readdir(artDir).catch(() => []);
@@ -558,7 +602,7 @@ module.exports = function charactersRouter({
       const nextNum  = (nums.length ? Math.max(...nums) : 0) + 1;
       const filename = `${char.slug}_${String(nextNum).padStart(2, '0')}.${safeExt}`;
 
-      await writeFileAtomic(path.join(artDir, filename), Buffer.from(base64, 'base64'));
+      await writeFileAtomic(path.join(artDir, filename), validated.buffer);
 
       // Update ## 🖼️ Изображения section in the card
       const cardPath = path.join(charsDir(city), char.lineageFolder, char.slug, `${char.slug}.md`);

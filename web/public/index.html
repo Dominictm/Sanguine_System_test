@@ -990,7 +990,7 @@
         <div class="form-row">
           <div class="form-group">
             <label class="form-label" for="npc-name">Имя *</label>
-            <input class="form-control" id="npc-name" placeholder="Эмилия Вольф">
+            <input class="form-control" id="npc-name" placeholder="Эмилия Вольф" maxlength="100">
           </div>
           <div class="form-group">
             <label class="form-label" for="npc-type">Линейка *</label>
@@ -1081,6 +1081,24 @@
               <label class="form-label" for="npc-house">Дом</label>
               <input class="form-control" id="npc-house" placeholder="Эйлиль, Фиона...">
             </div>
+          </div>
+        </div>
+        <div id="npc-werewolf-fields" style="display:none">
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label" for="npc-tribe">Племя <span class="form-req">*</span></label>
+              <input class="form-control" id="npc-tribe" placeholder="Гару Дети Гайи, Чёрные Фурии...">
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="npc-auspice">Каста</label>
+              <input class="form-control" id="npc-auspice" placeholder="Рагабаш, Тодас, Филандо, Галлиард, Теодаз">
+            </div>
+          </div>
+        </div>
+        <div id="npc-mage-fields" style="display:none">
+          <div class="form-group">
+            <label class="form-label" for="npc-tradition">Традиция <span class="form-req">*</span></label>
+            <input class="form-control" id="npc-tradition" placeholder="Верителли, Хранители Традиции, Порядок Гермеса...">
           </div>
         </div>
         <div class="form-group">

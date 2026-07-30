@@ -495,6 +495,19 @@ describe('Parsers — unit', () => {
       assert.equal(t.epochs[0].rows[1].event, 'Новое');
     });
 
+    // FIX-2 (docs/audit/2026-07-28-fix-plan.md, находка #2): '|' в значении ячейки
+    // рвал pipe-таблицу на лишнюю колонку — теперь экранируется/разэкранируется
+    // прозрачно на границе _serializeTable/_parsePipeTable.
+    it('FIX-2: "|" в тексте события не рвёт таблицу — round-trip через | сохраняет одну ячейку', () => {
+      const { raw } = addTimelineRow(fixture, 'I. Эпоха первая',
+        { year: '1400', type: 'x', event: 'Битва | резня в порту', source: 'src', links: [] });
+      const t = parseTimelineMd(raw);
+      const row = t.epochs[0].rows.find(r => r.year === '1400');
+      assert.ok(row, 'новая строка не найдена');
+      assert.equal(row.event, 'Битва | резня в порту', 'символ "|" должен пережить запись/чтение как есть');
+      assert.equal(row.source, 'src', '"|" не должен был сдвинуть соседнюю колонку');
+    });
+
     it('updateTimelineRow — неверный индекс → indexValid:false', () => {
       const r = updateTimelineRow(fixture, 'I. Эпоха первая', 5, { year: 'x', type: '', event: '', source: '', links: [] });
       assert.equal(r.indexValid, false);
@@ -510,7 +523,8 @@ describe('Parsers — unit', () => {
     });
 
     it('addTimelineEpoch / removeTimelineEpoch — round-trip', () => {
-      const added = addTimelineEpoch(fixture, 'II. Эпоха вторая');
+      const { raw: added, duplicate } = addTimelineEpoch(fixture, 'II. Эпоха вторая');
+      assert.equal(duplicate, false);
       let t = parseTimelineMd(added);
       assert.equal(t.epochs.length, 2);
       assert.equal(t.epochs[1].heading, 'II. Эпоха вторая');
@@ -520,6 +534,17 @@ describe('Parsers — unit', () => {
       t = parseTimelineMd(removed);
       assert.equal(t.epochs.length, 1);
       assert.equal(t.epochs[0].heading, 'I. Эпоха первая'); // первая эпоха не задета
+    });
+
+    // FIX-5 (docs/audit/2026-07-28-fix-plan.md): дубликат заголовка эпохи раньше
+    // добавлялся молча — findIndex во всех остальных операциях (add/update/remove
+    // row, removeEpoch) всегда бьёт по ПЕРВОЙ секции с таким заголовком, так что
+    // вторая становится недостижимой навсегда.
+    it('FIX-5: addTimelineEpoch с уже существующим заголовком → duplicate:true, файл не меняется', () => {
+      const { raw, duplicate } = addTimelineEpoch(fixture, 'I. Эпоха первая');
+      assert.equal(duplicate, true);
+      assert.equal(raw, fixture, 'при дубликате исходный текст не должен меняться');
+      assert.equal(parseTimelineMd(raw).epochs.length, 1);
     });
   });
 
@@ -562,6 +587,17 @@ describe('Parsers — unit', () => {
       ws = parseWorldStateBlock(removed);
       assert.equal(ws.sections[0].rows.length, 1);
       assert.deepEqual(ws.sections[0].rows[0], ['x', 'y']);
+    });
+
+    // FIX-2 (docs/audit/2026-07-28-fix-plan.md, находка #2) — тот же паттерн,
+    // что и в timeline.js, независимая копия _serializeTable/_parsePipeTable.
+    it('FIX-2: "|" в ячейке строки секции не сдвигает соседние колонки', () => {
+      const added = addWorldStateRow(fixture, '🏛️ Секция А', ['Камарилья | Анархи', 'Напряжение']).raw;
+      const ws = parseWorldStateBlock(added);
+      const row = ws.sections[0].rows.find(r => r[0] === 'Камарилья | Анархи');
+      assert.ok(row, 'строка с "|" не найдена как единая ячейка');
+      assert.equal(row.length, 2, '"|" не должен был породить лишнюю колонку');
+      assert.equal(row[1], 'Напряжение');
     });
 
     it('addWorldStateSection / removeWorldStateSection', () => {
@@ -1790,6 +1826,26 @@ describe('Parsers — unit', () => {
       const updated = setPoliticalFactionInfluence('# Карта фракций\n\nПусто.', 'Шабаш', 20);
       const factions = parsePoliticalFactions(updated);
       assert.deepEqual(factions, [{ name: 'Шабаш', influence: 20, territory: '', threat: '' }]);
+    });
+
+    // FIX-2 (docs/audit/2026-07-28-fix-plan.md, находка #2) — "|" в названии
+    // фракции обрезал имя и сдвигал влияние в колонку «Территория».
+    it('FIX-2: "|" в названии новой фракции не рвёт строку и не путает влияние с территорией', () => {
+      const updated = setPoliticalFactionInfluence(POL, 'Анархи | Шабаш', 30);
+      const factions = parsePoliticalFactions(updated);
+      const f = factions.find(f => f.name === 'Анархи | Шабаш');
+      assert.ok(f, 'фракция с полным именем (включая "|") не найдена');
+      assert.equal(f.influence, 30);
+      assert.equal(f.territory, '');
+    });
+
+    it('FIX-2: "|" переживает обновление уже существующей фракции (round-trip через строку с "|")', () => {
+      const withPipe = setPoliticalFactionInfluence(POL, 'Анархи | Шабаш', 30);
+      const updated = setPoliticalFactionInfluence(withPipe, 'Анархи | Шабаш', 60);
+      const factions = parsePoliticalFactions(updated);
+      const f = factions.find(f => f.name === 'Анархи | Шабаш');
+      assert.ok(f, 'фракция потерялась при повторном обновлении её "|"-имени');
+      assert.equal(f.influence, 60);
     });
   });
 
@@ -3145,10 +3201,12 @@ describe('API — integration', () => {
       try {
         const { status, body } = await apiJson(
           `/api/characters/${CHAR_GERSON}/upload-image${CITY}`,
-          { method: 'POST', body: JSON.stringify({ base64: 'iVBORw0KGgo=', ext: 'jpg' }) });
+          // PNG magic bytes (\x89PNG\r\n\x1a\n) — validateImageUpload (FIX-1) now checks
+          // content against the claimed ext, so this must actually decode to a PNG header.
+          { method: 'POST', body: JSON.stringify({ base64: 'iVBORw0KGgo=', ext: 'png' }) });
         assert.equal(status, 200);
         assert.equal(body.success, true);
-        assert.match(body.filename, new RegExp(`^${CHAR_GERSON}_\\d+\\.jpg$`));
+        assert.match(body.filename, new RegExp(`^${CHAR_GERSON}_\\d+\\.png$`));
 
         createdFile = path.join(CITY_ROOT, 'characters', 'vampires', CHAR_GERSON, 'art', body.filename);
         const written = await fs.readFile(createdFile);
@@ -3160,6 +3218,42 @@ describe('API — integration', () => {
         if (createdFile) await fs.rm(createdFile, { force: true });
         await fs.writeFile(cardPath, original, 'utf-8');
       }
+    });
+
+    // FIX-1: QA (2026-07-28) — сервер принимал любое расширение из [^a-z] и
+    // никогда не проверял содержимое, из-за чего <script> под именем "арта"
+    // сохранялся и отдавался обратно как text/html (stored XSS).
+    it('POST /upload-image — html-содержимое под видом расширения "html" → 400, не сохраняется', async () => {
+      const before = await fs.readdir(path.join(CITY_ROOT, 'characters', 'vampires', CHAR_GERSON, 'art')).catch(() => []);
+      const base64 = Buffer.from('<script>alert(1)</script>', 'utf-8').toString('base64');
+      const { status, body } = await apiJson(
+        `/api/characters/${CHAR_GERSON}/upload-image${CITY}`,
+        { method: 'POST', body: JSON.stringify({ base64, ext: 'html' }) });
+      assert.equal(status, 400);
+      assert.ok(body.error, 'нет сообщения об ошибке');
+      const after = await fs.readdir(path.join(CITY_ROOT, 'characters', 'vampires', CHAR_GERSON, 'art')).catch(() => []);
+      assert.deepEqual(after, before, 'ничего не должно быть записано в art/ при отклонённой загрузке');
+    });
+
+    it('POST /upload-image — валидные PNG-байты с ext="jpg" (расширение врёт о содержимом) → 400', async () => {
+      const { status, body } = await apiJson(
+        `/api/characters/${CHAR_GERSON}/upload-image${CITY}`,
+        { method: 'POST', body: JSON.stringify({ base64: 'iVBORw0KGgo=', ext: 'jpg' }) });
+      assert.equal(status, 400);
+      assert.ok(body.error);
+    });
+
+    it('source-guard: /city-img отдаётся с X-Content-Type-Options: nosniff', () => {
+      const serverSrc = require('fs').readFileSync(path.join(__dirname, '../server.js'), 'utf-8');
+      const mount = serverSrc.match(/app\.use\('\/city-img'[\s\S]*?\)\);/);
+      assert.ok(mount, 'не найдено монтирование /city-img');
+      assert.ok(/X-Content-Type-Options.*nosniff/.test(mount[0]), '/city-img не задаёт X-Content-Type-Options: nosniff');
+    });
+
+    it('source-guard: локации используют тот же validateImageUpload, что и персонажи', () => {
+      const locSrc = require('fs').readFileSync(path.join(__dirname, '../routes/locations.js'), 'utf-8');
+      assert.ok(/validateImageUpload\(base64, ext\)/.test(locSrc),
+        'routes/locations.js не использует validateImageUpload — та же уязвимость, что и в characters.js, должна быть закрыта и там');
     });
   });
 
@@ -3591,6 +3685,15 @@ describe('API — integration', () => {
         { method: 'POST', body: JSON.stringify({ heading: '__TEST_EPOCH__' }) });
       assert.equal(ok.status, 200);
       assert.ok(ok.body.epochs.some(e => e.heading === '__TEST_EPOCH__'));
+    });
+
+    it('FIX-5: POST /api/timeline/epoch с уже существующим заголовком → 409, не плодит дубликат', async () => {
+      await apiJson(`/api/timeline/epoch${CITY}`, { method: 'POST', body: JSON.stringify({ heading: '__TEST_EPOCH_DUP__' }) });
+      const dup = await apiJson(`/api/timeline/epoch${CITY}`, { method: 'POST', body: JSON.stringify({ heading: '__TEST_EPOCH_DUP__' }) });
+      assert.equal(dup.status, 409);
+      const { body } = await apiJson(`/api/timeline/structured${CITY}`);
+      assert.equal(body.epochs.filter(e => e.heading === '__TEST_EPOCH_DUP__').length, 1,
+        'после 409 в файле должна остаться ровно одна секция с этим заголовком');
     });
 
     it('POST row → PUT row → DELETE row — round-trip внутри тестовой эпохи', async () => {
@@ -5824,4 +5927,406 @@ test('source-guard: session-screen.js — заметки без формальн
   assert.ok(/includedHeadings\.has\(block\.heading\)/.test(fnBody),
     'второй проход не пропускает уже учтённые в основном списке блоки — рискует задвоить заметку');
   assert.ok(/Прочее/.test(fnBody), 'нет блока «Прочее» в агрегате для заметок без формального совпадения');
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// FIX-10 — path traversal через клиентский slug (Локации/Хроники/Модули)
+// ══════════════════════════════════════════════════════════════════════════════
+// QA (2026-07-28/29): district/slug использовались как сегмент пути к файлу
+// после одного лишь .trim() — «../../имя» уводил запись за пределы cities/<город>/.
+// Регресс — реальные HTTP-запросы к тестовому серверу, не только source-guard,
+// раз баг был именно в поведении (echo слага, фактическое место на диске).
+
+describe('FIX-10: path traversal через slug — Локации/Хроники/Модули', () => {
+  const tmpCity   = path.join(__dirname, '../../cities/__traversaltest__');
+  const outsideDir = path.join(__dirname, '../../cities/__traversal_escaped__');
+  const qs = '?city=__traversaltest__';
+
+  before(async () => {
+    await fs.mkdir(path.join(tmpCity, 'locations'), { recursive: true });
+    await fs.mkdir(path.join(tmpCity, 'chronicles', 'test_chr', 'modules'), { recursive: true });
+    await fs.mkdir(path.join(tmpCity, 'archive'), { recursive: true });
+    await fs.writeFile(path.join(tmpCity, 'archive', 'characters_index.md'), '# Реестр\n', 'utf-8');
+    await startServer(); // предыдущий describe('API — integration') уже остановил свой сервер в after()
+  });
+  after(async () => {
+    await stopServer();
+    await fs.rm(tmpCity, { recursive: true, force: true });
+    await fs.rm(outsideDir, { recursive: true, force: true }); // на случай регресса — не должен существовать
+  });
+
+  it('POST /api/locations с district="../../__traversal_escaped__" не создаёт файл вне cities/<город>/', async () => {
+    const { status, body } = await apiJson(`/api/locations${qs}`, {
+      method: 'POST',
+      body: JSON.stringify({ name: 'ТравТестЛокация', district: '../../__traversal_escaped__' }),
+    });
+    assert.equal(status, 200);
+    assert.ok(!body.district.includes('..'), `district не санитизирован: ${body.district}`);
+    assert.equal(await fs.stat(outsideDir).catch(() => null), null, 'traversal создал директорию вне города');
+    const escaped = await fs.readdir(path.join(tmpCity, 'locations')).catch(() => []);
+    assert.ok(escaped.length > 0, 'локация не была создана вообще (ожидался безопасный slug-фолбэк, не полный отказ)');
+  });
+
+  it('POST /api/chronicles со slug="../../__traversal_escaped__" не создаёт файлы вне cities/<город>/', async () => {
+    const { status, body } = await apiJson(`/api/chronicles${qs}`, {
+      method: 'POST',
+      body: JSON.stringify({ name: 'ТравТестХроника', slug: '../../__traversal_escaped__' }),
+    });
+    assert.equal(status, 200);
+    assert.ok(!body.slug.includes('..'), `slug не санитизирован: ${body.slug}`);
+    assert.equal(await fs.stat(outsideDir).catch(() => null), null, 'traversal создал директорию вне города');
+    await fs.rm(path.join(tmpCity, 'chronicles', body.slug), { recursive: true, force: true });
+  });
+
+  it('POST /api/chronicles/:chr/modules со slug="../../../__traversal_escaped__" не создаёт файлы вне модуля (двойной эскейп из отчёта)', async () => {
+    const { status, body } = await apiJson(`/api/chronicles/test_chr/modules${qs}`, {
+      method: 'POST',
+      body: JSON.stringify({ name: 'ТравТестМодуль', time: '2020', slug: '../../../__traversal_escaped__' }),
+    });
+    assert.equal(status, 200);
+    assert.ok(!body.slug.includes('..'), `slug не санитизирован: ${body.slug}`);
+    assert.equal(await fs.stat(outsideDir).catch(() => null), null, 'traversal создал директорию вне города');
+    // Главный риск отчёта — содержимое модуля резолвится ЕЩЁ РАЗ через тот же slug
+    // (было: modDir и `${modSlug}.md` считали от одного непроверенного значения).
+    const modDir = path.join(tmpCity, 'chronicles', 'test_chr', 'modules', body.slug);
+    assert.equal(await fs.stat(path.join(modDir, `${body.slug}.md`)).catch(() => null) !== null, true,
+      'файл содержимого модуля не найден внутри ожидаемой (безопасной) папки модуля');
+  });
+
+  it('source-guard: slugify() применяется к клиентскому slug/district во всех трёх местах (не просто .trim())', () => {
+    const locSrc = require('fs').readFileSync(path.join(__dirname, '../routes/locations.js'), 'utf-8');
+    const chrSrc = require('fs').readFileSync(path.join(__dirname, '../routes/chronicles.js'), 'utf-8');
+    const modSrc = require('fs').readFileSync(path.join(__dirname, '../routes/modules/list.js'), 'utf-8');
+    assert.ok(/const distFolder = slugify\(district\)/.test(locSrc),
+      'locations.js: district должен идти через slugify(), не просто .trim()');
+    assert.ok(/const slug\s*=\s*slugify\(req\.body\.slug\?\.trim\(\) \|\| display\)/.test(chrSrc),
+      'chronicles.js: slug должен идти через slugify(), даже если передан явно клиентом');
+    assert.ok(/const modSlug = slugify\(req\.body\.slug\?\.trim\(\) \|\| name\.trim\(\)\)/.test(modSrc),
+      'modules/list.js: modSlug должен идти через slugify(), даже если передан явно клиентом');
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// FIX-2 — свободный текст ломает структуру хранения (маршрутный слой)
+// ══════════════════════════════════════════════════════════════════════════════
+// Парсерный слой (timeline/worldState/city.js) уже покрыт unit-тестами выше —
+// здесь только то, что нормализуется НЕ в парсере, а в самих роутах (relations,
+// поля модуля, журнал сессий, заметки сцен) — требует реального HTTP round-trip,
+// т.к. баг проявляется именно на ПОВТОРНОМ разборе уже записанного файла.
+
+describe('FIX-2: свободный текст ломает структуру хранения — маршрутный слой', () => {
+  const tmpCity = path.join(__dirname, '../../cities/__fix2test__');
+  const qs = '?city=__fix2test__';
+  let charSlug;
+
+  before(async () => {
+    await startServer();
+    await fs.mkdir(path.join(tmpCity, 'archive'), { recursive: true });
+    await fs.writeFile(path.join(tmpCity, 'archive', 'characters_index.md'), '# Реестр\n', 'utf-8');
+
+    const c1 = await apiJson(`/api/characters${qs}`, { method: 'POST',
+      body: JSON.stringify({ name: 'ФиксТестА', lineage: 'mortal', gender: 'Мужской' }) });
+    charSlug = c1.body.slug;
+    await apiJson(`/api/chronicles${qs}`, { method: 'POST', body: JSON.stringify({ name: 'ФиксТестХроника' }) });
+    await apiJson(`/api/chronicles/fikstesthronika/modules${qs}`, { method: 'POST',
+      body: JSON.stringify({ name: 'ФиксТестМодуль', time: '2020' }) });
+  });
+  after(async () => {
+    await stopServer();
+    await fs.rm(tmpCity, { recursive: true, force: true });
+  });
+
+  it('FIX-6: имя персонажа длиннее 100 символов → 400, а не 500 (раньше падало в fs.mkdir на длине пути Windows)', async () => {
+    const longName = 'Оченьдлинноеимяперсонажадлятестированияграничныхзначений'.repeat(9); // 504 символа
+    const { status, body } = await apiJson(`/api/characters${qs}`, { method: 'POST',
+      body: JSON.stringify({ name: longName, lineage: 'mortal', gender: 'Мужской' }) });
+    assert.equal(status, 400);
+    assert.ok(body.error);
+  });
+
+  it('FIX-4a: переименование персонажа в уже существующее имя → 409, не создаёт коллизию', async () => {
+    const other = await apiJson(`/api/characters${qs}`, { method: 'POST',
+      body: JSON.stringify({ name: 'ФиксТестБ', lineage: 'mortal', gender: 'Женский' }) });
+    const { status, body } = await apiJson(`/api/characters/${other.body.slug}/fields${qs}`, { method: 'PUT',
+      body: JSON.stringify({ fields: { name: 'ФиксТестА' } }) }); // charSlug's display name
+    assert.equal(status, 409);
+    assert.ok(body.error);
+    // Персонаж не должен был переименоваться — карточка "Б" остаётся собой.
+    const card = await fs.readFile(path.join(tmpCity, 'characters', 'mortals', other.body.slug, `${other.body.slug}.md`), 'utf-8');
+    assert.match(card, /^# 🧑 ФиксТестБ/m);
+  });
+
+  it('FIX-4a: переименование персонажа В САМОГО СЕБЯ (то же имя) — не 409, обычный no-op успех', async () => {
+    const { status } = await apiJson(`/api/characters/${charSlug}/fields${qs}`, { method: 'PUT',
+      body: JSON.stringify({ fields: { name: 'ФиксТестА' } }) });
+    assert.equal(status, 200);
+  });
+
+  it('FIX-3: PUT /fields с explicit пустой строкой реально очищает поле на диске (не только "поле отсутствует = не трогать")', async () => {
+    await apiJson(`/api/characters/${charSlug}/fields${qs}`, { method: 'PUT',
+      body: JSON.stringify({ fields: { voice: 'Хриплый голос' } }) });
+    let card = await fs.readFile(path.join(tmpCity, 'characters', 'mortals', charSlug, `${charSlug}.md`), 'utf-8');
+    assert.match(card, /Хриплый голос/, 'предварительная запись голоса не удалась');
+
+    await apiJson(`/api/characters/${charSlug}/fields${qs}`, { method: 'PUT',
+      body: JSON.stringify({ fields: { voice: '' } }) });
+    card = await fs.readFile(path.join(tmpCity, 'characters', 'mortals', charSlug, `${charSlug}.md`), 'utf-8');
+    assert.ok(!card.includes('Хриплый голос'), 'сервер не очистил поле при явной пустой строке — старое значение пережило запись');
+  });
+
+  it('Отношения: "\\n" в строке связи не оставляет осиротевшую строку вне блока «Отношения:»', async () => {
+    const { status } = await apiJson(`/api/characters/${charSlug}/relations${qs}`, { method: 'PUT',
+      body: JSON.stringify({ lines: ['Злодей — Враг\n- **Слаг:** hacked'] }) });
+    assert.equal(status, 200);
+    const card = await fs.readFile(path.join(tmpCity, 'characters', 'mortals', charSlug, `${charSlug}.md`), 'utf-8');
+    assert.ok(!/^- \*\*Слаг:\*\* hacked/m.test(card), 'инъекция создала строку-поле вне блока «Отношения:»');
+    assert.match(card, /- Злодей — Враг/, 'сама связь должна сохраниться (перенос схлопнут в пробел)');
+  });
+
+  it('Журнал сессий: "## Сессия N" в заметке не фабрикует поддельную запись при следующем сохранении', async () => {
+    await apiJson(`/api/chronicles/fikstesthronika/modules/fikstestmodul/session${qs}`, { method: 'POST',
+      body: JSON.stringify({ date: '2026-01-01', scenes: '1', status: '🟡 В процессе',
+        notes: 'Заметка.\n## Сессия 99 — ИНЪЕКЦИЯ\n- **Статус модуля:** 🟢 Закрыт\nПоддельно.' }) });
+    // Второе сохранение вызывает повторный разбор всего файла — здесь и
+    // проявлялась инъекция (см. 2026-07-29-session-chronicles-qa-report.md #3).
+    const second = await apiJson(`/api/chronicles/fikstesthronika/modules/fikstestmodul/session${qs}`, { method: 'POST',
+      body: JSON.stringify({ date: '2026-02-01', scenes: '2', status: '🟡 В процессе', notes: 'Вторая настоящая.' }) });
+    assert.equal(second.body.n, 2, 'должно быть ровно 2 сессии — инъекция не должна была стать третьей записью');
+  });
+
+  it('Заметки по сцене: "### Сессия N" в тексте заметки не фабрикует поддельную подзапись', async () => {
+    await apiJson(`/api/chronicles/fikstesthronika/modules/fikstestmodul/scene-note${qs}`, { method: 'PUT',
+      body: JSON.stringify({ heading: 'Сцена 1', session: 1,
+        text: 'Заметка.\n### Сессия 5\nПоддельная запись.' }) });
+    await apiJson(`/api/chronicles/fikstesthronika/modules/fikstestmodul/scene-note${qs}`, { method: 'PUT',
+      body: JSON.stringify({ heading: 'Сцена 1', session: 2, text: 'Вторая настоящая.' }) });
+    const { body } = await apiJson(`/api/chronicles/fikstesthronika/modules/fikstestmodul/scene-notes${qs}`);
+    const entries = body['Сцена 1'];
+    assert.equal(entries.length, 2, 'должно быть ровно 2 записи — инъекция не должна была стать третьей');
+    assert.deepEqual(entries.map(e => e.session).sort(), [1, 2]);
+    assert.match(entries[0].text, /### Сессия 5/, 'исходный текст заметки (включая "### Сессия 5" как текст) должен остаться читаемым при показе');
+  });
+
+  it('FIX-14: продвижение модульного НПС в канон обновляет «Линейка WoD» и эмодзи под целевую линейку', async () => {
+    await apiJson(`/api/chronicles/fikstesthronika/modules/fikstestmodul/npc${qs}`, { method: 'POST',
+      body: JSON.stringify({ name: 'ФиксТест14НПС', group: 'modular' }) });
+    const promoted = await apiJson(`/api/chronicles/fikstesthronika/modules/fikstestmodul/npc/fikstest14nps/promote${qs}`,
+      { method: 'POST', body: JSON.stringify({ lineage: 'vampires', force: true }) });
+    assert.equal(promoted.status, 200);
+    const card = await fs.readFile(path.join(tmpCity, 'characters', 'vampires', 'fikstest14nps', 'fikstest14nps.md'), 'utf-8');
+    assert.match(card, /^- \*\*Линейка WoD:\*\* Вампир\s*$/m,
+      'после продвижения в vampires карточка всё ещё называет себя "mortals" — ровно то, что забракует validate_cards.js');
+    assert.match(card, /^# 🧛 /m, 'эмодзи заголовка не обновился под целевую линейку');
+  });
+
+  it('Поля модуля: "|" в «Тон» не сдвигает таблицу параметров модуля', async () => {
+    const { status } = await apiJson(`/api/chronicles/fikstesthronika/modules/fikstestmodul/fields${qs}`, { method: 'PUT',
+      body: JSON.stringify({ fields: { tone: 'Мрачный | Готический' } }) });
+    assert.equal(status, 200);
+    const main = await fs.readFile(
+      path.join(tmpCity, 'chronicles', 'fikstesthronika', 'modules', 'fikstestmodul', 'fikstestmodul.md'), 'utf-8');
+    const toneLine = main.split('\n').find(l => l.includes('**Тон**'));
+    assert.ok(toneLine, 'строка «Тон» не найдена');
+    // Корректная 2-ячеечная строка "| **Тон** | значение |" содержит РОВНО 3
+    // символа "|" — необработанный "|" внутри значения дал бы 4 и лишнюю колонку.
+    assert.equal((toneLine.match(/\|/g) || []).length, 3, '"|" из значения не должен был добавить лишнюю колонку в строку таблицы');
+  });
+});
+
+describe('FIX-12: граф — неоднозначная цель связи не резолвится молча к случайному персонажу', () => {
+  const tmpCity = path.join(__dirname, '../../cities/__fix12test__');
+  const qs = '?city=__fix12test__';
+
+  before(async () => {
+    await fs.mkdir(path.join(tmpCity, 'archive'), { recursive: true });
+    await fs.writeFile(path.join(tmpCity, 'archive', 'characters_index.md'), '# Реестр\n', 'utf-8');
+    await startServer();
+    for (const name of ['Иван Петров', 'Иван Сидоров', 'СвязнойТест']) {
+      await apiJson(`/api/characters${qs}`, { method: 'POST',
+        body: JSON.stringify({ name, lineage: 'mortal', gender: 'Мужской' }) });
+    }
+    await apiJson(`/api/characters/svyaznoytest/relations${qs}`, { method: 'PUT',
+      body: JSON.stringify({ lines: ['Иван — Знакомый'] }) }); // неоднозначно: два "Иван ..."
+  });
+  after(async () => {
+    await stopServer();
+    await fs.rm(tmpCity, { recursive: true, force: true });
+  });
+
+  it('неоднозначное имя ("Иван" при двух "Иван ...") не резолвится ни к одному — ребро отсутствует', async () => {
+    const { body } = await apiJson(`/api/graph${qs}`);
+    const edge = body.links.find(l => l.source === 'СвязнойТест' || l.target === 'СвязнойТест');
+    assert.equal(edge, undefined, 'неоднозначная связь не должна была молча выбрать одного из двух "Иван ..."');
+  });
+
+  it('однозначное точное имя по-прежнему резолвится нормально', async () => {
+    await apiJson(`/api/characters/svyaznoytest/relations${qs}`, { method: 'PUT',
+      body: JSON.stringify({ lines: ['Иван Петров — Знакомый'] }) });
+    const { body } = await apiJson(`/api/graph${qs}`);
+    const edge = body.links.find(l =>
+      (l.source === 'СвязнойТест' && l.target === 'Иван Петров') ||
+      (l.target === 'СвязнойТест' && l.source === 'Иван Петров'));
+    assert.ok(edge, 'точное совпадение имени должно резолвиться как обычно');
+  });
+});
+
+describe('FIX-13: граф — несимметричная связь между парой сохраняет обе стороны, не теряет вторую', () => {
+  const tmpCity = path.join(__dirname, '../../cities/__fix13test__');
+  const qs = '?city=__fix13test__';
+
+  before(async () => {
+    await fs.mkdir(path.join(tmpCity, 'archive'), { recursive: true });
+    await fs.writeFile(path.join(tmpCity, 'archive', 'characters_index.md'), '# Реестр\n', 'utf-8');
+    await startServer();
+    const slugs = {};
+    for (const name of ['Первый Асимметрик', 'Второй Асимметрик']) {
+      const { body } = await apiJson(`/api/characters${qs}`, { method: 'POST',
+        body: JSON.stringify({ name, lineage: 'mortal', gender: 'Мужской' }) });
+      slugs[name] = body.slug;
+    }
+    await apiJson(`/api/characters/${slugs['Первый Асимметрик']}/relations${qs}`, { method: 'PUT',
+      body: JSON.stringify({ lines: ['Второй Асимметрик — враг'] }) });
+    await apiJson(`/api/characters/${slugs['Второй Асимметрик']}/relations${qs}`, { method: 'PUT',
+      body: JSON.stringify({ lines: ['Первый Асимметрик — должник'] }) });
+  });
+  after(async () => {
+    await stopServer();
+    await fs.rm(tmpCity, { recursive: true, force: true });
+  });
+
+  it('одно ребро на пару, но description/description2 хранят СВОЙ текст каждой стороны (не дедуп до одной)', async () => {
+    const { body } = await apiJson(`/api/graph${qs}`);
+    const edges = body.links.filter(l =>
+      (l.source === 'Первый Асимметрик' && l.target === 'Второй Асимметрик') ||
+      (l.target === 'Первый Асимметрик' && l.source === 'Второй Асимметрик'));
+    assert.equal(edges.length, 1, 'между парой должно быть ровно одно ребро, не два дублирующих');
+    const [edge] = edges;
+    assert.ok(edge.fromChar2, 'вторая сторона не должна теряться — fromChar2 должен быть заполнен');
+    const byChar = { [edge.fromChar]: edge.description, [edge.fromChar2]: edge.description2 };
+    assert.match(byChar['Первый Асимметрик'], /враг/, 'у "Первого" должен сохраниться его текст "враг"');
+    assert.match(byChar['Второй Асимметрик'], /должник/, 'у "Второго" должен сохраниться его текст "должник", а не потеряться при дедупе');
+  });
+});
+
+describe('FIX-9: линейка-специфичные поля создания — Оборотень (Племя/Каста), Маг (Традиция)', () => {
+  const tmpCity = path.join(__dirname, '../../cities/__fix9test__');
+  const qs = '?city=__fix9test__';
+
+  before(async () => {
+    await fs.mkdir(path.join(tmpCity, 'archive'), { recursive: true });
+    await fs.writeFile(path.join(tmpCity, 'archive', 'characters_index.md'), '# Реестр\n', 'utf-8');
+    await startServer();
+  });
+  after(async () => {
+    await stopServer();
+    await fs.rm(tmpCity, { recursive: true, force: true });
+  });
+
+  it('Оборотень без «Племя» → 400, не создаёт карточку без обязательного поля', async () => {
+    const { status, body } = await apiJson(`/api/characters${qs}`, { method: 'POST',
+      body: JSON.stringify({ name: 'Волк Без Племени', lineage: 'werewolf', gender: 'Мужской' }) });
+    assert.equal(status, 400);
+    assert.match(body.error, /Племя/);
+  });
+
+  it('Маг без «Традиция» → 400', async () => {
+    const { status, body } = await apiJson(`/api/characters${qs}`, { method: 'POST',
+      body: JSON.stringify({ name: 'Маг Без Традиции', lineage: 'mage', gender: 'Мужской' }) });
+    assert.equal(status, 400);
+    assert.match(body.error, /Традиция/);
+  });
+
+  it('Оборотень с Племя/Каста — оба поля пишутся в карточку', async () => {
+    const { body } = await apiJson(`/api/characters${qs}`, { method: 'POST',
+      body: JSON.stringify({ name: 'Тестовый Гару', lineage: 'werewolf', gender: 'Мужской', tribe: 'Дети Гайи', auspice: 'Тодас' }) });
+    assert.ok(body.ok, body.error);
+    const card = await fs.readFile(path.join(tmpCity, 'characters', 'werewolves', body.slug, `${body.slug}.md`), 'utf-8');
+    assert.match(card, /- \*\*Племя:\*\* Дети Гайи/);
+    assert.match(card, /- \*\*Каста:\*\* Тодас/);
+  });
+
+  it('Маг с Традиция — пишется в карточку', async () => {
+    const { body } = await apiJson(`/api/characters${qs}`, { method: 'POST',
+      body: JSON.stringify({ name: 'Тестовый Маг', lineage: 'mage', gender: 'Женский', tradition: 'Верителли' }) });
+    assert.ok(body.ok, body.error);
+    const card = await fs.readFile(path.join(tmpCity, 'characters', 'mages', body.slug, `${body.slug}.md`), 'utf-8');
+    assert.match(card, /- \*\*Традиция:\*\* Верителли/);
+  });
+});
+
+describe('FIX-11: getCityDisplayName находит city.md (не падает в фолбэк на сырой слаг)', () => {
+  const tmpCity = path.join(__dirname, '../../cities/__fix11test__');
+  before(async () => {
+    await fs.mkdir(tmpCity, { recursive: true });
+    await fs.writeFile(path.join(tmpCity, 'city.md'), '# Тестбург, 2010 — сеттинг города\n\nОписание.\n', 'utf-8');
+  });
+  after(async () => { await fs.rm(tmpCity, { recursive: true, force: true }); });
+
+  it('находит реальный city.md и возвращает заголовок, а не сырой слаг __fix11test__', async () => {
+    const { getCityDisplayName } = require('../routes/modules/shared');
+    const name = await getCityDisplayName('__fix11test__');
+    assert.equal(name, 'Тестбург, 2010 — сеттинг города');
+  });
+
+  it('несуществующий город — фолбэк на слаг (не падает)', async () => {
+    const { getCityDisplayName } = require('../routes/modules/shared');
+    const name = await getCityDisplayName('__no_such_city_fix11__');
+    assert.equal(name, '__no_such_city_fix11__');
+  });
+});
+
+test('source-guard: archive.js — счётчик событий согласует число (FIX-8, не всегда "N событий")', () => {
+  const js = require('fs').readFileSync(path.join(__dirname, '../public/scripts/archive.js'), 'utf-8');
+  assert.ok(!/sub\.textContent = `\$\{evCount\} событий`/.test(js),
+    'счётчик всё ещё хардкодит "событий" независимо от числа');
+  assert.match(js, /evCount % 10 === 1 && evCount % 100 !== 11 \? 'событие'/,
+    'не найдено согласование числа для evWord');
+});
+
+test('source-guard: char-detail.js — таймер карусели останавливается при ЛЮБОМ закрытии модалки, не только по кнопке ✕ (FIX-8)', () => {
+  const js = require('fs').readFileSync(path.join(__dirname, '../public/scripts/char-detail.js'), 'utf-8');
+  assert.ok(/new MutationObserver\(\(\) => \{[\s\S]*?classList\.contains\('open'\)[\s\S]*?clearInterval\(_carouselTimer\)/.test(js),
+    'не найден MutationObserver, останавливающий _carouselTimer по исчезновению класса .open');
+  assert.ok(/attributeFilter: \['class'\]/.test(js),
+    'MutationObserver не следит именно за атрибутом class модалки');
+});
+
+test('source-guard: scripts.js — смена линейки в форме создания НПС очищает #npc-clan/#npc-sect (FIX-7)', () => {
+  const js = require('fs').readFileSync(path.join(__dirname, '../public/scripts/scripts.js'), 'utf-8');
+  const fnMatch = js.match(/function _clearNpcClanSectOnLineageChange\(\) \{[\s\S]*?\n\}/);
+  assert.ok(fnMatch, 'не найдена функция _clearNpcClanSectOnLineageChange');
+  assert.match(fnMatch[0], /getElementById\('npc-clan'\)\.value = ''/);
+  assert.match(fnMatch[0], /getElementById\('npc-sect'\)\.value = ''/);
+  assert.ok(/addEventListener\('change', _clearNpcClanSectOnLineageChange\)/.test(js),
+    '#npc-type change не подключён к _clearNpcClanSectOnLineageChange');
+});
+
+test('source-guard: char-detail.js — _savePanelEdit(desc) шлёт все 5 полей безусловно (FIX-3, не пропускает очистку пустого поля)', () => {
+  const js = require('fs').readFileSync(path.join(__dirname, '../public/scripts/char-detail.js'), 'utf-8');
+  const fnMatch = js.match(/\} else if \(panel === 'desc'\) \{[\s\S]*?\n    \}/);
+  assert.ok(fnMatch, 'не найдена ветка panel === \'desc\' в _savePanelEdit');
+  assert.ok(!/if \(appearance\)\s*fields\.appearance/.test(fnMatch[0]),
+    'appearance всё ещё пропускается из fields при пустом значении — очистка поля не сохранится на сервере');
+  assert.match(fnMatch[0], /const fields = \{ appearance, voice, personality, imagePrompt, negativePrompt \}/,
+    'fields должен собираться безусловно из всех пяти полей, а не через if (x) fields.x = x');
+});
+
+test('source-guard: server.js — genTextWithRetry перебирает fallback-модели OpenRouter/OpenAI, а не один вызов без повтора', () => {
+  const js = require('fs').readFileSync(path.join(__dirname, '../server.js'), 'utf-8');
+  const fnMatch = js.match(/async function genTextWithRetry\([\s\S]*?\n\}/);
+  assert.ok(fnMatch, 'не найдена функция genTextWithRetry');
+  const oaBranch = fnMatch[0].match(/if \(_isOA\(gen\)\) \{[\s\S]*?\n  \}/);
+  assert.ok(oaBranch, 'не найдена ветка _isOA(gen) внутри genTextWithRetry');
+  assert.match(oaBranch[0], /_oaModels\(gen\)/,
+    'ветка OpenRouter/OpenAI должна перебирать список моделей _oaModels(gen), а не звать одну модель один раз');
+  assert.match(oaBranch[0], /for \(const m of models\)/,
+    'должен быть цикл по моделям с повтором при ошибке/невалидном ответе');
+});
+
+test('source-guard: generation.js — generate-prompt передаёт isValid в genTextWithRetry (ретрай моделью при "не JSON"/обрезанном ответе)', () => {
+  const js = require('fs').readFileSync(path.join(__dirname, '../routes/generation.js'), 'utf-8');
+  const routeMatch = js.match(/router\.post\('\/api\/characters\/:slug\/generate-prompt'[\s\S]*?\n  \}\);/);
+  assert.ok(routeMatch, 'не найден маршрут generate-prompt');
+  assert.match(routeMatch[0], /isValid:\s*isValidPromptResponse/,
+    'generate-prompt должен передавать isValid в genTextWithRetry, иначе мусорный ответ одной бесплатной модели сразу роняет запрос 500-й ошибкой без повтора');
 });

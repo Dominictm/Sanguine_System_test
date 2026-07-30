@@ -15,8 +15,15 @@ const {
   _parseScenarioScenesDirect, _parseScenarioScenesLegacy, _parseScenarioScenes, _parseScenarioLocations,
   _parseModuleLocSlugs, _writeModuleLocSlugs, _parseSessions, _cleanNpcName, _npcCardHref,
   _parseNpcEntries, _findNpcMdSection, _findNpcMdSections, _removeNpcEntry, _parseNpcMdGroups, _renderSessionBlock,
-  _writeSessionsFile, _patchModuleMain,
+  _writeSessionsFile, _patchModuleMain, sanitizeInlineText,
 } = require('./shared');
+
+// Mirrors _LIN_WOD/_LIN_EMOJI in routes/characters.js — used only when promoting a
+// modular NPC (see FIX-14 in the promote route below), so a small local copy
+// (matching this project's existing pattern of per-file lineage-label tables,
+// e.g. routes/tools.js LINEAGE_RU) is simpler than threading a shared import through.
+const _PROMOTE_LIN_WOD   = { vampires:'Вампир', fairies:'Фея / Ченджлинг', mortals:'Смертный', werewolves:'Оборотень', mages:'Маг', hunters:'Охотник' };
+const _PROMOTE_LIN_EMOJI = { vampires:'🧛', fairies:'🧚', mortals:'🧑', werewolves:'🐺', mages:'🔮', hunters:'🏹' };
 
 module.exports = function npcRouter({ makeGenerationClient, generateV20Sheet, ensureSheetLink }) {
   const router = express.Router();
@@ -56,7 +63,9 @@ module.exports = function npcRouter({ makeGenerationClient, generateV20Sheet, en
 
       if (!name?.trim()) return res.status(400).json({ error: 'Укажи имя' });
 
-      const nm     = name.trim();
+      // sanitizeInlineText: a '\n' in the name would otherwise leave a line looking
+      // like a heading/bullet inside npc.md (FIX-2, docs/audit/2026-07-28-fix-plan.md).
+      const nm     = sanitizeInlineText(name);
       const mainTxt  = await fs.readFile(path.join(modDir, `${mod}.md`), 'utf-8').catch(() => '');
       const titleM   = mainTxt.match(/^#\s+(.+)$/m);
       const modTitle = titleM ? titleM[1].replace(/[*[\]]/g, '').trim() : mod;
@@ -318,10 +327,20 @@ module.exports = function npcRouter({ makeGenerationClient, generateV20Sheet, en
 
       // Patch the card: update city field if it has a placeholder
       const cardContent = await fs.readFile(path.join(targetDir, `${npcSlug}.md`), 'utf-8');
-      const patched = cardContent.replace(
+      let patched = cardContent.replace(
         /(\*\*Родной\s+город\*\*[^|\n]*\|\s*)(⚠️[^|\n]*|—)(\s*\|)/i,
         (_, pre, _old, post) => `${pre}${city.charAt(0).toUpperCase() + city.slice(1)}${post}`
       );
+      // FIX-14 (docs/audit/2026-07-28-fix-plan.md): the modular-NPC stub always
+      // hardcodes "- **Линейка WoD:** mortals" (npc.js create route above) and a
+      // generic 🎭 emoji, regardless of the lineage chosen HERE at promotion — the
+      // card ends up physically in characters/<lineage>/ while still describing
+      // itself as mortals, exactly the folder/field mismatch validate_cards.js
+      // (system/schema/validate_cards.js) flags as an error.
+      const wodLabel = _PROMOTE_LIN_WOD[lineage] || lineage;
+      patched = patched.replace(/^(- \*\*Линейка WoD:\*\*\s*).*$/m, `$1${wodLabel}`);
+      const emoji = _PROMOTE_LIN_EMOJI[lineage];
+      if (emoji) patched = patched.replace(/^(#\s+)[^\s]+(\s+.+)$/m, `$1${emoji}$2`);
       if (patched !== cardContent) await writeFileAtomic(path.join(targetDir, `${npcSlug}.md`), patched, 'utf-8');
 
       // Update characters_index.md

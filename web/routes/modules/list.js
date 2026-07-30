@@ -15,7 +15,7 @@ const {
   _parseScenarioScenesDirect, _parseScenarioScenesLegacy, _parseScenarioScenes, _parseScenarioLocations,
   _parseModuleLocSlugs, _writeModuleLocSlugs, _parseSessions, _cleanNpcName, _npcCardHref,
   _parseNpcEntries, _findNpcMdSection, _removeNpcEntry, _parseNpcMdGroups, _renderSessionBlock,
-  _writeSessionsFile, _patchModuleMain,
+  _writeSessionsFile, _patchModuleMain, sanitizeInlineText, escapeTableCell,
 } = require('./shared');
 
 module.exports = function listRouter() {
@@ -95,11 +95,12 @@ module.exports = function listRouter() {
     try {
       const city   = reqCity(req);
       const chr    = req.params.slug;
+      if (chr.includes('..')) return res.status(400).json({ error: 'Недопустимое имя' });
       const { name, time } = req.body || {};
       if (!name?.trim()) return res.status(400).json({ error: 'Укажи название модуля' });
       if (!time?.trim()) return res.status(400).json({ error: 'Укажи время/дату модуля — это нужно для проверки таймлайна (желательно с годом)' });
 
-      const modSlug = req.body.slug?.trim() || slugify(name.trim());
+      const modSlug = slugify(req.body.slug?.trim() || name.trim());
       if (!modSlug) return res.status(400).json({ error: 'Не удалось сформировать slug' });
 
       const modDir = path.join(chroniclesDir(city), chr, 'modules', modSlug);
@@ -107,17 +108,20 @@ module.exports = function listRouter() {
         return res.status(409).json({ error: `Модуль «${modSlug}» уже существует` });
 
       await fs.mkdir(modDir, { recursive: true });
-      const timeStr   = (time || '').trim();
-      const typeStr   = (req.body.type || '').trim() || 'Игровая сессия';
-      const toneStr   = (req.body.tone || '').trim();
-      const formatStr = (req.body.format || '').trim();
+      // escapeTableCell/sanitizeInlineText: FIX-2 (docs/audit/2026-07-28-fix-plan.md) —
+      // a '|' in any of these would shift the «Параметр | Значение» table columns on
+      // the next parse; a '\n' in a name would leave an orphaned line in the bullet list.
+      const timeStr   = escapeTableCell(sanitizeInlineText(time));
+      const typeStr   = escapeTableCell(sanitizeInlineText(req.body.type)) || 'Игровая сессия';
+      const toneStr   = escapeTableCell(sanitizeInlineText(req.body.tone));
+      const formatStr = escapeTableCell(sanitizeInlineText(req.body.format));
       const pcs       = Array.isArray(req.body.pcs)  ? req.body.pcs  : [];
       const npcs      = Array.isArray(req.body.npcs) ? req.body.npcs : [];
       const concept   = (req.body.content || '').trim();
       const track     = req.body.trackInChronology !== false; // default true
 
-      const pcBlock  = pcs.length  ? pcs.map(n  => `  - ${n} — Персонаж игрока`).join('\n') : '  - ⚠️ Уточнить';
-      const npcBlock = npcs.length ? npcs.map(n => `  - ${n} — НПС`).join('\n')             : '  - ⚠️ Уточнить';
+      const pcBlock  = pcs.length  ? pcs.map(n  => `  - ${sanitizeInlineText(n)} — Персонаж игрока`).join('\n') : '  - ⚠️ Уточнить';
+      const npcBlock = npcs.length ? npcs.map(n => `  - ${sanitizeInlineText(n)} — НПС`).join('\n')             : '  - ⚠️ Уточнить';
 
       const mainContent = [
         `# ${name.trim()}`,

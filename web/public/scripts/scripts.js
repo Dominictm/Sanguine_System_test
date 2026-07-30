@@ -1775,16 +1775,33 @@ document.getElementById('btn-new-city').addEventListener('click', async () => {
   }
 });
 
-// Vampire-only fields visible / clan+sect required only for vampires
+// Lineage-specific fields visible / clan+sect required only for vampires.
+// FIX-9 (docs/audit/2026-07-28-fix-plan.md): Оборотень/Маг раньше не получали
+// собственных полей (только общие Клан/Раса+Секта/Двор) — Племя/Каста и
+// Традиция добавлены по аналогии с Fairy-полями выше.
 function _updateNpcForm() {
-  const isVamp = document.getElementById('npc-type').value === 'vampire';
-  const isFairy = document.getElementById('npc-type').value === 'fairy';
+  const type = document.getElementById('npc-type').value;
+  const isVamp = type === 'vampire';
+  const isFairy = type === 'fairy';
+  const isWerewolf = type === 'werewolf';
+  const isMage = type === 'mage';
   document.getElementById('npc-vamp-fields').style.display = isVamp ? '' : 'none';
   document.getElementById('npc-fairy-fields').style.display = isFairy ? '' : 'none';
+  document.getElementById('npc-werewolf-fields').style.display = isWerewolf ? '' : 'none';
+  document.getElementById('npc-mage-fields').style.display = isMage ? '' : 'none';
   document.getElementById('npc-clan-req').style.display = isVamp ? '' : 'none';
   document.getElementById('npc-sect-req').style.display = isVamp ? '' : 'none';
 }
-document.getElementById('npc-type').addEventListener('change', _updateNpcForm);
+// FIX-7 (docs/audit/2026-07-28-fix-plan.md): #npc-clan/#npc-sect are shared,
+// always-visible inputs (only their *-req asterisk toggles) — switching away from
+// Vampire after typing a clan/sect used to leave the old value sitting there,
+// silently saved into a non-vampire card's «Клан / Раса»/«Секта / Двор» on submit.
+function _clearNpcClanSectOnLineageChange() {
+  document.getElementById('npc-clan').value = '';
+  document.getElementById('npc-sect').value = '';
+  _updateNpcForm();
+}
+document.getElementById('npc-type').addEventListener('change', _clearNpcClanSectOnLineageChange);
 _updateNpcForm();
 
 document.getElementById('btn-new-npc').addEventListener('click', async () => {
@@ -1799,15 +1816,20 @@ document.getElementById('btn-new-npc').addEventListener('click', async () => {
   const seeming = document.getElementById('npc-seeming').value.trim();
   const court = document.getElementById('npc-court').value.trim();
   const house = document.getElementById('npc-house').value.trim();
+  const tribe = document.getElementById('npc-tribe').value.trim();
+  const auspice = document.getElementById('npc-auspice').value.trim();
+  const tradition = document.getElementById('npc-tradition').value.trim();
   if (!name) { showToast('Укажи имя', 'warning'); return; }
   if (!gender) { showToast('Укажи пол', 'warning'); return; }
   if (!CITY) { showToast('Сначала выбери город в шапке', 'warning'); return; }
   if (isVamp && !clan) { showToast('Клан обязателен для вампира', 'warning'); return; }
   if (isVamp && !sect) { showToast('Секта обязательна для вампира', 'warning'); return; }
   if (lineage === 'fairy' && !seeming) { showToast('Обличье обязательно для феи', 'warning'); return; }
+  if (lineage === 'werewolf' && !tribe) { showToast('Племя обязательно для оборотня', 'warning'); return; }
+  if (lineage === 'mage' && !tradition) { showToast('Традиция обязательна для мага', 'warning'); return; }
 
   const payload = {
-    name, lineage, gender, clan, sect, seeming, court, house,
+    name, lineage, gender, clan, sect, seeming, court, house, tribe, auspice, tradition,
     generation:  document.getElementById('npc-generation').value.trim(),
     birthYear:   document.getElementById('npc-birth').value.trim(),
     embraceYear: document.getElementById('npc-embrace').value.trim(),
@@ -1844,7 +1866,7 @@ document.getElementById('btn-new-npc').addEventListener('click', async () => {
     }
     out.innerHTML = `<span class="ok">${escHtml(msg)}</span>`;
 
-    ['npc-name','npc-clan','npc-sect','npc-seeming','npc-court','npc-house','npc-generation','npc-birth','npc-embrace','npc-sire','npc-bio','npc-appearance']
+    ['npc-name','npc-clan','npc-sect','npc-seeming','npc-court','npc-house','npc-tribe','npc-auspice','npc-tradition','npc-generation','npc-birth','npc-embrace','npc-sire','npc-bio','npc-appearance']
       .forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
     document.getElementById('npc-gender').value = '';
     const art = document.getElementById('npc-art'); if (art) art.value = '';

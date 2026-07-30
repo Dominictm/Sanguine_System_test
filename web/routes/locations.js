@@ -7,12 +7,12 @@
 const express = require('express');
 const path    = require('path');
 const fs      = require('fs').promises;
-const { serverError, aiRateLimit, _logAiCall, _logAiFail } = require('../lib/http');
+const { serverError, aiRateLimit, _logAiCall, _logAiFail, validateImageUpload } = require('../lib/http');
 const {
   ROOT, reqCity, locsDir, writeFileAtomic, invalidateLocs,
   getAllLocations, findLocMdPath,
 } = require('../lib/db');
-const { slugify, writePrompt, parseLocation } = require('../lib/parsers');
+const { slugify, writePrompt, parseLocation, sanitizeInlineText } = require('../lib/parsers');
 const { buildCityConstraints } = require('../lib/context_builder');
 
 // ── Location card template (standalone) ──────────────────────────────────────
@@ -182,10 +182,13 @@ module.exports = function locationsRouter({ makeGenerationClient, genTextWithRet
         if (key === 'subtype') {
           // Update H1 (preserve emoji, handle BOM)
           card = card.replace(/^(﻿?#\s+(?:[\p{Emoji}\p{Mark}]+\s+)?).*$/mu, `$1${value}`);
-          // Update inline metadata field **Название:**
+          // Update inline metadata field **Название:** — this line is a single
+          // pipe-separated row (all fields on one line, not a real table), so a
+          // literal '|' here isn't escapable/reversible the way a table cell is —
+          // fold it to a lookalike instead (FIX-2, docs/audit/2026-07-28-fix-plan.md).
           card = card.replace(
             /(\*\*Название:\*\*)\s*([^|\n]+?)(?=\s*\||\s*\n|$)/m,
-            `$1 ${value}`
+            `$1 ${sanitizeInlineText(value).replace(/\|/g, '∣')}`
           );
           continue;
         }
@@ -203,14 +206,14 @@ module.exports = function locationsRouter({ makeGenerationClient, genTextWithRet
           );
           continue;
         }
-        // Inline metadata fields
+        // Inline metadata fields — same one-line-pipe-row shape as «Название» above.
         const fieldMap = { district: 'Округ', neighborhood: 'Район', address: 'Адрес', control: 'Контроль', zone: 'Зона' };
         const mdKey = fieldMap[key];
         if (mdKey) {
           const esc = mdKey.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
           card = card.replace(
             new RegExp(`(\\*\\*${esc}:\\*\\*)\\s*([^|\\n]+?)(?=\\s*\\||\\s*\\n|$)`, 'm'),
-            `$1 ${value}`
+            `$1 ${sanitizeInlineText(value).replace(/\|/g, '∣')}`
           );
         }
       }
@@ -230,18 +233,21 @@ module.exports = function locationsRouter({ makeGenerationClient, genTextWithRet
       const mdPath = await findLocMdPath(slug, city);
       if (!mdPath) return res.status(404).json({ error: 'Локация не найдена' });
 
+      const validated = validateImageUpload(base64, ext);
+      if (!validated.ok) return res.status(400).json({ error: validated.error });
+      const safeExt = validated.ext;
+
       const locFolder = path.dirname(mdPath);
       const artDir    = path.join(locFolder, 'art');
       await fs.mkdir(artDir, { recursive: true });
 
-      const safeExt = (ext || 'jpg').toLowerCase().replace(/[^a-z]/g, '') || 'jpg';
       const existing = await fs.readdir(artDir).catch(() => []);
       const slugRe   = new RegExp(`^${slug.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}_(\\d+)\\.[a-z]+$`, 'i');
       const nums     = existing.map(f => { const m = slugRe.exec(f); return m ? parseInt(m[1], 10) : 0; }).filter(n => n > 0);
       const nextNum  = (nums.length ? Math.max(...nums) : 0) + 1;
       const filename = `${slug}_${String(nextNum).padStart(2, '0')}.${safeExt}`;
 
-      await writeFileAtomic(path.join(artDir, filename), Buffer.from(base64, 'base64'));
+      await writeFileAtomic(path.join(artDir, filename), validated.buffer);
 
       let card = await fs.readFile(mdPath, 'utf-8').catch(() => null);
       if (card) {
@@ -277,7 +283,7 @@ module.exports = function locationsRouter({ makeGenerationClient, genTextWithRet
       const locSlug  = slugify(locName);
       if (!locSlug) return res.status(400).json({ error: 'Не удалось построить slug из имени' });
 
-      const distFolder = district?.trim() || 'Другие';
+      const distFolder = slugify(district) || 'Другие';
       const locDir  = path.join(locsDir(city), distFolder, locSlug);
       const locFile = path.join(locDir, `${locSlug}.md`);
 

@@ -2,7 +2,7 @@
 // city.md build/parse + archive/political_state.md faction-influence table.
 // Extracted from parsers.js during the 2026-07-12 decomposition.
 
-const { slugify } = require('./shared');
+const { slugify, escapeTableCell, unescapeTableCell, sanitizeInlineText } = require('./shared');
 
 // ── city.md ──────────────────────────────────────────────────────────────────
 // Single source of truth for the city.md section layout, shared by tools/new_city.js,
@@ -234,8 +234,11 @@ function _polFacParseCell(cell) {
   const m = t.match(/(\d+)/);
   return m ? Math.max(0, Math.min(100, parseInt(m[1], 10))) : 0;
 }
+// unescapeTableCell undoes escapeTableCell applied at every write site below —
+// a '|' in a faction name would otherwise shift Сила/Территория/Угроза by one
+// column on the next parse (FIX-2, docs/audit/2026-07-28-fix-plan.md).
 function _polFacRow(cells) {
-  return cells.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map(c => c.trim());
+  return cells.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map(c => unescapeTableCell(c.trim()));
 }
 
 /**
@@ -267,7 +270,10 @@ function parsePoliticalFactions(raw) {
  * @param {number} influence — 0-100, округляется до шага 5
  * @returns {string} обновлённое содержимое файла
  */
-function setPoliticalFactionInfluence(raw, name, influence) {
+function setPoliticalFactionInfluence(raw, rawName, influence) {
+  // sanitizeInlineText: a '\n' would break the single-line row same as a stray
+  // '|' would shift columns — both closed here, once, before any use of `name`.
+  const name = sanitizeInlineText(rawName);
   const text = String(raw == null ? '' : raw).replace(/^﻿/, '').replace(/\r\n/g, '\n');
   const lines = text.split('\n');
   const cellText = _polFacCellText(influence);
@@ -279,7 +285,7 @@ function setPoliticalFactionInfluence(raw, name, influence) {
       '## Баланс сил — обзор', '',
       '| Фракция | Сила | Территория | Угроза |',
       '|---|---|---|---|',
-      `| ${name} | ${cellText} |  |  |`,
+      `| ${escapeTableCell(name)} | ${cellText} |  |  |`,
       '',
     ].join('\n');
     return text.replace(/\s*$/, '\n\n') + table;
@@ -288,16 +294,16 @@ function setPoliticalFactionInfluence(raw, name, influence) {
   let i = headerIdx + 2;
   let found = false;
   while (i < lines.length && /^\s*\|/.test(lines[i])) {
-    const cells = _polFacRow(lines[i]);
+    const cells = _polFacRow(lines[i]); // already unescaped — re-escape before rejoining
     if (cells[0] === name) {
       cells[1] = cellText;
-      lines[i] = `| ${cells.join(' | ')} |`;
+      lines[i] = `| ${cells.map(escapeTableCell).join(' | ')} |`;
       found = true;
       break;
     }
     i++;
   }
-  if (!found) lines.splice(i, 0, `| ${name} | ${cellText} |  |  |`);
+  if (!found) lines.splice(i, 0, `| ${escapeTableCell(name)} | ${cellText} |  |  |`);
   return lines.join('\n');
 }
 

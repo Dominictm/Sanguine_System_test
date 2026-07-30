@@ -373,7 +373,20 @@ Requirements:
         return blocks.some(b => b.replace(/[.…\s]/g, '').length < 15);
       };
 
-      const out = await genTextWithRetry(gen, { system: systemPrompt, user: userPrompt, maxTokens: 2500 });
+      // Свободные модели OpenRouter иногда возвращают текст без JSON вообще
+      // (см. лог: «Модель не вернула JSON с промтом») или с обрезанным блоком —
+      // раньше это сразу падало 500/502 без единой повторной попытки другой моделью.
+      // isValid позволяет genTextWithRetry перебрать fallback-модели и на такой ответ,
+      // не только на HTTP-ошибку.
+      const isValidPromptResponse = text => {
+        const match = text && text.match(/\{[\s\S]*\}/);
+        if (!match) return false;
+        let parsed;
+        try { parsed = JSON.parse(match[0]); } catch { return false; }
+        return !_isBogusPrompt((parsed.positive || '').trim());
+      };
+
+      const out = await genTextWithRetry(gen, { system: systemPrompt, user: userPrompt, maxTokens: 2500, isValid: isValidPromptResponse });
       parseResult(out.text);
 
       if (!positive) return res.status(500).json({ error: 'Модель не вернула промт. Попробуйте ещё раз.' });

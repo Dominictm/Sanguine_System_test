@@ -133,6 +133,44 @@ function periodLabel(period) {
   return String(period || '');
 }
 
+// ── Free-text vs. storage-format structure ───────────────────────────────────
+// A recurring bug class (FIX-2, docs/audit/2026-07-28-fix-plan.md): user-typed
+// free text written verbatim into a markdown structure the app later re-parses
+// can be silently promoted into a fake record — a stray '\n' turns into an
+// orphaned bullet, a '|' shifts an entire pipe-table row, a '## '/'### ' line
+// fabricates a whole new heading-delimited entry (session/scene note). These
+// three helpers are the single point of normalization for each case — call the
+// matching one at every write site that inserts free text into that shape.
+
+/** Bullet-list item / single-line field value — collapses embedded newlines so
+ * the text can never masquerade as a second, differently-indented list line. */
+function sanitizeInlineText(s) {
+  return String(s == null ? '' : s).replace(/\r\n?/g, '\n').replace(/\n+/g, ' ').trim();
+}
+
+/** Pipe-table cell — escape/unescape '|' around the table read/write boundary
+ * (call escape in the row serializer, unescape in the row splitter) so a cell
+ * value containing '|' can't shift every following column. Uses an HTML-entity
+ * placeholder (not a backslash) so the existing naive `split('|')` stays correct
+ * with no lookbehind/escaping-aware split logic needed. */
+function escapeTableCell(s) { return String(s == null ? '' : s).replace(/\|/g, '&#124;'); }
+function unescapeTableCell(s) { return String(s == null ? '' : s).replace(/&#124;/g, '|'); }
+
+/** Multi-line freeform body (session log entry, scene note) that a caller later
+ * re-splits on lines starting with '#'/'##'/'###' — escapes a leading '#' on any
+ * line of the body so pasted/typed text can't fabricate a fake record boundary
+ * on the next parse. Escaping (not stripping) preserves the author's text as
+ * closely as possible — pair with unescapeFreeformBody wherever the body is read
+ * back for display/editing, so the person who typed it never sees the backslash. */
+function sanitizeFreeformBody(s) {
+  return String(s == null ? '' : s).replace(/\r\n?/g, '\n')
+    .split('\n').map(line => /^#+\s/.test(line) ? '\\' + line : line).join('\n');
+}
+function unescapeFreeformBody(s) {
+  return String(s == null ? '' : s).replace(/\r\n?/g, '\n')
+    .split('\n').map(line => /^\\#+\s/.test(line) ? line.slice(1) : line).join('\n');
+}
+
 // ── Markdown link helpers ────────────────────────────────────────────────────
 /** @param {string} s @returns {{text: string, href: string}[]} все `[text](href)` в строке */
 function mdExtractLinks(s) {
@@ -151,4 +189,5 @@ module.exports = {
   RU_MONTHS_NOM, CYRILLIC_TR, LATIN_TR, slugify,
   THREAD_STATUS, readPrompt, writePrompt, periodLabel,
   mdExtractLinks, mdStripLinks, mdStripInline,
+  sanitizeInlineText, escapeTableCell, unescapeTableCell, sanitizeFreeformBody, unescapeFreeformBody,
 };

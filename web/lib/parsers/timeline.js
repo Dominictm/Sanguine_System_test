@@ -1,5 +1,5 @@
 'use strict';
-const { mdExtractLinks } = require('./shared');
+const { mdExtractLinks, escapeTableCell, unescapeTableCell } = require('./shared');
 
 const TIMELINE_HEADERS = ['Год', 'Тип', 'Событие', 'Источник', 'Связи'];
 
@@ -23,16 +23,19 @@ function _splitTopBlocks(raw) {
   return blocks;
 }
 
+// unescapeTableCell here undoes escapeTableCell from _serializeTable below — a
+// '|' typed into any cell value (year/type/event/source) would otherwise shift
+// every following column on the next parse (FIX-2, docs/audit/2026-07-28-fix-plan.md).
 function _parsePipeTable(text) {
   const rows = String(text || '').split('\n').filter(l => /^\s*\|/.test(l));
   if (rows.length < 2) return { headers: [], body: [] };
-  const cells = r => r.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map(c => c.trim());
+  const cells = r => r.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map(c => unescapeTableCell(c.trim()));
   return { headers: cells(rows[0]), body: rows.slice(2).map(cells) };
 }
 
 function _serializeTable(headers, bodyRows) {
   const sep = headers.map(() => '---').join(' | ');
-  const line = cells => `| ${cells.join(' | ')} |`;
+  const line = cells => `| ${cells.map(escapeTableCell).join(' | ')} |`;
   return [line(headers), `| ${sep} |`, ...bodyRows.map(line)].join('\n');
 }
 
@@ -66,10 +69,16 @@ function parseTimelineMd(raw) {
   return { intro, legend, epochs };
 }
 
+// FIX-5 (docs/audit/2026-07-28-fix-plan.md): a duplicate heading used to be added
+// unconditionally — removeTimelineEpoch/addTimelineRow/etc. all resolve a heading
+// via findIndex, i.e. always the FIRST match, so the second same-named epoch
+// became a permanently unreachable duplicate block. Returns {raw, duplicate} —
+// on duplicate, `raw` is the input unchanged so callers can safely no-op/reject.
 function addTimelineEpoch(raw, heading) {
   const text = String(raw || '').replace(/\r\n/g, '\n').replace(/\s+$/, '');
+  if (_splitTopBlocks(text).some(b => b.heading === heading)) return { raw: String(raw || ''), duplicate: true };
   const table = _serializeTable(TIMELINE_HEADERS, []);
-  return `${text}\n\n---\n\n## ${heading}\n\n${table}\n`;
+  return { raw: `${text}\n\n---\n\n## ${heading}\n\n${table}\n`, duplicate: false };
 }
 
 function removeTimelineEpoch(raw, heading) {

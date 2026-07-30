@@ -15,7 +15,7 @@ const {
   _parseScenarioScenesDirect, _parseScenarioScenesLegacy, _parseScenarioScenes, _parseScenarioLocations,
   _parseModuleLocSlugs, _writeModuleLocSlugs, _parseSessions, _cleanNpcName, _npcCardHref,
   _parseNpcEntries, _findNpcMdSection, _removeNpcEntry, _parseNpcMdGroups, _renderSessionBlock,
-  _writeSessionsFile, _patchModuleMain,
+  _writeSessionsFile, _patchModuleMain, sanitizeInlineText, escapeTableCell,
 } = require('./shared');
 
 module.exports = function fieldsRouter() {
@@ -46,7 +46,9 @@ module.exports = function fieldsRouter() {
         } else if (['type', 'time', 'location', 'tone', 'format'].includes(key)) {
           const labels = { type: 'Тип', time: 'Время', location: 'Локация', tone: 'Тон', format: 'Формат' };
           const label  = labels[key];
-          const v = String(val).trim();
+          // escapeTableCell: a raw '|' in the value would otherwise shift every
+          // column after it on the next parse (FIX-2, docs/audit/2026-07-28-fix-plan.md).
+          const v = escapeTableCell(sanitizeInlineText(val));
           const cellRe = new RegExp(`(\\|\\s*\\*\\*${label}\\*\\*\\s*\\|\\s*)([^|\\n]*)(\\|)`);
           if (cellRe.test(raw)) {
             raw = raw.replace(cellRe, `$1${v} $3`);
@@ -87,8 +89,10 @@ module.exports = function fieldsRouter() {
 
         } else if (key === 'pcs') {
           const arr = Array.isArray(val) ? val : JSON.parse(String(val) || '[]');
+          // sanitizeInlineText: a '\n' in a name would otherwise leave an orphaned
+          // line outside this bullet list (FIX-2, docs/audit/2026-07-28-fix-plan.md).
           const block = arr.length
-            ? arr.map(n => `  - ${n} — Персонаж игрока`).join('\n')
+            ? arr.map(n => `  - ${sanitizeInlineText(n)} — Персонаж игрока`).join('\n')
             : '  - ⚠️ Уточнить';
           raw = raw.replace(
             /(\*\*Персонажи игроков:\*\*\s*\n)((?:[ \t]*- [^\n]+\n?)*)/,
@@ -98,7 +102,7 @@ module.exports = function fieldsRouter() {
         } else if (key === 'npcs') {
           const arr = Array.isArray(val) ? val : JSON.parse(String(val) || '[]');
           const block = arr.length
-            ? arr.map(n => `  - ${n} — НПС`).join('\n')
+            ? arr.map(n => `  - ${sanitizeInlineText(n)} — НПС`).join('\n')
             : '  - ⚠️ Уточнить';
           raw = raw.replace(
             /(\*\*НПС:\*\*\s*\n)((?:[ \t]*- [^\n]+\n?)*)/,

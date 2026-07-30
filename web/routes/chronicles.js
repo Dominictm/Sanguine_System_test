@@ -170,7 +170,7 @@ module.exports = function chroniclesRouter({
       if (!name || !name.trim()) return res.status(400).json({ error: 'Укажи название хроники' });
 
       const display  = name.trim();
-      const slug     = req.body.slug?.trim() || slugify(display);
+      const slug     = slugify(req.body.slug?.trim() || display);
       if (!slug) return res.status(400).json({ error: 'Не удалось сформировать slug' });
 
       const chrDir = path.join(chroniclesDir(city), slug);

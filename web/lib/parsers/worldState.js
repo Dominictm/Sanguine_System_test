@@ -1,4 +1,5 @@
 'use strict';
+const { escapeTableCell, unescapeTableCell } = require('./shared');
 
 // Извлекает блок "## 🌍 Состояние мира" из events.md — от заголовка до
 // следующего "## " (там начинается индекс событий) либо до конца файла.
@@ -50,15 +51,18 @@ function _splitSections(body) {
   return { preamble, sections };
 }
 
+// unescapeTableCell/escapeTableCell mirror timeline.js's own copy of this same
+// pipe-table shape — a '|' in a cell value would otherwise shift every following
+// column on the next parse (FIX-2, docs/audit/2026-07-28-fix-plan.md).
 function _parsePipeTable(text) {
   const rows = String(text || '').split('\n').filter(l => /^\s*\|/.test(l));
   if (rows.length < 2) return { headers: [], body: [] };
-  const cells = r => r.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map(c => c.trim());
+  const cells = r => r.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map(c => unescapeTableCell(c.trim()));
   return { headers: cells(rows[0]), body: rows.slice(2).map(cells) };
 }
 function _serializeTable(headers, bodyRows) {
   const sep = headers.map(() => '---').join(' | ');
-  const line = cells => `| ${cells.join(' | ')} |`;
+  const line = cells => `| ${cells.map(escapeTableCell).join(' | ')} |`;
   return [line(headers), `| ${sep} |`, ...bodyRows.map(line)].join('\n');
 }
 // Свободный абзац после таблицы секции (например «**Главный Элизиум:** …»).

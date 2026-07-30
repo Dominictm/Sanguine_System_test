@@ -77,27 +77,50 @@ router.get('/api/graph', async (req, res) => {
 
     const idSet = new Set(nodes.map(n => n.id));
 
+    // FIX-12 (docs/audit/2026-07-28-fix-plan.md): an exact match always wins outright.
+    // Otherwise this used to return the FIRST fuzzy candidate it found, silently —
+    // with two "Иван ..." characters in the city, a relation just typed as "Иван"
+    // always resolved to whichever one happened to iterate first, with nothing on
+    // the graph (or in the data) hinting the match was a guess. Collecting every
+    // candidate and only resolving when there's exactly one keeps the fuzzy match
+    // (still useful for a genuine one-candidate typo/shorthand) without ever
+    // silently picking a winner among several plausible people.
     function resolveTarget(tgt) {
       if (idSet.has(tgt)) return tgt;
-      for (const id of idSet) {
-        const tl = tgt.toLowerCase(), il = id.toLowerCase();
-        if (il.startsWith(tl) || tl.startsWith(il.split(' ')[0])) return id;
-      }
-      return null;
+      const tl = tgt.toLowerCase();
+      const candidates = [...idSet].filter(id => {
+        const il = id.toLowerCase();
+        return il.startsWith(tl) || tl.startsWith(il.split(' ')[0]);
+      });
+      return candidates.length === 1 ? candidates[0] : null;
     }
 
+    // FIX-13 (docs/audit/2026-07-28-fix-plan.md): для пары персонажей граф —
+    // неориентированный (одно ребро на пару), но у КАЖДОГО может быть свой,
+    // отличный текст связи («А→Б: враг», «Б→А: должник») — обе карточки хранят
+    // свою версию верно. Раньше вторая находка для той же пары молча
+    // отбрасывалась (побеждал первый по порядку персонаж); теперь обе стороны
+    // сохраняются на одном ребре (description/description2), не теряя ни одну.
     const links = [];
-    const seen  = new Set();
+    const byKey = new Map();
     for (const c of chars) {
       for (const r of c.relationships) {
         const tgt = resolveTarget(r.target);
         if (!tgt || tgt === c.name) continue;
         const key = [c.name, tgt].sort().join('\x00');
-        if (seen.has(key)) continue;
-        seen.add(key);
-        links.push({ source: c.name, target: tgt, type: r.type,
-                     label: r.description.split(';')[0].slice(0, 55),
-                     fromChar: c.name, description: r.description });
+        const label = r.description.split(';')[0].slice(0, 55);
+        const existing = byKey.get(key);
+        if (!existing) {
+          const link = { source: c.name, target: tgt, type: r.type,
+                         label, fromChar: c.name, description: r.description };
+          byKey.set(key, link);
+          links.push(link);
+        } else if (!existing.fromChar2 && existing.fromChar !== c.name) {
+          existing.fromChar2    = c.name;
+          existing.type2        = r.type;
+          existing.label2       = label;
+          existing.description2 = r.description;
+        }
       }
     }
 

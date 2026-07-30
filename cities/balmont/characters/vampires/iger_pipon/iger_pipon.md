@@ -32,4 +32,10 @@
 ---
 
 ## 🖼️ Изображения
-- ⏳ Изображение не предоставлено
+- [Образ 1](art/iger_pipon_01.jpg)
+- [Образ 2](art/iger_pipon_02.jpg)
+- [Образ 3](art/iger_pipon_03.jpg)
+- [Образ 4](art/iger_pipon_04.jpg)
+
+
+

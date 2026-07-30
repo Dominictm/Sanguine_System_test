@@ -435,10 +435,24 @@ function _carouselGoTo(targetIdx, resetTimer = false) {
 
 function _carouselAdvance() { _carouselGoTo(_carouselIdx + 1); }
 
-// Stop carousel when modal closes
-document.getElementById('char-detail-close')?.addEventListener('click', () => {
-  if (_carouselTimer) { clearInterval(_carouselTimer); _carouselTimer = null; }
-}, { capture: true });
+// Stop carousel when the modal closes — FIX-8 (docs/audit/2026-07-28-fix-plan.md):
+// this used to only fire on the explicit ✕ button, so closing via Escape or a
+// backdrop click left the 60s auto-advance timer running against a hidden modal
+// until the next character happened to be opened (initCarousel's own clearInterval
+// guard). Watching the modal's own `open` class (closeModal()'s only visible
+// signal, shared by every close path — ✕, backdrop click, Escape) covers all of
+// them from one place instead of duplicating the stop call at each trigger site.
+{
+  const modalEl = document.getElementById('char-detail-modal');
+  if (modalEl) {
+    new MutationObserver(() => {
+      if (!modalEl.classList.contains('open') && _carouselTimer) {
+        clearInterval(_carouselTimer);
+        _carouselTimer = null;
+      }
+    }).observe(modalEl, { attributes: true, attributeFilter: ['class'] });
+  }
+}
 
 // ── Panel editing (bio / rels / desc) ────────────────────────────────────────
 
@@ -531,12 +545,11 @@ async function _savePanelEdit(panel, charName) {
       const personality  = document.getElementById('cdet-personality-ta')?.value.trim() || '';
       const imagePrompt  = document.getElementById('cdet-prompt-ta')?.value.trim() || '';
       const negativePrompt = document.getElementById('cdet-negprompt-ta')?.value.trim() || '';
-      const fields = {};
-      if (appearance)   fields.appearance    = appearance;
-      if (voice)        fields.voice         = voice;
-      if (personality)  fields.personality   = personality;
-      if (imagePrompt)  fields.imagePrompt   = imagePrompt;
-      if (negativePrompt) fields.negativePrompt = negativePrompt;
+      // FIX-3 (docs/audit/2026-07-28-fix-plan.md): send all five fields unconditionally,
+      // even empty ones — omitting a falsy field here used to mean the server (which
+      // treats "absent" as "leave untouched") never persisted the clear, so the panel
+      // showed empty while the old value silently survived on disk until reload.
+      const fields = { appearance, voice, personality, imagePrompt, negativePrompt };
       const r = await fetch(`/api/characters/${encodeURIComponent(_charSlug(charName))}/fields${qs}`,
         { method: 'PUT', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ fields }) });

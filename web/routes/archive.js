@@ -15,6 +15,7 @@ const {
   parseWorldStateBlock, replaceWorldStateBlock, setWorldStateLastUpdate,
   addWorldStateSection, removeWorldStateSection, setWorldStateSectionNote,
   addWorldStateRow, updateWorldStateRow, removeWorldStateRow,
+  sanitizeInlineText,
 } = require('../lib/parsers');
 
 const router = express.Router();
@@ -129,11 +130,15 @@ router.get('/api/timeline/structured', async (req, res) => {
 router.post('/api/timeline/epoch', express.json(), async (req, res) => {
   try {
     const city = reqCity(req);
-    const heading = String(req.body?.heading || '').trim();
+    // sanitizeInlineText: a '\n## '-starting line in the heading would otherwise
+    // fabricate a second, bogus epoch section on the next parse (FIX-2,
+    // docs/audit/2026-07-28-fix-plan.md).
+    const heading = sanitizeInlineText(req.body?.heading);
     if (!heading) return res.status(400).json({ error: 'Укажи название эпохи' });
     const file = path.join(archiveDir(city), 'timeline.md');
     const raw = await fs.readFile(file, 'utf-8').catch(() => '');
-    const updated = addTimelineEpoch(raw, heading);
+    const { raw: updated, duplicate } = addTimelineEpoch(raw, heading);
+    if (duplicate) return res.status(409).json({ error: `Эпоха «${heading}» уже существует` });
     await fs.mkdir(archiveDir(city), { recursive: true });
     await writeFileAtomic(file, updated, 'utf-8');
     res.json({ ok: true, ...parseTimelineMd(updated) });
@@ -235,7 +240,10 @@ router.put('/api/world-state/last-update', express.json(), async (req, res) => {
 router.post('/api/world-state/section', express.json(), async (req, res) => {
   try {
     const city = reqCity(req);
-    const heading = String(req.body?.heading || '').trim();
+    // sanitizeInlineText: a '\n### '-starting line in the heading would otherwise
+    // fabricate a second, bogus section on the next parse (FIX-2,
+    // docs/audit/2026-07-28-fix-plan.md).
+    const heading = sanitizeInlineText(req.body?.heading);
     const columns = Array.isArray(req.body?.columns) ? req.body.columns.map(c => String(c).trim()).filter(Boolean) : [];
     if (!heading) return res.status(400).json({ error: 'Укажи заголовок секции' });
     if (!columns.length) return res.status(400).json({ error: 'Укажи хотя бы одну колонку' });
@@ -265,7 +273,12 @@ router.put('/api/world-state/section/:heading/note', express.json(), async (req,
   try {
     const city = reqCity(req);
     const heading = decodeURIComponent(req.params.heading);
-    const text = String(req.body?.text || '').trim();
+    // sanitizeInlineText: _extractNote() already collapses a section's note to a
+    // single line on read (joins non-table lines with a space) — collapsing here
+    // too means a '\n### fake heading' can never reach the file as a real line
+    // start, closing the same fabricated-section risk as the heading fields above
+    // (FIX-2, docs/audit/2026-07-28-fix-plan.md) without needing an escape/unescape pair.
+    const text = sanitizeInlineText(req.body?.text);
     const raw = await fs.readFile(_eventsFile(city), 'utf-8').catch(() => null);
     if (raw === null) return res.status(404).json({ error: 'events.md не найден' });
     const { raw: updated, found } = setWorldStateSectionNote(raw, heading, text);

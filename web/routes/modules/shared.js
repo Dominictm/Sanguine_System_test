@@ -12,7 +12,7 @@ const {
   getAllCharacters, getAllLocations, listModules, tableCell, LINEAGE_MAP,
   _nameMatch, rmdir, getChronicleDisplay,
 } = require('../../lib/db');
-const { slugify, parseEvent, parseScenarioSections, replaceScenarioSection, replaceScenarioSections, splitH3Body, serializeScenarioSections, findScenarioSectionIndex, checkScenarioStructure, insertScenarioScene, hasManualSceneMarker, clearManualSceneMarker, isFinaleHeading } = require('../../lib/parsers');
+const { slugify, parseEvent, parseScenarioSections, replaceScenarioSection, replaceScenarioSections, splitH3Body, serializeScenarioSections, findScenarioSectionIndex, checkScenarioStructure, insertScenarioScene, hasManualSceneMarker, clearManualSceneMarker, isFinaleHeading, sanitizeInlineText, escapeTableCell, unescapeTableCell, sanitizeFreeformBody, unescapeFreeformBody } = require('../../lib/parsers');
 
 // Modules now live under chronicles/<chr>/modules/<mod>/ — flatten them with their chronicle.
 const MOD_AUX = n => ['npc.md', 'scenario.md', 'finale.md'].includes(n) || n.endsWith('-sheet.md');
@@ -56,11 +56,16 @@ async function syncChronicleModuleLinks(city, chr) {
 }
 
 // Build preview of what delete would do
-// Resolve city display name from city.md H1
+// Resolve city display name from city.md H1.
+// FIX-11 (docs/audit/2026-07-28-fix-plan.md): this used to rebuild the path by
+// hand as path.join(__dirname, '..', 'cities', ...) — __dirname is
+// web/routes/modules/, so that resolved to the nonexistent web/routes/cities/
+// (one level short of the real cities/ at the project root) and ALWAYS hit the
+// catch, silently falling back to the raw city slug for every module NPC ever
+// created. cityDir() is the single source of truth for this path elsewhere.
 async function getCityDisplayName(city) {
   try {
-    const cityMdPath = path.join(__dirname, '..', 'cities', city, 'city.md');
-    const txt = await fs.readFile(cityMdPath, 'utf-8');
+    const txt = await fs.readFile(path.join(cityDir(city), 'city.md'), 'utf-8');
     const m = txt.match(/^#\s+(.+)$/m);
     return m ? m[1].trim() : city;
   } catch { return city; }
@@ -385,7 +390,7 @@ function _parseSessions(raw) {
       .trim();
     if (/^\*\(без заметок\)\*$/.test(body)) body = '';
     const date = (head.match(/[—–-]\s*(.+)$/)?.[1] || '').trim();
-    out.push({ title: head, date, scenes, status, body });
+    out.push({ title: head, date, scenes, status, body: unescapeFreeformBody(body) });
   }
   return out;
 }
@@ -582,14 +587,19 @@ function _parseNpcMdGroups(raw) {
   }
   return groups;
 }
-// Render one session block for sessions.md
+// Render one session block for sessions.md.
+// sanitizeFreeformBody escapes any line in `body` that starts with '#'/'##' —
+// otherwise it reads as a real heading on the next parse and _parseSessions
+// (which splits purely on "\n(?=##\s+Сесси)") fabricates a whole extra, bogus
+// session entry out of it (FIX-2, docs/audit/2026-07-28-fix-plan.md). date/scenes/
+// status are single-line fields — sanitizeInlineText keeps them that way.
 function _renderSessionBlock(n, date, scenes, status, body) {
   return [
     '', '---', '',
-    `## Сессия ${n} — ${(date || '').trim() || new Date().toISOString().slice(0, 10)}`, '',
-    `- **Сыграно сцен:** ${(scenes || '').trim() || '—'}`,
-    `- **Статус модуля:** ${(status || '').trim() || '🟡 В процессе'}`, '',
-    (body || '').trim() || '*(без заметок)*', '',
+    `## Сессия ${n} — ${sanitizeInlineText(date) || new Date().toISOString().slice(0, 10)}`, '',
+    `- **Сыграно сцен:** ${sanitizeInlineText(scenes) || '—'}`,
+    `- **Статус модуля:** ${sanitizeInlineText(status) || '🟡 В процессе'}`, '',
+    sanitizeFreeformBody((body || '').trim()) || '*(без заметок)*', '',
   ].join('\n');
 }
 // Rewrite the whole sessions.md from the session array (append & edit share this)
@@ -631,7 +641,10 @@ async function _patchModuleMain(modDir, mod, firstLoc) {
 function _upsertSceneNoteEntry(raw, sceneHeading, session, text) {
   const { preamble, sections } = parseScenarioSections(raw);
   const entryHeading = `Сессия ${session}`;
-  const cleanBody = String(text == null ? '' : text).trim();
+  // sanitizeFreeformBody: a '###'-starting line in the note would otherwise read as
+  // a real level-3 heading on the next parse, fabricating a bogus session entry in
+  // this scene's note history (FIX-2, docs/audit/2026-07-28-fix-plan.md).
+  const cleanBody = sanitizeFreeformBody(String(text == null ? '' : text).trim());
   const sceneIdx = sections.findIndex(s => s.level === 2 && s.heading === sceneHeading);
   if (sceneIdx === -1) {
     sections.push({ heading: sceneHeading, body: '', level: 2, parent: null });
@@ -682,7 +695,11 @@ function _moduleSectionBodyBoundary(rest) {
 async function _upsertModuleSection(modDir, mod, heading, body) {
   const p = path.join(modDir, `${mod}.md`);
   let txt = await fs.readFile(p, 'utf-8').catch(() => '');
-  const cleanBody = String(body == null ? '' : body).trim();
+  // sanitizeFreeformBody: a '## '-starting line in the body would otherwise be
+  // mistaken for the start of the NEXT section by _moduleSectionBodyBoundary on
+  // the next upsert, silently truncating this section / corrupting the one after
+  // it (FIX-2, docs/audit/2026-07-28-fix-plan.md).
+  const cleanBody = sanitizeFreeformBody(String(body == null ? '' : body).trim());
   const headingRe = _moduleSectionHeadingRe(heading);
   const m = headingRe.exec(txt);
   if (m) {
@@ -715,7 +732,7 @@ async function _readModuleSection(modDir, mod, heading) {
   const rest = txt.slice(start);
   const { idx: nextIdx } = _moduleSectionBodyBoundary(rest);
   const body = nextIdx === -1 ? rest : rest.slice(0, nextIdx);
-  return body.trim();
+  return unescapeFreeformBody(body.trim());
 }
 
 // Захардкоженный model-оверрайд (дешёвая/быстрая модель вместо дефолтной) имеет
@@ -747,4 +764,5 @@ module.exports = {
   _parseNpcEntries, _findNpcMdSection, _findNpcMdSections, _removeNpcEntry, _parseNpcMdGroups, _renderSessionBlock,
   _writeSessionsFile, _patchModuleMain, _claudeOnlyModel,
   _upsertSceneNoteEntry, _upsertModuleSection, _readModuleSection,
+  sanitizeInlineText, escapeTableCell, unescapeTableCell, sanitizeFreeformBody, unescapeFreeformBody,
 };
