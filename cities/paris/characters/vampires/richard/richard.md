@@ -44,7 +44,6 @@
 ---
 
 ## 🖼️ Изображения
-- [Образ 1](art/richard_01.jpg)
 - [Образ 2](art/richard_02.png)
 - [Образ 3](art/richard_03.png)
 
