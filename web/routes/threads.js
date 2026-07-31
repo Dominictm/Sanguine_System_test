@@ -8,7 +8,7 @@ const path    = require('path');
 const fs      = require('fs').promises;
 const { serverError } = require('../lib/http');
 const { DEFAULT_CITY, cityDir, chroniclesDir, reqCity, writeFileAtomic } = require('../lib/db');
-const { THREAD_STATUS, parseThreadsContent, threadSourceDate } = require('../lib/parsers');
+const { THREAD_STATUS, parseThreadsContent, threadSourceDate, sanitizeInlineText, escapeTableCell } = require('../lib/parsers');
 
 const router = express.Router();
 
@@ -67,9 +67,15 @@ router.post('/api/threads', express.json(), async (req, res) => {
 
     const ids    = parseThreadsContent(content, rel).map(t => t.id);
     const nextId = ids.length ? Math.max(...ids) + 1 : 1;
-    const desc   = String(description).trim();
+    // sanitizeInlineText/escapeTableCell: FIX-16 (docs/audit/2026-07-28-fix-plan.md,
+    // continuation of FIX-2) — a '\n' in description used to leave the row split
+    // across two physical lines (the tail silently fell out of the table on next
+    // parse, losing the whole thread); an unescaped '|' shifted every column after it.
+    const titleClean = escapeTableCell(sanitizeInlineText(title));
+    const desc   = escapeTableCell(sanitizeInlineText(description));
+    const sourceClean = escapeTableCell(sanitizeInlineText(source));
     const statusText = THREAD_STATUS[status] || THREAD_STATUS.active;
-    const row = `| ${nextId} | **${String(title).trim()}**${desc ? ' — ' + desc : ''} | ${String(source).trim() || '—'} | ${statusText} | ${priority} |`;
+    const row = `| ${nextId} | **${titleClean}**${desc ? ' — ' + desc : ''} | ${sourceClean || '—'} | ${statusText} | ${escapeTableCell(sanitizeInlineText(priority))} |`;
 
     let insertAt = headerIdx + 2; // skip header + separator
     while (insertAt < lines.length && lines[insertAt].trimStart().startsWith('|')) insertAt++;
@@ -100,7 +106,7 @@ router.patch('/api/threads/:id', express.json(), async (req, res) => {
       const cells = lines[i].split('|'); // ['', ' id ', ' **t** desc ', ' src ', ' status ', ' prio ', '']
       if (cells.length < 6) break;
       if (status)   cells[4] = ` ${THREAD_STATUS[status]} `;
-      if (priority) cells[5] = ` ${String(priority).trim()} `;
+      if (priority) cells[5] = ` ${escapeTableCell(sanitizeInlineText(priority))} `;
       lines[i] = cells.join('|');
       done = true;
       break;

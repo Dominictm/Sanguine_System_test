@@ -15,7 +15,7 @@ const {
   _parseScenarioScenesDirect, _parseScenarioScenesLegacy, _parseScenarioScenes, _parseScenarioLocations,
   _parseModuleLocSlugs, _writeModuleLocSlugs, _parseSessions, _cleanNpcName, _npcCardHref,
   _parseNpcEntries, _findNpcMdSection, _removeNpcEntry, _parseNpcMdGroups, _renderSessionBlock,
-  _writeSessionsFile, _patchModuleMain,
+  _writeSessionsFile, _patchModuleMain, _hasTraversal,
 } = require('./shared');
 
 module.exports = function locationsRouter() {
@@ -25,6 +25,7 @@ module.exports = function locationsRouter() {
     try {
       const city = reqCity(req);
       const { chr, mod } = req.params;
+      if (_hasTraversal(chr, mod)) return res.status(400).json({ error: 'Недопустимое имя' });
       const modFile = path.join(chroniclesDir(city), chr, 'modules', mod, `${mod}.md`);
       if (!await fs.stat(modFile).catch(() => null))
         return res.status(404).json({ error: 'Модуль не найден' });
@@ -41,6 +42,7 @@ module.exports = function locationsRouter() {
     try {
       const city = reqCity(req);
       const { chr, mod } = req.params;
+      if (_hasTraversal(chr, mod)) return res.status(400).json({ error: 'Недопустимое имя' });
       const { slug: locSlug } = req.body || {};
       if (!locSlug) return res.status(400).json({ error: 'slug обязателен' });
 
@@ -63,6 +65,7 @@ module.exports = function locationsRouter() {
     try {
       const city       = reqCity(req);
       const { chr, mod, locSlug } = req.params;
+      if (_hasTraversal(chr, mod)) return res.status(400).json({ error: 'Недопустимое имя' });
       const decodedSlug = decodeURIComponent(locSlug);
 
       const modFile = path.join(chroniclesDir(city), chr, 'modules', mod, `${mod}.md`);

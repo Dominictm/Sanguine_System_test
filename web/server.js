@@ -89,7 +89,12 @@ app.use('/city-img', express.static(CITIES_DIR, {
   setHeaders: res => res.set('X-Content-Type-Options', 'nosniff'),
 }));
 // Serve uploaded soundboard audio files straight out of cities/audio/ (routes/audio.js).
-app.use('/audio-lib', express.static(AUDIO_DIR, { maxAge: '1h' }));
+// nosniff: uploaded audio is validated (magic bytes, see lib/http.js validateAudioUpload,
+// FIX-18 docs/audit/2026-07-28-fix-plan.md) but this is defense-in-depth, same as /city-img.
+app.use('/audio-lib', express.static(AUDIO_DIR, {
+  maxAge: '1h',
+  setHeaders: res => res.set('X-Content-Type-Options', 'nosniff'),
+}));
 
 
 // ── Request logger ────────────────────────────────────────────────────────────

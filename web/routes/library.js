@@ -9,7 +9,7 @@ const path    = require('path');
 const fs      = require('fs').promises;
 const { serverError } = require('../lib/http');
 const { ROOT, writeFileAtomic } = require('../lib/db');
-const { slugify } = require('../lib/parsers');
+const { slugify, sanitizeInlineText } = require('../lib/parsers');
 const { parseDisciplineMd, pathArtSlug } = require('../lib/disciplines');
 const { parsePsychicMd } = require('../lib/psychics');
 const { getMerits, getAllMerits, invalidateMerits } = require('../lib/merits-loader');
@@ -192,14 +192,19 @@ router.get('/api/library/backgrounds', async (_req, res) => {
 // V20-контент через это API не редактируется и не удаляется.
 // ═══════════════════════════════════════════════════════════════════════════
 
+// sanitizeInlineText on clans/source/level name/literary/system: FIX-16
+// (docs/audit/2026-07-28-fix-plan.md, continuation of FIX-2) — each is spliced
+// into a single template line; an embedded '\n## Уровень N — …' would otherwise
+// break out into a real H2/level heading that parseDisciplineMd then treats as
+// genuine data (confirmed live during QA: a fake level 99 appeared in the API).
 function _discTemplate({ name, clans, source, note, levels }) {
-  const lines = [`# ${name}`, `- **Клан / принадлежность:** ${clans || ''}`];
-  if (source) lines.push(`- **Источник:** ${source}`);
+  const lines = [`# ${name}`, `- **Клан / принадлежность:** ${sanitizeInlineText(clans || '')}`];
+  if (source) lines.push(`- **Источник:** ${sanitizeInlineText(source)}`);
   lines.push('- **Авторское:** да');
-  if (note) { lines.push(''); for (const l of note.split('\n')) lines.push(`> ${l}`); }
+  if (note) { lines.push(''); for (const l of note.split('\n')) lines.push(`> ${sanitizeInlineText(l)}`); }
   lines.push('');
   for (const lvl of (levels || [])) {
-    lines.push(`## Уровень ${lvl.level} — ${lvl.name}`, '', `**Литературное описание.** ${lvl.literary || ''}`, '', `**Система.** ${lvl.system || ''}`, '');
+    lines.push(`## Уровень ${lvl.level} — ${sanitizeInlineText(lvl.name || '')}`, '', `**Литературное описание.** ${sanitizeInlineText(lvl.literary || '')}`, '', `**Система.** ${sanitizeInlineText(lvl.system || '')}`, '');
   }
   return lines.join('\n');
 }
@@ -221,7 +226,13 @@ router.post('/api/library/disciplines', express.json(), async (req, res) => {
 
 router.put('/api/library/disciplines/:slug', express.json(), async (req, res) => {
   try {
-    const slug = req.params.slug;
+    // FIX-17 (docs/audit/2026-07-28-fix-plan.md): unlike POST (which derives its
+    // filename via slugify(name)), this took :slug from the URL straight into
+    // path.join — a '..' segment would resolve outside DISC_DIR. Gated in practice
+    // by the "Авторское: да" check below (can only touch an existing, custom-marked
+    // file, not write anywhere new), but slugify() closes it outright.
+    const slug = slugify(req.params.slug);
+    if (!slug) return res.status(400).json({ error: 'Недопустимый slug' });
     const file = path.join(DISC_DIR, `${slug}.md`);
     const existing = await fs.readFile(file, 'utf-8').catch(() => null);
     if (existing == null) return res.status(404).json({ error: 'Дисциплина не найдена' });
@@ -237,7 +248,8 @@ router.put('/api/library/disciplines/:slug', express.json(), async (req, res) =>
 
 router.delete('/api/library/disciplines/:slug', async (req, res) => {
   try {
-    const slug = req.params.slug;
+    const slug = slugify(req.params.slug);   // FIX-17 — see PUT above
+    if (!slug) return res.status(400).json({ error: 'Недопустимый slug' });
     const file = path.join(DISC_DIR, `${slug}.md`);
     const existing = await fs.readFile(file, 'utf-8').catch(() => null);
     if (existing == null) return res.status(404).json({ error: 'Дисциплина не найдена' });
@@ -251,15 +263,16 @@ router.delete('/api/library/disciplines/:slug', async (req, res) => {
   } catch (e) { serverError(res, e); }
 });
 
+// sanitizeInlineText: see _discTemplate above (same FIX-16 breakout risk).
 function _psyTemplate({ name, category, roll, source, note, levels }) {
-  const lines = [`# ${name}`, `- **Категория:** ${category || ''}`];
-  if (roll) lines.push(`- **Бросок:** ${roll}`);
-  if (source) lines.push(`- **Источник:** ${source}`);
+  const lines = [`# ${name}`, `- **Категория:** ${sanitizeInlineText(category || '')}`];
+  if (roll) lines.push(`- **Бросок:** ${sanitizeInlineText(roll)}`);
+  if (source) lines.push(`- **Источник:** ${sanitizeInlineText(source)}`);
   lines.push('- **Авторское:** да');
-  if (note) { lines.push(''); for (const l of note.split('\n')) lines.push(`> ${l}`); }
+  if (note) { lines.push(''); for (const l of note.split('\n')) lines.push(`> ${sanitizeInlineText(l)}`); }
   lines.push('');
   for (const lvl of (levels || [])) {
-    lines.push(`## Уровень ${lvl.level} — ${lvl.name}`, '', `**Литературное описание.** ${lvl.literary || ''}`, '', `**Система.** ${lvl.system || ''}`, '');
+    lines.push(`## Уровень ${lvl.level} — ${sanitizeInlineText(lvl.name || '')}`, '', `**Литературное описание.** ${sanitizeInlineText(lvl.literary || '')}`, '', `**Система.** ${sanitizeInlineText(lvl.system || '')}`, '');
   }
   return lines.join('\n');
 }
@@ -281,7 +294,8 @@ router.post('/api/library/psychics', express.json(), async (req, res) => {
 
 router.put('/api/library/psychics/:slug', express.json(), async (req, res) => {
   try {
-    const slug = req.params.slug;
+    const slug = slugify(req.params.slug);   // FIX-17 — see disciplines PUT above
+    if (!slug) return res.status(400).json({ error: 'Недопустимый slug' });
     const file = path.join(PSY_DIR, `${slug}.md`);
     const existing = await fs.readFile(file, 'utf-8').catch(() => null);
     if (existing == null) return res.status(404).json({ error: 'Способность не найдена' });
@@ -297,7 +311,8 @@ router.put('/api/library/psychics/:slug', express.json(), async (req, res) => {
 
 router.delete('/api/library/psychics/:slug', async (req, res) => {
   try {
-    const slug = req.params.slug;
+    const slug = slugify(req.params.slug);   // FIX-17 — see disciplines PUT above
+    if (!slug) return res.status(400).json({ error: 'Недопустимый slug' });
     const file = path.join(PSY_DIR, `${slug}.md`);
     const existing = await fs.readFile(file, 'utf-8').catch(() => null);
     if (existing == null) return res.status(404).json({ error: 'Способность не найдена' });

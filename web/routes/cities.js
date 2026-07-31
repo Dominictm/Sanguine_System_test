@@ -12,7 +12,7 @@ const {
   listCities, writeFileAtomic, invalidateChars,
   getAllCharacters, listModules, countMdFiles,
 } = require('../lib/db');
-const { slugify, buildCityMd, parseCityMd, cityScaffold } = require('../lib/parsers');
+const { slugify, buildCityMd, parseCityMd, cityScaffold, sanitizeInlineText, escapeTableCell, unescapeTableCell } = require('../lib/parsers');
 
 const router = express.Router();
 
@@ -165,14 +165,18 @@ async function syncPoliticalStateTable(slug, records, previousRoles = []) {
   let end = sepIdx + 1;
   while (end < lines.length && /^\s*\|/.test(lines[end])) end++;
   const existingRows = lines.slice(sepIdx + 1, end).map(_parseMdTableRow);
-  const noteByRole = new Map(existingRows.map(r => [r[0], r[3] || '']));
+  // unescapeTableCell/escapeTableCell: FIX-16 (docs/audit/2026-07-28-fix-plan.md,
+  // continuation of FIX-2) — role/name come from the free-text «Политический
+  // ландшафт» textarea; an embedded '|' otherwise shifted every column after it
+  // on the next parse (confirmed live during QA with a "Князь: Тест|ВЗЛОМ" line).
+  const noteByRole = new Map(existingRows.map(r => [unescapeTableCell(r[0]), r[3] || '']));
   const savedRoles = new Set(records.map(r => r.role).filter(Boolean));
   const removedRoles = new Set(previousRoles.filter(role => role && !savedRoles.has(role)));
-  const kept = existingRows.filter(r => !savedRoles.has(r[0]) && !removedRoles.has(r[0]));
+  const kept = existingRows.filter(r => !savedRoles.has(unescapeTableCell(r[0])) && !removedRoles.has(unescapeTableCell(r[0])));
   const newRows = records.filter(r => r.role || r.name || r.name2).map(r => {
-    const persons = [r.name, r.name2].filter(Boolean).join(' / ') || '—';
-    const clan = clanByName.get(r.name) || clanByName.get(r.name2) || '';
-    return [r.role || '—', persons, clan, noteByRole.get(r.role) || ''];
+    const persons = escapeTableCell(sanitizeInlineText([r.name, r.name2].filter(Boolean).join(' / '))) || '—';
+    const clan = escapeTableCell(sanitizeInlineText(clanByName.get(r.name) || clanByName.get(r.name2) || ''));
+    return [escapeTableCell(sanitizeInlineText(r.role)) || '—', persons, clan, noteByRole.get(r.role) || ''];
   });
   const allRows = [...newRows, ...kept];
   const rowsText = allRows.length ? allRows.map(r => `| ${r.join(' | ')} |`).join('\n') : '|  |  |  |  |';

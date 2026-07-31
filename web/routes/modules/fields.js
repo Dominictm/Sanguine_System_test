@@ -15,7 +15,7 @@ const {
   _parseScenarioScenesDirect, _parseScenarioScenesLegacy, _parseScenarioScenes, _parseScenarioLocations,
   _parseModuleLocSlugs, _writeModuleLocSlugs, _parseSessions, _cleanNpcName, _npcCardHref,
   _parseNpcEntries, _findNpcMdSection, _removeNpcEntry, _parseNpcMdGroups, _renderSessionBlock,
-  _writeSessionsFile, _patchModuleMain, sanitizeInlineText, escapeTableCell,
+  _writeSessionsFile, _patchModuleMain, sanitizeInlineText, escapeTableCell, sanitizeFreeformBody,
 } = require('./shared');
 
 module.exports = function fieldsRouter() {
@@ -78,7 +78,12 @@ module.exports = function fieldsRouter() {
           }
 
         } else if (key === 'description') {
-          const v = String(val).trim();
+          // sanitizeFreeformBody: FIX-16 (docs/audit/2026-07-28-fix-plan.md,
+          // continuation of FIX-2) — this section is the last thing in the file
+          // (nothing follows «## 💡 Концепция»), so an unescaped leading '#'/'##'
+          // line here fabricates a fake heading that the very regex below treats
+          // as the section boundary on the next read, silently truncating it.
+          const v = sanitizeFreeformBody(String(val).trim());
           // Replace section between «## 💡 Концепция» header and next ## or ---
           if (/## 💡 Концепция/.test(raw)) {
             raw = raw.replace(

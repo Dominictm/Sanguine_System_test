@@ -15,7 +15,7 @@ const {
   _parseScenarioScenesDirect, _parseScenarioScenesLegacy, _parseScenarioScenes, _parseScenarioLocations,
   _parseModuleLocSlugs, _writeModuleLocSlugs, _parseSessions, _cleanNpcName, _npcCardHref,
   _parseNpcEntries, _findNpcMdSection, _findNpcMdSections, _removeNpcEntry, _parseNpcMdGroups, _renderSessionBlock,
-  _writeSessionsFile, _patchModuleMain, sanitizeInlineText,
+  _writeSessionsFile, _patchModuleMain, sanitizeInlineText, _hasTraversal,
 } = require('./shared');
 
 // Mirrors _LIN_WOD/_LIN_EMOJI in routes/characters.js — used only when promoting a
@@ -228,8 +228,9 @@ module.exports = function npcRouter({ makeGenerationClient, generateV20Sheet, en
   router.get('/api/chronicles/:chr/modules/:mod/npc/:slug/sheet', async (req, res) => {
     try {
       const { chr, mod, slug } = req.params;
-      const { sheet } = _npcSheetPaths(reqCity(req), chr, mod, decodeURIComponent(slug));
-      const content = await fs.readFile(sheet, 'utf-8').catch(() => null);
+      const p = _npcSheetPaths(reqCity(req), chr, mod, decodeURIComponent(slug));
+      if (!p) return res.status(400).json({ error: 'Недопустимое имя' });
+      const content = await fs.readFile(p.sheet, 'utf-8').catch(() => null);
       res.json({ exists: content !== null, content: content || '' });
     } catch (e) { serverError(res, e); }
   });
@@ -238,6 +239,7 @@ module.exports = function npcRouter({ makeGenerationClient, generateV20Sheet, en
     try {
       const { chr, mod, slug } = req.params;
       const p = _npcSheetPaths(reqCity(req), chr, mod, decodeURIComponent(slug));
+      if (!p) return res.status(400).json({ ok: false, error: 'Недопустимое имя' });
       const card = await fs.readFile(p.card, 'utf-8').catch(() => '');
       if (!card) return res.status(404).json({ ok: false, error: 'Карточка НПС не найдена' });
       const displayName = (card.match(/^#{1,6}\s+(.+)$/m)?.[1] || slug)
@@ -257,6 +259,7 @@ module.exports = function npcRouter({ makeGenerationClient, generateV20Sheet, en
       const content = String(req.body?.content || '');
       if (!content.trim()) return res.status(400).json({ ok: false, error: 'Пустой лист' });
       const p = _npcSheetPaths(reqCity(req), chr, mod, decodeURIComponent(slug));
+      if (!p) return res.status(400).json({ ok: false, error: 'Недопустимое имя' });
       if (!await fs.stat(p.dir).catch(() => null)) return res.status(404).json({ ok: false, error: 'Папка НПС не найдена' });
       await writeFileAtomic(p.sheet, content.replace(/\s*$/, '') + '\n', 'utf-8');
       res.json({ ok: true });
@@ -269,6 +272,8 @@ module.exports = function npcRouter({ makeGenerationClient, generateV20Sheet, en
       const city    = reqCity(req);
       const { chr, mod, slug } = req.params;
       const npcSlug = decodeURIComponent(slug);
+      if (_hasTraversal(chr, mod, npcSlug))
+        return res.status(400).json({ ok: false, error: 'Недопустимое имя' });
       const modDir  = path.join(chroniclesDir(city), chr, 'modules', mod);
       if (!await fs.stat(path.join(modDir, 'npc', npcSlug)).catch(() => null))
         return res.status(404).json({ ok: false, error: 'Модульный НПС не найден' });
@@ -285,6 +290,8 @@ module.exports = function npcRouter({ makeGenerationClient, generateV20Sheet, en
       const city    = reqCity(req);
       const { chr, mod, slug } = req.params;
       const npcSlug = decodeURIComponent(slug);
+      if (_hasTraversal(chr, mod, npcSlug))
+        return res.status(400).json({ ok: false, error: 'Недопустимое имя' });
       const { lineage = 'vampires', force = false } = req.body || {};
 
       const modDir  = path.join(chroniclesDir(city), chr, 'modules', mod);

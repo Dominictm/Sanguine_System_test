@@ -2,6 +2,8 @@
 // archive/open_threads.md parsing. Extracted from parsers.js during
 // the 2026-07-12 decomposition. Sole consumer: web/routes/threads.js.
 
+const { unescapeTableCell } = require('./shared');
+
 // ── Threads ────────────────────────────────────────────────────────────────────
 /**
  * @param {string} cell — ячейка таблицы open_threads.md с эмодзи-статусом
@@ -27,11 +29,11 @@ function parseThreadsContent(content, file) {
     if (!m) continue;
     out.push({
       id:          parseInt(m[1]),
-      title:       m[2].trim(),
-      description: m[3].replace(/^[\s—-]+/, '').trim(),
-      source:      m[4].trim(),
+      title:       unescapeTableCell(m[2].trim()),
+      description: unescapeTableCell(m[3].replace(/^[\s—-]+/, '').trim()),
+      source:      unescapeTableCell(m[4].trim()),
       status:      threadStatusKey(m[5]),
-      priority:    m[6].replace(/\|?\s*$/, '').trim(),
+      priority:    unescapeTableCell(m[6].replace(/\|?\s*$/, '').trim()),
       file,
     });
   }

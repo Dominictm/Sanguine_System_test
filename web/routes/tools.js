@@ -29,6 +29,21 @@ const { slugify } = require('../lib/parsers');
 // List them here so they aren't quoted as strings in the PS command.
 const SWITCH_PARAMS = ['Fix'];
 
+// FIX-15 (docs/audit/2026-07-28-fix-plan.md): the PowerShell command below is
+// built by string concatenation — VALUES are escaped (doubled '), but the
+// object KEYS of `params` used to be inserted as `-${k}` completely
+// unescaped and without any whitelist. A key like `X'; <any command>; #`
+// terminates the intended parameter binding and starts new PowerShell
+// statements — command injection, not just path/argument confusion. Each
+// tool's real .ps1 `param(...)` block is small and fixed, so a per-tool
+// whitelist of allowed keys closes this off entirely (an unlisted key is
+// rejected before it ever reaches the command string, regardless of its
+// content).
+const RUN_TOOL_PARAM_WHITELIST = {
+  validate_links: new Set(['Root', 'Filter', 'IncludeRules', 'Fix', 'Quiet']),
+  search:         new Set(['Query', 'Root', 'Case']),
+};
+
 // Tools that write project files → trigger background revalidation on success.
 const FILE_MUTATING_TOOLS = new Set(['new_npc', 'new_city']);
 
@@ -511,6 +526,14 @@ module.exports = function toolsRouter({
     // module creation lives in the chronicle flow (POST /api/chronicles/:slug/modules).
     const allowed = ['validate_links', 'search'];
     if (!allowed.includes(tool)) return res.status(400).json({ error: 'Unknown tool' });
+
+    // FIX-15 (docs/audit/2026-07-28-fix-plan.md): reject any param KEY not on
+    // this tool's whitelist before it ever reaches the PowerShell command
+    // string below — values are escaped, keys never were, so an unlisted key
+    // is a command-injection vector regardless of its content.
+    const whitelist = RUN_TOOL_PARAM_WHITELIST[tool] || new Set();
+    const badKey = Object.keys(params || {}).find(k => !whitelist.has(k));
+    if (badKey !== undefined) return res.status(400).json({ error: `Недопустимый параметр: ${badKey}` });
 
     const script = path.join(ROOT, 'tools', `${tool}.ps1`);
 

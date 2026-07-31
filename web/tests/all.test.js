@@ -3424,6 +3424,36 @@ describe('API — integration', () => {
       }
     });
 
+    it('FIX-18: POST /api/audio с mimetype "audio/mpeg", но данными, не похожими на mp3 (magic bytes) → 400, файл не сохраняется', async () => {
+      const before = await fs.readdir(AUDIO_ROOT).catch(() => []);
+      const fakeMp3 = Buffer.from('<script>alert(1)</script>', 'utf-8').toString('base64');
+      const { status, body } = await apiJson('/api/audio', {
+        method: 'POST',
+        body: JSON.stringify({ title: 'Поддельный mp3', filename: 'evil.mp3', mimetype: 'audio/mpeg', data: fakeMp3, category: 'effect' }),
+      });
+      assert.equal(status, 400);
+      assert.match(body.error, /не похоже на аудио/);
+      const after = await fs.readdir(AUDIO_ROOT).catch(() => []);
+      assert.deepEqual(after.filter(f => f !== 'index.json' && f !== 'presets.json'),
+        before.filter(f => f !== 'index.json' && f !== 'presets.json'),
+        'ни один файл не должен появиться в cities/audio/ при провале валидации содержимого');
+    });
+
+    it('FIX-18: GET /audio-lib/<файл> отдаёт X-Content-Type-Options: nosniff', async () => {
+      let created = null;
+      try {
+        const { body } = await apiJson('/api/audio', {
+          method: 'POST',
+          body: JSON.stringify({ title: 'Для проверки nosniff', filename: 'x.wav', mimetype: 'audio/wav', data: 'UklGRiQAAABXQVZFZm10', category: 'effect' }),
+        });
+        created = body.id;
+        const res = await fetch(`${BASE}${body.url}`);
+        assert.equal(res.headers.get('x-content-type-options'), 'nosniff');
+      } finally {
+        if (created) await apiJson(`/api/audio/${created}`, { method: 'DELETE' });
+      }
+    });
+
     it('PUT /api/audio/:id — 404 для несуществующего id', async () => {
       const { status } = await apiJson('/api/audio/__no_such_id__', {
         method: 'PUT', body: JSON.stringify({ title: 'Новое имя' }),
@@ -3434,7 +3464,7 @@ describe('API — integration', () => {
     it('PUT /api/audio/:id — отклоняет недопустимое значение категории', async () => {
       const { body: created } = await apiJson('/api/audio', {
         method: 'POST',
-        body: JSON.stringify({ title: 'Для проверки категории', filename: 'x.mp3', mimetype: 'audio/mpeg', data: 'AAAA', category: 'music' }),
+        body: JSON.stringify({ title: 'Для проверки категории', filename: 'x.mp3', mimetype: 'audio/mpeg', data: 'SUQz', category: 'music' }),
       });
       try {
         const { status } = await apiJson(`/api/audio/${created.id}`, {
@@ -3516,7 +3546,7 @@ describe('API — integration', () => {
       it('POST/GET/PUT/DELETE /api/audio/presets — полный цикл, резолвит title/url трека и null-локацию', async () => {
         const { body: track } = await apiJson('/api/audio', {
           method: 'POST',
-          body: JSON.stringify({ title: 'Трек для пресета', filename: 'x.mp3', mimetype: 'audio/mpeg', data: 'AAAA', category: 'effect' }),
+          body: JSON.stringify({ title: 'Трек для пресета', filename: 'x.mp3', mimetype: 'audio/mpeg', data: 'SUQz', category: 'effect' }),
         });
         let presetId = null;
         try {
@@ -3571,11 +3601,11 @@ describe('API — integration', () => {
       it('GET /api/audio/presets — ссылка на удалённый трек тихо пропускается, остальные треки остаются', async () => {
         const { body: keepTrack } = await apiJson('/api/audio', {
           method: 'POST',
-          body: JSON.stringify({ title: 'Останется', filename: 'a.mp3', mimetype: 'audio/mpeg', data: 'AAAA', category: 'music' }),
+          body: JSON.stringify({ title: 'Останется', filename: 'a.mp3', mimetype: 'audio/mpeg', data: 'SUQz', category: 'music' }),
         });
         const { body: doomedTrack } = await apiJson('/api/audio', {
           method: 'POST',
-          body: JSON.stringify({ title: 'Будет удалён', filename: 'b.mp3', mimetype: 'audio/mpeg', data: 'AAAA', category: 'effect' }),
+          body: JSON.stringify({ title: 'Будет удалён', filename: 'b.mp3', mimetype: 'audio/mpeg', data: 'SUQz', category: 'effect' }),
         });
         let presetId = null;
         try {
@@ -6324,6 +6354,319 @@ describe('FIX-9: линейка-специфичные поля создания
   });
 });
 
+// FIX-15 (docs/audit/2026-07-28-fix-plan.md): POST /api/run-tool строил
+// PowerShell-команду конкатенацией строк — значения экранировались, а КЛЮЧИ
+// объекта params нет, и без белого списка допустимых имён. Ключ вида
+// `X'; <любая команда>; #` превращал финальную команду в несколько
+// независимых PowerShell-инструкций — command injection. Тесты ниже
+// намеренно НЕ дают дойти до реального spawn() валидного вызова (в этом
+// проекте `search.ps1`/`validate_links.ps1` — интерактивные интерфейс-скрипты,
+// которые без -Force зависают на "нажмите любую клавишу" до 30s-таймаута —
+// это отдельная, не относящаяся к FIX-15 особенность, не стоит делать
+// тестовый прогон медленным из-за нее) — проверяется только то, что
+// belongs к самому фиксу: неизвестный ключ отклоняется ДО построения команды.
+describe('FIX-15: POST /api/run-tool — белый список ключей params (command injection)', () => {
+  before(async () => startServer());
+  after(async () => stopServer());
+
+  it('неизвестный tool → 400, без обращения к белому списку', async () => {
+    const { status, body } = await apiJson('/api/run-tool', { method: 'POST',
+      body: JSON.stringify({ tool: 'not_a_real_tool', params: {} }) });
+    assert.equal(status, 400);
+    assert.match(body.error, /Unknown tool/);
+  });
+
+  it('ключ-инъекция (`Query\'; ...; #`) для tool=search → 400, не "Unknown tool" (значит дошло до проверки ключей, не имени тула)', async () => {
+    const { status, body } = await apiJson('/api/run-tool', { method: 'POST',
+      body: JSON.stringify({ tool: 'search', params: { "Query'; Write-Output 'INJECTED'; #": 'x' } }) });
+    assert.equal(status, 400);
+    assert.match(body.error, /Недопустимый параметр/);
+  });
+
+  it('легитимный, но не входящий в whitelist ключ (например "Query2") для tool=validate_links → 400', async () => {
+    const { status, body } = await apiJson('/api/run-tool', { method: 'POST',
+      body: JSON.stringify({ tool: 'validate_links', params: { Query2: 'x' } }) });
+    assert.equal(status, 400);
+    assert.match(body.error, /Недопустимый параметр/);
+  });
+
+  it('пустой params (реальный вызов кнопки «Проверить» из UI) проходит проверку ключей', async () => {
+    // Не даём процессу реально завершиться (search/validate_links оба тратят
+    // время) — просто убеждаемся, что ответ НЕ содержит "Недопустимый
+    // параметр" быстро после старта; сам процесс убиваем через короткий таймаут.
+    const controller = new AbortController();
+    const t = setTimeout(() => controller.abort(), 3000);
+    try {
+      await apiJson('/api/run-tool', { method: 'POST', signal: controller.signal,
+        body: JSON.stringify({ tool: 'validate_links', params: {} }) });
+    } catch (e) {
+      // Обрыв по нашему же таймауту — ожидаемо и ОК: значит, whitelist-проверка
+      // (синхронная, до spawn) уже пройдена, иначе сервер ответил бы мгновенно.
+      assert.ok(e.name === 'AbortError' || /abort/i.test(e.message || ''), `неожиданная ошибка: ${e}`);
+    } finally {
+      clearTimeout(t);
+    }
+  });
+});
+
+// FIX-17 (docs/audit/2026-07-28-fix-plan.md): полный аудит web/routes/modules/*.js
+// нашёл 16 из 35 роутов, принимавших :chr/:mod/:slug в path.join(...) без
+// проверки на '..' вообще — среди них DELETE-модуля (рекурсивное удаление
+// произвольной директории через web/lib/db.js rmdir()) и NPC-promote (запись
+// с контролируемым атакующим путём назначения). Живые HTTP-тесты ниже бьют по
+// двум самым серьёзным; остальные 14 + 4 в library.js покрыты source-guard
+// проверкой (грепом кода) — 20 отдельных живых HTTP-тестов на один и тот же
+// паттерн защиты были бы избыточны и медленны.
+describe('FIX-17: path traversal — журнал сессий, удаление/promote модуля', () => {
+  const tmpCity = path.join(__dirname, '../../cities/__fix17test__');
+  const qs = '?city=__fix17test__';
+
+  before(async () => {
+    await fs.mkdir(path.join(tmpCity, 'archive'), { recursive: true });
+    await fs.writeFile(path.join(tmpCity, 'archive', 'characters_index.md'), '# Реестр\n', 'utf-8');
+    await startServer();
+    await apiJson(`/api/chronicles${qs}`, { method: 'POST', body: JSON.stringify({ name: 'Хроника ФИКС17' }) });
+    await apiJson(`/api/chronicles/hronika_fiks17/modules${qs}`, { method: 'POST',
+      body: JSON.stringify({ name: 'Модуль ФИКС17', time: '2010' }) });
+  });
+  after(async () => {
+    await stopServer();
+    await fs.rm(tmpCity, { recursive: true, force: true });
+  });
+
+  it('POST .../session с traversal в :chr → 400, не «Модуль не найден» (доказывает, что вход отклонён, а не просто не нашлась цель)', async () => {
+    const { status, body } = await apiJson(
+      `/api/chronicles/${encodeURIComponent('../hronika_fiks17')}/modules/modul_fiks17/session${qs}`,
+      { method: 'POST', body: JSON.stringify({ date: '2099', notes: 'traversal' }) });
+    assert.equal(status, 400);
+    assert.match(body.error, /Недопустимое имя/);
+  });
+
+  it('PUT/DELETE .../session/:idx с traversal в :mod → 400', async () => {
+    const put = await apiJson(
+      `/api/chronicles/hronika_fiks17/modules/${encodeURIComponent('../modul_fiks17')}/session/0${qs}`,
+      { method: 'PUT', body: JSON.stringify({ notes: 'x' }) });
+    assert.equal(put.status, 400);
+    const del = await apiJson(
+      `/api/chronicles/hronika_fiks17/modules/${encodeURIComponent('../modul_fiks17')}/session/0${qs}`,
+      { method: 'DELETE' });
+    assert.equal(del.status, 400);
+  });
+
+  it('DELETE /api/chronicles/:chr/modules/:mod (удаление модуля) с traversal → 400, ничего не удаляет', async () => {
+    const { status, body } = await apiJson(
+      `/api/chronicles/${encodeURIComponent('../hronika_fiks17')}/modules/modul_fiks17${qs}`,
+      { method: 'DELETE' });
+    assert.equal(status, 400);
+    assert.match(body.error, /Недопустимое имя/);
+    // Модуль по-прежнему на месте — traversal не смог его случайно задеть.
+    const detail = await apiJson(`/api/chronicles/hronika_fiks17/modules/modul_fiks17/detail${qs}`);
+    assert.equal(detail.status, 200);
+  });
+
+  it('POST .../npc/:slug/promote с traversal в :slug (путь НАЗНАЧЕНИЯ записи) → 400', async () => {
+    const { status, body } = await apiJson(
+      `/api/chronicles/hronika_fiks17/modules/modul_fiks17/npc/${encodeURIComponent('../../../evil')}/promote${qs}`,
+      { method: 'POST', body: JSON.stringify({ lineage: 'vampires', force: true }) });
+    assert.equal(status, 400);
+    assert.match(body.error, /Недопустимое имя/);
+  });
+
+  it('GET .../npc/:slug/sheet с traversal → 400 (через _npcSheetPaths, возвращающий null)', async () => {
+    const { status } = await apiJson(
+      `/api/chronicles/hronika_fiks17/modules/modul_fiks17/npc/${encodeURIComponent('../x')}/sheet${qs}`);
+    assert.equal(status, 400);
+  });
+});
+
+test('source-guard: web/routes/modules/*.js — все 16 роутов из FIX-17 защищены _hasTraversal()', () => {
+  const files = ['fill.js', 'lifecycle.js', 'list.js', 'locations.js', 'npc.js', 'sessions.js']
+    .map(f => path.join(__dirname, '../routes/modules', f));
+  // Ожидаемое число вызовов _hasTraversal(...) на файл — по одному на каждый
+  // из 16 роутов, что были без защиты (см. таблицу в FIX-17). shared.js
+  // объявляет функцию (1 раз) и использует её же внутри _npcSheetPaths
+  // (тоже 1) — npc.js экономит явные вызовы за счёт этого хелпера для 3 из
+  // своих 5 роутов, поэтому его собственный счётчик ниже.
+  const expectedMin = { 'fill.js': 1, 'lifecycle.js': 2, 'list.js': 2, 'locations.js': 3, 'npc.js': 2, 'sessions.js': 3 };
+  for (const f of files) {
+    const js = require('fs').readFileSync(f, 'utf-8');
+    const name = path.basename(f);
+    const count = (js.match(/_hasTraversal\(/g) || []).length;
+    assert.ok(count >= expectedMin[name],
+      `${name}: ожидалось минимум ${expectedMin[name]} вызовов _hasTraversal(), найдено ${count}`);
+  }
+  // npc.js's 3 sheet-роута защищены косвенно через _npcSheetPaths() → null,
+  // а не прямым вызовом _hasTraversal в самом роуте — проверяем отдельно.
+  const npcJs = require('fs').readFileSync(path.join(__dirname, '../routes/modules/npc.js'), 'utf-8');
+  const sheetRouteMatches = npcJs.match(/if \(!p\) return res\.status\(400\)/g) || [];
+  assert.ok(sheetRouteMatches.length >= 3,
+    `npc.js: ожидалось минимум 3 роута, проверяющих _npcSheetPaths() на null, найдено ${sheetRouteMatches.length}`);
+});
+
+test('source-guard: web/routes/modules/shared.js — _npcSheetPaths возвращает null на traversal, а не строит путь безусловно', () => {
+  const js = require('fs').readFileSync(path.join(__dirname, '../routes/modules/shared.js'), 'utf-8');
+  const fnMatch = js.match(/function _npcSheetPaths\([^)]*\) \{[\s\S]*?\n\}/);
+  assert.ok(fnMatch, 'не найдена _npcSheetPaths');
+  assert.match(fnMatch[0], /_hasTraversal\(chr, mod, slug\)/,
+    '_npcSheetPaths должна проверять chr/mod/slug на traversal ДО построения пути');
+  assert.match(fnMatch[0], /return null/, '_npcSheetPaths должна возвращать null при обнаружении traversal');
+});
+
+test('source-guard: web/routes/library.js — PUT/DELETE дисциплин и способностей прогоняют :slug через slugify()', () => {
+  const js = require('fs').readFileSync(path.join(__dirname, '../routes/library.js'), 'utf-8');
+  const routeMatches = js.match(/router\.(put|delete)\('\/api\/library\/(disciplines|psychics)\/:slug'[\s\S]*?\n\}\);/g) || [];
+  assert.equal(routeMatches.length, 4, `ожидалось 4 роута (PUT+DELETE × disciplines+psychics), найдено ${routeMatches.length}`);
+  for (const route of routeMatches) {
+    assert.match(route, /slugify\(req\.params\.slug\)/,
+      `роут не прогоняет :slug через slugify():\n${route.slice(0, 120)}...`);
+  }
+});
+
+describe('FIX-16: санитизация свободного текста — нити, концепция модуля, библиотека, город (продолжение FIX-2)', () => {
+  const tmpCity = path.join(__dirname, '../../cities/__fix16test__');
+  const qs = '?city=__fix16test__';
+
+  before(async () => {
+    await fs.mkdir(path.join(tmpCity, 'archive'), { recursive: true });
+    await fs.writeFile(path.join(tmpCity, 'archive', 'characters_index.md'), '# Реестр\n', 'utf-8');
+    await fs.writeFile(path.join(tmpCity, 'archive', 'open_threads.md'),
+      '# Открытые нити\n\n| № | Нить | Источник | Статус | Приоритет |\n|---|---|---|---|---|\n', 'utf-8');
+    await startServer();
+    await apiJson(`/api/chronicles${qs}`, { method: 'POST', body: JSON.stringify({ name: 'Хроника ФИКС16' }) });
+    await apiJson(`/api/chronicles/hronika_fiks16/modules${qs}`, { method: 'POST',
+      body: JSON.stringify({ name: 'Модуль ФИКС16', time: '2010' }) });
+  });
+  after(async () => {
+    await stopServer();
+    await fs.rm(tmpCity, { recursive: true, force: true });
+  });
+
+  it('нить: "\\n" в description и "|" в priority не ломают таблицу — нить читается обратно с теми же полями', async () => {
+    const create = await apiJson(`/api/threads${qs}`, { method: 'POST', body: JSON.stringify({
+      title: 'Тест ФИКС16', description: 'строка1\nстрока2', priority: 'Высокий | ВЗЛОМ', source: 'мод|уль',
+    }) });
+    assert.equal(create.status, 200);
+    const { body: threads } = await apiJson(`/api/threads${qs}`);
+    const t = threads.find(x => x.id === create.body.id);
+    assert.ok(t, 'нить не найдена после создания');
+    assert.equal(t.description, 'строка1 строка2');
+    assert.equal(t.priority, 'Высокий | ВЗЛОМ');
+    assert.equal(t.source, 'мод|уль');
+  });
+
+  it('нить: PATCH priority с "|" не сдвигает столбцы — статус остаётся корректным', async () => {
+    const create = await apiJson(`/api/threads${qs}`, { method: 'POST', body: JSON.stringify({ title: 'Патч ФИКС16' }) });
+    const patch = await apiJson(`/api/threads/${create.body.id}${qs}`, { method: 'PATCH', body: JSON.stringify({
+      file: 'archive/open_threads.md', priority: 'Низкий | X',
+    }) });
+    assert.equal(patch.status, 200);
+    const { body: threads } = await apiJson(`/api/threads${qs}`);
+    const t = threads.find(x => x.id === create.body.id);
+    assert.equal(t.priority, 'Низкий | X');
+    assert.notEqual(t.status, 'unknown');
+  });
+
+  it('концепция модуля (создание): ведущая "##" в content не фабрикует фейковый заголовок в <mod>.md', async () => {
+    const create = await apiJson(`/api/chronicles/hronika_fiks16/modules${qs}`, { method: 'POST', body: JSON.stringify({
+      name: 'Концепт ФИКС16', time: '2010', content: '## Фейковый заголовок\nидея модуля',
+    }) });
+    assert.equal(create.status, 200);
+    const modPath = path.join(tmpCity, 'chronicles', 'hronika_fiks16', 'modules', create.body.slug, `${create.body.slug}.md`);
+    const raw = await fs.readFile(modPath, 'utf-8');
+    assert.doesNotMatch(raw, /^## Фейковый заголовок$/m, 'экранирование не сработало — вставленный "##" стал настоящим заголовком');
+    const detail = await apiJson(`/api/chronicles/hronika_fiks16/modules/${create.body.slug}/detail${qs}`);
+    assert.match(detail.body.description, /## Фейковый заголовок/, 'при чтении назад текст должен де-экранироваться (совпасть с исходным)');
+  });
+
+  it('концепция модуля (правка через PUT fields): та же защита, что при создании', async () => {
+    const put = await apiJson(`/api/chronicles/hronika_fiks16/modules/modul_fiks16/fields${qs}`, { method: 'PUT', body: JSON.stringify({
+      fields: { description: '## Ещё один фейк\nновая идея' },
+    }) });
+    assert.equal(put.status, 200);
+    const modPath = path.join(tmpCity, 'chronicles', 'hronika_fiks16', 'modules', 'modul_fiks16', 'modul_fiks16.md');
+    const raw = await fs.readFile(modPath, 'utf-8');
+    assert.doesNotMatch(raw, /^## Ещё один фейк$/m);
+  });
+
+  it('библиотека: "\\n## Уровень 99" в clans дисциплины не фабрикует фейковый уровень силы', async () => {
+    const create = await apiJson('/api/library/disciplines', { method: 'POST', body: JSON.stringify({
+      name: 'Тестовая дисциплина ФИКС16', clans: 'Тест\n## Уровень 99 — Фальшивая сила\n**Система.** поддельная',
+    }) });
+    assert.equal(create.status, 200);
+    const discs = (await apiJson('/api/library/disciplines')).body;
+    const d = discs.find(x => x.slug === create.body.slug);
+    assert.ok(d, 'дисциплина не найдена');
+    assert.ok(!d.levels.some(l => l.level === 99), 'фейковый уровень 99 не должен появиться в распарсенных данных');
+    // Уборка: DELETE у авторских дисциплин — soft-delete (rename в _deleted/,
+    // не erase, см. web/routes/library.js) — файл-огрызок остался бы в repo
+    // на каждый прогон тестов, если не убрать его явно вот тут.
+    await apiJson(`/api/library/disciplines/${create.body.slug}`, { method: 'DELETE' });
+    const trashDir = path.join(__dirname, '../../system/library/disciplines/_deleted');
+    const trashFiles = await fs.readdir(trashDir).catch(() => []);
+    for (const f of trashFiles.filter(f => f.startsWith(create.body.slug + '_'))) {
+      await fs.rm(path.join(trashDir, f), { force: true });
+    }
+    await fs.rmdir(trashDir).catch(() => {});
+  });
+
+  it('город: "|" в политическом составе не сдвигает столбцы «Карты фракций»', async () => {
+    const create = await apiJson('/api/cities', { method: 'POST', body: JSON.stringify({
+      name: 'Fix16 Citytest', year: '2010',
+      political: 'Князь: Тест|ВЗЛОМ_ЯЧЕЙКА',
+    }) });
+    assert.equal(create.status, 200);
+    const citySlug = create.body.slug;
+    const psFile = path.join(__dirname, '../../cities', citySlug, 'archive/political_state.md');
+    const raw = await fs.readFile(psFile, 'utf-8').catch(() => '');
+    const row = raw.split('\n').find(l => /Тест/.test(l));
+    assert.ok(row, 'строка с ролью «Князь» не найдена в political_state.md');
+    const cells = row.trim().replace(/^\|/, '').replace(/\|$/, '').split('|');
+    assert.equal(cells.length, 4, `ожидалось 4 колонки, "|" в значении сдвинул их: ${row}`);
+    await fs.rm(path.join(__dirname, '../../cities', citySlug), { recursive: true, force: true });
+  });
+});
+
+test('source-guard: web/routes/threads.js и lib/parsers/threads.js — санитизация/де-экранирование полей нити', () => {
+  const routeJs = require('fs').readFileSync(path.join(__dirname, '../routes/threads.js'), 'utf-8');
+  assert.match(routeJs, /escapeTableCell\(sanitizeInlineText\(title\)\)/);
+  assert.match(routeJs, /escapeTableCell\(sanitizeInlineText\(description\)\)/);
+  assert.match(routeJs, /escapeTableCell\(sanitizeInlineText\(priority\)\)/);
+  const parserJs = require('fs').readFileSync(path.join(__dirname, '../lib/parsers/threads.js'), 'utf-8');
+  const unescapeCount = (parserJs.match(/unescapeTableCell\(/g) || []).length;
+  assert.ok(unescapeCount >= 4, `ожидалось де-экранирование минимум 4 полей (title/description/source/priority), найдено ${unescapeCount}`);
+});
+
+test('source-guard: web/routes/modules/list.js и fields.js — концепция модуля санитизируется на запись и де-экранируется на чтение', () => {
+  const listJs = require('fs').readFileSync(path.join(__dirname, '../routes/modules/list.js'), 'utf-8');
+  assert.match(listJs, /sanitizeFreeformBody\(\(req\.body\.content \|\| ''\)\.trim\(\)\)/,
+    'создание модуля не санитизирует content через sanitizeFreeformBody');
+  assert.match(listJs, /unescapeFreeformBody\(conceptM\[1\]\.trim\(\)\)/,
+    'чтение detail не де-экранирует концепцию через unescapeFreeformBody');
+  const fieldsJs = require('fs').readFileSync(path.join(__dirname, '../routes/modules/fields.js'), 'utf-8');
+  assert.match(fieldsJs, /key === 'description'[\s\S]{0,200}sanitizeFreeformBody/,
+    'PUT /fields description не санитизирует через sanitizeFreeformBody');
+});
+
+test('source-guard: web/routes/library.js — шаблоны дисциплин/способностей санитизируют clans/source/levels через sanitizeInlineText', () => {
+  const js = require('fs').readFileSync(path.join(__dirname, '../routes/library.js'), 'utf-8');
+  const discFn = js.match(/function _discTemplate\([^)]*\) \{[\s\S]*?\n\}/)?.[0] || '';
+  const psyFn  = js.match(/function _psyTemplate\([^)]*\) \{[\s\S]*?\n\}/)?.[0] || '';
+  for (const [name, fn] of [['_discTemplate', discFn], ['_psyTemplate', psyFn]]) {
+    assert.ok(fn, `не найдена ${name}`);
+    const count = (fn.match(/sanitizeInlineText\(/g) || []).length;
+    assert.ok(count >= 5, `${name}: ожидалось минимум 5 вызовов sanitizeInlineText (clans/source/level name/literary/system), найдено ${count}`);
+  }
+});
+
+test('source-guard: web/routes/cities.js — синк «Карты фракций» экранирует ячейки таблицы', () => {
+  const js = require('fs').readFileSync(path.join(__dirname, '../routes/cities.js'), 'utf-8');
+  const fn = js.match(/async function syncPoliticalStateTable\([^)]*\) \{[\s\S]*?\n\}/)?.[0] || '';
+  assert.ok(fn, 'не найдена syncPoliticalStateTable');
+  assert.match(fn, /escapeTableCell\(sanitizeInlineText\(r\.role\)\)/);
+  assert.match(fn, /escapeTableCell\(sanitizeInlineText\(\[r\.name, r\.name2\]/);
+  assert.match(fn, /unescapeTableCell\(r\[0\]\)/);
+});
+
 // FIX-4b (docs/audit/2026-07-28-fix-plan.md): пользовательский аудит-скрипт,
 // который стоит прогнать после обновления — находит коллизии имён, оставшиеся
 // в старых данных с ДО-фикса времён (сейчас интерфейс их уже не ломает, но
@@ -6394,6 +6737,70 @@ describe('FIX-11: getCityDisplayName находит city.md (не падает �
     const name = await getCityDisplayName('__no_such_city_fix11__');
     assert.equal(name, '__no_such_city_fix11__');
   });
+});
+
+describe('FIX-19: GET /api/search — эмодзи-заголовок с суррогатной парой не портит имя в результатах', () => {
+  const tmpCity = path.join(__dirname, '../../cities/__fix19test__');
+  const qs = '?city=__fix19test__';
+
+  before(async () => {
+    await fs.mkdir(path.join(tmpCity, 'characters', 'vampires', 'anya_gros'), { recursive: true });
+    // 👤 (U+1F464) не входил в старый хардкод-список, но делит старший суррогат
+    // \ud83d с 🐺 (U+1F43A), который входил — старый /[…]/g без /u-флага резал
+    // по code unit и терял парную половину чужого эмодзи (docs/audit/2026-07-28-fix-plan.md).
+    await fs.writeFile(path.join(tmpCity, 'characters', 'vampires', 'anya_gros', 'anya_gros.md'),
+      '# 👤 Аня Грос\n- **Слаг:** anya_gros\n- **Родной город:** __fix19test__\n- **Линейка WoD:** vampires\n- **Статус:** активен\n\nОписание для поиска: полуночный переулок.\n',
+      'utf-8');
+    await startServer();
+  });
+  after(async () => {
+    await stopServer();
+    await fs.rm(tmpCity, { recursive: true, force: true });
+  });
+
+  it('имя в результатах поиска — валидная строка "Аня Грос", без "\\ufffd"/одинокого суррогата', async () => {
+    const { status, body } = await apiJson(`/api/search${qs}&q=${encodeURIComponent('полуночный')}`);
+    assert.equal(status, 200);
+    const hit = (body.results?.characters || []).find(h => h.slug === 'anya_gros');
+    assert.ok(hit, 'персонаж не найден в результатах поиска');
+    assert.equal(hit.name, 'Аня Грос');
+    assert.ok(!/[\ud800-\udfff]/.test(hit.name), 'имя содержит одинокий суррогат — строка невалидна как UTF-16');
+  });
+});
+
+describe('FIX-20: mdToHtmlPlain(md, {allowHeadings:false}) — экранированный "#"/"##" не рендерится как настоящий заголовок в теле сессии', () => {
+  // mdToHtmlPlain не зависит от DOM (кроме недостижимой в этих тестах ветки
+  // resolveMdLink для markdown-ссылок) — извлекаем функцию как есть из
+  // клиентского скрипта и исполняем в Node через new Function, как уже
+  // делают другие тесты этого файла (например _isBogusPrompt выше).
+  const jsSrc = require('fs').readFileSync(path.join(__dirname, '../public/scripts/modules.js'), 'utf-8');
+  const fnMatch = jsSrc.match(/function mdToHtmlPlain\([\s\S]*?\n\}\n/);
+  assert.ok(fnMatch, 'не найдена mdToHtmlPlain в modules.js');
+  const mdToHtmlPlain = (new Function(`return (${fnMatch[0]})`))();
+
+  it('allowHeadings:false — "## Сессия 99 — Поддельная" остаётся текстом, не становится <h2>', () => {
+    const html = mdToHtmlPlain('## Сессия 99 — Поддельная', { allowHeadings: false });
+    assert.ok(!/<h[1-6]>/.test(html), `ожидался обычный текст без заголовка, получено: ${html}`);
+    assert.match(html, /## Сессия 99 — Поддельная/);
+  });
+
+  it('allowHeadings по умолчанию (true) — легитимный "## Финал" в других контекстах (finale.md и т.п.) по-прежнему рендерится заголовком', () => {
+    const html = mdToHtmlPlain('## Финал — Развязка');
+    assert.match(html, /<h2>Финал — Развязка<\/h2>/);
+  });
+});
+
+test('source-guard: modules.js — тело записи журнала сессий рендерится через mdToHtmlPlain(s.body, {allowHeadings:false}) (FIX-20)', () => {
+  const js = require('fs').readFileSync(path.join(__dirname, '../public/scripts/modules.js'), 'utf-8');
+  assert.match(js, /mdToHtmlPlain\(s\.body,\s*\{\s*allowHeadings:\s*false\s*\}\)/,
+    'рендер тела сессии должен отключать заголовки — иначе экранированный "#"/"##" из заметки рисуется как настоящий <h2>');
+});
+
+test('source-guard: routes/dashboard.js — h1() снимает эмодзи по кодпоинтам (\\p{Extended_Pictographic}/u), не хардкод-списком UTF-16 code units', () => {
+  const js = require('fs').readFileSync(path.join(__dirname, '../routes/dashboard.js'), 'utf-8');
+  assert.doesNotMatch(js, /🧛🧚🧑🐺🔮🏹⚔️🩸/, 'старый небезопасный хардкод-список эмодзи всё ещё в файле');
+  assert.match(js, /\\p\{Extended_Pictographic\}/, 'h1() больше не использует codepoint-safe \\p{Extended_Pictographic}');
+  assert.match(js, /\/gu[\s\S]{0,10};/, 'регэксп эмодзи должен использовать /u-флаг (по кодпоинтам, не UTF-16 code units)');
 });
 
 test('source-guard: archive.js — счётчик событий согласует число (FIX-8, не всегда "N событий")', () => {

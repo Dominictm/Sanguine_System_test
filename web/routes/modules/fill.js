@@ -15,7 +15,8 @@ const {
   _parseScenarioScenesDirect, _parseScenarioScenesLegacy, _parseScenarioScenes, _parseScenarioLocations,
   _parseModuleLocSlugs, _writeModuleLocSlugs, _parseSessions, _cleanNpcName, _npcCardHref,
   _parseNpcEntries, _findNpcMdSection, _removeNpcEntry, _parseNpcMdGroups, _renderSessionBlock,
-  _writeSessionsFile, _patchModuleMain, _claudeOnlyModel, _logAiCall, _logAiFail,
+  _writeSessionsFile, _patchModuleMain, _claudeOnlyModel, _logAiCall, _logAiFail, _hasTraversal,
+  unescapeFreeformBody,
 } = require('./shared');
 const { buildCityConstraints, buildThreatClocks, buildCityNaming } = require('../../lib/context_builder');
 
@@ -26,6 +27,8 @@ module.exports = function fillRouter({ makeGenerationClient, genTextWithRetry })
     try {
       const city    = reqCity(req);
       const { chr, mod } = req.params;
+      if (_hasTraversal(chr, mod))
+        return res.status(400).json({ ok: false, error: 'Недопустимое имя' });
       const { pcs = [], npcs = [] } = req.body || {};
       let content = (req.body.content || '').trim();
       const cityDisplayName = await getCityDisplayName(city);
@@ -35,7 +38,7 @@ module.exports = function fillRouter({ makeGenerationClient, genTextWithRetry })
         const mainTxtForConcept = await fs.readFile(
           path.join(chroniclesDir(city), chr, 'modules', mod, `${mod}.md`), 'utf-8').catch(() => '');
         const conceptMatch = mainTxtForConcept.match(/## 💡 Концепция\s*\n+([\s\S]*?)(?=\n##|\n---|\s*$)/);
-        if (conceptMatch) content = conceptMatch[1].trim();
+        if (conceptMatch) content = unescapeFreeformBody(conceptMatch[1].trim());
       }
 
       if (!content) return res.status(400).json({ ok: false, error: 'Не заполнено поле «Содержание модуля» и концепция не найдена в файле модуля.' });

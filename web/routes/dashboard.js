@@ -192,7 +192,17 @@ router.get('/api/search', async (req, res) => {
       return hits;
     };
 
-    const h1 = s => { const m = s.match(/^#\s+(.+)$/m); return m ? m[1].replace(/[🧛🧚🧑🐺🔮🏹⚔️🩸*_]/g, '').trim() : ''; };
+    // FIX-19 (docs/audit/2026-07-28-fix-plan.md): the old hardcoded emoji
+    // character class had no /u flag, so it matched individual UTF-16 code
+    // units — an emoji NOT in the list but sharing a high surrogate with one
+    // that IS (e.g. 👤 U+1F464 and 🐺 U+1F43A both start with \ud83d) lost only
+    // its own half of the pair, corrupting the string ("👤 Аня Грос" → a lone
+    // low surrogate + " Аня Грос", confirmed live as "�" in search results).
+    // \p{Extended_Pictographic} with /u matches by codepoint, covers emoji in
+    // general (not a fixed list), and ️/‍ clean up the variation
+    // selector / ZWJ that some emoji sequences (e.g. ⚔️) leave behind.
+    const EMOJI_RE = /[\p{Extended_Pictographic}️‍]/gu;
+    const h1 = s => { const m = s.match(/^#\s+(.+)$/m); return m ? m[1].replace(EMOJI_RE, '').replace(/[*_]/g, '').trim() : ''; };
 
     // Characters — main card only (slug/slug.md, not -sheet.md, not journals)
     const charHits = await walkMd(path.join(cityBase, 'characters'), (p, name) => {

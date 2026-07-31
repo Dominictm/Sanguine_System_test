@@ -1675,7 +1675,7 @@ function renderModulePage(data) {
             <button class="modp-session-delete" data-sess-idx="${i}" title="Удалить запись">🗑</button>
           </div>
           ${s.scenes ? `<div class="modp-session-scenes">🎬 Сыграно сцен: ${escHtml(s.scenes)}</div>` : ''}
-          ${s.body ? `<div class="modp-session-body">${mdToHtmlPlain(s.body)}</div>` : ''}
+          ${s.body ? `<div class="modp-session-body">${mdToHtmlPlain(s.body, { allowHeadings: false })}</div>` : ''}
         </div>`).join('')
     : '<div class="modp-empty"><div class="modp-empty-icon">🎲</div>Сессий пока нет — добавь первую запись выше</div>';
 
@@ -1782,7 +1782,18 @@ function renderModulePage(data) {
 }
 
 // Minimal markdown → HTML converter
-function mdToHtmlPlain(md) {
+// allowHeadings: FIX-20 (docs/audit/2026-07-28-fix-plan.md) — session/scene
+// notes are freeform prose, never real markdown documents; the server
+// unescapes a stored '\#'/'\##' (kept escaped on disk since FIX-2, so a note
+// starting with '#' can't fabricate a fake session/scene record on the next
+// parse — see web/lib/parsers/shared.js sanitizeFreeformBody) before sending
+// it here, so by the time it reaches this renderer a once-escaped '#' is
+// indistinguishable from a real one. Rather than thread escape-state through
+// the whole read pipeline, callers that only ever hold prose (no legitimate
+// headings) pass allowHeadings:false so '#'/'##' render as literal text
+// instead of a fabricated <h2> (confirmed live: a note with '\## Сессия 99'
+// rendered as a real bolded heading inline in the session body).
+function mdToHtmlPlain(md, { allowHeadings = true } = {}) {
   if (!md) return '';
   // Extract code blocks before escaping
   const codeBlocks = [];
@@ -1795,12 +1806,14 @@ function mdToHtmlPlain(md) {
   // Inline code
   src = src.replace(/`([^`]+)`/g, (_, c) => `<code>${c}</code>`);
   // Headers
-  src = src.replace(/^######\s+(.+)$/gm, '<h6>$1</h6>');
-  src = src.replace(/^#####\s+(.+)$/gm, '<h5>$1</h5>');
-  src = src.replace(/^####\s+(.+)$/gm,  '<h4>$1</h4>');
-  src = src.replace(/^###\s+(.+)$/gm,   '<h3>$1</h3>');
-  src = src.replace(/^##\s+(.+)$/gm,    '<h2>$1</h2>');
-  src = src.replace(/^#\s+(.+)$/gm,     '<h2>$1</h2>');
+  if (allowHeadings) {
+    src = src.replace(/^######\s+(.+)$/gm, '<h6>$1</h6>');
+    src = src.replace(/^#####\s+(.+)$/gm, '<h5>$1</h5>');
+    src = src.replace(/^####\s+(.+)$/gm,  '<h4>$1</h4>');
+    src = src.replace(/^###\s+(.+)$/gm,   '<h3>$1</h3>');
+    src = src.replace(/^##\s+(.+)$/gm,    '<h2>$1</h2>');
+    src = src.replace(/^#\s+(.+)$/gm,     '<h2>$1</h2>');
+  }
   // Bold + italic
   src = src.replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>');
   src = src.replace(/\*\*(.+?)\*\*/g,     '<strong>$1</strong>');

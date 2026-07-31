@@ -15,7 +15,8 @@ const {
   _parseScenarioScenesDirect, _parseScenarioScenesLegacy, _parseScenarioScenes, _parseScenarioLocations,
   _parseModuleLocSlugs, _writeModuleLocSlugs, _parseSessions, _cleanNpcName, _npcCardHref,
   _parseNpcEntries, _findNpcMdSection, _removeNpcEntry, _parseNpcMdGroups, _renderSessionBlock,
-  _writeSessionsFile, _patchModuleMain, sanitizeInlineText, escapeTableCell,
+  _writeSessionsFile, _patchModuleMain, sanitizeInlineText, escapeTableCell, _hasTraversal,
+  sanitizeFreeformBody, unescapeFreeformBody,
 } = require('./shared');
 
 module.exports = function listRouter() {
@@ -57,6 +58,7 @@ module.exports = function listRouter() {
     try {
       const city = reqCity(req);
       const slug = req.params.slug;
+      if (_hasTraversal(slug)) return res.status(400).json({ error: 'Недопустимое имя' });
       const chrDir = path.join(chroniclesDir(city), slug);
       if (!await fs.stat(chrDir).catch(() => null)) return res.status(404).json({ error: 'Хроника не найдена' });
 
@@ -117,7 +119,12 @@ module.exports = function listRouter() {
       const formatStr = escapeTableCell(sanitizeInlineText(req.body.format));
       const pcs       = Array.isArray(req.body.pcs)  ? req.body.pcs  : [];
       const npcs      = Array.isArray(req.body.npcs) ? req.body.npcs : [];
-      const concept   = (req.body.content || '').trim();
+      // sanitizeFreeformBody: FIX-16 (docs/audit/2026-07-28-fix-plan.md, continuation
+      // of FIX-2) — this is the LAST section written into the fresh <mod>.md (nothing
+      // follows «## 💡 Концепция»); an unescaped leading '#'/'##' line here fabricates
+      // a fake heading that fields.js/list.js's own «## 💡 Концепция» regex then
+      // treats as the section boundary on the next read/edit, silently truncating it.
+      const concept   = sanitizeFreeformBody((req.body.content || '').trim());
       const track     = req.body.trackInChronology !== false; // default true
 
       const pcBlock  = pcs.length  ? pcs.map(n  => `  - ${sanitizeInlineText(n)} — Персонаж игрока`).join('\n') : '  - ⚠️ Уточнить';
@@ -209,6 +216,7 @@ module.exports = function listRouter() {
     try {
       const city = reqCity(req);
       const { chr, mod } = req.params;
+      if (_hasTraversal(chr, mod)) return res.status(400).json({ error: 'Недопустимое имя' });
       const modDir = path.join(chroniclesDir(city), chr, 'modules', mod);
 
       if (!await fs.stat(modDir).catch(() => null))
@@ -241,7 +249,7 @@ module.exports = function listRouter() {
         // but never surface the metadata table itself.
         const conceptM = mc.match(/##\s*💡\s*Концепция\s*\n+([\s\S]*?)(?=\n##|\n---|\s*$)/);
         if (conceptM && conceptM[1].trim()) {
-          result.description = conceptM[1].trim();
+          result.description = unescapeFreeformBody(conceptM[1].trim());
         } else {
           for (const m of mc.matchAll(/\n---\s*\n+([\s\S]+?)(?=\n##|\n---|\s*$)/g)) {
             const block = m[1].trim();

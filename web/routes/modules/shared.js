@@ -71,8 +71,23 @@ async function getCityDisplayName(city) {
   } catch { return city; }
 }
 
+// FIX-17 (docs/audit/2026-07-28-fix-plan.md): full audit of web/routes/modules/*.js
+// found 16 of 35 routes taking a client path-segment (:chr/:mod/:slug/...) and
+// using it in path.join(...) with no check for '..' at all — some only leak
+// reads, but DELETE /api/chronicles/:chr/modules/:mod (lifecycle.js) recursively
+// rm's whatever directory the traversal resolves to, and the NPC-promote route
+// below writes to a caller-controlled destination. One shared predicate instead
+// of copy-pasting `x.includes('..')` chains at each of the 16 call sites.
+function _hasTraversal(...segments) {
+  return segments.some(s => typeof s === 'string' && s.includes('..'));
+}
+
 // ── Module NPC sheets (episodic NPCs: chronicles/<chr>/modules/<mod>/npc/<slug>/) ──
+// Returns null on a traversal attempt in any segment — every caller must check
+// for that before using the paths (FIX-17 above; this used to build the path
+// unconditionally, so every route calling it inherited the same hole).
 function _npcSheetPaths(city, chr, mod, slug) {
+  if (_hasTraversal(chr, mod, slug)) return null;
   const dir = path.join(chroniclesDir(city), chr, 'modules', mod, 'npc', slug);
   return { dir, card: path.join(dir, `${slug}.md`), sheet: path.join(dir, `${slug}-sheet.md`) };
 }
@@ -756,7 +771,7 @@ module.exports = {
   slugify, parseEvent, parseScenarioSections, replaceScenarioSection, replaceScenarioSections,
   splitH3Body, serializeScenarioSections, findScenarioSectionIndex, checkScenarioStructure,
   insertScenarioScene, hasManualSceneMarker, clearManualSceneMarker, isFinaleHeading,
-  MOD_AUX, syncChronicleModuleLinks, getCityDisplayName, _npcSheetPaths, _checkNpcPromotion,
+  MOD_AUX, syncChronicleModuleLinks, getCityDisplayName, _npcSheetPaths, _checkNpcPromotion, _hasTraversal,
   _cleanLocName, _locType, _extractMetaList, _extractLocNamesFromScenario, _extractNpcNamesFromScenario,
   _renderModuleNpcMd, _charTimelineDigest, _extractScenarioSection, _SCENE_HEADING_RE,
   _parseScenarioScenesDirect, _parseScenarioScenesLegacy, _parseScenarioScenes, _parseScenarioLocations,

@@ -17,7 +17,7 @@ const {
   _parseNpcEntries, _findNpcMdSection, _removeNpcEntry, _parseNpcMdGroups, _renderSessionBlock,
   _writeSessionsFile, _patchModuleMain,
   _upsertSceneNoteEntry, _upsertModuleSection, _readModuleSection,
-  unescapeFreeformBody,
+  unescapeFreeformBody, _hasTraversal,
 } = require('./shared');
 
 module.exports = function sessionsRouter() {
@@ -27,6 +27,8 @@ module.exports = function sessionsRouter() {
     try {
       const city = reqCity(req);
       const { chr, mod } = req.params;
+      if (_hasTraversal(chr, mod))
+        return res.status(400).json({ ok: false, error: 'Недопустимое имя' });
       const modDir = path.join(chroniclesDir(city), chr, 'modules', mod);
       if (!await fs.stat(modDir).catch(() => null))
         return res.status(404).json({ ok: false, error: 'Модуль не найден' });
@@ -56,6 +58,8 @@ module.exports = function sessionsRouter() {
     try {
       const city = reqCity(req);
       const { chr, mod, idx } = req.params;
+      if (_hasTraversal(chr, mod))
+        return res.status(400).json({ ok: false, error: 'Недопустимое имя' });
       const modDir = path.join(chroniclesDir(city), chr, 'modules', mod);
       const raw = await fs.readFile(path.join(modDir, 'sessions.md'), 'utf-8').catch(() => '');
       const sessions = _parseSessions(raw);
@@ -86,6 +90,8 @@ module.exports = function sessionsRouter() {
     try {
       const city = reqCity(req);
       const { chr, mod, idx } = req.params;
+      if (_hasTraversal(chr, mod))
+        return res.status(400).json({ ok: false, error: 'Недопустимое имя' });
       const modDir = path.join(chroniclesDir(city), chr, 'modules', mod);
       const raw = await fs.readFile(path.join(modDir, 'sessions.md'), 'utf-8').catch(() => '');
       const sessions = _parseSessions(raw);

@@ -8,7 +8,7 @@ const express = require('express');
 const path    = require('path');
 const fs      = require('fs').promises;
 const crypto  = require('crypto');
-const { serverError } = require('../lib/http');
+const { serverError, validateAudioUpload } = require('../lib/http');
 const { AUDIO_DIR, writeFileAtomic, reqCity, getAllLocations } = require('../lib/db');
 
 const router = express.Router();
@@ -57,13 +57,18 @@ router.get('/api/audio', async (_req, res) => {
 router.post('/api/audio', async (req, res) => {
   try {
     const { title, filename, mimetype, data, category } = req.body || {};
-    const ext = MIME_EXT[mimetype];
-    if (!ext) return res.status(400).json({ error: 'Неподдерживаемый формат аудио (нужен mp3/ogg/wav)' });
+    // FIX-18 (docs/audit/2026-07-28-fix-plan.md): mimetype/MIME_EXT is only a
+    // candidate extension from the CLIENT — validateAudioUpload checks the
+    // actual bytes (magic number) match it before anything is written to disk.
+    const candidateExt = MIME_EXT[mimetype];
+    if (!candidateExt) return res.status(400).json({ error: 'Неподдерживаемый формат аудио (нужен mp3/ogg/wav)' });
     if (!title || !title.trim()) return res.status(400).json({ error: 'Название не может быть пустым' });
     if (!CATEGORIES.includes(category)) return res.status(400).json({ error: 'Укажите категорию: фоновая музыка или аудио эффект' });
     if (!data) return res.status(400).json({ error: 'Файл не передан' });
 
-    const buf = Buffer.from(data, 'base64');
+    const validated = validateAudioUpload(data, candidateExt);
+    if (!validated.ok) return res.status(400).json({ error: validated.error });
+    const { ext, buffer: buf } = validated;
     if (buf.length > MAX_BYTES) return res.status(400).json({ error: 'Файл больше 20МБ' });
 
     const id = crypto.randomUUID();

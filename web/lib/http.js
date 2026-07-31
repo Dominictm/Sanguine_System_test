@@ -127,4 +127,36 @@ function _logAiFail(label, err, gen) {
   console.warn(`${C.yellow}[ai-fail]${C.reset} ${label} — ${C.cyan}${gen?.source || '?'}${C.reset}${gen?.model ? ` (${gen.model})` : ''} — ${C.red}${status}${C.reset} ${err?.message || err}`);
 }
 
-module.exports = { C, serverError, aiRateLimit, callAnthropicWithRetry, _logAiCall, _logAiFail, validateImageUpload };
+// ── Валидация загружаемого аудио (звук саундборда) ────────────────────────────
+// Тот же риск, что закрывал validateImageUpload (FIX-1) для картинок, был открыт
+// для звука (FIX-18, docs/audit/2026-07-28-fix-plan.md): расширение бралось из
+// клиентского mimetype без проверки байт — подтверждено live загрузкой
+// <script>alert(1)</script> под видом .mp3, отданной обратно express.static().
+const AUDIO_EXT_WHITELIST = new Set(['mp3', 'ogg', 'wav']);
+function validateAudioUpload(base64, ext) {
+  // [^a-z0-9] (not [^a-z]) — unlike image extensions, 'mp3' has a digit that
+  // a letters-only strip would silently eat, turning it into 'mp' and always
+  // failing the whitelist check below.
+  const safeExt = String(ext || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  if (!AUDIO_EXT_WHITELIST.has(safeExt))
+    return { ok: false, error: 'Недопустимый формат файла (только mp3/ogg/wav)' };
+
+  let buf;
+  try { buf = Buffer.from(String(base64 || ''), 'base64'); } catch { buf = null; }
+  if (!buf || buf.length === 0)
+    return { ok: false, error: 'Некорректные данные аудио' };
+
+  const isMp3 = buf.length >= 3 &&
+    ((buf[0] === 0x49 && buf[1] === 0x44 && buf[2] === 0x33) || // "ID3"
+     (buf[0] === 0xFF && (buf[1] & 0xE0) === 0xE0));            // MPEG frame sync
+  const isOgg = buf.length >= 4 && buf[0] === 0x4F && buf[1] === 0x67 && buf[2] === 0x67 && buf[3] === 0x53; // "OggS"
+  const isWav = buf.length >= 12 && buf[0] === 0x52 && buf[1] === 0x49 && buf[2] === 0x46 && buf[3] === 0x46 &&
+                buf[8] === 0x57 && buf[9] === 0x41 && buf[10] === 0x56 && buf[11] === 0x45; // "RIFF"...."WAVE"
+  const matchesExt = { mp3: isMp3, ogg: isOgg, wav: isWav }[safeExt];
+  if (!matchesExt)
+    return { ok: false, error: 'Содержимое файла не похоже на аудио заявленного формата' };
+
+  return { ok: true, ext: safeExt, buffer: buf };
+}
+
+module.exports = { C, serverError, aiRateLimit, callAnthropicWithRetry, _logAiCall, _logAiFail, validateImageUpload, validateAudioUpload };

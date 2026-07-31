@@ -16,7 +16,7 @@ const {
   _parseScenarioScenesDirect, _parseScenarioScenesLegacy, _parseScenarioScenes, _parseScenarioLocations,
   _parseModuleLocSlugs, _writeModuleLocSlugs, _parseSessions, _cleanNpcName, _npcCardHref,
   _parseNpcEntries, _findNpcMdSection, _removeNpcEntry, _parseNpcMdGroups, _renderSessionBlock,
-  _writeSessionsFile, _patchModuleMain, _claudeOnlyModel, _logAiCall, _logAiFail,
+  _writeSessionsFile, _patchModuleMain, _claudeOnlyModel, _logAiCall, _logAiFail, _hasTraversal,
 } = require('./shared');
 const { buildThreatClocks } = require('../../lib/context_builder');
 
@@ -82,6 +82,8 @@ module.exports = function lifecycleRouter({ makeGenerationClient, genTextWithRet
     try {
       const city   = reqCity(req);
       const { chr, mod } = req.params;
+      if (_hasTraversal(chr, mod))
+        return res.status(400).json({ error: 'Недопустимое имя' });
       const modDir = path.join(chroniclesDir(city), chr, 'modules', mod);
 
       if (!await fs.stat(modDir).catch(() => null))
@@ -203,6 +205,8 @@ module.exports = function lifecycleRouter({ makeGenerationClient, genTextWithRet
     try {
       const city = reqCity(req);
       const { chr, mod } = req.params;
+      if (_hasTraversal(chr, mod))
+        return res.status(400).json({ ok: false, error: 'Недопустимое имя' });
       const modDir = path.join(chroniclesDir(city), chr, 'modules', mod);
       if (!await fs.stat(modDir).catch(() => null))
         return res.status(404).json({ ok: false, error: 'Модуль не найден' });
