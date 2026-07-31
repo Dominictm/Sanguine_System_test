@@ -22,7 +22,7 @@ if %CODE% neq 0 (
 ) else (
     echo  [OK]  All UI tests passed
 )
-echo  Report: web\tests\report.html
+echo  Report: web\tests\report-ui.html
 echo.
 
 pause

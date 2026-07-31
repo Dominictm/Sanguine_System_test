@@ -41,6 +41,7 @@ if %CODE% neq 0 (
 ) else (
     echo  [OK]  All tests passed
 )
+echo  UI report: web\tests\report-ui.html
 echo.
 
 pause

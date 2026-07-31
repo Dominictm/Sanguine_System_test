@@ -5,11 +5,18 @@
  * Usage: node --test --test-reporter=./tests/reporter.js tests/all.test.js
  *
  * Console: coloured hierarchical summary.
- * File:    tests/report.html — dark gothic HTML report, opens in browser.
+ * File:    tests/<VTM_TEST_REPORT || report.html> — dark gothic HTML report, opens in browser.
+ *
+ * VTM_TEST_REPORT lets different npm scripts land in different files (see
+ * package.json's test:ui) — without it, run-tests.bat's own two steps
+ * (test:all then test:ui) silently overwrote each other's report before the
+ * user ever saw the first one, and run-ui.bat run afterwards clobbered
+ * whatever run-tests.bat had just written.
  */
 
 const fs   = require('fs');
 const path = require('path');
+const REPORT_FILE = process.env.VTM_TEST_REPORT || 'report.html';
 
 // ── ANSI palette ──────────────────────────────────────────────────────────────
 const A = {
@@ -103,6 +110,77 @@ function esc(s) {
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
+// Test names in this suite follow a consistent "<заголовок> — <развёрнутое
+// пояснение>" convention (see tests/all.test.js) — split on the first em-dash
+// so the report can show a short title next to the icon and the fuller
+// explanation of what the test actually checks as its own readable paragraph,
+// instead of one long line squeezed into the row.
+function splitTitleDetail(name) {
+  const i = name.indexOf(' — ');
+  if (i === -1) return { title: name, detail: '' };
+  return { title: name.slice(0, i), detail: name.slice(i + 3) };
+}
+
+// A large share of tests are plain `test(...)` calls with no enclosing
+// describe() — mostly "source-guard: <файл> — <пояснение>" checks added
+// alongside whatever feature they guard. Left as-is they land as 100+ loose
+// leaves directly under the report root. Bucket them by the file/component
+// named right after "source-guard:" (or by the text before the first ':' for
+// anything else) so the report groups them like every describe()-based suite.
+function categoryFor(name) {
+  const sg = name.match(/^source-guard:\s*(.*)$/);
+  if (sg) {
+    const dashIdx = sg[1].indexOf(' — ');
+    const head    = dashIdx === -1 ? sg[1] : sg[1].slice(0, dashIdx);
+    // Most source-guard tests lead with a filename token — prefer that even
+    // when other text follows on the same side of the dash (e.g. "list.js и
+    // fields.js" → "list.js"), so the category stays a clean, stable label.
+    const fileTok = head.match(/^[\w./*-]+\.(?:js|css|html)\b/);
+    if (fileTok) return fileTok[0];
+    if (dashIdx !== -1) return head.trim();
+    return 'source-guard: разное (файл не указан в названии)';
+  }
+  const c = name.indexOf(':');
+  if (c > 0 && c < 60) return name.slice(0, c).trim();
+  return 'Разное';
+}
+
+function makeSuiteNode(name, children) {
+  return { name, nesting: 0, children, isLeaf: false, passed: children.every(c => c.passed), error: null, durMs: 0 };
+}
+
+// Only reshapes the tree used for the HTML report — console output (via the
+// built-in `spec` reporter) and pass/fail counts (computed from the original
+// leaves) are untouched.
+function regroupBareTestsForHtml(root) {
+  const namedSuites = [];
+  const bareLeaves  = [];
+  for (const child of root.children) (child.isLeaf ? bareLeaves : namedSuites).push(child);
+  if (!bareLeaves.length) return root;
+
+  const buckets = new Map();
+  for (const leaf of bareLeaves) {
+    const cat = categoryFor(leaf.name);
+    if (!buckets.has(cat)) buckets.set(cat, []);
+    buckets.get(cat).push(leaf);
+  }
+
+  const sourceGuardCats = [];
+  const otherCats = [];
+  for (const entry of buckets) (entry[1][0].name.startsWith('source-guard:') ? sourceGuardCats : otherCats).push(entry);
+  sourceGuardCats.sort((a, b) => a[0].localeCompare(b[0], 'ru'));
+  otherCats.sort((a, b) => a[0].localeCompare(b[0], 'ru'));
+
+  const children = [...namedSuites];
+  if (sourceGuardCats.length) {
+    const subSuites = sourceGuardCats.map(([cat, leaves]) => makeSuiteNode(cat, leaves));
+    children.push(makeSuiteNode('🛡️ Проверки исходного кода (source-guard) — по файлам', subSuites));
+  }
+  for (const [cat, leaves] of otherCats) children.push(makeSuiteNode(cat, leaves));
+
+  return { ...root, children };
+}
+
 function renderHtmlNode(node) {
   if (node.name === 'root') {
     return node.children.map(renderHtmlNode).join('\n');
@@ -121,9 +199,14 @@ function renderHtmlNode(node) {
   } else {
     const cls  = node.passed ? 'test-pass' : 'test-fail';
     const icon = node.passed ? '✓' : '✗';
+    const { title, detail } = splitTitleDetail(node.name);
+    const detailHtml = detail ? `<div class="test-detail">${esc(detail)}</div>` : '';
     const errHtml = (!node.passed && node.error)
       ? `<pre class="test-error">${esc(node.error.split('\n').slice(0, 8).join('\n'))}</pre>` : '';
-    return `<div class="test ${cls}"><span class="t-icon">${icon}</span><span class="t-name">${esc(node.name)}</span>${errHtml}</div>`;
+    return `<div class="test ${cls}">
+  <div class="test-head"><span class="t-icon">${icon}</span><span class="t-name">${esc(title)}</span></div>
+  ${detailHtml}${errHtml}
+</div>`;
   }
 }
 
@@ -133,7 +216,7 @@ function buildHtml(root, pass, fail, dur) {
   const statusCls  = fail > 0 ? 'bad' : 'good';
   const statusText = fail > 0 ? `${fail} FAILED` : 'ALL PASSED';
   const runDate    = new Date().toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' });
-  const body       = renderHtmlNode(root);
+  const body       = renderHtmlNode(regroupBareTestsForHtml(root));
 
   return `<!DOCTYPE html>
 <html lang="ru">
@@ -271,7 +354,7 @@ function buildHtml(root, pass, fail, dur) {
 
   /* ── Results ── */
   .results {
-    max-width: 900px;
+    max-width: 1240px;
     margin: 0 auto;
     padding: 2rem 1.5rem 4rem;
   }
@@ -330,18 +413,34 @@ function buildHtml(root, pass, fail, dur) {
 
   /* ── Test rows ── */
   .test {
+    padding: .4rem .6rem;
+    font-family: 'Source Code Pro', monospace;
+  }
+  .test-head {
     display: flex;
     align-items: baseline;
     flex-wrap: wrap;
-    gap: .3rem;
-    padding: .22rem .5rem;
-    font-family: 'Source Code Pro', monospace;
-    font-size: .8rem;
+    gap: .4rem;
+    font-size: 1rem;
   }
   .test-pass .t-icon { color: var(--green2); }
   .test-fail .t-icon { color: var(--red2); font-weight: 600; }
   .test-pass .t-name { color: var(--text-dim); }
   .test-fail .t-name { color: var(--text); font-weight: 600; }
+
+  /* Развёрнутое пояснение — то, что тест реально проверяет (вторая половина
+     названия после « — »), отдельным читаемым абзацем вместо одной строки. */
+  .test-detail {
+    margin: .35rem 0 0 1.4rem;
+    padding: .5rem .8rem;
+    max-width: 100%;
+    background: rgba(255,255,255,.02);
+    border-left: 2px solid var(--border2);
+    font-family: 'IM Fell English', Georgia, serif;
+    font-size: 1rem;
+    line-height: 1.55;
+    color: var(--text);
+  }
 
   .test-error {
     width: 100%;
@@ -417,7 +516,7 @@ module.exports = async function* reporter(source) {
   const fail   = leaves.filter(l => !l.passed).length;
   const dur    = ((Date.now() - t0) / 1000).toFixed(2);
 
-  const htmlPath = path.join(__dirname, 'report.html');
+  const htmlPath = path.join(__dirname, REPORT_FILE);
   try {
     fs.writeFileSync(htmlPath, buildHtml(tree, pass, fail, dur));
   } catch (_) { /* non-fatal */ }
