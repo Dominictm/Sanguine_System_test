@@ -6,7 +6,7 @@
 
 const path = require('path');
 const fs   = require('fs').promises;
-const { parseCharacter, parseLocation, parseEvent } = require('./parsers');
+const { parseCharacter, parseLocation, parseEvent, DISTRICT_FILENAME } = require('./parsers');
 
 const ROOT = path.join(__dirname, '..', '..');
 
@@ -136,7 +136,7 @@ async function findLocMdPath(slug, city = DEFAULT_CITY) {
     let entries;
     try { entries = await fs.readdir(dir, { withFileTypes: true }); } catch { return null; }
     for (const e of entries) {
-      if (e.name.startsWith('.') || e.name.startsWith('_')) continue;
+      if (e.name.startsWith('.') || e.name.startsWith('_') || e.name === DISTRICT_FILENAME) continue;
       const full = path.join(dir, e.name);
       if (e.isDirectory()) { const r = await walk(full); if (r) return r; }
       else if (e.name.endsWith('.md')) {
@@ -160,7 +160,7 @@ async function getAllLocations(city = DEFAULT_CITY) {
     let entries;
     try { entries = await fs.readdir(dir, { withFileTypes: true }); } catch { return; }
     for (const entry of entries) {
-      if (entry.name.startsWith('.') || entry.name.startsWith('_') || entry.name === '.gitkeep') continue;
+      if (entry.name.startsWith('.') || entry.name.startsWith('_') || entry.name === '.gitkeep' || entry.name === DISTRICT_FILENAME) continue;
       const fullPath = path.join(dir, entry.name);
       if (entry.isDirectory()) {
         await walk(fullPath);
@@ -422,7 +422,7 @@ async function countMdFiles(dir) {
   try {
     for (const item of await fs.readdir(dir, { withFileTypes: true })) {
       if (item.isDirectory()) n += await countMdFiles(path.join(dir, item.name));
-      else if (item.name.endsWith('.md') && item.name !== 'characters_index.md') n++;
+      else if (item.name.endsWith('.md') && item.name !== 'characters_index.md' && item.name !== DISTRICT_FILENAME) n++;
     }
   } catch {}
   return n;

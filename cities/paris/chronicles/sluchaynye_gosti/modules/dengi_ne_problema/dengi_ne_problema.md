@@ -17,12 +17,12 @@
 
 | Сцена | Локация | Карточка |
 |---|---|---|
-| Пролог | Трасса А1, выезд Сен-Дени | [Трасса А1](../../../../locations/district_93/sen_deni/trassa_a1/trassa_a1.md) |
-| Сцена 1 | Промзона Сен-Дени (убежище) | [Промзона Сен-Дени](../../../../locations/district_93/sen_deni/promzona_sen_deni/promzona_sen_deni.md) |
-| Сцена 2 | «Chasse & Nature», 15-й арр. | [Шасс-э-Натюр](../../../../locations/district_15/vozhirar/shass_e_natyur/shass_e_natyur.md) |
-| Путь А | Credit Mutuel, бульвар Осман, 8-й | [Кредит Мютюэль](../../../../locations/district_08/osman/kredit_myutyuel/kredit_myutyuel.md) |
-| Путь Б | Склад у канала Юрк, 19-й | [Склад Канал Юрк](../../../../locations/district_19/villet/sklad_kanal_yurk/sklad_kanal_yurk.md) |
-| Финал | Гараж Жирона, рю де Толбиак, 13-й | [Гараж Жирон](../../../../locations/district_13/tolbiak/garazh_zhiron/garazh_zhiron.md) |
+| Пролог | Трасса А1, выезд Сен-Дени | [Трасса А1](../../../../locations/sen_deni/trassa_a1/trassa_a1.md) |
+| Сцена 1 | Промзона Сен-Дени (убежище) | [Промзона Сен-Дени](../../../../locations/sen_deni/promzona_sen_deni/promzona_sen_deni.md) |
+| Сцена 2 | «Chasse & Nature», 15-й арр. | [Шасс-э-Натюр](../../../../locations/vozhirar/shass_e_natyur/shass_e_natyur.md) |
+| Путь А | Credit Mutuel, бульвар Осман, 8-й | [Кредит Мютюэль](../../../../locations/osman/kredit_myutyuel/kredit_myutyuel.md) |
+| Путь Б | Склад у канала Юрк, 19-й | [Склад Канал Юрк](../../../../locations/villet/sklad_kanal_yurk/sklad_kanal_yurk.md) |
+| Финал | Гараж Жирона, рю де Толбиак, 13-й | [Гараж Жирон](../../../../locations/tolbiak/garazh_zhiron/garazh_zhiron.md) |
 
 ---
 

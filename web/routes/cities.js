@@ -12,7 +12,10 @@ const {
   listCities, writeFileAtomic, invalidateChars,
   getAllCharacters, listModules, countMdFiles,
 } = require('../lib/db');
-const { slugify, buildCityMd, parseCityMd, cityScaffold, sanitizeInlineText, escapeTableCell, unescapeTableCell } = require('../lib/parsers');
+const {
+  slugify, buildCityMd, parseCityMd, cityScaffold, sanitizeInlineText, escapeTableCell, unescapeTableCell,
+  buildDistrictMd, parseDistrictMd, DISTRICT_FILENAME,
+} = require('../lib/parsers');
 
 const router = express.Router();
 
@@ -245,6 +248,99 @@ router.delete('/api/cities/:slug', async (req, res) => {
     res.json({ ok: true, slug, movedTo: path.relative(ROOT, dest).replace(/\\/g, '/') });
   } catch (e) {
     console.error('[delete-city]', e.message);
+    serverError(res, e);
+  }
+});
+
+// ── District (Район) — новая сущность, план 2026-08-02-city-creation-restructure ─────
+// Файл-карточка района — cities/<city>/locations/<rayon-slug>/district.md, единый
+// источник шаблона с tools/new_district.js (buildDistrictMd/parseDistrictMd,
+// web/lib/parsers/district.js). Только create/read/update — DELETE вне скоупа (§2.4
+// техспеки: удаление района с локациями внутри — отдельная, более рискованная задача).
+
+// GET /api/cities/:slug/districts — список районов города: [{slug, name, type, sect, clan}].
+router.get('/api/cities/:slug/districts', async (req, res) => {
+  try {
+    const slug = req.params.slug;
+    if (!(await listCities()).includes(slug)) return res.status(404).json({ error: 'Город не найден' });
+
+    const root = locsDir(slug);
+    let entries;
+    try { entries = await fs.readdir(root, { withFileTypes: true }); } catch { entries = []; }
+    const out = [];
+    for (const e of entries) {
+      if (!e.isDirectory()) continue;
+      const districtFile = path.join(root, e.name, DISTRICT_FILENAME);
+      const raw = await fs.readFile(districtFile, 'utf-8').catch(() => null);
+      if (raw === null) continue;
+      const { name, type, sect, clan } = parseDistrictMd(raw);
+      out.push({ slug: e.name, name: name || e.name, type, sect, clan });
+    }
+    out.sort((a, b) => a.name.localeCompare(b.name, 'ru'));
+    res.json(out);
+  } catch (e) { serverError(res, e); }
+});
+
+// POST /api/cities/:slug/districts — создать район. Body: { name, type?, sect?, clan?, description? }.
+router.post('/api/cities/:slug/districts', express.json(), async (req, res) => {
+  try {
+    const slug = req.params.slug;
+    if (!(await listCities()).includes(slug)) return res.status(404).json({ error: 'Город не найден' });
+
+    const b = req.body || {};
+    const name = String(b.name || '').trim();
+    if (!name) return res.status(400).json({ error: 'Укажи название района' });
+    const districtSlug = slugify(name);
+    if (!districtSlug) return res.status(400).json({ error: 'Не удалось сформировать слаг из названия' });
+
+    const districtDir = path.join(locsDir(slug), districtSlug);
+    if (await fs.access(districtDir).then(() => true, () => false)) {
+      return res.status(409).json({ error: `Район «${districtSlug}» уже существует` });
+    }
+
+    const md = buildDistrictMd({ name, type: b.type, sect: b.sect, clan: b.clan, description: b.description });
+    await fs.mkdir(districtDir, { recursive: true });
+    await writeFileAtomic(path.join(districtDir, DISTRICT_FILENAME), md, 'utf-8');
+
+    console.log(`[create-district] ${slug}/${districtSlug} («${name}»)`);
+    res.json({ ok: true, slug: districtSlug, ...parseDistrictMd(md) });
+  } catch (e) {
+    console.error('[create-district]', e.message);
+    serverError(res, e);
+  }
+});
+
+// PUT /api/cities/:slug/districts/:districtSlug — частичная правка полей district.md.
+// НЕ переименовывает/не переносит папку — «name» меняет только текст «Название» внутри
+// карточки, слаг папки/URL остаётся прежним (см. техспека §2.4).
+router.put('/api/cities/:slug/districts/:districtSlug', express.json(), async (req, res) => {
+  try {
+    const { slug, districtSlug } = req.params;
+    if (!(await listCities()).includes(slug)) return res.status(404).json({ error: 'Город не найден' });
+    if (!/^[a-z0-9_]+$/.test(districtSlug)) return res.status(400).json({ error: 'Недопустимый слаг района' });
+
+    const districtFile = path.join(locsDir(slug), districtSlug, DISTRICT_FILENAME);
+    const raw = await fs.readFile(districtFile, 'utf-8').catch(() => null);
+    if (raw === null) return res.status(404).json({ error: 'Район не найден' });
+
+    const b = req.body || {};
+    const current = parseDistrictMd(raw);
+    const merged = {
+      name:        b.name        !== undefined ? String(b.name).trim()        : current.name,
+      type:        b.type        !== undefined ? String(b.type).trim()        : current.type,
+      sect:        b.sect        !== undefined ? String(b.sect).trim()        : current.sect,
+      clan:        b.clan        !== undefined ? String(b.clan).trim()        : current.clan,
+      description: b.description !== undefined ? String(b.description).trim() : current.description,
+    };
+    if (!merged.name) return res.status(400).json({ error: 'Название района не может быть пустым' });
+
+    const md = buildDistrictMd(merged);
+    await writeFileAtomic(districtFile, md, 'utf-8');
+
+    console.log(`[edit-district] ${slug}/${districtSlug}`);
+    res.json({ ok: true, slug: districtSlug, ...parseDistrictMd(md) });
+  } catch (e) {
+    console.error('[edit-district]', e.message);
     serverError(res, e);
   }
 });
