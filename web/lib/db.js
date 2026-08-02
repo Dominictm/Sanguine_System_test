@@ -6,7 +6,7 @@
 
 const path = require('path');
 const fs   = require('fs').promises;
-const { parseCharacter, parseLocation, parseEvent, DISTRICT_FILENAME } = require('./parsers');
+const { parseCharacter, parseLocation, parseEvent, DISTRICT_FILENAME, sanitizeInlineText } = require('./parsers');
 
 const ROOT = path.join(__dirname, '..', '..');
 
@@ -147,6 +147,26 @@ async function findLocMdPath(slug, city = DEFAULT_CITY) {
     return null;
   }
   return walk(locRoot);
+}
+
+// Write/clear one inline "**Label:** value" metadata field on a location card — used by
+// routes/cities.js for the significant-place → zone/control write-back (city → location,
+// docs/design/2026-08-02-city-creation-restructure-techspec.md §5.2). Mirrors (but does not
+// replace) the generic fieldMap branch inside PUT /api/locations/:slug/fields
+// (routes/locations.js) — same reasoning as writeCharacterCardField above: left that
+// multi-field batched route alone, this is a standalone single-field read-modify-write.
+async function writeLocationCardField(city, slug, mdKey, rawValue) {
+  const mdPath = await findLocMdPath(slug, city);
+  if (!mdPath) return false;
+  let card = await fs.readFile(mdPath, 'utf-8');
+  const esc = mdKey.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  card = card.replace(
+    new RegExp(`(\\*\\*${esc}:\\*\\*)\\s*([^|\\n]+?)(?=\\s*\\||\\s*\\n|$)`, 'm'),
+    `$1 ${sanitizeInlineText(rawValue).replace(/\|/g, '∣')}`
+  );
+  await writeFileAtomic(mdPath, card, 'utf-8');
+  invalidateLocs(city);
+  return true;
 }
 
 async function getAllLocations(city = DEFAULT_CITY) {
@@ -508,6 +528,32 @@ function _setSheetHeaderCell(md, labelPrefix, value) {
   return re.test(md) ? md.replace(re, (_, pre, post) => `${pre}${value} ${post}`) : md;
 }
 
+// Write/clear a single "- **Label:** value" bullet line in a character card — used by
+// routes/cities.js for the political-role → «Иерархия» write-back (city → character,
+// docs/design/2026-08-02-city-creation-restructure-techspec.md §4.2). Mirrors (but does not
+// replace) the generic-field branch inside PUT /api/characters/:slug/fields
+// (routes/characters.js) — left that batched multi-field route alone rather than risk its
+// existing behaviour/tests; this is a standalone single-field read-modify-write instead.
+async function writeCharacterCardField(city, char, mdKey, rawValue) {
+  const cardPath = path.join(charsDir(city), char.lineageFolder, char.slug, `${char.slug}.md`);
+  let card = (await fs.readFile(cardPath, 'utf-8')).replace(/^﻿/, '');
+  const value   = String(rawValue == null ? '' : rawValue).replace(/\n+/g, ' ').trim();
+  const escaped = mdKey.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const lineRe  = new RegExp(`^(- \\*\\*${escaped}[^*]*:\\*\\*).*$`, 'm');
+  const newLine = `- **${mdKey}:** ${value}`;
+  if (lineRe.test(card)) {
+    card = card.replace(lineRe, newLine);
+  } else {
+    const lastM = [...card.matchAll(/^- \*\*[^*:\n]+[^*]*:\*\*\s*.+$/gm)].at(-1);
+    if (lastM) {
+      const pos = lastM.index + lastM[0].length;
+      card = card.slice(0, pos) + '\n' + newLine + card.slice(pos);
+    }
+  }
+  await writeFileAtomic(cardPath, card, 'utf-8');
+  invalidateChars(city);
+}
+
 module.exports = {
   ROOT, CITIES_DIR, AUDIO_DIR, DEFAULT_CITY,
   cityDir, charsDir, locsDir, chroniclesDir, archiveDir,
@@ -521,6 +567,7 @@ module.exports = {
   readOpenThreadsRaw,
   countMdFiles, mapLimit, tableCell,
   EDITABLE_FIELD_MAP, SHEET_HEADER_FROM_CARD, _setSheetHeaderCell,
+  writeCharacterCardField, writeLocationCardField,
   RU_MONTH_STEMS, eventDateScore, aggregateEvents,
   makeNameResolver, getDiaryIndex, eventMonthKey,
   renderChronicleEventsSkeleton, renderOpenThreadsSkeleton,

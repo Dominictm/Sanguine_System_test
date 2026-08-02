@@ -2886,7 +2886,9 @@ select.form-control {
   .city-edit-btn, .city-del-btn, .mod-gen-scenario-btn, .nav-item,
   .cdet-faction-chip, .modp-edit-btn,
   .tour-replay-btn, .city-switch-add, .chd-dir-btn, button.chron-chip,
-  .chron-toggle, .sess-scene-btn, .modp-session-edit, .modp-session-delete {
+  .chron-toggle, .sess-scene-btn, .modp-session-edit, .modp-session-delete,
+  .cdet-rel-add-btn, .cdet-rel-del-btn, .city-districts-add-btn, .city-district-del-btn,
+  .city-district-add-loc-btn {
     min-height: 44px;
   }
 
@@ -3721,19 +3723,20 @@ a:focus-visible {
   flex: 1;
 }
 
-/* Структурные редакторы города: ряды политики/локаций поверх .cdet-rel-row,
-   с ведущим <select> должности/типа. */
-#cdet-political-rows, #cdet-location-rows {
+/* Структурные редакторы города: ряды политики/примогената/локаций поверх .cdet-rel-row,
+   с ведущим <select> должности/клана/типа. Классы (не id) — редактор одновременно
+   смонтирован и в форме создания города, и в модалке редактирования (2026-08). */
+.cdet-political-rows, .cdet-primogen-rows, .cdet-location-rows {
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
 
-.cdet-pol-row, .cdet-loc-row {
+.cdet-pol-row, .cdet-prim-row, .cdet-loc-row {
   flex-wrap: wrap;
 }
 
-.cdet-pol-role-sel {
+.cdet-pol-role-sel, .cdet-prim-clan-sel {
   flex: 0 0 150px;
   background: var(--bg);
   color: var(--text);
@@ -3744,17 +3747,17 @@ a:focus-visible {
   font-size: var(--fs-sm);
 }
 
-.cdet-pol-role-sel:focus {
+.cdet-pol-role-sel:focus, .cdet-prim-clan-sel:focus {
   outline: none;
   border-color: var(--accent);
   box-shadow: 0 0 6px var(--glow);
 }
 
-.cdet-pol-role-custom, .cdet-loc-type-custom {
+.cdet-pol-role-custom, .cdet-loc-type-custom, .cdet-prim-clan-custom {
   flex: 0 0 150px;
 }
 
-.cdet-pol-name-inp, .cdet-loc-name-inp {
+.cdet-pol-name-inp, .cdet-loc-name-inp, .cdet-prim-name-inp {
   flex: 1 1 200px;
 }
 
@@ -3815,6 +3818,75 @@ a:focus-visible {
 }
 
 .cdet-rel-add-btn:hover {
+  background: rgba(184, 134, 11, 0.2);
+}
+
+/* Заголовки-разделители формы создания города (designspec §2: География/Политический
+   ландшафт/Значимые места — те же уровни, что в модалке редактирования, form-label +
+   немного веса, не отдельный h-тег ради простоты вёрстки). */
+.city-create-section-label {
+  font-family: var(--f-heading);
+  font-size: var(--fs-md);
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--gold);
+  margin: 20px 0 10px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+/* Блок «Район» (форма создания города) — повторяемая КАРТОЧКА, не строка: у района
+   больше полей, чем у одной строки «должность+имя», нужна более заметная рамка
+   (designspec §2.1). */
+.city-district-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.city-district-card {
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  padding: 14px;
+  background: var(--bg2);
+}
+
+.city-district-card.row-enter {
+  animation: row-enter var(--dur-fast) var(--ease);
+}
+
+.city-district-card.row-exit {
+  animation: row-exit var(--dur-fast) var(--ease) forwards;
+}
+
+.city-district-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.city-district-card-title {
+  font-family: var(--f-heading);
+  font-size: var(--fs-md);
+  color: var(--gold);
+}
+
+.city-district-locs {
+  margin-top: 8px;
+}
+
+.city-district-add-loc-btn {
+  background: rgba(184, 134, 11, 0.1);
+  border: 1px solid var(--gold);
+  color: var(--gold);
+  border-radius: 5px;
+  padding: 6px 12px;
+  font-family: var(--f-body);
+  font-size: var(--fs-sm);
+}
+
+.city-district-add-loc-btn:hover {
   background: rgba(184, 134, 11, 0.2);
 }
 
