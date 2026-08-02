@@ -1023,19 +1023,6 @@
         <p class="form-hint" style="margin-bottom:14px">Действуют над текущим выбранным городом (слева в шапке).</p>
 
         <div class="ls-section">
-          <div class="ls-sec-title">📍 Новая локация</div>
-          <div class="form-row">
-            <div class="form-group"><label class="form-label" for="loc-district">Округ/код *</label><input class="form-control" id="loc-district" placeholder="1 или district_01"></div>
-            <div class="form-group"><label class="form-label" for="loc-name">Название *</label><input class="form-control" id="loc-name" placeholder="Театр Лицей"></div>
-            <div class="form-group"><label class="form-label" for="loc-zone">Зона</label>
-              <select class="form-control" id="loc-zone"><option value="neutral">🟡 Нейтральная</option><option value="safe">🟢 Безопасная</option><option value="dangerous">🔴 Опасная</option></select>
-            </div>
-          </div>
-          <div class="form-group"><label class="form-label" for="loc-rayon">Район (опц.)</label><input class="form-control" id="loc-rayon" placeholder="Вест-Энд"></div>
-          <button class="btn-submit" id="btn-new-loc">Создать локацию</button>
-        </div>
-
-        <div class="ls-section">
           <div class="ls-sec-title">🌍 Кросс-город — присутствие персонажа</div>
           <div class="form-row">
             <div class="form-group"><label class="form-label" for="mig-lineage">Линейка</label>
@@ -1279,8 +1266,9 @@
 
       <div class="loc-edit-row2">
         <div class="chr-form-group">
-          <label class="chr-form-label" for="loc-edit-district">Район (папка)<span class="field-tip" tabindex="0" data-tip="Округ/район, определяющий папку хранения (locations/district_NN/&lt;район&gt;/) — влияет на путь файла, не только на отображение.">ⓘ</span></label>
-          <input class="chr-form-input" id="loc-edit-district" type="text" placeholder="Другие" autocomplete="off">
+          <label class="chr-form-label" for="loc-edit-district">Район <span class="loc-edit-req">*</span><span class="field-tip" tabindex="0" data-tip="Район города, определяющий папку хранения (locations/&lt;район&gt;/&lt;локация&gt;/) — влияет на путь файла, не только на отображение. Можно выбрать из списка или вписать новый — район не обязан существовать как отдельная карточка.">ⓘ</span></label>
+          <input class="chr-form-input" id="loc-edit-district" type="text" placeholder="Другие" list="loc-district-list" autocomplete="off">
+          <datalist id="loc-district-list"></datalist>
         </div>
         <div class="chr-form-group">
           <label class="chr-form-label" for="loc-edit-neighborhood">Квартал<span class="field-tip" tabindex="0" data-tip="Более узкое уточнение места внутри района — конкретный квартал или подрайон.">ⓘ</span></label>

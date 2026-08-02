@@ -1796,12 +1796,6 @@ function _moreBtn(id, name, argsFn) {
     runNodeTool(name, args, 'out-more', el);
   });
 }
-_moreBtn('btn-new-loc', 'new_location', () => {
-  const d = document.getElementById('loc-district').value.trim();
-  const n = document.getElementById('loc-name').value.trim();
-  if (!d || !n) { showToast('Укажите округ/код и название', 'warning'); return null; }
-  return [CITY, d, n, document.getElementById('loc-rayon').value.trim(), document.getElementById('loc-zone').value];
-});
 _moreBtn('btn-migrate', 'migrate_char', () => {
   const slug = document.getElementById('mig-slug').value.trim();
   const to   = document.getElementById('mig-to').value.trim();

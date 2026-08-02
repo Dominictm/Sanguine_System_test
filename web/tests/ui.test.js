@@ -259,23 +259,37 @@ describe('UI — Selenium (Chrome)', () => {
       assert.ok(fileExists(`cities/${UI_CITY}/city.md`));
     });
 
-    it('создание локации во вкладке «🛠 Ещё»', async () => {
+    it('создание локации через модалку на странице «Локации»', async () => {
       // Успешное создание города выше запускает отложенный редирект
       // (location.search = ... через setTimeout 900мс, scripts.js) — без
-      // явной полной перезагрузки здесь navTo('tools') рискует кликнуть по
+      // явной полной перезагрузки здесь navTo() рискует кликнуть по
       // .nav-item в момент, когда браузер уже уходит на новый URL,
       // и словить stale element reference / повиснуть на пустой странице.
       await driver.get(`${BASE}?city=${UI_CITY}`);
-      await navTo('tools');
-      await openTab('more');
-      await typeIn('loc-district', '1');
-      await typeIn('loc-name', 'Подземный док');
-      await clickEl(await id_('btn-new-loc'));
-      await waitOut('out-more', /✓|создан/i);
-      assert.ok(fileExists(`cities/${UI_CITY}/locations/district_01/podzemnyy_dok/podzemnyy_dok.md`));
+      await navTo('locations');
+      await clickEl(await id_('loc-page-create-btn'));
+      await css('#loc-edit-modal.open');
+      // #loc-edit-modal — chr-modal-backdrop с CSS-переходом видимости,
+      // тот же паттерн задержки, что у #char-modal (см. ui-full-flow.test.js).
+      const nameInput = await id_('loc-edit-name');
+      await driver.wait(until.elementIsVisible(nameInput), 10000, 'поле «Название» не стало видимым');
+      await typeIn('loc-edit-name', 'Подземный док');
+      await typeIn('loc-edit-district', 'Тестовый район');
+      await clickEl(await id_('loc-edit-save-btn'));
+      await driver.wait(async () => (await driver.findElements(By.css('#loc-edit-modal.open'))).length === 0,
+        10000, 'модалка локации не закрылась после сохранения');
+      const districtSlug = slugify('Тестовый район');
+      const locSlug = slugify('Подземный док');
+      assert.ok(fileExists(`cities/${UI_CITY}/locations/${districtSlug}/${locSlug}/${locSlug}.md`));
     });
 
     it('кнопка «Пересобрать индекс» отрабатывает', async () => {
+      // Предыдущий тест теперь создаёт локацию через модалку на странице
+      // «Локации» (не через вкладку «Ещё»), поэтому здесь больше нельзя
+      // полагаться на то, что браузер уже стоит на #page-tools/#tab-more —
+      // переходим явно.
+      await navTo('tools');
+      await openTab('more');
       await clickEl(await id_('btn-rebuild-idx'));
       await waitOut('out-more', /обновл|событ/i);
     });
