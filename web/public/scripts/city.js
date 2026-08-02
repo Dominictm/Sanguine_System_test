@@ -276,19 +276,19 @@ function _cityPolEditorHtml(sec) {
     : _primogenRowHtml('', '', '', _cityEditChars);
   return `
     <div class="form-group">
-      <label class="form-label">Политический ландшафт</label>
+      <label class="form-label">Политический ландшафт<span class="field-tip" tabindex="0" data-tip="Свободное описание расклада сил — тон и нюансы, которые не влезают в структурные поля ниже. Пример: «Камарилья формально у власти, но реальный баланс держится на негласном перемирии с Анархи».">ⓘ</span></label>
       <div class="cdet-rels-hint">Общее описание расклада сил — атмосфера, фракции, конфликты.</div>
       <textarea class="form-control" data-city-field="political-narrative" rows="3"
         placeholder="По строке на пункт…">${escHtml(narrative)}</textarea>
     </div>
     <div class="form-group">
-      <label class="form-label">Властители города</label>
+      <label class="form-label">Властители города<span class="field-tip" tabindex="0" data-tip="Именные должности уровня города — Князь, Сенешаль, Шериф, Хранитель Элизиума. Выбери персонажа из уже существующих в городе или впиши имя вручную, если карточки ещё нет. Пример: Должность «Шериф» → Персонаж «Ричард Гарро».">ⓘ</span></label>
       <div class="cdet-rels-hint">Должность — из списка или своя. Имя (и второе, если нужно) — выбери из персонажей или впиши своё. Занятые в других строках персонажи не предлагаются. При выборе существующего персонажа его карточка получит запись в поле «Иерархия» автоматически.</div>
       <div class="cdet-political-rows">${rows}</div>
       <button class="cdet-rel-add-btn cdet-political-add-btn" type="button">+ Добавить запись</button>
     </div>
     <div class="form-group">
-      <label class="form-label">Примогенат</label>
+      <label class="form-label">Примогенат<span class="field-tip" tabindex="0" data-tip="Один Примоген на клан — представитель клана в Совете Примогенов Камарильи. Клан и персонаж выбираются так же, как для Властителей. Пример: Клан «Тремер» → Примоген «Верене де Кюстин».">ⓘ</span></label>
       <div class="cdet-rels-hint">Один Примоген на клан. Клан — из списка или свой. Имя — выбери из персонажей или впиши своё. При выборе существующего персонажа его карточка получит запись в поле «Иерархия» автоматически.</div>
       <div class="cdet-primogen-rows">${primRows}</div>
       <button class="cdet-rel-add-btn cdet-primogen-add-btn" type="button">+ Добавить запись</button>
@@ -315,13 +315,13 @@ function _cityLocEditorHtml(sec, idPrefix = 'cdet-edit') {
   const districts = _parseDistrictNames(sec.districts);
   return `
     <div class="form-group">
-      <label class="form-label">Ключевые локации</label>
+      <label class="form-label">Ключевые локации<span class="field-tip" tabindex="0" data-tip="Свободное описание значимых мест города — общий обзор, без привязки к конкретным статусам. Пример: «Опера как элизиум, катакомбы под Монпарнасом как убежище шабашитов».">ⓘ</span></label>
       <div class="cdet-rels-hint">Общее описание ключевых локаций города.</div>
       <textarea class="form-control" data-city-field="locations-narrative" rows="3"
         placeholder="По строке на пункт…">${escHtml(narrative)}</textarea>
     </div>
     <div class="form-group">
-      <label class="form-label">Отмеченные локации</label>
+      <label class="form-label">Отмеченные локации<span class="field-tip" tabindex="0" data-tip="Привязка конкретной локации к городскому статусу — Элизиум, резиденция Князя и т.д. Выбери уже существующую локацию или впиши новое название — тогда при сохранении создастся настоящая карточка. Пример: Статус «Элизиум» → Локация «Опера Гарнье».">ⓘ</span></label>
       <div class="cdet-rels-hint">Статус локации — из списка или свой. Название — из созданных локаций или своё: новое имя создаст настоящую карточку локации (район + заметка ниже), а не просто текст. При выборе существующей локации со статусом «Элизиум»/«Приёмная князя»/«Убежище»/«Шериф»/«Сенешаль» её карточка получит запись в поле «Зона»/«Контроль» автоматически.</div>
       <div class="cdet-location-rows" data-loc-id-prefix="${escAttr(idPrefix)}">${rows}</div>
       <button class="cdet-rel-add-btn cdet-location-add-btn" type="button">+ Добавить запись</button>
@@ -340,7 +340,23 @@ const DISTRICT_TYPES = [
 ];
 let _districtCardSeq = 0;
 
-function _districtCardHtml(d = {}) {
+// Опции дропдауна «Влияние — Секта» — зеркалят ТЕКУЩИЙ выбор в разделе «Фракции»
+// (чипы + «Другие фракции»), не отдельный статичный список: район не может держать
+// влияние фракции, которой в городе не заявлено. current сохраняется отдельной опцией,
+// если её убрали из «Фракции» уже ПОСЛЕ того, как её выбрали здесь — не роняем тихо
+// уже сохранённые данные карточки.
+function _districtSectOptionsHtml(factionNames, current) {
+  const names = [...factionNames];
+  if (current && !names.includes(current)) names.push(current);
+  if (!names.length) {
+    return `<option value="">Сначала выберите фракции ниже…</option>`;
+  }
+  return [
+    `<option value=""${!current ? ' selected' : ''}>Секта/фракция…</option>`,
+    ...names.map(n => `<option value="${escAttr(n)}"${n === current ? ' selected' : ''}>${escHtml(n)}</option>`),
+  ].join('');
+}
+function _districtCardHtml(d = {}, factionNames = []) {
   const { name = '', type = '', sect = '', clan = '', description = '' } = d;
   const known   = DISTRICT_TYPES.includes(type);
   const selVal  = !type ? '' : (known ? type : 'other');
@@ -356,26 +372,26 @@ function _districtCardHtml(d = {}) {
       <button class="cdet-rel-del-btn city-district-del-btn" type="button" title="Удалить район">✕ Удалить</button>
     </div>
     <div class="form-group">
-      <label class="form-label">Наименование района *</label>
+      <label class="form-label">Наименование района *<span class="field-tip" tabindex="0" data-tip="Название района, каким его знают в городе — станет именем папки в locations/. Пример: «Монмартр», «Ле-Аль».">ⓘ</span></label>
       <input class="form-control city-district-name" type="text" placeholder="Монмартр" value="${escAttr(name)}">
     </div>
     <div class="form-group">
-      <label class="form-label">Тип района</label>
+      <label class="form-label">Тип района<span class="field-tip" tabindex="0" data-tip="Общий характер территории — влияет на то, какие сцены и персонажи там уместны по умолчанию. Пример: «Гетто» для промзоны с нищетой и бандами, «Туристический» для района с толпами смертных и низким Маскарадом.">ⓘ</span></label>
       <select class="form-control city-district-type-sel">${opts}</select>
       <input class="form-control city-district-type-custom" placeholder="Свой тип" value="${escAttr(custVal)}" style="${selVal === 'other' ? '' : 'display:none'}">
     </div>
     <div class="form-row">
       <div class="form-group">
-        <label class="form-label">Влияние — Секта</label>
-        <input class="form-control city-district-sect" type="text" placeholder="Камарилья" value="${escAttr(sect)}">
+        <label class="form-label">Влияние — Секта<span class="field-tip" tabindex="0" data-tip="Список берётся из раздела «Фракции» выше — сначала выбери фракции там, потом привязывай их к району.">ⓘ</span></label>
+        <select class="form-control city-district-sect">${_districtSectOptionsHtml(factionNames, sect)}</select>
       </div>
       <div class="form-group">
-        <label class="form-label">Влияние — Клан</label>
+        <label class="form-label">Влияние — Клан<span class="field-tip" tabindex="0" data-tip="Какой клан вампиров реально контролирует район — если контроля нет или он оспаривается, оставь пустым. Пример: «Гангрел» держат промзону, хотя формально город — Камарилья.">ⓘ</span></label>
         <input class="form-control city-district-clan" type="text" placeholder="Тремер" value="${escAttr(clan)}">
       </div>
     </div>
     <div class="form-group">
-      <label class="form-label">Описание района</label>
+      <label class="form-label">Описание района<span class="field-tip" tabindex="0" data-tip="2–3 предложения о том, чем живёт район и кто там держит власть — то, с чем Рассказчик сверяется, выбирая район для сцены. Пример: «Богемный квартал художников и клубов, ночью — территория Анархи; днём кажется обычным туристическим районом».">ⓘ</span></label>
       <textarea class="form-control city-district-desc" rows="2" placeholder="Чем живёт район, кто держит…">${escHtml(description)}</textarea>
     </div>
     <div class="city-district-locs">
@@ -384,9 +400,27 @@ function _districtCardHtml(d = {}) {
     </div>
   </div>`;
 }
+// Текущий выбор в разделе «Фракции» (chips + «Другие фракции») — источник опций
+// дропдауна «Влияние — Секта» карточки района. _cityFactionsCreateHost — тот же
+// глобал из scripts.js, что уже читает loadCitiesGrid() выше для ленивого инжекта.
+function _currentFactionNames() {
+  return _cityFactionsCreateHost
+    ? _collectFactions(_cityFactionsCreateHost).split('\n').map(s => s.trim()).filter(Boolean)
+    : [];
+}
+// Перечитывает опции «Влияние — Секта» во всех уже отрисованных карточках района —
+// вызывается при любом изменении состава «Фракции» (клик по чипу / правка «Другие
+// фракции»), чтобы дропдаун не отставал от того, что реально выбрано выше по форме.
+function _refreshDistrictSectOptions() {
+  if (!_cityDistrictsCreateHost) return;
+  const names = _currentFactionNames();
+  _cityDistrictsCreateHost.querySelectorAll('.city-district-sect').forEach(sel => {
+    sel.innerHTML = _districtSectOptionsHtml(names, sel.value);
+  });
+}
 function _cityDistrictsEditorHtml() {
   return `<div class="city-districts-editor">
-    <div class="city-district-cards">${_districtCardHtml()}</div>
+    <div class="city-district-cards">${_districtCardHtml({}, _currentFactionNames())}</div>
     <button class="cdet-rel-add-btn city-districts-add-btn" type="button">+ Добавить район</button>
   </div>`;
 }
@@ -429,7 +463,7 @@ function _cityFactionsEditorHtml(sec) {
   };
   return `
     <div class="form-group">
-      <label class="form-label">Фракции</label>
+      <label class="form-label">Фракции<span class="field-tip" tabindex="0" data-tip="Секты и независимые кланы, реально присутствующие в городе — источник списка для дропдауна «Влияние — Секта» в блоке «Район» ниже. Пример: отметь «Камарилья» и «Анархи», если обе секты представлены.">ⓘ</span></label>
       <div class="cdet-rels-hint">Секты и независимые кланы, присутствующие в городе. Можно выбрать несколько.</div>
       <div class="cdet-faction-group-label">Секты</div>
       <div class="cdet-faction-chips" data-faction-group="sects">${CITY_SECTS.map(chip).join('')}</div>
@@ -657,7 +691,13 @@ document.addEventListener('click', e => {
   const factionChip = e.target.closest('.cdet-faction-chip');
   if (factionChip) {
     factionChip.setAttribute('aria-pressed', factionChip.getAttribute('aria-pressed') === 'true' ? 'false' : 'true');
+    _refreshDistrictSectOptions();
   }
+});
+// «Другие фракции» — свободный текст, тоже часть состава «Фракции» (см. _collectFactions),
+// дропдаун «Влияние — Секта» должен подхватывать и его правки, не только чипы.
+document.addEventListener('input', e => {
+  if (e.target.closest('[data-city-field="factions-other"]')) _refreshDistrictSectOptions();
 });
 
 // Строки политики/примогената/локаций (add/del) — ГЛОБАЛЬНАЯ делегация на document,
@@ -724,7 +764,7 @@ document.addEventListener('click', async e => {
   if (distAdd) {
     const list = distAdd.closest('.city-districts-editor')?.querySelector('.city-district-cards');
     if (list) {
-      list.insertAdjacentHTML('beforeend', _districtCardHtml());
+      list.insertAdjacentHTML('beforeend', _districtCardHtml({}, _currentFactionNames()));
       list.lastElementChild?.classList.add('row-enter');
       list.lastElementChild?.querySelector('.city-district-name')?.focus();
     }

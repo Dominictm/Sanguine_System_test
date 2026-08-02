@@ -13,10 +13,13 @@ const ZONE_CLASS_LABELS = {
   other:      '📍 Локация',
 };
 
+// 🎭-иконка вместо цветного кружка — на карточке (см. _locCardHtml) она стоит
+// рядом с бейджем зоны/опасности, у которого свой кружок; без иконки-оси два
+// «Высокий» неотличимы друг от друга (2026-08-02-location-card-modal-plan.md §1).
 const MASQ_BADGE_LABELS = {
-  low:     '🟢 Низкий',
-  medium:  '🟡 Средний',
-  high:    '🔴 Высокий',
+  low:     '🎭 Низкий',
+  medium:  '🎭 Средний',
+  high:    '🎭 Высокий',
 };
 
 const DANGER_BADGE_LABELS = {
@@ -112,12 +115,8 @@ function renderLocations() {
 function _locCardHtml(loc, { delay = '', overlayExtra = '' } = {}) {
   const zc    = zoneClass(loc.zone);
   const mLvl  = loc.masqueradeLevel || 'unknown';
-  const dLvl  = zoneDangerLevel(loc.zone);
   const masqBadge = MASQ_BADGE_LABELS[mLvl]
     ? `<span class="badge badge-masq-${mLvl}">${MASQ_BADGE_LABELS[mLvl]}</span>`
-    : '';
-  const dangerBadge = DANGER_BADGE_LABELS[dLvl]
-    ? `<span class="badge badge-danger-${dLvl}">${DANGER_BADGE_LABELS[dLvl]}</span>`
     : '';
   const zoneBadge = `<span class="badge badge-loc-${zc}">${ZONE_CLASS_LABELS[zc]}</span>`;
 
@@ -127,7 +126,7 @@ function _locCardHtml(loc, { delay = '', overlayExtra = '' } = {}) {
     <div class="loc-title">${escHtml(cardTitle)}</div>
     ${distLine    ? `<div class="loc-district">${distLine}</div>` : ''}
     ${loc.address ? `<div class="loc-address">${escHtml(loc.address)}</div>` : ''}
-    <div class="loc-badges">${zoneBadge}${dangerBadge}${masqBadge}</div>`;
+    <div class="loc-badges">${zoneBadge}${masqBadge}</div>`;
 
   if (loc.imageUrl) {
     return `<div class="loc-card has-art" data-slug="${escHtml(loc.slug)}" ${delay}>
