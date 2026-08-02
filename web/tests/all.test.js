@@ -6626,6 +6626,95 @@ describe('FIX-16: санитизация свободного текста — �
   });
 });
 
+// docs/design/2026-08-02-city-creation-restructure-{spec,techspec,designspec}.md —
+// PUT /api/cities/:slug пишет/снимает «Иерархию» на карточке персонажа (§4.2/§4.4
+// техспеки) и «Зону»/«Контроль» на карточке локации (§5.1-5.2), когда выбранная
+// роль/статус указывает на СУЩЕСТВУЮЩЕГО персонажа/локацию города — и снимает запись
+// автоматически, когда роль переходит к другому персонажу/локации.
+describe('city-creation-restructure: город → персонаж/локация (Иерархия/Зона-Контроль write-back)', () => {
+  // Английское имя → предсказуемый slugify()-слаг (кириллица транслитерируется не
+  // всегда очевидно — берём citySlug из ответа POST /api/cities, а не угадываем его,
+  // чтобы тест не мог тихо разъехаться с реальным городом и попасть в чужую директорию).
+  let citySlug, cityDir;
+  const qs = () => `?city=${citySlug}`;
+
+  before(async () => {
+    await startServer();
+    const create = await apiJson('/api/cities', { method: 'POST', body: JSON.stringify({
+      name: 'Restructure Hierarchy Testcity', year: '2010',
+    }) });
+    assert.equal(create.status, 200, 'не удалось создать тестовый город');
+    citySlug = create.body.slug;
+    cityDir  = path.join(__dirname, '../../cities', citySlug);
+  });
+  after(async () => {
+    await stopServer();
+    await fs.rm(cityDir, { recursive: true, force: true });
+  });
+
+  it('Властители города: смена роли с одного персонажа на другого переносит «Иерархию»', async () => {
+    const charA = await apiJson(`/api/characters${qs()}`, { method: 'POST', body: JSON.stringify({
+      name: 'Реструкт Князь А', lineage: 'vampire', gender: 'Мужской', clan: 'Тремер', sect: 'Камарилья',
+    }) });
+    assert.equal(charA.status, 200, charA.body.error);
+    const charB = await apiJson(`/api/characters${qs()}`, { method: 'POST', body: JSON.stringify({
+      name: 'Реструкт Князь Б', lineage: 'vampire', gender: 'Мужской', clan: 'Вентру', sect: 'Камарилья',
+    }) });
+    assert.equal(charB.status, 200, charB.body.error);
+
+    const put1 = await apiJson(`/api/cities/${citySlug}`, { method: 'PUT', body: JSON.stringify({
+      fields: { display: 'Restructure Hierarchy Testcity', year: '2010', political: 'Князь: Реструкт Князь А' },
+    }) });
+    assert.equal(put1.status, 200);
+
+    const afterFirst = await apiJson(`/api/characters${qs()}`);
+    const aAfterFirst = afterFirst.body.find(c => c.name === 'Реструкт Князь А');
+    assert.equal(aAfterFirst.hierarchy, 'Князь города Restructure Hierarchy Testcity',
+      'у выбранного персонажа должна проставиться «Иерархия»');
+
+    // Смена роли на другого персонажа — прежний должен лишиться «Иерархии».
+    const put2 = await apiJson(`/api/cities/${citySlug}`, { method: 'PUT', body: JSON.stringify({
+      fields: { display: 'Restructure Hierarchy Testcity', year: '2010', political: 'Князь: Реструкт Князь Б' },
+    }) });
+    assert.equal(put2.status, 200);
+
+    const afterSecond = await apiJson(`/api/characters${qs()}`);
+    const aAfterSecond = afterSecond.body.find(c => c.name === 'Реструкт Князь А');
+    const bAfterSecond = afterSecond.body.find(c => c.name === 'Реструкт Князь Б');
+    assert.equal(aAfterSecond.hierarchy, '', 'у прежнего персонажа «Иерархия» должна очиститься');
+    assert.equal(bAfterSecond.hierarchy, 'Князь города Restructure Hierarchy Testcity',
+      'у нового персонажа должна проставиться «Иерархия»');
+  });
+
+  it('Значимые места: смена локации со статусом «Элизиум» переносит «Зону»', async () => {
+    const locA = await apiJson(`/api/locations${qs()}`, { method: 'POST', body: JSON.stringify({ name: 'Реструкт Элизиум А' }) });
+    assert.equal(locA.status, 200, locA.body.error);
+    const locB = await apiJson(`/api/locations${qs()}`, { method: 'POST', body: JSON.stringify({ name: 'Реструкт Элизиум Б' }) });
+    assert.equal(locB.status, 200, locB.body.error);
+
+    const put1 = await apiJson(`/api/cities/${citySlug}`, { method: 'PUT', body: JSON.stringify({
+      fields: { display: 'Restructure Hierarchy Testcity', year: '2010', locations: 'Элизиум: Реструкт Элизиум А' },
+    }) });
+    assert.equal(put1.status, 200);
+
+    const afterFirst = await apiJson(`/api/locations${qs()}`);
+    const aAfterFirst = afterFirst.body.find(l => l.title === 'Реструкт Элизиум А');
+    assert.equal(aAfterFirst.zone, '🏛️ Элизиум', 'у выбранной локации должна проставиться «Зона»');
+
+    // Смена значимого места на другую локацию — прежняя должна лишиться «Зоны».
+    const put2 = await apiJson(`/api/cities/${citySlug}`, { method: 'PUT', body: JSON.stringify({
+      fields: { display: 'Restructure Hierarchy Testcity', year: '2010', locations: 'Элизиум: Реструкт Элизиум Б' },
+    }) });
+    assert.equal(put2.status, 200);
+
+    const afterSecond = await apiJson(`/api/locations${qs()}`);
+    const aAfterSecond = afterSecond.body.find(l => l.title === 'Реструкт Элизиум А');
+    const bAfterSecond = afterSecond.body.find(l => l.title === 'Реструкт Элизиум Б');
+    assert.ok(!aAfterSecond.zone, 'у прежней локации «Зона» должна очиститься');
+    assert.equal(bAfterSecond.zone, '🏛️ Элизиум', 'у новой локации должна проставиться «Зона»');
+  });
+});
+
 test('source-guard: web/routes/threads.js и lib/parsers/threads.js — санитизация/де-экранирование полей нити', () => {
   const routeJs = require('fs').readFileSync(path.join(__dirname, '../routes/threads.js'), 'utf-8');
   assert.match(routeJs, /escapeTableCell\(sanitizeInlineText\(title\)\)/);
