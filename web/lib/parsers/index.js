@@ -8,6 +8,7 @@
 module.exports = {
   ...require('./shared'),
   ...require('./city'),
+  ...require('./district'),
   ...require('./character'),
   ...require('./location'),
   ...require('./scenario'),

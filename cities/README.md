@@ -17,7 +17,7 @@ cities/<slug>/
   archive/                 — political_state.md, events.md, characters_index.md, visitors.md …
   characters/<линейка>/    — vampires, fairies, mortals, werewolves, mages, hunters
   chronicles/<хроника>/    — chronicle.md, events.md, modules/<модуль>/ …
-  locations/district_NN/   — карточки локаций
+  locations/<район>/       — карточки локаций (район → локация, без «округа»)
 ```
 
 Подробности структуры и правила — в [`CLAUDE.md`](../CLAUDE.md) и [`system/rules/`](../system/rules/).
