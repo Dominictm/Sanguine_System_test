@@ -760,6 +760,35 @@ function _claudeOnlyModel(gen, model) {
   return (gen && (gen.source === 'api-key' || gen.source === 'claude-login')) ? model : null;
 }
 
+// Клан → тон дневниковой прозы. Общее между «Log session» (routes/tools.js,
+// каждый отмеченный участник сессии) и закрытием модуля (lifecycle.js,
+// closing-stub каждому участнику модуля) — единый источник, чтобы тон не
+// разъезжался между двумя местами, где рождается один и тот же тип stub'а.
+const CLAN_DIARY_STYLE = {
+  'тореадор':       'Эстетический, чувственный, драматичный',
+  'вентру':         'Контролируемый, аналитический, статус-ориентированный',
+  'малкавиан':      'Фрагментированный, символичный, скачущий',
+  'носферату':      'Циничный, наблюдательный, теневой',
+  'гэнгрел':        'Дикий, инстинктивный, немногословный',
+  'бруха':          'Страстный, бунтарский, прямой',
+  'тремер':         'Методичный, оккультный, осторожный',
+  'цимисхи':        'Отстранённый, висцеральный, философский',
+  'каппадокий':     'Отстранённый, висцеральный, философский',
+  'ассамит':        'Дисциплинированный, ритуальный, сдержанный',
+  'тзими':          'Отстранённый, висцеральный, философский',
+  'красная шапка':  'Архаичный, хищный, прямой',
+  'слуаг':          'Лаконичный, теневой, точный',
+  'пак':            'Игровой, импульсивный, момент настоящего',
+  'сидхи':          'Возвышенный, церемониальный',
+};
+function diaryToneFor(c) {
+  const clan = (c.clan || '').toLowerCase();
+  for (const k in CLAN_DIARY_STYLE) if (clan.includes(k)) return CLAN_DIARY_STYLE[k];
+  if (c.lineage === 'mortal') return 'Наблюдательный, человеческий';
+  if (c.lineage === 'fairy')  return 'Грёзовый, образный';
+  return 'Меланхоличный';
+}
+
 // Фабрика: server.js передаёт AI-хелперы и character-sheet генерацию при монтировании.
 
 module.exports = {
@@ -780,4 +809,5 @@ module.exports = {
   _writeSessionsFile, _patchModuleMain, _claudeOnlyModel,
   _upsertSceneNoteEntry, _upsertModuleSection, _readModuleSection,
   sanitizeInlineText, escapeTableCell, unescapeTableCell, sanitizeFreeformBody, unescapeFreeformBody,
+  diaryToneFor,
 };

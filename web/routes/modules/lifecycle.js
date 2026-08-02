@@ -323,6 +323,7 @@ module.exports = function lifecycleRouter({ makeGenerationClient, genTextWithRet
       const reminders = [
         'Дневники участников (journal/) — сгенерировать на вкладке персонажа',
         'Открытые нити (open_threads.md) — внести новые',
+        'Статусы персонажей (торпор/гибель и т.п.) — обновить вручную на карточке',
         'Модульные НПС — проверить условия продвижения в каноничные (module_rules.md)',
         'tools/validate_links.ps1',
       ];

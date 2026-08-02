@@ -1775,110 +1775,6 @@ document.getElementById('btn-new-city').addEventListener('click', async () => {
   }
 });
 
-// Lineage-specific fields visible / clan+sect required only for vampires.
-// FIX-9 (docs/audit/2026-07-28-fix-plan.md): Оборотень/Маг раньше не получали
-// собственных полей (только общие Клан/Раса+Секта/Двор) — Племя/Каста и
-// Традиция добавлены по аналогии с Fairy-полями выше.
-function _updateNpcForm() {
-  const type = document.getElementById('npc-type').value;
-  const isVamp = type === 'vampire';
-  const isFairy = type === 'fairy';
-  const isWerewolf = type === 'werewolf';
-  const isMage = type === 'mage';
-  document.getElementById('npc-vamp-fields').style.display = isVamp ? '' : 'none';
-  document.getElementById('npc-fairy-fields').style.display = isFairy ? '' : 'none';
-  document.getElementById('npc-werewolf-fields').style.display = isWerewolf ? '' : 'none';
-  document.getElementById('npc-mage-fields').style.display = isMage ? '' : 'none';
-  document.getElementById('npc-clan-req').style.display = isVamp ? '' : 'none';
-  document.getElementById('npc-sect-req').style.display = isVamp ? '' : 'none';
-}
-// FIX-7 (docs/audit/2026-07-28-fix-plan.md): #npc-clan/#npc-sect are shared,
-// always-visible inputs (only their *-req asterisk toggles) — switching away from
-// Vampire after typing a clan/sect used to leave the old value sitting there,
-// silently saved into a non-vampire card's «Клан / Раса»/«Секта / Двор» on submit.
-function _clearNpcClanSectOnLineageChange() {
-  document.getElementById('npc-clan').value = '';
-  document.getElementById('npc-sect').value = '';
-  _updateNpcForm();
-}
-document.getElementById('npc-type').addEventListener('change', _clearNpcClanSectOnLineageChange);
-_updateNpcForm();
-
-document.getElementById('btn-new-npc').addEventListener('click', async () => {
-  const btn = document.getElementById('btn-new-npc');
-  const out = document.getElementById('out-new-npc');
-  const lineage = document.getElementById('npc-type').value;
-  const isVamp  = lineage === 'vampire';
-  const name = document.getElementById('npc-name').value.trim();
-  const gender = document.getElementById('npc-gender').value.trim();
-  const clan = document.getElementById('npc-clan').value.trim();
-  const sect = document.getElementById('npc-sect').value.trim();
-  const seeming = document.getElementById('npc-seeming').value.trim();
-  const court = document.getElementById('npc-court').value.trim();
-  const house = document.getElementById('npc-house').value.trim();
-  const tribe = document.getElementById('npc-tribe').value.trim();
-  const auspice = document.getElementById('npc-auspice').value.trim();
-  const tradition = document.getElementById('npc-tradition').value.trim();
-  if (!name) { showToast('Укажи имя', 'warning'); return; }
-  if (!gender) { showToast('Укажи пол', 'warning'); return; }
-  if (!CITY) { showToast('Сначала выбери город в шапке', 'warning'); return; }
-  if (isVamp && !clan) { showToast('Клан обязателен для вампира', 'warning'); return; }
-  if (isVamp && !sect) { showToast('Секта обязательна для вампира', 'warning'); return; }
-  if (lineage === 'fairy' && !seeming) { showToast('Обличье обязательно для феи', 'warning'); return; }
-  if (lineage === 'werewolf' && !tribe) { showToast('Племя обязательно для оборотня', 'warning'); return; }
-  if (lineage === 'mage' && !tradition) { showToast('Традиция обязательна для мага', 'warning'); return; }
-
-  const payload = {
-    name, lineage, gender, clan, sect, seeming, court, house, tribe, auspice, tradition,
-    generation:  document.getElementById('npc-generation').value.trim(),
-    birthYear:   document.getElementById('npc-birth').value.trim(),
-    embraceYear: document.getElementById('npc-embrace').value.trim(),
-    sire:        document.getElementById('npc-sire').value.trim(),
-    biography:   document.getElementById('npc-bio').value.trim(),
-    appearance:  document.getElementById('npc-appearance').value.trim(),
-    belonging:   document.getElementById('npc-belonging').value,
-  };
-
-  btn.disabled = true; btn.textContent = '⏳ Создание...';
-  out.className = 'output-area show'; out.textContent = '';
-  try {
-    const qs = window.location.search;
-    const d  = await fetch('/api/characters' + qs,
-      { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }
-    ).then(r => r.json());
-    if (!d.ok) { out.innerHTML = `<span class="err">⚠ ${escHtml(d.error || 'Ошибка')}</span>`; return; }
-    let msg = `✓ Создан: cities/${CITY}/characters/${d.lineage}/${d.slug}/${d.slug}.md`;
-
-    // Optional art upload (reuses the existing per-character upload endpoint)
-    const file = document.getElementById('npc-art')?.files?.[0];
-    if (file) {
-      const base64 = await new Promise((resolve, reject) => {
-        const fr = new FileReader();
-        fr.onload = () => resolve(String(fr.result).split(',')[1]);
-        fr.onerror = reject;
-        fr.readAsDataURL(file);
-      });
-      const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
-      const u = await fetch(`/api/characters/${encodeURIComponent(d.slug)}/upload-image${qs}`,
-        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ base64, ext }) }
-      ).then(r => r.json());
-      msg += u.ok ? '\n📷 Арт загружен' : `\n⚠ Арт не загружен: ${u.error || ''}`;
-    }
-    out.innerHTML = `<span class="ok">${escHtml(msg)}</span>`;
-
-    ['npc-name','npc-clan','npc-sect','npc-seeming','npc-court','npc-house','npc-tribe','npc-auspice','npc-tradition','npc-generation','npc-birth','npc-embrace','npc-sire','npc-bio','npc-appearance']
-      .forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
-    document.getElementById('npc-gender').value = '';
-    const art = document.getElementById('npc-art'); if (art) art.value = '';
-    STATE.characters = []; STATE.graph.inited = false;
-    if (STATE.page === 'dashboard') loadDashboard();
-  } catch (e) {
-    out.innerHTML = `<span class="err">⚠ ${escHtml(e.message)}</span>`;
-  } finally {
-    btn.disabled = false; btn.textContent = 'Создать карточку';
-  }
-});
-
 document.getElementById('btn-create-module-tools').addEventListener('click', () => {
   openModCreateModal(true);
 });
@@ -2455,7 +2351,7 @@ const CHANGELING_KITHS = [
 const GENDER_OPTIONS = ['Мужской', 'Женский'];
 
 const LINEAGE_DEFS = {
-  vampire:  { label:'🧛 Вампир',          type:'vampire', endpoint:'characters',
+  vampire:  { label:'🧛 Вампир',          type:'vampire',
     fields:[
       { param:'name',        label:'Имя',           required:true, placeholder:'Граф Лейрок' },
       { param:'gender',      label:'Пол',           required:true, options:GENDER_OPTIONS, placeholder:'Выберите...' },
@@ -2471,7 +2367,7 @@ const LINEAGE_DEFS = {
       { param:'biography',   label:'Биография',     textarea:true, placeholder:'Краткая биография…' },
       { param:'appearance',  label:'Внешность',     textarea:true, placeholder:'3–5 визуальных маркеров…' },
     ]},
-  mortal:   { label:'🧑 Смертный',         type:'mortal', endpoint:'characters',
+  mortal:   { label:'🧑 Смертный',         type:'mortal',
     fields:[
       { param:'name',     label:'Имя',                  required:true,  placeholder:'Жан Дюбуа' },
       { param:'gender',   label:'Пол',                  required:true,  options:GENDER_OPTIONS, placeholder:'Выберите...' },
@@ -2481,7 +2377,7 @@ const LINEAGE_DEFS = {
       { param:'biography', label:'Биография',           textarea:true, placeholder:'Краткая биография…' },
       { param:'appearance', label:'Внешность',          textarea:true, placeholder:'3–5 визуальных маркеров…' },
     ]},
-  fairy:    { label:'🧚 Фея / Ченджлинг',  type:'fairy', endpoint:'characters',
+  fairy:    { label:'🧚 Фея / Ченджлинг',  type:'fairy',
     fields:[
       { param:'name',   label:'Имя',                  required:true,  placeholder:'Сильвана' },
       { param:'gender', label:'Пол',                  required:true,  options:GENDER_OPTIONS, placeholder:'Выберите...' },
@@ -2497,26 +2393,31 @@ const LINEAGE_DEFS = {
     ]},
   werewolf: { label:'🐺 Оборотень',        type:'werewolf',
     fields:[
-      { param:'Name',   label:'Имя',                  required:true,  placeholder:'Буря-в-Ночи' },
-      { param:'Gender', label:'Пол',                  required:true,  options:GENDER_OPTIONS, placeholder:'Выберите...' },
-      { param:'Clan', label:'Племя',                               placeholder:'Bone Gnawers, Glass Walkers...' },
-      { param:'Sect', label:'Аусписий',                           placeholder:'Рагабаш, Тали, Арун...' },
-      { param:'Role', label:'Роль',                               placeholder:'Альфа, Разведчик...' },
+      { param:'name',    label:'Имя',                  required:true, placeholder:'Буря-в-Ночи' },
+      { param:'gender',  label:'Пол',                  required:true, options:GENDER_OPTIONS, placeholder:'Выберите...' },
+      { param:'tribe',   label:'Племя',                required:true, placeholder:'Гару Дети Гайи, Чёрные Фурии...' },
+      { param:'auspice', label:'Каста',                               placeholder:'Рагабаш, Тодас, Филандо, Галлиард, Теодаз' },
+      { param:'role',    label:'Роль',                               placeholder:'Альфа, Разведчик...' },
+      { param:'biography', label:'Биография',          textarea:true, placeholder:'Краткая биография…' },
+      { param:'appearance', label:'Внешность',         textarea:true, placeholder:'3–5 визуальных маркеров…' },
     ]},
   mage:     { label:'🔮 Маг',             type:'mage',
     fields:[
-      { param:'Name',   label:'Имя',                  required:true,  placeholder:'Мастер Элиас' },
-      { param:'Gender', label:'Пол',                  required:true,  options:GENDER_OPTIONS, placeholder:'Выберите...' },
-      { param:'Clan', label:'Традиция / Конвенция',                placeholder:'Verbena, Technocracy...' },
-      { param:'Sect', label:'Орден',                              placeholder:'Просветлённые, Объединение...' },
-      { param:'Role', label:'Роль',                               placeholder:'Наставник, Агент...' },
+      { param:'name',      label:'Имя',                required:true, placeholder:'Мастер Элиас' },
+      { param:'gender',    label:'Пол',                required:true, options:GENDER_OPTIONS, placeholder:'Выберите...' },
+      { param:'tradition', label:'Традиция',           required:true, placeholder:'Верителли, Хранители Традиции, Порядок Гермеса...' },
+      { param:'role',      label:'Роль',                              placeholder:'Наставник, Агент...' },
+      { param:'biography', label:'Биография',          textarea:true, placeholder:'Краткая биография…' },
+      { param:'appearance', label:'Внешность',         textarea:true, placeholder:'3–5 визуальных маркеров…' },
     ]},
   hunter:   { label:'🏹 Охотник',         type:'hunter',
     fields:[
-      { param:'Name',   label:'Имя',                  required:true,  placeholder:'Конрад Вейс' },
-      { param:'Gender', label:'Пол',                  required:true,  options:GENDER_OPTIONS, placeholder:'Выберите...' },
-      { param:'Clan', label:'Организация',                        placeholder:'Инквизиция, ЦСА...' },
-      { param:'Role', label:'Роль',                               placeholder:'Инквизитор, Агент...' },
+      { param:'name',   label:'Имя',                   required:true, placeholder:'Конрад Вейс' },
+      { param:'gender', label:'Пол',                   required:true, options:GENDER_OPTIONS, placeholder:'Выберите...' },
+      { param:'clan',   label:'Организация',                          placeholder:'Инквизиция, ЦСА...' },
+      { param:'role',   label:'Роль',                                 placeholder:'Инквизитор, Агент...' },
+      { param:'biography', label:'Биография',          textarea:true, placeholder:'Краткая биография…' },
+      { param:'appearance', label:'Внешность',         textarea:true, placeholder:'3–5 визуальных маркеров…' },
     ]},
 };
 
@@ -2754,42 +2655,27 @@ modalSubmit.addEventListener('click', async () => {
   };
 
   try {
-    if (def.endpoint === 'characters') {
-      // Rules-compliant card endpoint — fills clan/sect/generation/birth/embrace/sire/nature/demeanor/concept/seeming/court/house/role/bio/appearance.
-      const payload = {
-        name: charName, lineage: def.type, gender: params.gender || '',
-        clan: params.clan || '', sect: params.sect || '',
-        generation: params.generation || '', birthYear: params.birthYear || '',
-        embraceYear: params.embraceYear || '', sire: params.sire || '',
-        nature: params.nature || '', demeanor: params.demeanor || '', concept: params.concept || '',
-        seeming: params.seeming || '', court: params.court || '', house: params.house || '',
-        role: params.role || '',
-        biography: params.biography || '', appearance: params.appearance || '',
-        belonging: params.belonging || '',
-      };
-      const d = await fetch('/api/characters' + qs, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      }).then(r => r.json());
-      if (!d.ok) return fail(d.error || 'Ошибка');
-      await onCreated(`✓ Создан: cities/${CITY}/characters/${d.lineage}/${d.slug}/${d.slug}.md`, d.slug);
-    } else {
-      // Other lineages → new_npc CLI tool (Name / Clan / Sect / Role positional args).
-      const TYPE_TO_LINEAGE = {
-        vampire: 'vampires', mortal: 'mortals', fairy: 'fairies',
-        werewolf: 'werewolves', mage: 'mages', hunter: 'hunters'
-      };
-      const folder = TYPE_TO_LINEAGE[def.type] || 'mortals';
-      const npcArgs = [CITY, folder, params.Name, params.Gender, params.Clan || '', params.Sect || '', params.Role || '', params.belonging || ''];
-      const d = await fetch('/api/tool/new_npc', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ args: npcArgs })
-      }).then(r => r.json());
-      if (!d.ok) { modalOut.textContent = d.output || '(нет вывода)'; reset(); return; }
-      // CLI tool doesn't return JSON — pull the slug out of its stdout path (cities/.../<slug>/<slug>.md).
-      const slugMatch = (d.output || '').match(/\/([a-z0-9_]+)\/\1\.md/);
-      await onCreated(d.output || '✓ Создан', slugMatch?.[1]);
-    }
+    // Все линейки идут через единый rules-compliant card-эндпоинт — заполняет
+    // clan/sect/generation/birth/embrace/sire/nature/demeanor/concept/seeming/
+    // court/house/tribe/auspice/tradition/role/bio/appearance по линейке.
+    const payload = {
+      name: charName, lineage: def.type, gender: params.gender || '',
+      clan: params.clan || '', sect: params.sect || '',
+      generation: params.generation || '', birthYear: params.birthYear || '',
+      embraceYear: params.embraceYear || '', sire: params.sire || '',
+      nature: params.nature || '', demeanor: params.demeanor || '', concept: params.concept || '',
+      seeming: params.seeming || '', court: params.court || '', house: params.house || '',
+      tribe: params.tribe || '', auspice: params.auspice || '', tradition: params.tradition || '',
+      role: params.role || '',
+      biography: params.biography || '', appearance: params.appearance || '',
+      belonging: params.belonging || '',
+    };
+    const d = await fetch('/api/characters' + qs, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    }).then(r => r.json());
+    if (!d.ok) return fail(d.error || 'Ошибка');
+    await onCreated(`✓ Создан: cities/${CITY}/characters/${d.lineage}/${d.slug}/${d.slug}.md`, d.slug);
   } catch (e) {
     fail(e.message);
   }

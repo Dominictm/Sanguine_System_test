@@ -976,8 +976,7 @@
       </div>
 
       <div class="tab-bar">
-        <button class="tab-btn active" data-tab="new-npc">Новый НПС</button>
-        <button class="tab-btn" data-tab="new-module">Модуль</button>
+        <button class="tab-btn active" data-tab="new-module">Модуль</button>
         <button class="tab-btn" data-tab="log-session">📓 Сессия</button>
         <button class="tab-btn" data-tab="more">🛠 Ещё</button>
         <button class="tab-btn" data-tab="validate">Проверка</button>
@@ -985,140 +984,8 @@
         <button class="tab-btn" data-tab="guide">📖 Инструкции</button>
       </div>
 
-      <!-- New NPC -->
-      <div class="tab-panel active" id="tab-new-npc">
-        <div class="form-row">
-          <div class="form-group">
-            <label class="form-label" for="npc-name">Имя *</label>
-            <input class="form-control" id="npc-name" placeholder="Эмилия Вольф" maxlength="100">
-          </div>
-          <div class="form-group">
-            <label class="form-label" for="npc-type">Линейка *</label>
-            <select class="form-control" id="npc-type">
-              <option value="vampire">Вампир</option>
-              <option value="mortal">Смертный</option>
-              <option value="fairy">Фея / Ченджлинг</option>
-              <option value="werewolf">Оборотень</option>
-              <option value="mage">Маг</option>
-              <option value="hunter">Охотник</option>
-            </select>
-          </div>
-        </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label class="form-label" for="npc-gender">Пол *</label>
-            <select class="form-control" id="npc-gender">
-              <option value="">— выбрать —</option>
-              <option value="Мужской">Мужской</option>
-              <option value="Женский">Женский</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label class="form-label" for="npc-belonging">Принадлежность</label>
-            <select class="form-control" id="npc-belonging">
-              <option value="Персонаж мастера">Персонаж мастера</option>
-              <option value="Персонаж игрока">Персонаж игрока</option>
-              <option value="Эпизодический персонаж">Эпизодический персонаж</option>
-              <option value="Фамильяр">Фамильяр</option>
-            </select>
-          </div>
-        </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label class="form-label" for="npc-clan">Клан <span id="npc-clan-req" class="form-req">*</span></label>
-            <input class="form-control" id="npc-clan" placeholder="Бруха">
-          </div>
-          <div class="form-group">
-            <label class="form-label" for="npc-sect">Секта <span id="npc-sect-req" class="form-req">*</span></label>
-            <input class="form-control" id="npc-sect" placeholder="Камарилья">
-          </div>
-        </div>
-        <div id="npc-vamp-fields">
-          <div class="form-row">
-            <div class="form-group">
-              <label class="form-label" for="npc-generation">Поколение</label>
-              <select class="form-control" id="npc-generation">
-                <option value="">— выбрать —</option>
-                <option value="14-е">14-е</option>
-                <option value="13-е">13-е</option>
-                <option value="12-е">12-е</option>
-                <option value="11-е">11-е</option>
-                <option value="10-е">10-е</option>
-                <option value="9-е">9-е</option>
-                <option value="8-е">8-е</option>
-                <option value="7-е">7-е</option>
-                <option value="6-е">6-е</option>
-                <option value="5-е">5-е</option>
-                <option value="4-е">4-е</option>
-                <option value="3-е">3-е</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label class="form-label" for="npc-birth">Год рождения</label>
-              <input class="form-control" id="npc-birth" placeholder="1955">
-            </div>
-            <div class="form-group">
-              <label class="form-label" for="npc-embrace">Год обращения</label>
-              <input class="form-control" id="npc-embrace" placeholder="1978">
-            </div>
-          </div>
-          <div class="form-group">
-            <label class="form-label" for="npc-sire">Сир</label>
-            <input class="form-control" id="npc-sire" placeholder="Имя сира">
-          </div>
-        </div>
-        <div id="npc-fairy-fields" style="display:none">
-          <div class="form-row">
-            <div class="form-group">
-              <label class="form-label" for="npc-seeming">Обличье (Seeming) <span class="form-req">*</span></label>
-              <input class="form-control" id="npc-seeming" placeholder="Дикарь, Сид, Тролль...">
-            </div>
-            <div class="form-group">
-              <label class="form-label" for="npc-court">Двор</label>
-              <input class="form-control" id="npc-court" placeholder="Светлый / Тёмный">
-            </div>
-            <div class="form-group">
-              <label class="form-label" for="npc-house">Дом</label>
-              <input class="form-control" id="npc-house" placeholder="Эйлиль, Фиона...">
-            </div>
-          </div>
-        </div>
-        <div id="npc-werewolf-fields" style="display:none">
-          <div class="form-row">
-            <div class="form-group">
-              <label class="form-label" for="npc-tribe">Племя <span class="form-req">*</span></label>
-              <input class="form-control" id="npc-tribe" placeholder="Гару Дети Гайи, Чёрные Фурии...">
-            </div>
-            <div class="form-group">
-              <label class="form-label" for="npc-auspice">Каста</label>
-              <input class="form-control" id="npc-auspice" placeholder="Рагабаш, Тодас, Филандо, Галлиард, Теодаз">
-            </div>
-          </div>
-        </div>
-        <div id="npc-mage-fields" style="display:none">
-          <div class="form-group">
-            <label class="form-label" for="npc-tradition">Традиция <span class="form-req">*</span></label>
-            <input class="form-control" id="npc-tradition" placeholder="Верителли, Хранители Традиции, Порядок Гермеса...">
-          </div>
-        </div>
-        <div class="form-group">
-          <label class="form-label" for="npc-bio">Биография</label>
-          <textarea class="form-control" id="npc-bio" rows="4" placeholder="Краткая биография..."></textarea>
-        </div>
-        <div class="form-group">
-          <label class="form-label" for="npc-appearance">Внешность</label>
-          <textarea class="form-control" id="npc-appearance" rows="3" placeholder="3–5 визуальных маркеров..."></textarea>
-        </div>
-        <div class="form-group">
-          <label class="form-label" for="npc-art">Арт <span class="chr-modal-dim">(необязательно)</span></label>
-          <input type="file" class="form-control" id="npc-art" accept="image/jpeg,image/png,image/webp,image/gif">
-        </div>
-        <button class="btn-submit" id="btn-new-npc">Создать карточку</button>
-        <pre class="output-area" id="out-new-npc"></pre>
-      </div>
-
       <!-- New Module -->
-      <div class="tab-panel" id="tab-new-module">
+      <div class="tab-panel active" id="tab-new-module">
         <p class="validate-hint">
           Создай модуль и привяжи его к нужной хронике прямо здесь.
         </p>

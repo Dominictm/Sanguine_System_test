@@ -38,8 +38,8 @@ const CHARACTERS = [
   { type: 'vampire',  name: `Вампир Тест ${RUN_ID}`,  belonging: 'Персонаж игрока', folder: 'vampires', clan: 'Носферату', sect: 'Камарилья' },
   { type: 'mortal',   name: `Смертный Тест ${RUN_ID}`, belonging: 'Персонаж мастера', folder: 'mortals' },
   { type: 'fairy',    name: `Фея Тест ${RUN_ID}`,     belonging: 'Эпизодический персонаж', folder: 'fairies', seeming: 'Сид' },
-  { type: 'werewolf', name: `Волк Тест ${RUN_ID}`,    belonging: 'Персонаж мастера', folder: 'werewolves' },
-  { type: 'mage',     name: `Маг Тест ${RUN_ID}`,     belonging: 'Персонаж мастера', folder: 'mages' },
+  { type: 'werewolf', name: `Волк Тест ${RUN_ID}`,    belonging: 'Персонаж мастера', folder: 'werewolves', tribe: 'Гару Дети Гайи' },
+  { type: 'mage',     name: `Маг Тест ${RUN_ID}`,     belonging: 'Персонаж мастера', folder: 'mages', tradition: 'Верителли' },
   { type: 'hunter',   name: `Охотник Тест ${RUN_ID}`, belonging: 'Фамильяр', folder: 'hunters' },
 ];
 
@@ -196,23 +196,48 @@ describe('UI — полный изолированный цикл города',
     assert.ok(fs.existsSync(path.join(ROOT, 'cities', CITY, 'locations', 'district_01', `teatr_proverki_${RUN_ID}`, `teatr_proverki_${RUN_ID}.md`)));
   });
 
+  // Точка входа создания персонажа переехала со вкладки «Инструменты → Новый
+  // НПС» (удалена) на модалку «+ Создать» страницы «Персонажи» (#char-modal) —
+  // шаг 1 выбор линейки (.lineage-pick-btn), шаг 2 поля по data-param.
+  async function fillModalField(param, value) {
+    const el = await css(`#modal-fields [data-param="${param}"]`);
+    await driver.wait(until.elementIsVisible(el), 10000, `#modal-fields [data-param="${param}"] не стал видимым`);
+    const tag = await el.getTagName();
+    if (tag === 'select') await new Select(el).selectByValue(value);
+    else { await el.clear(); await el.sendKeys(value); }
+  }
+
   for (const character of CHARACTERS) {
     it(`создаёт через UI: ${character.type}`, async () => {
-      await go('tools');
-      await openToolTab('new-npc');
-      await new Select(await id('npc-type')).selectByValue(character.type);
-      await fill('npc-name', character.name);
-      await new Select(await id('npc-gender')).selectByValue('Мужской');
-      await new Select(await id('npc-belonging')).selectByValue(character.belonging);
+      await go('characters');
+      await (await id('btn-open-create-char')).click();
+      await css('#char-modal.open');
+      // #char-modal — .modal-overlay с CSS-переходом opacity/visibility (~280мс,
+      // --dur-base) — класс .open появляется мгновенно, но элемент физически
+      // некликабелен, пока переход не завершится (ElementNotInteractableError
+      // при клике сразу после .open, воспроизведено вживую).
+      const lineageBtn = await css(`.lineage-pick-btn[data-type="${character.type}"]`);
+      await driver.wait(until.elementIsVisible(lineageBtn), 10000, 'кнопка выбора линейки не стала видимой');
+      await lineageBtn.click();
+      await fillModalField('name', character.name);
+      await fillModalField('gender', 'Мужской');
       if (character.type === 'vampire') {
-        await fill('npc-clan', character.clan);
-        await fill('npc-sect', character.sect);
+        await fillModalField('clan', character.clan);
+        await fillModalField('sect', character.sect);
       }
-      if (character.type === 'fairy') await fill('npc-seeming', character.seeming);
-      await (await id('btn-new-npc')).click();
-      await waitOutput('out-new-npc', /создан/i);
+      if (character.type === 'fairy') await fillModalField('seeming', character.seeming);
+      if (character.type === 'werewolf') await fillModalField('tribe', character.tribe);
+      if (character.type === 'mage') await fillModalField('tradition', character.tradition);
+      await fillModalField('belonging', character.belonging);
+      await (await id('modal-submit')).click();
+      await waitOutput('modal-output', /создан/i);
       const slug = slugify(character.name);
       assert.ok(fs.existsSync(path.join(ROOT, 'cities', CITY, 'characters', character.folder, slug, `${slug}.md`)));
+      // Модалка автозакрывается через ~900мс после успеха — дожидаемся перед
+      // следующей итерацией, иначе следующий клик «+ Создать» может попасть
+      // в ещё открытую модалку прошлого персонажа.
+      await waitUntil(async () => (await driver.findElements(By.css('#char-modal.open'))).length === 0,
+        3000, 'модалка создания не закрылась автоматически после успеха');
     });
   }
 

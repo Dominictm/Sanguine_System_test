@@ -12,14 +12,14 @@
  *   HEADLESS=1 node --test tests/ui.test.js (headless)
  */
 
-const { describe, it, before, after } = require('node:test');
+const { describe, it, before, after, beforeEach } = require('node:test');
 const assert = require('node:assert/strict');
 const fs     = require('fs');
 const path   = require('path');
 const { spawn } = require('child_process');
 const http   = require('http');
 
-const { Builder, By, until, Select } = require('selenium-webdriver');
+const { Builder, By, until, Select, Key } = require('selenium-webdriver');
 const chromeOpts = require('selenium-webdriver/chrome');
 
 const ROOT    = path.resolve(__dirname, '../..');
@@ -85,7 +85,7 @@ let serverProc, driver;
 let browse = { city: '', chars: 0 };
 
 // ── Driver helpers (set after driver is created) ──────────────────────────────
-let css, id_, count, navTo, openTab, typeIn, waitOut;
+let css, id_, count, navTo, openTab, typeIn, waitOut, clickEl;
 
 describe('UI — Selenium (Chrome)', () => {
 
@@ -117,12 +117,32 @@ describe('UI — Selenium (Chrome)', () => {
     css     = (s, t = 15000) => driver.wait(until.elementLocated(By.css(s)), t, `нет элемента: ${s}`);
     id_     = (s, t = 15000) => driver.wait(until.elementLocated(By.id(s)),  t, `нет #${s}`);
     count   = s => driver.findElements(By.css(s)).then(a => a.length);
+    // .page скроллится ВНУТРЕННИМ контейнером (.page{overflow-y:auto}, CSS
+    // scroll-behavior:smooth) — обычный el.click() на элементе ниже фолда не
+    // докручивает сам (в отличие от body-скролла) и падает
+    // ElementClickInterceptedError; scrollIntoView() запускает анимацию
+    // асинхронно, так что клик сразу следом всё ещё может попасть в
+    // до-скролловую позицию — дожидаемся, пока элемент реально не окажется
+    // в точке своего же центра, прежде чем кликать. e.contains(hit), не
+    // hit === e: составные элементы (.nav-item/.tab-btn) держат дочерние
+    // <span> для иконки/текста — elementFromPoint в их центре возвращает
+    // именно дочерний span, а не сам <a>/<button>.
+    clickEl = async el => {
+      await driver.executeScript("arguments[0].scrollIntoView({block:'center'});", el);
+      await driver.wait(() => driver.executeScript(`
+        const e = arguments[0];
+        const r = e.getBoundingClientRect();
+        const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+        return !!hit && e.contains(hit);
+      `, el), 3000, 'элемент не доскроллился в клик-зону');
+      await el.click();
+    };
     navTo   = async page => {
-      await (await css(`.nav-item[data-page="${page}"]`)).click();
+      await clickEl(await css(`.nav-item[data-page="${page}"]`));
       await css(`#page-${page}.page.active`);
     };
     openTab = async tab => {
-      await (await css(`.tab-btn[data-tab="${tab}"]`)).click();
+      await clickEl(await css(`.tab-btn[data-tab="${tab}"]`));
       await css(`#tab-${tab}.tab-panel.active`);
     };
     typeIn  = async (elId, val) => {
@@ -239,33 +259,24 @@ describe('UI — Selenium (Chrome)', () => {
       assert.ok(fileExists(`cities/${UI_CITY}/city.md`));
     });
 
-    it('создание НПС через вкладку «Новый НПС»', async () => {
-      await driver.get(`${BASE}?city=${UI_CITY}`);
-      await navTo('tools');
-      await openTab('new-npc');
-      await typeIn('npc-name', 'Тестовый Носферату');
-      // npc-type по умолчанию 'vampire' — Пол/Клан/Секта обязательны, иначе
-      // клиент молча блокирует отправку (showToast) и out-new-npc не заполнится.
-      await new Select(await id_('npc-gender')).selectByValue('Мужской');
-      await typeIn('npc-clan', 'Носферату');
-      await typeIn('npc-sect', 'Камарилья');
-      await (await id_('btn-new-npc')).click();
-      await waitOut('out-new-npc', /✓|создан/i);
-      assert.ok(fileExists(`cities/${UI_CITY}/characters/vampires/testovyy_nosferatu/testovyy_nosferatu.md`));
-    });
-
     it('создание локации во вкладке «🛠 Ещё»', async () => {
+      // Успешное создание города выше запускает отложенный редирект
+      // (location.search = ... через setTimeout 900мс, scripts.js) — без
+      // явной полной перезагрузки здесь navTo('tools') рискует кликнуть по
+      // .nav-item в момент, когда браузер уже уходит на новый URL,
+      // и словить stale element reference / повиснуть на пустой странице.
+      await driver.get(`${BASE}?city=${UI_CITY}`);
       await navTo('tools');
       await openTab('more');
       await typeIn('loc-district', '1');
       await typeIn('loc-name', 'Подземный док');
-      await (await id_('btn-new-loc')).click();
+      await clickEl(await id_('btn-new-loc'));
       await waitOut('out-more', /✓|создан/i);
       assert.ok(fileExists(`cities/${UI_CITY}/locations/district_01/podzemnyy_dok/podzemnyy_dok.md`));
     });
 
     it('кнопка «Пересобрать индекс» отрабатывает', async () => {
-      await (await id_('btn-rebuild-idx')).click();
+      await clickEl(await id_('btn-rebuild-idx'));
       await waitOut('out-more', /обновл|событ/i);
     });
 
@@ -273,6 +284,415 @@ describe('UI — Selenium (Chrome)', () => {
       await openTab('validate');
       await (await id_('btn-validate')).click();
       await waitOut('out-validate', /ссыл|битых|broken|✓|0/i, 40000);
+    });
+  });
+
+  // ── Создание персонажа (модалка «+ Создать» на странице «Персонажи») ──────────
+  // Точка входа перенесена из вкладки «Инструменты → Новый НПС» (удалена) на
+  // саму страницу «Персонажи» — там уже была своя, более полная модалка
+  // (#char-modal, LINEAGE_DEFS в scripts.js), которая раньше для Оборотня/
+  // Мага/Охотника шла через устаревший CLI-инструмент new_npc.js (без
+  // обязательных Племя/Традиция из FIX-9, без биографии/внешности) — приведена
+  // к единому POST /api/characters, как остальные линейки.
+  // Модель формы другая, чем была у старой вкладки: шаг 1 — выбор линейки
+  // (.lineage-pick-btn), шаг 2 — поля с data-param (не статичные id), причём
+  // #modal-fields перегенерируется целиком при каждом выборе линейки (так что
+  // сценарий FIX-7 «смена линейки не очищает Клан/Секту» здесь физически
+  // недостижим — поля каждый раз рендерятся с нуля). Клиентская валидация —
+  // не тост, а подсветка поля (el.style.borderColor) и молчаливый return.
+  // Успех автозакрывает модалку через 900мс (onCreated → setTimeout).
+  describe('Создание персонажа (модалка «+ Создать» на странице «Персонажи»)', () => {
+    const charPath = (folder, name) => {
+      const s = slugify(name);
+      return `cities/${UI_CITY}/characters/${folder}/${s}/${s}.md`;
+    };
+
+    beforeEach(async () => {
+      await driver.get(`${BASE}?city=${UI_CITY}`);
+      await navTo('characters');
+      await clickEl(await id_('btn-open-create-char'));
+      await css('#char-modal.open');
+    });
+
+    const pickLineage = async type => clickEl(await css(`.lineage-pick-btn[data-type="${type}"]`));
+    const field = param => css(`#modal-fields [data-param="${param}"]`);
+    // Единственное реальное <select> в шаге 2 — «Поколение» вампира и
+    // универсальная «Принадлежность»; остальные (включая Пол!) — текстовые
+    // input с datalist-подсказками, не <select> — определяем тег динамически.
+    const setField = async (param, value) => {
+      const el = await field(param);
+      const tag = await el.getTagName();
+      if (tag === 'select') await new Select(el).selectByValue(value);
+      else { await el.clear(); await el.sendKeys(value); }
+    };
+    const submitModal = async () => clickEl(await id_('modal-submit'));
+    const borderColor = async param =>
+      driver.executeScript('return arguments[0].style.borderColor;', await field(param));
+
+    // ── Позитив: happy path для каждой линейки ──────────────────────────────
+
+    it('Вампир — создаётся с Кланом/Сектой (обязательные поля линейки)', async () => {
+      const name = 'УИ Вампир Тест';
+      await pickLineage('vampire');
+      await setField('name', name);
+      await setField('gender', 'Мужской');
+      await setField('clan', 'Носферату');
+      await setField('sect', 'Камарилья');
+      await submitModal();
+      await waitOut('modal-output', /✓|создан/i);
+      assert.ok(fileExists(charPath('vampires', name)));
+    });
+
+    it('Смертный — создаётся с минимумом полей (нет своих обязательных)', async () => {
+      const name = 'УИ Смертный Тест';
+      await pickLineage('mortal');
+      await setField('name', name);
+      await setField('gender', 'Мужской');
+      await submitModal();
+      await waitOut('modal-output', /✓|создан/i);
+      assert.ok(fileExists(charPath('mortals', name)));
+    });
+
+    it('Охотник — создаётся с минимумом полей (нет своих обязательных)', async () => {
+      const name = 'УИ Охотник Тест';
+      await pickLineage('hunter');
+      await setField('name', name);
+      await setField('gender', 'Женский');
+      await submitModal();
+      await waitOut('modal-output', /✓|создан/i);
+      assert.ok(fileExists(charPath('hunters', name)));
+    });
+
+    it('Фея — создаётся с заполненным Обличьем (обязательное поле линейки)', async () => {
+      const name = 'УИ Фея Тест';
+      await pickLineage('fairy');
+      await setField('name', name);
+      await setField('gender', 'Женский');
+      await setField('seeming', 'Дикарь');
+      await submitModal();
+      await waitOut('modal-output', /✓|создан/i);
+      assert.ok(fileExists(charPath('fairies', name)));
+    });
+
+    it('Оборотень — создаётся с заполненным Племенем (FIX-9, обязательное поле линейки)', async () => {
+      const name = 'УИ Оборотень Тест';
+      await pickLineage('werewolf');
+      await setField('name', name);
+      await setField('gender', 'Мужской');
+      await setField('tribe', 'Гару Дети Гайи');
+      await submitModal();
+      await waitOut('modal-output', /✓|создан/i);
+      assert.ok(fileExists(charPath('werewolves', name)));
+    });
+
+    it('Маг — создаётся с заполненной Традицией (FIX-9, обязательное поле линейки)', async () => {
+      const name = 'УИ Маг Тест';
+      await pickLineage('mage');
+      await setField('name', name);
+      await setField('gender', 'Женский');
+      await setField('tradition', 'Верителли');
+      await submitModal();
+      await waitOut('modal-output', /✓|создан/i);
+      assert.ok(fileExists(charPath('mages', name)));
+    });
+
+    // ── Негатив: клиентская валидация подсвечивает поле и не отправляет запрос ─
+
+    it('пустое имя → поле подсвечивается, запрос не уходит, карточка не создаётся', async () => {
+      await pickLineage('vampire');
+      await setField('gender', 'Мужской');
+      await setField('clan', 'Бруха');
+      await setField('sect', 'Камарилья');
+      await submitModal();
+      assert.equal(await borderColor('name'), 'var(--crimson)', 'поле «Имя» должно подсветиться как невалидное');
+      assert.equal(await count('#modal-output.show'), 0, 'вывод не должен показаться — запрос на сервер не отправлялся');
+    });
+
+    it('не указан пол → поле подсвечивается, карточка не создаётся', async () => {
+      const name = 'УИ Без Пола';
+      await pickLineage('vampire');
+      await setField('name', name);
+      await setField('clan', 'Бруха');
+      await setField('sect', 'Камарилья');
+      await submitModal();
+      assert.equal(await borderColor('gender'), 'var(--crimson)', 'поле «Пол» должно подсветиться как невалидное');
+      assert.ok(!fileExists(charPath('vampires', name)));
+    });
+
+    it('Вампир без Клана → поле подсвечивается, карточка не создаётся', async () => {
+      const name = 'УИ Без Клана';
+      await pickLineage('vampire');
+      await setField('name', name);
+      await setField('gender', 'Мужской');
+      await setField('sect', 'Камарилья');
+      await submitModal();
+      assert.equal(await borderColor('clan'), 'var(--crimson)', 'поле «Клан» должно подсветиться как невалидное');
+      assert.ok(!fileExists(charPath('vampires', name)));
+    });
+
+    it('Фея без Обличья → поле подсвечивается, карточка не создаётся (FIX-9)', async () => {
+      const name = 'УИ Фея Без Обличья';
+      await pickLineage('fairy');
+      await setField('name', name);
+      await setField('gender', 'Женский');
+      await submitModal();
+      assert.equal(await borderColor('seeming'), 'var(--crimson)', 'поле «Обличье» должно подсветиться как невалидное');
+      assert.ok(!fileExists(charPath('fairies', name)));
+    });
+
+    it('Оборотень без Племени → поле подсвечивается, карточка не создаётся (FIX-9)', async () => {
+      const name = 'УИ Оборотень Без Племени';
+      await pickLineage('werewolf');
+      await setField('name', name);
+      await setField('gender', 'Мужской');
+      await submitModal();
+      assert.equal(await borderColor('tribe'), 'var(--crimson)', 'поле «Племя» должно подсветиться как невалидное');
+      assert.ok(!fileExists(charPath('werewolves', name)));
+    });
+
+    it('Маг без Традиции → поле подсвечивается, карточка не создаётся (FIX-9)', async () => {
+      const name = 'УИ Маг Без Традиции';
+      await pickLineage('mage');
+      await setField('name', name);
+      await setField('gender', 'Женский');
+      await submitModal();
+      assert.equal(await borderColor('tradition'), 'var(--crimson)', 'поле «Традиция» должно подсветиться как невалидное');
+      assert.ok(!fileExists(charPath('mages', name)));
+    });
+
+    // ── Негатив: серверная проверка (дубликат имени+линейки → 409) ─────────────
+
+    it('повторное создание с тем же именем+линейкой → сервер 409, UI показывает ошибку, не «✓»', async () => {
+      const name = 'УИ Дубликат Тест';
+      const submitVampire = async () => {
+        await pickLineage('vampire');
+        await setField('name', name);
+        await setField('gender', 'Мужской');
+        await setField('clan', 'Бруха');
+        await setField('sect', 'Камарилья');
+        await submitModal();
+      };
+      await submitVampire();
+      await waitOut('modal-output', /✓|создан/i);
+      assert.ok(fileExists(charPath('vampires', name)));
+
+      // Модалка автозакрывается через ~900мс после успеха — переоткрываем и
+      // повторяем с тем же именем+линейкой.
+      await driver.wait(async () => (await count('#char-modal.open')) === 0, 3000, 'модалка не закрылась автоматически после успеха');
+      await clickEl(await id_('btn-open-create-char'));
+      await css('#char-modal.open');
+      await submitVampire();
+      await waitOut('modal-output', /уже существует/i);
+    });
+
+    // ── UI-specific: у каждой линейки в шаге 2 есть её специфичное поле ────────
+
+    const LINEAGE_SPECIFIC_FIELD = {
+      vampire: 'clan', fairy: 'seeming', werewolf: 'tribe', mage: 'tradition',
+    };
+
+    for (const [type, param] of Object.entries(LINEAGE_SPECIFIC_FIELD)) {
+      it(`линейка «${type}»: в форме шага 2 есть поле [data-param="${param}"]`, async () => {
+        await pickLineage(type);
+        assert.equal(await count(`#modal-fields [data-param="${param}"]`), 1);
+      });
+    }
+
+    it('линейка «Смертный»/«Охотник»: специфичных для линейки обязательных полей нет', async () => {
+      for (const type of ['mortal', 'hunter']) {
+        await pickLineage(type);
+        for (const param of Object.values(LINEAGE_SPECIFIC_FIELD)) {
+          // Не «поля вообще нет» — у Охотника есть необязательное [data-param="clan"]
+          // (лейбл «Организация», переиспользует общее поле) — важно, что оно не required.
+          assert.equal(await count(`#modal-fields [data-param="${param}"][required]`), 0,
+            `«${type}» не должна показывать ОБЯЗАТЕЛЬНОЕ поле [data-param="${param}"]`);
+        }
+        await clickEl(await id_('modal-back'));
+      }
+    });
+  });
+
+  // ── Карточка персонажа (модалка) ───────────────────────────────────────────────
+  // Тестировщик: раздел «Персонажи» выше проверял только сам грид («карточки
+  // отрисованы», «поиск фильтрует») — сама карточка персонажа (модалка с деталями)
+  // не была покрыта вообще. Ниже: открытие с проверкой реальных данных (не просто
+  // «что-то отрендерилось»), переключение всех вкладок, ленивая подгрузка листа
+  // V20, три способа закрытия, и цикл редактирования/отмены на СВОЁМ тестовом
+  // персонаже (UI_CITY) — чтение проверяем на живых данных browse.city, а правки
+  // делаем только на одноразовом персонаже, чтобы не трогать реальный paris/balmont.
+  describe('Карточка персонажа (модалка)', () => {
+    let readChar;   // существующий персонаж из browse.city — только для чтения
+    let editSlug;   // свой одноразовый персонаж в UI_CITY — безопасно править
+
+    before(async () => {
+      const list = (await get(`/api/characters?city=${browse.city}`)).json || [];
+      readChar = list.find(c => (c.relationships || []).length && (c.diaries || []).length)
+        || list.find(c => (c.relationships || []).length)
+        || list[0];
+
+      const created = await httpReq('POST', `/api/characters?city=${UI_CITY}`,
+        { name: 'УИ Карточка Тест', lineage: 'mortal', gender: 'Мужской' });
+      editSlug = created.json.slug;
+    });
+
+    // Каждый it() открывает модалку через openCharCard() (полная перезагрузка
+    // страницы в начале), поэтому внутри блока предыдущий openCharCard() сам
+    // сбрасывает состояние — но ПОСЛЕДНИЙ тест ничего не закрывает за собой, и
+    // .modal-overlay.open (fixed, во весь экран, z-index поверх всего) остаётся
+    // висеть, перехватывая клики в СЛЕДУЮЩЕМ describe-блоке (например по
+    // .nav-item «Инструменты»). Возвращаем страницу в чистое состояние.
+    after(async () => { await driver.get(`${BASE}?city=${browse.city}`); });
+
+    const openCharCard = async (city, slug) => {
+      await driver.get(`${BASE}?city=${city}`);
+      await navTo('characters');
+      const card = await css(`.char-card[data-slug="${slug}"]`);
+      await clickEl(card);
+      await css('#char-detail-modal.open');
+      // .modal-overlay.open анимирует opacity/visibility через CSS
+      // (--dur-base: .28s) — .open появляется на элементе мгновенно (JS),
+      // но getText() на ещё непрозрачном/invisible элементе возвращает ''
+      // всю длительность перехода. Ждём реального рендера, а не только класса.
+      await driver.wait(async () => (await (await css('.cdet-name')).getText()) !== '', 3000,
+        'имя персонажа не отрисовалось (модалка ещё в процессе CSS-перехода?)');
+    };
+
+    const activePanel = () => driver.executeScript(
+      `return document.querySelector('.cdet-panel.active')?.dataset.panel || null;`);
+
+    it('клик по карточке в гриде открывает модалку с верными именем/линейкой', async () => {
+      if (!readChar) return; // чистый город без персонажей — нечего открывать
+      await openCharCard(browse.city, readChar.slug);
+      // .cdet-name — text-transform:uppercase в CSS (заголовок карточки); getText()
+      // по спецификации WebDriver возвращает отрисованный (заглавный) текст, а не
+      // исходный регистр из DOM/данных — сравниваем без учёта регистра.
+      assert.equal((await (await css('.cdet-name')).getText()).toUpperCase(), readChar.name.toUpperCase());
+      assert.ok(await count(`.badge-${readChar.lineage}`) >= 1, `нет бейджа линейки .badge-${readChar.lineage}`);
+      assert.equal(await activePanel(), 'info', 'по умолчанию должна быть активна вкладка «Информация»');
+    });
+
+    it('переключение вкладок — активна ровно одна панель, соответствующая нажатой вкладке', async () => {
+      if (!readChar) return;
+      await openCharCard(browse.city, readChar.slug);
+      const tabs = await driver.findElements(By.css('.cdet-tab'));
+      const tabNames = await Promise.all(tabs.map(t => t.getAttribute('data-tab')));
+      for (const tabName of tabNames) {
+        await clickEl(await css(`.cdet-tab[data-tab="${tabName}"]`));
+        await driver.wait(async () => (await activePanel()) === tabName, 5000,
+          `после клика по вкладке «${tabName}» активной панелью должна стать [data-panel="${tabName}"]`);
+        assert.equal(await count('.cdet-panel.active'), 1, 'должна быть активна ровно одна панель');
+      }
+    });
+
+    it('вкладка «Отношения» — число .cdet-rel совпадает с данными API', async () => {
+      if (!readChar || !(readChar.relationships || []).length) return;
+      await openCharCard(browse.city, readChar.slug);
+      await clickEl(await css('.cdet-tab[data-tab="rels"]'));
+      await driver.wait(async () => (await activePanel()) === 'rels', 5000);
+      assert.equal(await count('.cdet-rel'), readChar.relationships.length);
+    });
+
+    it('вкладка «Дневники» — число .diary-item совпадает с данными API', async () => {
+      if (!readChar || !(readChar.diaries || []).length) return;
+      await openCharCard(browse.city, readChar.slug);
+      await clickEl(await css('.cdet-tab[data-tab="diaries"]'));
+      await driver.wait(async () => (await activePanel()) === 'diaries', 5000);
+      assert.equal(await count('.diary-item'), readChar.diaries.length);
+    });
+
+    it('вкладка «Лист V20» — лениво подгружается по клику (спиннер сменяется реальным содержимым)', async () => {
+      if (!readChar) return;
+      await openCharCard(browse.city, readChar.slug);
+      // Спиннер — часть исходной разметки модалки (openCharDetail рендерит его
+      // сразу, ДО первого клика по вкладке) — сама подгрузка «ленивая»: реальный
+      // запрос GET .../sheet-data уходит только по клику (_loadCharSheet).
+      assert.equal(await count('#cdet-sheet-panel .loading-state'), 1,
+        'до клика по вкладке «Лист V20» панель должна содержать плейсхолдер-спиннер');
+      assert.ok(!(await driver.executeScript(`return document.getElementById('cdet-sheet-panel').dataset.loaded || null;`)),
+        'panel.dataset.loaded не должен быть выставлен до клика по вкладке');
+      await clickEl(await css('.cdet-tab[data-tab="sheet"]'));
+      await driver.wait(async () => (await count('#cdet-sheet-panel .loading-state')) === 0, 15000,
+        'лист V20 не догрузился (спиннер завис)');
+      assert.ok(await count('#cdet-sheet-panel *') > 0, 'после загрузки в панели листа должно быть содержимое');
+    });
+
+    it('закрытие кнопкой ✕', async () => {
+      if (!readChar) return;
+      await openCharCard(browse.city, readChar.slug);
+      await clickEl(await id_('char-detail-close'));
+      await driver.wait(async () => (await count('#char-detail-modal.open')) === 0, 5000, 'модалка не закрылась по ✕');
+    });
+
+    it('закрытие кликом по фону модалки', async () => {
+      if (!readChar) return;
+      await openCharCard(browse.city, readChar.slug);
+      // Клик строго по самому overlay (не по modal-box внутри) — так же, как
+      // проверяет обработчик: closeModal только если e.target === сам оверлей.
+      await driver.executeScript(`document.getElementById('char-detail-modal').click();`);
+      await driver.wait(async () => (await count('#char-detail-modal.open')) === 0, 5000, 'модалка не закрылась по клику на фон');
+    });
+
+    it('закрытие по Escape', async () => {
+      if (!readChar) return;
+      await openCharCard(browse.city, readChar.slug);
+      await driver.actions().sendKeys(Key.ESCAPE).perform();
+      await driver.wait(async () => (await count('#char-detail-modal.open')) === 0, 5000, 'модалка не закрылась по Escape');
+    });
+
+    it('редактирование «Информации»: смена Статуса сохраняется в DOM и на диске', async () => {
+      await openCharCard(UI_CITY, editSlug);
+      await clickEl(await id_('cdet-edit-btn'));
+      await css('#cdet-edit-bar.show');
+
+      const statusSelect = await css('select.cdet-field-input[data-field="status"]');
+      await new Select(statusSelect).selectByValue('Пропал');
+      await clickEl(await css('#cdet-save-btn'));
+      // _exitInfoEdit(true) на успехе сохранения заменяет DOM-узел (<select> →
+      // <div>) — между findElements и getText() в той же итерации возможна
+      // гонка (StaleElementReferenceError), которую driver.wait НЕ трактует
+      // как «ещё не готово», а сразу прерывает ожидание — глушим и опрашиваем дальше.
+      await driver.wait(async () => {
+        try {
+          const els = await driver.findElements(By.css('#cdet-info-fields [data-field="status"]'));
+          return els.length && /Пропал/.test(await els[0].getText());
+        } catch { return false; }
+      }, 8000, 'новый статус не отобразился после сохранения');
+
+      const md = fs.readFileSync(path.join(ROOT, 'cities', UI_CITY, 'characters', 'mortals', editSlug, `${editSlug}.md`), 'utf-8');
+      assert.match(md, /\*\*Статус:\*\*\s*Пропал/, 'новый статус не записан в .md-файл на диске');
+    });
+
+    it('отмена редактирования — Cancel не меняет значение ни в DOM, ни на диске', async () => {
+      await openCharCard(UI_CITY, editSlug);
+      const before = await (await css('#cdet-info-fields [data-field="status"]')).getText();
+
+      await clickEl(await id_('cdet-edit-btn'));
+      await css('#cdet-edit-bar.show');
+      await new Select(await css('select.cdet-field-input[data-field="status"]')).selectByValue('Мёртв');
+      await clickEl(await css('#cdet-cancel-btn'));
+
+      await driver.wait(async () => (await count('#cdet-edit-bar.show')) === 0, 5000, 'режим редактирования не закрылся по Отмене');
+      assert.equal(await (await css('#cdet-info-fields [data-field="status"]')).getText(), before);
+
+      const md = fs.readFileSync(path.join(ROOT, 'cities', UI_CITY, 'characters', 'mortals', editSlug, `${editSlug}.md`), 'utf-8');
+      assert.doesNotMatch(md, /\*\*Статус:\*\*\s*Мёртв\b/, 'Отмена не должна была ничего записать на диск');
+    });
+
+    it('переименование в режиме редактирования сохраняет идентичность по slug (FIX-4b) — карточка не задваивается', async () => {
+      await openCharCard(UI_CITY, editSlug);
+      await clickEl(await id_('cdet-edit-btn'));
+      await css('#cdet-name-input');
+      const nameInput = await id_('cdet-name-input');
+      await nameInput.clear();
+      await nameInput.sendKeys('УИ Карточка Тест (переименован)');
+      await clickEl(await css('#cdet-save-btn'));
+      await driver.wait(async () => (await count('#cdet-edit-bar.show')) === 0, 8000, 'не вышли из режима редактирования после сохранения');
+
+      // Грид ещё не перезагружен — переоткрываем страницу «Персонажи» тем же
+      // slug'ом (identity), а не по новому имени, и убеждаемся, что карточка одна.
+      await openCharCard(UI_CITY, editSlug);
+      assert.equal(await count(`.char-card[data-slug="${editSlug}"]`), 1, 'после переименования карточка задвоилась или потерялась по slug');
+      assert.equal((await (await css('.cdet-name')).getText()).toUpperCase(), 'УИ Карточка Тест (переименован)'.toUpperCase());
     });
   });
 

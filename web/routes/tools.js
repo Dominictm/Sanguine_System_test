@@ -22,6 +22,7 @@ const {
   getBrokenLinks, setBrokenLinks,
 } = require('../lib/db');
 const { slugify } = require('../lib/parsers');
+const { diaryToneFor } = require('./modules/shared');
 
 // ── Run a PowerShell tool ─────────────────────────────────────────────────────
 
@@ -61,31 +62,6 @@ const NODE_TOOLS = new Set(['new_city', 'new_npc', 'new_location', 'migrate_char
 // Two-phase by contract: dryRun=true returns a preview + previewHash; the write
 // call must echo that hash, and the server rebuilds the plan and refuses to write
 // if the plan changed since preview (no drift).
-
-const CLAN_DIARY_STYLE = {
-  'тореадор':       'Эстетический, чувственный, драматичный',
-  'вентру':         'Контролируемый, аналитический, статус-ориентированный',
-  'малкавиан':      'Фрагментированный, символичный, скачущий',
-  'носферату':      'Циничный, наблюдательный, теневой',
-  'гэнгрел':        'Дикий, инстинктивный, немногословный',
-  'бруха':          'Страстный, бунтарский, прямой',
-  'тремер':         'Методичный, оккультный, осторожный',
-  'цимисхи':        'Отстранённый, висцеральный, философский',
-  'каппадокий':     'Отстранённый, висцеральный, философский',
-  'ассамит':        'Дисциплинированный, ритуальный, сдержанный',
-  'тзими':          'Отстранённый, висцеральный, философский',
-  'красная шапка':  'Архаичный, хищный, прямой',
-  'слуаг':          'Лаконичный, теневой, точный',
-  'пак':            'Игровой, импульсивный, момент настоящего',
-  'сидхи':          'Возвышенный, церемониальный',
-};
-function diaryToneFor(c) {
-  const clan = (c.clan || '').toLowerCase();
-  for (const k in CLAN_DIARY_STYLE) if (clan.includes(k)) return CLAN_DIARY_STYLE[k];
-  if (c.lineage === 'mortal') return 'Наблюдательный, человеческий';
-  if (c.lineage === 'fairy')  return 'Грёзовый, образный';
-  return 'Меланхоличный';
-}
 
 // Project URL convention: encode spaces/parens only, keep Cyrillic as-is
 function encUrl(s) { return String(s).replace(/ /g, '%20').replace(/\(/g, '%28').replace(/\)/g, '%29'); }

@@ -117,7 +117,6 @@ async function importCardsFromFile(kind, file, onDone) {
 function getOrigLabel(id) {
   return {
     'btn-new-city':    'Создать домен',
-    'btn-new-npc':     'Создать карточку',
     'btn-validate':    'Проверить',
     'btn-validate-fix':'Исправить автоматически',
   }[id] || 'Выполнить';

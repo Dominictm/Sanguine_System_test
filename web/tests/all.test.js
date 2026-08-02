@@ -6819,16 +6819,6 @@ test('source-guard: char-detail.js — таймер карусели остан�
     'MutationObserver не следит именно за атрибутом class модалки');
 });
 
-test('source-guard: scripts.js — смена линейки в форме создания НПС очищает #npc-clan/#npc-sect (FIX-7)', () => {
-  const js = require('fs').readFileSync(path.join(__dirname, '../public/scripts/scripts.js'), 'utf-8');
-  const fnMatch = js.match(/function _clearNpcClanSectOnLineageChange\(\) \{[\s\S]*?\n\}/);
-  assert.ok(fnMatch, 'не найдена функция _clearNpcClanSectOnLineageChange');
-  assert.match(fnMatch[0], /getElementById\('npc-clan'\)\.value = ''/);
-  assert.match(fnMatch[0], /getElementById\('npc-sect'\)\.value = ''/);
-  assert.ok(/addEventListener\('change', _clearNpcClanSectOnLineageChange\)/.test(js),
-    '#npc-type change не подключён к _clearNpcClanSectOnLineageChange');
-});
-
 test('source-guard: char-detail.js — _savePanelEdit(desc) шлёт все 5 полей безусловно (FIX-3, не пропускает очистку пустого поля)', () => {
   const js = require('fs').readFileSync(path.join(__dirname, '../public/scripts/char-detail.js'), 'utf-8');
   const fnMatch = js.match(/\} else if \(panel === 'desc'\) \{[\s\S]*?\n    \}/);
