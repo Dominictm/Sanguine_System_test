@@ -402,18 +402,16 @@ function _collectDistrictCards(root = document) {
     return { name, type, sect, clan, description };
   }).filter(d => d.name);
 }
-// «+ Добавить локацию» внутри карточки района — контракт техспеки §3.3: отдельная
-// модалка локации, которую делает ПАРАЛЛЕЛЬНЫЙ агент (см. docs/design/2026-08-02-
-// city-creation-restructure-techspec.md §3.3). На момент этой правки модалки физически
-// нет в рабочей копии — вызываем по контракту (window.openLocationModal), с деградацией
-// без падения формы, если её ещё не подключили.
-// TODO(district-location-modal): убрать ветку деградации, когда модалка появится.
+// «+ Добавить локацию» внутри карточки района — открывает общую модалку
+// создания/редактирования локации (locations.js: openLocEditModal), с
+// предзаполненным и задизейбленным полем «Район» (см. её JSDoc-комментарий
+// про prefilledDistrict — только для создания, slug=null).
 function _openDistrictLocationModal(districtName) {
-  if (typeof window.openLocationModal === 'function') {
-    window.openLocationModal({ district: districtName, districtLocked: true });
+  if (typeof openLocEditModal === 'function') {
+    openLocEditModal(null, districtName);
     return;
   }
-  showToast('Модалка создания локации ещё не подключена в этой копии — добавьте локацию через «Инструменты → Ещё» после создания района', 'warning');
+  showToast('Модалка создания локации ещё не подключена в этой копии — добавьте локацию через страницу «Локации» после создания района', 'warning');
 }
 
 // Мультиселект-чипы: секты Камарилья/Анархи/Шабаш + независимые кланы. Храним как
