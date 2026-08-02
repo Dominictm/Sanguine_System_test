@@ -186,14 +186,18 @@ describe('UI — полный изолированный цикл города',
     });
   });
 
-  it('создаёт локацию в тестовом городе через UI', async () => {
-    await go('tools');
-    await openToolTab('more');
-    await fill('loc-district', '1');
-    await fill('loc-name', `Театр проверки ${RUN_ID}`);
-    await (await id('btn-new-loc')).click();
-    await waitOutput('out-more', /создан/i);
-    assert.ok(fs.existsSync(path.join(ROOT, 'cities', CITY, 'locations', 'district_01', `teatr_proverki_${RUN_ID}`, `teatr_proverki_${RUN_ID}.md`)));
+  it('создаёт локацию в тестовом городе через модалку на странице «Локации»', async () => {
+    await go('locations');
+    await (await id('loc-page-create-btn')).click();
+    await css('#loc-edit-modal.open');
+    await fill('loc-edit-name', `Театр проверки ${RUN_ID}`);
+    await fill('loc-edit-district', 'Тестовый район');
+    await (await id('loc-edit-save-btn')).click();
+    await waitUntil(async () => (await driver.findElements(By.css('#loc-edit-modal.open'))).length === 0,
+      10000, 'модалка локации не закрылась после сохранения');
+    const districtSlug = slugify('Тестовый район');
+    const locSlug = slugify(`Театр проверки ${RUN_ID}`);
+    assert.ok(fs.existsSync(path.join(ROOT, 'cities', CITY, 'locations', districtSlug, locSlug, `${locSlug}.md`)));
   });
 
   // Точка входа создания персонажа переехала со вкладки «Инструменты → Новый

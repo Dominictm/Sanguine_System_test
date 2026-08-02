@@ -848,7 +848,12 @@ document.getElementById('loc-detail-content').addEventListener('click', e => {
 
 let _locEditSlug = null; // null = create, string = edit
 
-function openLocEditModal(slug) {
+// prefilledDistrict: опциональное имя района — предзаполняет и дизейблит поле
+// «Район» (для встраивания модалки в блок «Район» формы создания/редактирования
+// города, где район уже определён контекстом вызова). Актуально только для
+// создания (slug=null); при редактировании существующей локации район всегда
+// остаётся редактируемым.
+function openLocEditModal(slug, prefilledDistrict) {
   _locEditSlug = slug || null;
   const title = document.getElementById('loc-edit-title');
   const delBtn = document.getElementById('loc-edit-delete-btn');
@@ -866,6 +871,13 @@ function openLocEditModal(slug) {
     if (el) el.value = '';
   });
   document.getElementById('loc-edit-zone').value = '';
+
+  const districtEl = document.getElementById('loc-edit-district');
+  districtEl.disabled = false;
+  if (!slug && prefilledDistrict) {
+    districtEl.value = prefilledDistrict;
+    districtEl.disabled = true;
+  }
 
   if (slug) {
     const loc = STATE.locations.find(l => l.slug === slug);
@@ -892,8 +904,31 @@ function openLocEditModal(slug) {
 
   // Populate factions datalist for the Control field
   _loadFactionsList();
+  // Populate districts datalist for the Район field
+  _loadDistrictsList();
 
   openModal('loc-edit-modal', '#loc-edit-name');
+}
+
+// GET /api/cities/:slug/districts — контракт из techspec (§2.4):
+// [{slug, name, type, sect, clan}]. Эндпоинт может ещё не существовать
+// (параллельная задача District-сущности) — 404/сетевая ошибка не должны
+// ломать модалку локации, район всё равно можно ввести вручную.
+async function _loadDistrictsList() {
+  const dl = document.getElementById('loc-district-list');
+  if (!dl) return;
+  dl.innerHTML = '';
+  try {
+    const r = await fetch(`/api/cities/${encodeURIComponent(CITY)}/districts`);
+    if (!r.ok) return; // 404 — эндпоинт ещё не реализован либо город не найден
+    const districts = await r.json();
+    if (!Array.isArray(districts)) return;
+    dl.innerHTML = districts
+      .map(d => (d && (d.name || d.slug) || '').trim())
+      .filter(Boolean)
+      .map(name => `<option value="${name.replace(/"/g, '&quot;')}">`)
+      .join('');
+  } catch { /* эндпоинт недоступен — молча, поле остаётся свободным текстом */ }
 }
 
 async function _loadFactionsList() {
@@ -922,9 +957,13 @@ async function saveLocEdit() {
   const saveBtn = document.getElementById('loc-edit-save-btn');
   const errDiv  = document.getElementById('loc-edit-error');
   const name    = document.getElementById('loc-edit-name').value.trim();
+  const district = document.getElementById('loc-edit-district').value.trim();
 
   errDiv.style.display = 'none';
   if (!name) { errDiv.textContent = 'Укажите название'; errDiv.style.display = ''; return; }
+  // Район обязателен только при создании (UI-уровня required — техспека §3.2,
+  // сервер по-прежнему принимает пустой district с фолбэком на «Другие»).
+  if (!_locEditSlug && !district) { errDiv.textContent = 'Укажите район'; errDiv.style.display = ''; return; }
 
   saveBtn.disabled = true;
   saveBtn.textContent = 'Сохраняем...';
@@ -1133,9 +1172,6 @@ async function runLocFullGen() {
     const editBtn = e.target.closest('#locdet-open-edit-modal');
     if (editBtn) openLocEditModal(editBtn.dataset.slug);
   });
-
-  // Old sidebar new-location button → open new modal
-  document.getElementById('btn-new-loc')?.removeEventListener('click', null);
 })();
 
 // ═══════════════════════════════════════════════════════════════════════════
