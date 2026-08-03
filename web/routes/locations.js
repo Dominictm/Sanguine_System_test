@@ -369,6 +369,25 @@ module.exports = function locationsRouter({ makeGenerationClient, genTextWithRet
       if (await fs.stat(locFile).catch(() => null))
         return res.status(409).json({ error: 'Локация уже существует', slug: locSlug });
 
+      // Техспека §16.3 — slug локации обязан быть уникален по ВСЕМУ городу, не только
+      // внутри целевого района: findLocMdPath() (PUT /fields, DELETE, upload-image,
+      // PUT /district) резолвит по голому slug и при дубликате в другом районе
+      // возвращает первое совпадение по обходу файловой системы — недетерминированно
+      // относительно того, какую карточку на самом деле имел в виду вызывающий.
+      // Явная ошибка здесь дешевле, чем резолвинг по полному пути везде (техспека §16.3
+      // — вариант (b) отклонён), и не меняет поведение уже созданных карточек:
+      // проверка стоит только на создании, задним числом ничего не ломает.
+      const otherDistrictConflict = (await getAllLocations(city)).find(l => l.slug === locSlug);
+      if (otherDistrictConflict) {
+        const conflictDistrict = otherDistrictConflict.district
+          || (otherDistrictConflict.dirRelPath || '').split('/')[0]
+          || 'другом районе';
+        return res.status(409).json({
+          error: `Локация «${locName}» уже существует в районе «${conflictDistrict}» — выбери другое название`,
+          slug: locSlug,
+        });
+      }
+
       await fs.mkdir(locDir, { recursive: true });
 
       let content = _locCardTemplate(locName, district?.trim() || '');
