@@ -411,6 +411,39 @@ describe('Parsers — unit', () => {
     });
   });
 
+  describe('миграция 004 — бэкофилл «Опасность» из эмодзи, ранее жившего внутри «Зона» (техспека §15)', () => {
+    const mig = require('../../tools/migrations/004_danger_level_backfill.js');
+
+    it('test() узнаёт карточку с цветовым эмодзи в Зоне и без своей Опасности', () => {
+      assert.equal(mig.test('> **Название:** X | **Зона:** 🔴 Опасная | **Контроль:** Y'), true);
+      assert.equal(mig.test('> **Название:** X | **Зона:** 🏛️ Элизиум | **Контроль:** Y'), false,
+        'без цветового эмодзи (маркер вроде «Элизиум») — не наш случай');
+      assert.equal(mig.test('> **Название:** X | **Зона:** 🔴 Опасная | **Опасность:** 🔴 | **Контроль:** Y'), false,
+        'Опасность уже есть — идемпотентность');
+    });
+
+    it('migrate() — pipe-delimited формат: вставляет поле между Зоной и следующим «|»', () => {
+      const before = '> **Название:** X | **Зона:** 🔴 Опасная | **Контроль:** Y';
+      const after  = mig.migrate(before);
+      assert.match(after, /\*\*Зона:\*\* 🔴 Опасная \| \*\*Опасность:\*\* 🔴 \|/);
+      assert.equal(mig.test(after), false, 'после миграции test() должен быть false');
+    });
+
+    it('migrate() — буллет-формат без «|» (реальный случай podzemnyy_dok.md): новый буллет сразу после Зоны', () => {
+      const before = ['# Локация', '- **Зона:** 🟡 Нейтральная', '- **Контроль:** Z', ''].join('\n');
+      const after  = mig.migrate(before);
+      assert.match(after, /- \*\*Зона:\*\* 🟡 Нейтральная\n- \*\*Опасность:\*\* 🟡\n/);
+      assert.equal(mig.test(after), false);
+    });
+
+    it('🟢/🟡/🔴 — соответствующий цвет переносится один в один', () => {
+      for (const emoji of ['🟢', '🟡', '🔴']) {
+        const after = mig.migrate(`> **Зона:** ${emoji} Тест |`);
+        assert.match(after, new RegExp(`\\*\\*Опасность:\\*\\* ${emoji}`));
+      }
+    });
+  });
+
   describe('dice.js — rollV20Pool', () => {
     const { rollV20Pool } = require('../public/scripts/dice.js');
     // rng-заглушка: выдаёт ровно заданную последовательность кубиков
@@ -1476,7 +1509,7 @@ describe('Parsers — unit', () => {
   describe('parseLocation', () => {
     const CARD = [
       '# Клуб Носферату',
-      '> **Название:** Клуб | **Округ:** 1 | **Зона:** 🔴 Опасная | **Контроль:** Шабаш',
+      '> **Название:** Клуб | **Округ:** 1 | **Зона:** 🔴 Опасная | **Опасность:** 🟡 Средний | **Контроль:** Шабаш',
       '## 🎭 Атмосфера', 'Дымный подвал.', '',
       '## 🩸 Контекст', '**Маскарад:** 🔴 высокий риск', '',
       '## 🪝 Крючки', '1. Первый крючок', '2. Второй крючок',
@@ -1497,6 +1530,15 @@ describe('Parsers — unit', () => {
     it('hooks parsed and de-numbered', () => {
       const l = parseLocation(CARD, 'klub_nosferatu');
       assert.deepEqual(l.hooks, ['Первый крючок', 'Второй крючок']);
+    });
+    it('Опасность — отдельное поле от Зоны (техспека §13.1)', () => {
+      const l = parseLocation(CARD, 'klub_nosferatu');
+      assert.equal(l.dangerLevel, '🟡 Средний');
+      assert.equal(l.zone, '🔴 Опасная', 'Зона не должна теряться при вводе Опасности');
+    });
+    it('карточка без Опасности → dangerLevel null (бэкофилл делает миграция 004, не парсер)', () => {
+      const noD = CARD.replace(' | **Опасность:** 🟡 Средний', '');
+      assert.equal(parseLocation(noD, 'klub_nosferatu').dangerLevel, null);
     });
   });
 
@@ -6712,6 +6754,281 @@ describe('city-creation-restructure: город → персонаж/локац�
     const bAfterSecond = afterSecond.body.find(l => l.title === 'Реструкт Элизиум Б');
     assert.ok(!aAfterSecond.zone, 'у прежней локации «Зона» должна очиститься');
     assert.equal(bAfterSecond.zone, '🏛️ Элизиум', 'у новой локации должна проставиться «Зона»');
+  });
+});
+
+describe('city-creation-restructure §15-16: Опасность/сенсорика/VtM-таблица/районы/slug-уникальность/факции↔city.md', () => {
+  let citySlug, cityDir;
+  const qs = () => `?city=${citySlug}`;
+
+  before(async () => {
+    await startServer();
+    const create = await apiJson('/api/cities', { method: 'POST', body: JSON.stringify({
+      name: 'Fifteen Sixteen Testcity', year: '2010', factions: 'Камарилья\nШабаш',
+    }) });
+    assert.equal(create.status, 200, create.body.error);
+    citySlug = create.body.slug;
+    cityDir  = path.join(__dirname, '../../cities', citySlug);
+  });
+  after(async () => {
+    await stopServer();
+    await fs.rm(cityDir, { recursive: true, force: true });
+  });
+
+  describe('PUT /fields — Опасность, Сенсорная палитра, VtM-таблица (техспека §13.1-13.3)', () => {
+    let slug;
+    before(async () => {
+      const create = await apiJson(`/api/locations${qs()}`, { method: 'POST', body: JSON.stringify({ name: 'Опасное место' }) });
+      assert.equal(create.status, 200, create.body.error);
+      slug = create.body.slug;
+    });
+
+    it('dangerLevel пишется в инлайн-поле «Опасность», отдельно от «Зоны»', async () => {
+      const put = await apiJson(`/api/locations/${slug}/fields${qs()}`, { method: 'PUT', body: JSON.stringify({
+        fields: { dangerLevel: '🟡 Средний', zone: '🔴 Опасная' },
+      }) });
+      assert.equal(put.status, 200);
+      const locs = await apiJson(`/api/locations${qs()}`);
+      const loc = locs.body.find(l => l.slug === slug);
+      assert.equal(loc.dangerLevel, '🟡 Средний');
+      assert.equal(loc.zone, '🔴 Опасная');
+    });
+
+    it('sensoryPalette — построчная таблица канал/значение раунд-трипится через parseLocation', async () => {
+      const table = '| Канал | |\n|---|---|\n| **Свет** | Тусклый неон |\n| **Звук** | Капель воды |';
+      const put = await apiJson(`/api/locations/${slug}/fields${qs()}`, { method: 'PUT', body: JSON.stringify({
+        fields: { sensoryPalette: table },
+      }) });
+      assert.equal(put.status, 200);
+      const locs = await apiJson(`/api/locations${qs()}`);
+      const loc = locs.body.find(l => l.slug === slug);
+      assert.deepEqual(loc.sensoryPalette, [
+        { channel: 'Свет', value: 'Тусклый неон' },
+        { channel: 'Звук', value: 'Капель воды' },
+      ]);
+    });
+
+    it('vtmTable — построчная сборка по полям (не задевает vtmText прозу рядом)', async () => {
+      const putText = await apiJson(`/api/locations/${slug}/fields${qs()}`, { method: 'PUT', body: JSON.stringify({
+        fields: { vtmText: 'Здесь пахнет кровью и вечностью.' },
+      }) });
+      assert.equal(putText.status, 200);
+
+      const put = await apiJson(`/api/locations/${slug}/fields${qs()}`, { method: 'PUT', body: JSON.stringify({
+        fields: { vtmTable: { locStatus: 'Открыто', faction: 'Носферату', figures: 'Бармен', threats: 'Шпионы', masquerade: '🔴 близко раскрытие' } },
+      }) });
+      assert.equal(put.status, 200);
+
+      const locs = await apiJson(`/api/locations${qs()}`);
+      const loc = locs.body.find(l => l.slug === slug);
+      assert.equal(loc.locStatus, 'Открыто');
+      assert.equal(loc.faction, 'Носферату');
+      assert.equal(loc.figures, 'Бармен');
+      assert.equal(loc.threats, 'Шпионы');
+      assert.equal(loc.masquerade, '🔴 близко раскрытие');
+      assert.equal(loc.vtmText, 'Здесь пахнет кровью и вечностью.', 'проза не должна пострадать от правки табличных полей');
+    });
+
+    it('vtmTable — пустая строка стирает ровно одну ячейку таблицы, остальные не трогает', async () => {
+      const put = await apiJson(`/api/locations/${slug}/fields${qs()}`, { method: 'PUT', body: JSON.stringify({
+        fields: { vtmTable: { faction: '' } },
+      }) });
+      assert.equal(put.status, 200);
+      const locs = await apiJson(`/api/locations${qs()}`);
+      const loc = locs.body.find(l => l.slug === slug);
+      assert.ok(!loc.faction, 'Фракция должна очиститься');
+      assert.equal(loc.locStatus, 'Открыто', 'Статус — не в этом PUT, должен остаться прежним');
+      assert.equal(loc.threats, 'Шпионы', 'Угрозы — не в этом PUT, должны остаться прежними');
+    });
+  });
+
+  describe('POST /api/locations — глобальная уникальность slug по городу (техспека §16.3, решение (a))', () => {
+    it('второе имя, дающее тот же slug в другом районе → 409 с указанием района первой карточки', async () => {
+      const first = await apiJson(`/api/locations${qs()}`, { method: 'POST', body: JSON.stringify({
+        name: 'Коллизия Слага', district: 'Район А',
+      }) });
+      assert.equal(first.status, 200, first.body.error);
+
+      const second = await apiJson(`/api/locations${qs()}`, { method: 'POST', body: JSON.stringify({
+        name: 'Коллизия Слага', district: 'Район Б',
+      }) });
+      assert.equal(second.status, 409);
+      assert.match(second.body.error, /Район А/, 'сообщение должно называть район уже существующей карточки');
+      assert.equal(second.body.slug, first.body.slug);
+
+      const locs = await apiJson(`/api/locations${qs()}`);
+      assert.equal(locs.body.filter(l => l.slug === first.body.slug).length, 1,
+        'в другом районе карточка-дубликат не должна была создаться физически');
+    });
+
+    it('разные имена → разные slug, конфликта нет даже в одном районе-тёзке', async () => {
+      const a = await apiJson(`/api/locations${qs()}`, { method: 'POST', body: JSON.stringify({ name: 'Первая Уникальная', district: 'Общий Район' }) });
+      const b = await apiJson(`/api/locations${qs()}`, { method: 'POST', body: JSON.stringify({ name: 'Вторая Уникальная', district: 'Общий Район' }) });
+      assert.equal(a.status, 200);
+      assert.equal(b.status, 200);
+      assert.notEqual(a.body.slug, b.body.slug);
+    });
+  });
+
+  describe('PUT /api/locations/:slug/district — привязка/перенос локации между районами (техспека §9.2-9.3)', () => {
+    let slug;
+    before(async () => {
+      const create = await apiJson(`/api/locations${qs()}`, { method: 'POST', body: JSON.stringify({
+        name: 'Кочующая Точка', district: 'Старый Квартал',
+      }) });
+      assert.equal(create.status, 200, create.body.error);
+      slug = create.body.slug;
+    });
+
+    it('без района в body → 400', async () => {
+      const r = await apiJson(`/api/locations/${slug}/district${qs()}`, { method: 'PUT', body: JSON.stringify({ district: '' }) });
+      assert.equal(r.status, 400);
+    });
+
+    it('перенос в район без district.md — «Округ» карточки становится слагом района (район ещё не формальная сущность)', async () => {
+      const r = await apiJson(`/api/locations/${slug}/district${qs()}`, { method: 'PUT', body: JSON.stringify({ district: 'Новый Квартал' }) });
+      assert.equal(r.status, 200, r.body.error);
+      assert.ok(r.body.movedFrom && r.body.movedTo);
+
+      const locs = await apiJson(`/api/locations${qs()}`);
+      const loc = locs.body.find(l => l.slug === slug);
+      assert.equal(loc.district, 'novyy_kvartal');
+      assert.equal(loc.dirRelPath.split('/')[0], 'novyy_kvartal');
+
+      const oldDir = path.join(cityDir, 'locations', 'staryy_kvartal', slug);
+      assert.ok(!(await fs.stat(oldDir).catch(() => null)), 'старая папка должна исчезнуть');
+    });
+
+    it('перенос в район с district.md (формальная сущность) — «Округ» становится display-именем района (техспека §9.1)', async () => {
+      const distCreate = await apiJson(`/api/cities/${citySlug}/districts`, { method: 'POST', body: JSON.stringify({ name: 'Настоящий Район' }) });
+      assert.equal(distCreate.status, 200, distCreate.body.error);
+
+      const r = await apiJson(`/api/locations/${slug}/district${qs()}`, { method: 'PUT', body: JSON.stringify({ district: 'Настоящий Район' }) });
+      assert.equal(r.status, 200, r.body.error);
+
+      const locs = await apiJson(`/api/locations${qs()}`);
+      const loc = locs.body.find(l => l.slug === slug);
+      assert.equal(loc.district, 'Настоящий Район');
+    });
+
+    it('перенос в тот же район — no-op (§9.3), папка не трогается', async () => {
+      const r = await apiJson(`/api/locations/${slug}/district${qs()}`, { method: 'PUT', body: JSON.stringify({ district: 'Настоящий Район' }) });
+      assert.equal(r.status, 200);
+      assert.equal(r.body.movedFrom, null);
+      assert.equal(r.body.movedTo, null);
+    });
+
+    it('в целевом районе уже есть папка с тем же именем → 409, источник не трогается', async () => {
+      // Такое состояние на диске могло остаться от карточек, созданных до фикса §16.3
+      // (сейчас POST /api/locations такую коллизию уже не пропустит) — ручной сетап
+      // файловой системы, не через API, чтобы воспроизвести именно этот кейс.
+      const collideDir = path.join(cityDir, 'locations', 'zanyatyy_rayon', slug);
+      await fs.mkdir(collideDir, { recursive: true });
+      await fs.writeFile(path.join(collideDir, `${slug}.md`), '# Занято\n', 'utf-8');
+
+      const r = await apiJson(`/api/locations/${slug}/district${qs()}`, { method: 'PUT', body: JSON.stringify({ district: 'Занятый Район' }) });
+      assert.equal(r.status, 409);
+
+      const locs = await apiJson(`/api/locations${qs()}`);
+      assert.ok(locs.body.find(l => l.slug === slug && l.district === 'Настоящий Район'), 'исходная карточка должна остаться на месте');
+
+      await fs.rm(path.join(cityDir, 'locations', 'zanyatyy_rayon'), { recursive: true, force: true });
+    });
+  });
+
+  describe('Районы (District) — POST/GET/PUT /api/cities/:slug/districts (техспека §2)', () => {
+    it('POST создаёт district.md; GET отдаёт его в списке', async () => {
+      const create = await apiJson(`/api/cities/${citySlug}/districts`, { method: 'POST', body: JSON.stringify({
+        name: 'Тестовый Округ', type: 'Квартал', sect: 'Камарилья',
+      }) });
+      assert.equal(create.status, 200, create.body.error);
+      assert.ok(await fs.stat(path.join(cityDir, 'locations', create.body.slug, 'district.md')).catch(() => null));
+
+      const list = await apiJson(`/api/cities/${citySlug}/districts`);
+      assert.equal(list.status, 200);
+      const found = list.body.find(d => d.slug === create.body.slug);
+      assert.ok(found);
+      assert.equal(found.name, 'Тестовый Округ');
+      assert.equal(found.type, 'Квартал');
+      assert.equal(found.sect, 'Камарилья');
+    });
+
+    it('без названия → 400', async () => {
+      const r = await apiJson(`/api/cities/${citySlug}/districts`, { method: 'POST', body: JSON.stringify({ type: 'X' }) });
+      assert.equal(r.status, 400);
+    });
+
+    it('повторное название → 409 (тот же slug папки)', async () => {
+      const r = await apiJson(`/api/cities/${citySlug}/districts`, { method: 'POST', body: JSON.stringify({ name: 'Тестовый Округ' }) });
+      assert.equal(r.status, 409);
+    });
+
+    it('PUT правит поля района, НЕ переименовывая папку/слаг', async () => {
+      const list = await apiJson(`/api/cities/${citySlug}/districts`);
+      const districtSlug = list.body.find(d => d.name === 'Тестовый Округ').slug;
+
+      const put = await apiJson(`/api/cities/${citySlug}/districts/${districtSlug}`, { method: 'PUT', body: JSON.stringify({
+        name: 'Обновлённое Имя Округа',
+      }) });
+      assert.equal(put.status, 200, put.body.error);
+      assert.equal(put.body.slug, districtSlug);
+
+      const after = await apiJson(`/api/cities/${citySlug}/districts`);
+      const found = after.body.find(d => d.slug === districtSlug);
+      assert.equal(found.name, 'Обновлённое Имя Округа');
+    });
+
+    it('PUT с пустым именем → 400', async () => {
+      const list = await apiJson(`/api/cities/${citySlug}/districts`);
+      const districtSlug = list.body[0].slug;
+      const r = await apiJson(`/api/cities/${citySlug}/districts/${districtSlug}`, { method: 'PUT', body: JSON.stringify({ name: '  ' }) });
+      assert.equal(r.status, 400);
+    });
+  });
+
+  describe('Двусторонний синк «Фракции» ↔ панель «Влияние фракций» (техспека §11)', () => {
+    it('PUT новой фракции добавляет её в city.md «## Фракции» рядом с существующими', async () => {
+      const put = await apiJson(`/api/factions/influence${qs()}`, { method: 'PUT', body: JSON.stringify({ name: 'Сеттиты', influence: 30 }) });
+      assert.equal(put.status, 200);
+      assert.ok(!put.body.warning, put.body.warning);
+
+      const cityMd = await fs.readFile(path.join(cityDir, 'city.md'), 'utf-8');
+      const parsed = parseCityMd(cityMd);
+      const names = parsed.sections.factions.split('\n').map(s => s.trim());
+      assert.deepEqual(names.sort(), ['Камарилья', 'Сеттиты', 'Шабаш']);
+    });
+
+    it('повторный PUT той же фракции — no-op, не задваивает строку в city.md', async () => {
+      await apiJson(`/api/factions/influence${qs()}`, { method: 'PUT', body: JSON.stringify({ name: 'Сеттиты', influence: 55 }) });
+      const cityMd = await fs.readFile(path.join(cityDir, 'city.md'), 'utf-8');
+      const names = parseCityMd(cityMd).sections.factions.split('\n').map(s => s.trim());
+      assert.equal(names.filter(n => n === 'Сеттиты').length, 1);
+    });
+
+    it('DELETE убирает фракцию из city.md «## Фракции», остальные не трогает', async () => {
+      const del = await apiJson(`/api/factions/influence/${encodeURIComponent('Сеттиты')}${qs()}`, { method: 'DELETE' });
+      assert.equal(del.status, 200);
+      assert.ok(!del.body.warning, del.body.warning);
+
+      const cityMd = await fs.readFile(path.join(cityDir, 'city.md'), 'utf-8');
+      const names = parseCityMd(cityMd).sections.factions.split('\n').map(s => s.trim());
+      assert.deepEqual(names.sort(), ['Камарилья', 'Шабаш']);
+    });
+
+    it('city.md без секции «## Фракции» — синк невозможен, PUT всё равно 200 с warning (non-blocking, техспека §11)', async () => {
+      const cityMdPath = path.join(cityDir, 'city.md');
+      const original = await fs.readFile(cityMdPath, 'utf-8');
+      try {
+        await fs.writeFile(cityMdPath, original.replace(/## Фракции\n[\s\S]*?(?=\n## )/, ''), 'utf-8');
+
+        const put = await apiJson(`/api/factions/influence${qs()}`, { method: 'PUT', body: JSON.stringify({ name: 'Джованни', influence: 10 }) });
+        assert.equal(put.status, 200, 'запись влияния не должна откатываться из-за сбоя синка города');
+        assert.ok(put.body.warning, 'ожидался warning — секция «Фракции» не найдена');
+        assert.ok(put.body.factions.some(f => f.name === 'Джованни'), 'political_state.md всё равно должен обновиться');
+      } finally {
+        await fs.writeFile(cityMdPath, original, 'utf-8');
+      }
+    });
   });
 });
 

@@ -301,6 +301,163 @@ describe('UI — Selenium (Chrome)', () => {
     });
   });
 
+  // ── Локация: Опасность / Сенсорика / VtM-таблица / бейдж (техспека §8-16) ─────
+  // «Подземный док» выше уже завёл физический район «Тестовый район» на диске —
+  // переиспользуем его как свободный текст (не формальная District-сущность,
+  // POST /api/locations терпим к этому же случаю, см. техспека §9).
+  describe('Локация — Опасность/Сенсорика/VtM-таблица (техспека §8-16, вкладки детальной модалки)', () => {
+    const locName    = 'Опасный притон';
+    const locSlug     = slugify(locName);
+    const districtSlug = slugify('Тестовый район');
+    const cardPath    = () => path.join(ROOT, 'cities', UI_CITY, 'locations', districtSlug, locSlug, `${locSlug}.md`);
+
+    it('создание с уровнем опасности и сенсорным каналом — оба поля попадают в карточку', async () => {
+      await driver.get(`${BASE}?city=${UI_CITY}`);
+      await navTo('locations');
+      await clickEl(await id_('loc-page-create-btn'));
+      await css('#loc-edit-modal.open');
+      const nameInput = await id_('loc-edit-name');
+      await driver.wait(until.elementIsVisible(nameInput), 10000, 'поле «Название» не стало видимым');
+      await typeIn('loc-edit-name', locName);
+      await typeIn('loc-edit-district', 'Тестовый район');
+
+      // Опасность — <select> с эмодзи-значениями (🟢/🟡/🔴), отдельное поле от Зоны.
+      await new Select(await id_('loc-edit-danger')).selectByValue('🟡');
+      // Модалка при открытии на создание уже сеет 3 пустых ряда сенсорики (Свет/
+      // Звук/Запах) — заполняем первый ряд, без клика «+ Добавить канал».
+      const sensTa = await css('#loc-edit-sens-rows .loc-edit-sens-row:first-child .loc-edit-sens-value-ta');
+      await sensTa.sendKeys('Тусклый неон и мигающие лампы.');
+
+      await clickEl(await id_('loc-edit-save-btn'));
+      await driver.wait(async () => (await count('#loc-edit-modal.open')) === 0,
+        10000, 'модалка локации не закрылась после сохранения');
+
+      await driver.wait(() => fs.existsSync(cardPath()), 5000, 'карточка не создана на диске');
+      const raw = fs.readFileSync(cardPath(), 'utf-8');
+      assert.match(raw, /\*\*Опасность:\*\*\s*🟡/, 'уровень опасности не записался в карточку');
+      assert.match(raw, /\|\s*\*\*Свет\*\*\s*\|\s*Тусклый неон и мигающие лампы\.\s*\|/,
+        'сенсорный канал «Свет» не записался в карточку');
+    });
+
+    it('детальная модалка показывает бейдж уровня опасности с верной подписью (⚔️ Средний ← 🟡)', async () => {
+      await driver.get(`${BASE}?city=${UI_CITY}`);
+      await navTo('locations');
+      await clickEl(await css(`.loc-card[data-slug="${locSlug}"]`));
+      await css('#loc-detail-modal.open');
+      // #loc-detail-modal тоже открывается CSS-переходом видимости (тот же паттерн,
+      // что #loc-edit-modal выше) — ждём именно текст, а не просто наличие узла в
+      // DOM, иначе getText() может поймать бейдж посреди перехода и вернуть ''.
+      let badgeText = '';
+      await driver.wait(async () => {
+        try {
+          const els = await driver.findElements(By.css('.locdet-legend-row .badge-danger-medium'));
+          if (!els.length) return false;
+          badgeText = await els[0].getText();
+          return badgeText.length > 0;
+        } catch { return false; }
+      }, 8000, 'бейдж уровня опасности не появился/остался пустым');
+      assert.match(badgeText, /средний/i);
+    });
+
+    it('вкладка VtM — форма по 5 полям сохраняется в карточке отдельно от прозы', async () => {
+      // Модалка уже открыта на локации из предыдущего теста (тот же driver, та же страница).
+      await clickEl(await css('#loc-detail-content .cdet-tab[data-tab="vtm"]'));
+      await css('#loc-detail-content .cdet-panel[data-panel="vtm"].active');
+      await clickEl(await css('#loc-detail-content .cdet-panel[data-panel="vtm"] .cdet-edit-btn[data-editloc="vtm"]'));
+      await driver.wait(until.elementIsVisible(await id_('locdet-vtm-status')), 5000, 'форма VtM не раскрылась');
+
+      await typeIn('locdet-vtm-status',  'Открыто для своих');
+      await typeIn('locdet-vtm-faction', 'Носферату');
+      await typeIn('locdet-vtm-figures', 'Слепой Бармен');
+      await typeIn('locdet-vtm-threats', 'Охотники на пороге');
+      await new Select(await id_('locdet-vtm-masquerade')).selectByValue('🔴');
+
+      await clickEl(await css('#loc-detail-content [data-saveloc="vtm"]'));
+
+      // Успешное сохранение перерисовывает всю панель через openLocDetail() —
+      // ждём появления сохранённого текста в режиме просмотра, а не просто
+      // закрытия формы редактирования (та же карточка, новые DOM-узлы).
+      await driver.wait(async () => {
+        try {
+          const bodies = await driver.findElements(By.css('#loc-detail-content .cdet-panel[data-panel="vtm"] .vtm-body'));
+          const texts = await Promise.all(bodies.map(e => e.getText()));
+          return texts.some(t => t.includes('Открыто для своих')) && texts.some(t => t.includes('Носферату'));
+        } catch {
+          return false; // DOM перерисовался между findElements() и getText() — попробуем на следующем тике
+        }
+      }, 8000, 'изменения вкладки VtM не отрендерились после сохранения');
+
+      const raw = fs.readFileSync(cardPath(), 'utf-8');
+      assert.match(raw, /\|\s*\*\*Статус\*\*\s*\|\s*Открыто для своих\s*\|/);
+      assert.match(raw, /\|\s*\*\*Фракция\*\*\s*\|\s*Носферату\s*\|/);
+      assert.match(raw, /\|\s*\*\*Постоянные фигуры\*\*\s*\|\s*Слепой Бармен\s*\|/);
+      assert.match(raw, /\|\s*\*\*Угрозы\*\*\s*\|\s*Охотники на пороге\s*\|/);
+      assert.match(raw, /\|\s*\*\*Маскарад\*\*\s*\|\s*🔴\s*\|/);
+    });
+  });
+
+  // ── Город: районы (District) и привязка «бесхозной» локации со страницы просмотра ──
+  // Район и «бесхозную» локацию заводит напрямую через API (before) — эти тесты
+  // проверяют страницу просмотра города и поток привязки, не сами формы создания.
+  describe('Город — страница просмотра: карточки районов и привязка локации (техспека §8-14)', () => {
+    const districtName = 'Портовый квартал';
+    const districtSlug = slugify(districtName);
+    const strayLocName = 'Бесхозный склад';
+    const strayLocSlug = slugify(strayLocName);
+
+    before(async () => {
+      const distRes = await httpReq('POST', `/api/cities/${UI_CITY}/districts`, { name: districtName });
+      assert.equal(distRes.status, 200, JSON.stringify(distRes.json));
+      const locRes = await httpReq('POST', `/api/locations?city=${UI_CITY}`, { name: strayLocName, district: 'Прочее' });
+      assert.equal(locRes.status, 200, JSON.stringify(locRes.json));
+    });
+
+    it('страница просмотра города рендерит карточку района', async () => {
+      await driver.get(`${BASE}?city=${UI_CITY}`);
+      await navTo('city-new');
+      await clickEl(await css(`.city-card[data-slug="${UI_CITY}"]`));
+      await css('#page-city.page.active');
+      // #page-city — тот же паттерн CSS-перехода видимости, что у модалок (см. выше) —
+      // опрашиваем текст в цикле, а не читаем его один раз сразу после нахождения
+      // узлов (иначе getText() может поймать карточку посреди перехода и вернуть '').
+      let titles = [];
+      await driver.wait(async () => {
+        try {
+          const els = await driver.findElements(By.css('.city-district-card-title'));
+          titles = await Promise.all(els.map(e => e.getText()));
+          return titles.some(t => t.includes(districtName));
+        } catch { return false; }
+      }, 10000, `нет карточки района «${districtName}»`);
+      assert.ok(titles.some(t => t.includes(districtName)), `нет карточки района «${districtName}» среди [${titles.join(', ')}]`);
+    });
+
+    it('привязка «бесхозной» локации к району переносит папку физически (PUT /district + showConfirm)', async () => {
+      const districtCard = await driver.wait(async () => {
+        try {
+          const cards = await driver.findElements(By.css('.city-district-card'));
+          for (const c of cards) {
+            const title = await c.findElement(By.css('.city-district-card-title')).getText();
+            if (title.includes(districtName)) return c;
+          }
+          return null;
+        } catch { return null; }
+      }, 10000, `не нашли карточку района «${districtName}»`);
+
+      const sel = new Select(await districtCard.findElement(By.css('.city-view-district-attach-sel')));
+      await sel.selectByValue(strayLocSlug);
+      await clickEl(await districtCard.findElement(By.css('[data-attach-loc-btn]')));
+
+      // showConfirm — кастомный диалог (#confirm-overlay), не window.confirm.
+      await css('#confirm-overlay');
+      await clickEl(await css('#confirm-overlay #_conf-ok'));
+
+      await driver.wait(() => fs.existsSync(path.join(ROOT, 'cities', UI_CITY, 'locations', districtSlug, strayLocSlug)),
+        10000, 'папка локации не переехала в район после привязки');
+      assert.ok(!fs.existsSync(path.join(ROOT, 'cities', UI_CITY, 'locations', 'prochee', strayLocSlug)),
+        'локация должна была переехать, а не задвоиться');
+    });
+  });
+
   // ── Создание персонажа (модалка «+ Создать» на странице «Персонажи») ──────────
   // Точка входа перенесена из вкладки «Инструменты → Новый НПС» (удалена) на
   // саму страницу «Персонажи» — там уже была своя, более полная модалка
