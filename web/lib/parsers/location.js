@@ -12,7 +12,7 @@ const { readPrompt } = require('./shared');
  * @param {string} rawContent — содержимое `<slug>.md` (или сырой сгенерированный текст той же структуры)
  * @param {string} folderName — имя папки локации (кладётся в `slug`)
  * @returns {{slug: string, title?: string, subtype?: string, district?: string, neighborhood?: string,
- *   address?: string, zone?: string, control?: string, atmosphere?: string,
+ *   address?: string, zone?: string, dangerLevel?: string, control?: string, atmosphere?: string,
  *   sensoryPalette: {channel: string, value: string}[], locStatus?: string, faction?: string,
  *   figures?: string, threats?: string, masquerade?: string, masqueradeLevel: 'low'|'medium'|'high'|'unknown',
  *   vtmText?: string, hooks: string[], keyPoints: {place: string, desc: string}[],
@@ -37,6 +37,7 @@ function parseLocation(rawContent, folderName) {
   loc.neighborhood = metaField('Район');
   loc.address      = metaField('Адрес');
   loc.zone         = metaField('Зона');
+  loc.dangerLevel  = metaField('Опасность');
   loc.control      = metaField('Контроль');
 
   // Atmosphere — emoji and exact wording optional

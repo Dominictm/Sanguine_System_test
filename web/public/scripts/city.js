@@ -148,14 +148,30 @@ function _politicalRowToLine(r) {
   const np = r.name2 ? (r.name ? `${r.name} / ${r.name2}` : r.name2) : r.name;
   return r.role ? `${r.role}: ${np}` : np;
 }
+// Заметка — третье поле строки (техспека §8.1), отделено « — »: «Статус: Название —
+// Заметка». Двоеточие уже занято под «Тип: Название», второе использование сломало бы
+// разбор — поэтому заметка отделяется тире, не ещё одним двоеточием.
 function _parseLocationLines(lines) {
   return lines.map(line => {
     const ci = line.indexOf(':');
-    if (ci === -1) return { type: '', name: line };
-    return { type: line.slice(0, ci).trim(), name: line.slice(ci + 1).trim() };
+    let type = '', rest = line;
+    if (ci !== -1) { type = line.slice(0, ci).trim(); rest = line.slice(ci + 1).trim(); }
+    let name = rest, note = '';
+    const dashIdx = rest.search(/\s+—\s+/);
+    if (dashIdx !== -1) {
+      name = rest.slice(0, dashIdx).trim();
+      note = rest.slice(dashIdx).replace(/^\s+—\s+/, '').trim();
+    }
+    return { type, name, note };
   });
 }
-function _locationRowToLine(r) { return r.type ? `${r.type}: ${r.name}` : r.name; }
+function _locationRowToLine(r) {
+  const base = r.type ? `${r.type}: ${r.name}` : r.name;
+  // Заметка не должна содержать «—» — иначе разъедет разбор обратно (§8.3); замена на
+  // похожий символ, тот же приём, что sanitizeInlineText делает для «|» в других местах.
+  const note = r.note ? String(r.note).trim().replace(/—/g, '–') : '';
+  return note ? `${base} — ${note}` : base;
+}
 
 // Персонажи, уже занятые в других строках, не предлагаются повторно (кроме self).
 function _polAvailableNames(allNames, records, self) {
@@ -230,7 +246,7 @@ function _primogenRowHtml(clan = '', name = '', name2 = '', availableNames = _ci
 // модалке редактирования (обе секции живут в DOM одновременно, скрытые/показанные через
 // CSS страниц — SPA не размонтирует .page при навигации), два набора datalist с
 // одинаковым id перепутали бы автодополнение между создаваемым и редактируемым городом.
-function _locRowHtml(type = '', name = '', locationNames = _cityEditLocs, idPrefix = 'cdet-edit') {
+function _locRowHtml(type = '', name = '', note = '', locationNames = _cityEditLocs, idPrefix = 'cdet-edit') {
   const known   = CITY_LOCATION_TYPES.includes(type);
   const selVal  = !type ? '' : (known ? type : 'other');
   const custVal = (!known && type) ? type : '';
@@ -245,6 +261,7 @@ function _locRowHtml(type = '', name = '', locationNames = _cityEditLocs, idPref
       <select class="form-control cdet-pol-role-sel cdet-loc-type-sel">${opts}</select>
       <input class="cdet-rel-type-inp cdet-loc-type-custom" placeholder="Свой статус" value="${escAttr(custVal)}" style="${selVal === 'other' ? '' : 'display:none'}">
       <input class="cdet-rel-name-inp cdet-loc-name-inp" list="${idPrefix}-city-loc-names" placeholder="Название локации" value="${escAttr(name)}">
+      <input class="cdet-rel-name-inp cdet-loc-status-note-inp" placeholder="Заметка (опц.)" value="${escAttr(note)}">
       <button class="cdet-rel-del-btn" type="button" title="Удалить запись">✕</button>
     </div>
     <div class="cdet-loc-new-fields"${isNew ? '' : ' hidden'}>
@@ -310,8 +327,8 @@ function _cityLocEditorHtml(sec, idPrefix = 'cdet-edit') {
   const { narrative, recordLines } = _splitCitySectionRecords(sec.locations || '', _LOC_LABELS);
   const records = _parseLocationLines(recordLines);
   const rows = records.length
-    ? records.map(r => _locRowHtml(r.type, r.name, _cityEditLocs, idPrefix)).join('')
-    : _locRowHtml('', '', _cityEditLocs, idPrefix);
+    ? records.map(r => _locRowHtml(r.type, r.name, r.note, _cityEditLocs, idPrefix)).join('')
+    : _locRowHtml('', '', '', _cityEditLocs, idPrefix);
   const districts = _parseDistrictNames(sec.districts);
   return `
     <div class="form-group">
@@ -529,6 +546,7 @@ function _collectLocationRows(root = document) {
     const custom = row.querySelector('.cdet-loc-type-custom');
     const type   = sel?.value === 'other' ? (custom?.value.trim() || '') : (sel?.value || '');
     const name   = row.querySelector('.cdet-loc-name-inp')?.value.trim() || '';
+    const note   = row.querySelector('.cdet-loc-status-note-inp')?.value.trim() || '';
     if (name && !_cityEditLocs.includes(name)) {
       newLocationRequests.push({
         name,
@@ -536,7 +554,7 @@ function _collectLocationRows(root = document) {
         note:     wrap.querySelector('.cdet-loc-new-note')?.value.trim() || '',
       });
     }
-    return { type, name };
+    return { type, name, note };
   }).filter(r => r.type || r.name).map(_locationRowToLine);
   _pendingNewLocations = newLocationRequests;
   return [...narrativeLines, ...recordLines].join('\n');
@@ -554,20 +572,81 @@ async function loadCityPage() {
   const content = document.getElementById('city-detail-content');
   content.innerHTML = `<div class="mod-loading">${SPINNER}</div>`;
 
-  let d, chars = [], locs = [];
+  let d, chars = [], locs = [], districts = [];
   try {
-    [d, chars, locs] = await Promise.all([
+    [d, chars, locs, districts] = await Promise.all([
       fetch(`/api/cities/${encodeURIComponent(slug)}/detail`).then(r => r.json()),
       fetch(`/api/characters?city=${encodeURIComponent(slug)}`).then(r => r.json()).catch(() => []),
       fetch(`/api/locations?city=${encodeURIComponent(slug)}`).then(r => r.json()).catch(() => []),
+      fetch(`/api/cities/${encodeURIComponent(slug)}/districts`).then(r => r.ok ? r.json() : []).catch(() => []),
     ]);
   } catch { content.innerHTML = '<div class="cdet-empty" style="padding:40px">⚠ Не удалось загрузить город</div>'; return; }
   if (d.error) { content.innerHTML = `<div class="cdet-empty" style="padding:40px">${escHtml(d.error)}</div>`; return; }
 
   _cityEditChars = Array.isArray(chars) ? chars.map(c => c.name).filter(Boolean) : [];
   _cityEditLocs  = Array.isArray(locs) ? locs.map(l => l.title).filter(Boolean) : [];
-  _cityDetail = { ...d, slug, active: slug === CITY };
+  _cityDetail = {
+    ...d, slug, active: slug === CITY,
+    locations: Array.isArray(locs) ? locs : [],
+    districts: Array.isArray(districts) ? districts : [],
+  };
   _renderCityView();
+}
+
+// Паритет с формой создания (техспека §9.1) — read-only карточки района на странице
+// просмотра. Переиспользует .locdet-table/-row/-key/-val — тот же паттерн «список пар
+// ключ-значение», что уже показывает вкладка «Метаданные» детальной модалки локации
+// (designspec §7.1), не третий способ показывать пары «подпись: значение» в проекте.
+function _cityViewDistrictsHtml() {
+  const d = _cityDetail;
+  const districts = d.districts || [];
+  const locations = d.locations || [];
+  if (!districts.length) return '';
+
+  const cards = districts.map(dist => {
+    const inDistrict = locations.filter(l => (l.dirRelPath || '').split('/')[0] === dist.slug);
+    const elsewhere   = locations.filter(l => (l.dirRelPath || '').split('/')[0] !== dist.slug);
+
+    const locsHtml = inDistrict.length
+      ? inDistrict.map(l => `<div class="city-view-district-loc-row">
+          <span>${escHtml(l.title || l.slug)}</span>
+          <button class="chr-modal-btn" type="button" data-open-loc="${escAttr(l.slug)}">Открыть</button>
+        </div>`).join('')
+      : '<div class="cdet-empty">Пока пусто</div>';
+
+    const attachRow = elsewhere.length
+      ? `<div class="city-view-district-attach-row">
+          <select class="form-control city-view-district-attach-sel">
+            ${elsewhere.map(l => `<option value="${escAttr(l.slug)}">${escHtml(l.title || l.slug)}</option>`).join('')}
+          </select>
+          <button class="chr-modal-btn" type="button" data-attach-loc-btn data-district-slug="${escAttr(dist.slug)}">Привязать</button>
+        </div>`
+      : `<div class="city-view-district-attach-row">
+          <select class="form-control city-view-district-attach-sel" disabled><option>Нет свободных локаций</option></select>
+          <button class="chr-modal-btn" type="button" disabled>Привязать</button>
+        </div>`;
+
+    return `<div class="city-district-card city-district-card-view">
+      <div class="city-district-card-head">
+        <span class="city-district-card-title">📍 ${escHtml(dist.name || dist.slug)}</span>
+      </div>
+      <div class="locdet-table">
+        <div class="locdet-row"><div class="locdet-key">Тип</div><div class="locdet-val">${escHtml(dist.type || '—')}</div></div>
+        <div class="locdet-row"><div class="locdet-key">Влияние</div><div class="locdet-val">${escHtml([dist.sect, dist.clan].filter(Boolean).join(' / ') || '—')}</div></div>
+      </div>
+      <div class="city-district-locs">
+        <div class="cdet-rels-hint">Локации в районе:</div>
+        ${locsHtml}
+        ${attachRow}
+        <button class="city-view-district-add-loc-btn" type="button" data-district-name="${escAttr(dist.name || dist.slug)}">+ Создать новую</button>
+      </div>
+    </div>`;
+  }).join('');
+
+  return `<div class="city-view-districts">
+    <div class="city-create-section-label">Районы</div>
+    <div class="city-district-cards">${cards}</div>
+  </div>`;
 }
 
 function _renderCityView() {
@@ -598,9 +677,32 @@ function _renderCityView() {
         <button class="city-del-btn" data-city-delete title="Удалить домен">🗑 Удалить</button>
       </div>
     </div>
+    ${_cityViewDistrictsHtml()}
     <div class="city-page-body city-page-prose">
       <div class="md-body">${mdToHtmlBlock(body)}</div>
     </div>`;
+}
+
+// Привязка уже существующей локации к району со страницы просмотра (техспека §9.2) —
+// физический перенос папки, заметное последствие, поэтому подтверждающий диалог перед
+// вызовом (designspec §7.2), не тихое срабатывание по одному клику на дропдауне.
+async function _attachLocationToDistrict(districtSlug, locSlug, locLabel, districtLabel) {
+  const ok = await showConfirm(
+    `Привязать «${locLabel}» к району «${districtLabel}»? Папка локации физически переедет на диске.`,
+    { confirmText: 'Привязать' }
+  );
+  if (!ok) return;
+  try {
+    const r = await fetch(`/api/locations/${encodeURIComponent(locSlug)}/district?city=${encodeURIComponent(_cityDetail.slug)}`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ district: districtSlug }),
+    });
+    if (!r.ok) throw new Error((await r.json()).error || r.statusText);
+    showToast(`«${locLabel}» привязана к району «${districtLabel}»`, 'success');
+    await loadCityPage();
+  } catch (e) {
+    showToast(`Не удалось привязать локацию: ${e.message}`, 'error');
+  }
 }
 
 // Пояснения к полям редактирования города — те же формулировки, что у формы
@@ -746,7 +848,7 @@ document.addEventListener('click', async e => {
     const rows = locAdd.closest('.form-group')?.querySelector('.cdet-location-rows');
     if (rows) {
       const idPrefix = rows.dataset.locIdPrefix || 'cdet-edit';
-      rows.insertAdjacentHTML('beforeend', _locRowHtml('', '', _cityEditLocs, idPrefix));
+      rows.insertAdjacentHTML('beforeend', _locRowHtml('', '', '', _cityEditLocs, idPrefix));
       rows.lastElementChild?.classList.add('row-enter');
       rows.lastElementChild?.querySelector('.cdet-loc-name-inp')?.focus();
     }
@@ -780,6 +882,25 @@ document.addEventListener('click', async e => {
   }
 
   if (e.target.closest('[data-city-back]')) { navigate('city-new'); return; }
+
+  const openLocBtn = e.target.closest('[data-open-loc]');
+  if (openLocBtn) {
+    ensureLocsLoaded().then(() => openLocDetail(openLocBtn.dataset.openLoc));
+    return;
+  }
+  const viewDistLocBtn = e.target.closest('.city-view-district-add-loc-btn');
+  if (viewDistLocBtn) { _openDistrictLocationModal(viewDistLocBtn.dataset.districtName || ''); return; }
+  const attachBtn = e.target.closest('[data-attach-loc-btn]');
+  if (attachBtn) {
+    const sel = attachBtn.closest('.city-view-district-attach-row')?.querySelector('.city-view-district-attach-sel');
+    const locSlug = sel?.value;
+    if (!locSlug) return;
+    const districtSlug  = attachBtn.dataset.districtSlug;
+    const districtLabel = attachBtn.closest('.city-district-card')?.querySelector('.city-district-card-title')?.textContent.replace(/^📍\s*/, '') || districtSlug;
+    const locLabel = sel.options[sel.selectedIndex]?.textContent || locSlug;
+    _attachLocationToDistrict(districtSlug, locSlug, locLabel, districtLabel);
+    return;
+  }
 
   const sw = e.target.closest('[data-switch-city]');
   if (sw) { location.search = 'city=' + encodeURIComponent(sw.dataset.switchCity); return; }
@@ -884,8 +1005,16 @@ async function _saveCityEdit() {
     }
 
     // Перечитываем детально и возвращаемся в просмотр; обновляем грид доменов.
-    const fresh = await fetch(`/api/cities/${encodeURIComponent(d.slug)}/detail`).then(r => r.json());
-    _cityDetail = { ...fresh, slug: d.slug, active: d.slug === CITY };
+    const [fresh, freshLocs, freshDistricts] = await Promise.all([
+      fetch(`/api/cities/${encodeURIComponent(d.slug)}/detail`).then(r => r.json()),
+      fetch(`/api/locations?city=${encodeURIComponent(d.slug)}`).then(r => r.json()).catch(() => []),
+      fetch(`/api/cities/${encodeURIComponent(d.slug)}/districts`).then(r => r.ok ? r.json() : []).catch(() => []),
+    ]);
+    _cityDetail = {
+      ...fresh, slug: d.slug, active: d.slug === CITY,
+      locations: Array.isArray(freshLocs) ? freshLocs : [],
+      districts: Array.isArray(freshDistricts) ? freshDistricts : [],
+    };
     _renderCityView();
     if (document.getElementById('cities-grid')) loadCitiesGrid();
   } catch (err) {

@@ -86,6 +86,48 @@ router.get('/api/factions/influence', async (req, res) => {
   } catch (e) { serverError(res, e); }
 });
 
+// Точечная замена ТОЛЬКО секции heading внутри уже готового city.md — НЕ полный
+// buildCityMd(parsed.sections)-ребилд: последний прогоняет КАЖДУЮ секцию через
+// _citySection() (выравнивает всё под простой буллет-список), что на реальном
+// «рукописном» city.md с блок-цитатами/подзаголовками/таблицами (напр. текущий
+// cities/paris/city.md) необратимо разбирает форматирование за пределами самой
+// «Фракции» — задевать любую секцию, кроме той, что реально меняем, здесь нельзя.
+// Возвращает null, если заголовок не найден (нестандартный city.md — синк пропускаем,
+// не создаём секцию сюрпризом).
+function _replaceCitySection(raw, heading, bulletLines) {
+  const body = bulletLines.length ? bulletLines.map(l => `- ${l}`).join('\n') : '- …';
+  const esc  = heading.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  // (?![\s\S]) — истинный конец строки, а не $ с флагом m (тот матчит конец КАЖДОЙ
+  // строки, не только всего текста — заставлял ленивый квантификатор останавливаться
+  // на первой же строке секции вместо всей секции целиком; проверено на реальных данных).
+  const re   = new RegExp(`(^##\\s+${esc}\\s*\\n)([\\s\\S]*?)(?=\\n##\\s+|(?![\\s\\S]))`, 'm');
+  if (!re.test(raw)) return null;
+  return raw.replace(re, (_, hdr) => `${hdr}${body}\n`);
+}
+
+// Двусторонний синк «Фракции» ↔ панель «Влияние фракций» (техспека §11, решение (a)).
+// mutate(names) возвращает НОВЫЙ массив имён либо null (no-op — имя уже там/уже нет,
+// ничего не пишем). Не бросает — правка political_state.md уже произошла к моменту
+// вызова и не должна откатываться из-за сбоя записи city.md (тот же паттерн non-blocking
+// side-write, что уже принят для §4.2/§5.2 — персонажей/локаций из формы города).
+async function _syncCityFactionsList(city, mutate) {
+  try {
+    const file = path.join(cityDir(city), 'city.md');
+    const raw  = await fs.readFile(file, 'utf-8').catch(() => null);
+    if (raw === null) return null; // города без city.md не бывает в норме — не наш случай
+    const parsed = parseCityMd(raw);
+    const names = (parsed.sections.factions || '').split('\n').map(s => s.trim()).filter(Boolean);
+    const mutated = mutate(names);
+    if (!mutated) return null; // уже актуально
+    const updatedRaw = _replaceCitySection(raw, 'Фракции', mutated);
+    if (updatedRaw === null) return 'Фракция сохранена, но в city.md не найдена секция «Фракции» — синк пропущен';
+    await writeFileAtomic(file, updatedRaw, 'utf-8');
+    return null;
+  } catch (e) {
+    return `Фракция сохранена, но не удалось синхронизировать список «Фракции» в описании города: ${e.message}`;
+  }
+}
+
 router.put('/api/factions/influence', express.json(), async (req, res) => {
   try {
     const city = reqCity(req);
@@ -100,7 +142,8 @@ router.put('/api/factions/influence', express.json(), async (req, res) => {
     const updated = setPoliticalFactionInfluence(raw, name, influence);
     await fs.mkdir(archiveDir(city), { recursive: true });
     await writeFileAtomic(file, updated, 'utf-8');
-    res.json({ ok: true, factions: parsePoliticalFactions(updated) });
+    const warning = await _syncCityFactionsList(city, names => names.includes(name) ? null : [...names, name]);
+    res.json({ ok: true, factions: parsePoliticalFactions(updated), ...(warning ? { warning } : {}) });
   } catch (e) { serverError(res, e); }
 });
 
@@ -114,7 +157,14 @@ router.delete('/api/factions/influence/:name', async (req, res) => {
     const { updated, found } = removePoliticalFaction(raw, name);
     if (!found) return res.status(404).json({ error: `Фракция «${name}» не найдена` });
     await writeFileAtomic(file, updated, 'utf-8');
-    res.json({ ok: true, factions: parsePoliticalFactions(updated) });
+    const warning = await _syncCityFactionsList(city, names => {
+      const idx = names.indexOf(name);
+      if (idx === -1) return null;
+      const copy = names.slice();
+      copy.splice(idx, 1);
+      return copy;
+    });
+    res.json({ ok: true, factions: parsePoliticalFactions(updated), ...(warning ? { warning } : {}) });
   } catch (e) { serverError(res, e); }
 });
 

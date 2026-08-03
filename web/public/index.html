@@ -1276,19 +1276,30 @@
 
       <div class="loc-edit-row2">
         <div class="chr-form-group">
-          <label class="chr-form-label" for="loc-edit-zone">Зона<span class="field-tip" tabindex="0" data-tip="Уровень опасности локации — безопасная/нейтральная/опасная. Влияет на то, какие сцены здесь уместны.">ⓘ</span></label>
+          <label class="chr-form-label" for="loc-edit-zone">Зона<span class="field-tip" tabindex="0" data-tip="Категория территории — кто здесь хозяин по факту, независимо от уровня опасности. Влияет на то, какие сцены и персонажи здесь уместны.">ⓘ</span></label>
           <select class="chr-form-input" id="loc-edit-zone">
             <option value="">—</option>
-            <option value="🟢">🟢 Безопасная</option>
-            <option value="🟡">🟡 Нейтральная</option>
-            <option value="🔴">🔴 Опасная</option>
+            <option value="🏛️ Элизиум">🏛️ Элизиум</option>
+            <option value="🟣 Носферату">🟣 Носферату</option>
+            <option value="🟡 Нейтральная">🟡 Нейтральная</option>
+            <option value="🔴 Опасная">🔴 Опасная</option>
           </select>
         </div>
         <div class="chr-form-group">
-          <label class="chr-form-label" for="loc-edit-control">Контроль<span class="field-tip" tabindex="0" data-tip="Фракция или группа, контролирующая эту территорию, — определяет, кто здесь хозяин.">ⓘ</span></label>
-          <input class="chr-form-input" id="loc-edit-control" type="text" placeholder="Фракция" list="loc-control-list" autocomplete="off">
-          <datalist id="loc-control-list"></datalist>
+          <label class="chr-form-label" for="loc-edit-danger">Опасность<span class="field-tip" tabindex="0" data-tip="Насколько рискованно здесь находиться — независимо от того, чья это зона контроля.">ⓘ</span></label>
+          <select class="chr-form-input" id="loc-edit-danger">
+            <option value="">—</option>
+            <option value="🟢">🟢 Низкая</option>
+            <option value="🟡">🟡 Средняя</option>
+            <option value="🔴">🔴 Высокая</option>
+          </select>
         </div>
+      </div>
+
+      <div class="chr-form-group">
+        <label class="chr-form-label" for="loc-edit-control">Контроль<span class="field-tip" tabindex="0" data-tip="Фракция или группа, контролирующая эту территорию, — определяет, кто здесь хозяин.">ⓘ</span></label>
+        <input class="chr-form-input" id="loc-edit-control" type="text" placeholder="Фракция" list="loc-control-list" autocomplete="off">
+        <datalist id="loc-control-list"></datalist>
       </div>
 
       <div class="chr-form-group loc-edit-field-with-gen">
@@ -1301,9 +1312,10 @@
 
       <div class="chr-form-group loc-edit-field-with-gen">
         <div class="loc-edit-field-header">
-          <label class="chr-form-label" for="loc-edit-sensory">Сенсорная палитра<span class="field-tip" tabindex="0" data-tip="Что видят, слышат и чувствуют персонажи здесь — по каналам: свет, звук, запах, тактильные ощущения.">ⓘ</span></label>
+          <label class="chr-form-label">Сенсорная палитра<span class="field-tip" tabindex="0" data-tip="Что видят, слышат и чувствуют персонажи здесь — по каналам: свет, звук, запах, тактильные ощущения.">ⓘ</span></label>
         </div>
-        <textarea class="chr-form-textarea" id="loc-edit-sensory" rows="5" placeholder="| **Свет** | ... |&#10;| **Звук** | ... |"></textarea>
+        <div id="loc-edit-sens-rows"></div>
+        <button class="cdet-rel-add-btn" type="button" id="loc-edit-sens-add-btn">+ Добавить канал</button>
       </div>
 
       <div class="chr-form-group loc-edit-field-with-gen">

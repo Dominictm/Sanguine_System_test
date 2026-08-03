@@ -12,13 +12,13 @@ const {
   ROOT, reqCity, locsDir, writeFileAtomic, invalidateLocs,
   getAllLocations, findLocMdPath,
 } = require('../lib/db');
-const { slugify, writePrompt, parseLocation, sanitizeInlineText } = require('../lib/parsers');
+const { slugify, writePrompt, parseLocation, sanitizeInlineText, parseDistrictMd, DISTRICT_FILENAME } = require('../lib/parsers');
 const { buildCityConstraints } = require('../lib/context_builder');
 
 // ── Location card template (standalone) ──────────────────────────────────────
 function _locCardTemplate(name, district) {
   return `# ${name}
-> **Название:** ${name} | **Округ:** ${district || '[округ]'} | **Район:** [район] | **Адрес:** [адрес] | **Зона:** [🟢/🟡/🔴] | **Контроль:** [фракция]
+> **Название:** ${name} | **Округ:** ${district || '[округ]'} | **Район:** [район] | **Адрес:** [адрес] | **Зона:** [📍 Локация] | **Опасность:** [🟢/🟡/🔴] | **Контроль:** [фракция]
 ---
 ## 🎭 Атмосфера
 [2–3 предложения]
@@ -206,8 +206,36 @@ module.exports = function locationsRouter({ makeGenerationClient, genTextWithRet
           );
           continue;
         }
+        if (key === 'vtmTable') {
+          // Табличные VtM-поля (Статус/Фракция/Постоянные фигуры/Угрозы/Маскарад) — строки
+          // markdown-таблицы внутри секции VtM-контекста, не инлайн-метаданные вида
+          // **Ключ:**, поэтому fieldMap ниже сюда не подходит (техспека §13.3). Построчная
+          // сборка (не regex-подстановка целиком) — чтобы точно не задвоить/не потерять
+          // переносы строк на границе последней строки таблицы и следующего «## »/«---».
+          // rawValue — объект { locStatus?, faction?, figures?, threats?, masquerade? };
+          // пустое значение стирает строку таблицы целиком (симметрично vtmText выше).
+          const tableFields = (rawValue && typeof rawValue === 'object') ? rawValue : {};
+          card = card.replace(
+            /(## (?:🩸\s+)?(?:VtM[^\n]*|Контекст[^\n]*)\n+)([\s\S]+?)(\n## |\n---|$)/i,
+            (_, hdr, body, tail) => {
+              const LABELS = { locStatus: 'Статус', faction: 'Фракция', figures: 'Постоянные фигуры', threats: 'Угрозы', masquerade: 'Маскарад' };
+              const lines = body.split('\n');
+              for (const [k, label] of Object.entries(LABELS)) {
+                if (!(k in tableFields)) continue;
+                const cellVal = sanitizeInlineText(String(tableFields[k] ?? '').trim()).replace(/\|/g, '∣');
+                const rowRe = new RegExp(`^\\|\\s*\\*\\*${label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\*\\*\\s*\\|`);
+                const idx = lines.findIndex(l => rowRe.test(l));
+                if (!cellVal) { if (idx !== -1) lines.splice(idx, 1); continue; }
+                const row = `| **${label}** | ${cellVal} |`;
+                if (idx !== -1) lines[idx] = row; else lines.push(row);
+              }
+              return `${hdr}${lines.join('\n')}${tail}`;
+            }
+          );
+          continue;
+        }
         // Inline metadata fields — same one-line-pipe-row shape as «Название» above.
-        const fieldMap = { district: 'Округ', neighborhood: 'Район', address: 'Адрес', control: 'Контроль', zone: 'Зона' };
+        const fieldMap = { district: 'Округ', neighborhood: 'Район', address: 'Адрес', control: 'Контроль', zone: 'Зона', dangerLevel: 'Опасность' };
         const mdKey = fieldMap[key];
         if (mdKey) {
           const esc = mdKey.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -221,6 +249,57 @@ module.exports = function locationsRouter({ makeGenerationClient, genTextWithRet
       await writeFileAtomic(mdPath, card, 'utf-8');
       invalidateLocs(city);
       res.json({ ok: true });
+    } catch (e) { serverError(res, e); }
+  });
+
+  // ── PUT /api/locations/:slug/district — привязать локацию к району ────────────
+  // Отдельно от PUT /fields намеренно (техспека §9.2) — это не инлайн-метаданные, это
+  // операция с физическим побочным эффектом (fs.rename папки локации целиком, включая
+  // gitignored art/ — тот же вывод, что уже подтверждён на миграции округ→район).
+  router.put('/api/locations/:slug/district', express.json(), async (req, res) => {
+    try {
+      const slug = decodeURIComponent(req.params.slug);
+      const city = reqCity(req);
+      const districtSlug = slugify(String(req.body?.district || '').trim());
+      if (!districtSlug) return res.status(400).json({ error: 'Укажи район' });
+
+      const mdPath = await findLocMdPath(slug, city);
+      if (!mdPath) return res.status(404).json({ error: 'Локация не найдена' });
+
+      const locRoot   = locsDir(city);
+      const oldLocDir = path.dirname(mdPath);
+      const oldDistrictSlug = path.basename(path.dirname(oldLocDir));
+      if (oldDistrictSlug === districtSlug) {
+        return res.json({ ok: true, movedFrom: null, movedTo: null }); // §9.3 — перенос в тот же район, no-op
+      }
+
+      const newLocDir = path.join(locRoot, districtSlug, path.basename(oldLocDir));
+      if (await fs.stat(newLocDir).catch(() => null))
+        return res.status(409).json({ error: `В районе «${districtSlug}» уже есть локация с таким именем папки` });
+
+      await fs.mkdir(path.dirname(newLocDir), { recursive: true });
+      await fs.rename(oldLocDir, newLocDir);
+
+      // Округ — читаем «Название» из district.md, если район уже заведён как сущность;
+      // иначе (район ещё не формальная сущность — POST /api/locations терпим к этому же
+      // случаю) записываем сам slug как текст, лучше, чем оставить старое значение.
+      const districtMdRaw = await fs.readFile(path.join(newLocDir, '..', DISTRICT_FILENAME), 'utf-8').catch(() => null);
+      const districtDisplay = districtMdRaw ? (parseDistrictMd(districtMdRaw).name || districtSlug) : districtSlug;
+
+      const newMdPath = path.join(newLocDir, path.basename(mdPath));
+      let card = await fs.readFile(newMdPath, 'utf-8');
+      card = card.replace(
+        /(\*\*Округ:\*\*)\s*([^|\n]+?)(?=\s*\||\s*\n|$)/m,
+        `$1 ${sanitizeInlineText(districtDisplay).replace(/\|/g, '∣')}`
+      );
+      await writeFileAtomic(newMdPath, card, 'utf-8');
+
+      invalidateLocs(city);
+      res.json({
+        ok: true,
+        movedFrom: path.relative(locRoot, oldLocDir).split(path.sep).join('/'),
+        movedTo:   path.relative(locRoot, newLocDir).split(path.sep).join('/'),
+      });
     } catch (e) { serverError(res, e); }
   });
 

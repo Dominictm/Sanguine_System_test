@@ -23,9 +23,9 @@ const MASQ_BADGE_LABELS = {
 };
 
 const DANGER_BADGE_LABELS = {
-  low:     '🟢 Низкий',
-  medium:  '🟡 Средний',
-  high:    '🔴 Высокий',
+  low:     '⚔️ Низкий',
+  medium:  '⚔️ Средний',
+  high:    '⚔️ Высокий',
 };
 
 function zoneClass(zone) {
@@ -38,14 +38,14 @@ function zoneClass(zone) {
   return 'other';
 }
 
-// Уровень опасности — читает цветной кружок (🟢/🟡/🔴) из того же поля «Зона»,
-// независимо от текстовой классификации zoneClass() (та про «чья зона контроля»,
-// этот — про то, насколько там опасно; в карточке оба смысла живут в одном поле).
-function zoneDangerLevel(zone) {
-  if (!zone) return 'unknown';
-  if (zone.includes('🟢')) return 'low';
-  if (zone.includes('🟡')) return 'medium';
-  if (zone.includes('🔴')) return 'high';
+// Уровень опасности — собственное поле «Опасность» (техспека §13.1), отдельное от
+// «Зоны» (та — про «чья зона контроля», это — про то, насколько там опасно; раньше
+// оба смысла жили в одном поле «Зона», разведены по разным инлайн-метаданным).
+function zoneDangerLevel(dangerLevel) {
+  if (!dangerLevel) return 'unknown';
+  if (dangerLevel.includes('🟢')) return 'low';
+  if (dangerLevel.includes('🟡')) return 'medium';
+  if (dangerLevel.includes('🔴')) return 'high';
   return 'unknown';
 }
 
@@ -320,7 +320,7 @@ function openLocDetail(slug, keepTab) {
 
   const zc   = zoneClass(loc.zone);
   const mLvl = loc.masqueradeLevel || 'unknown';
-  const dLvl = zoneDangerLevel(loc.zone);
+  const dLvl = zoneDangerLevel(loc.dangerLevel);
 
   const imgCol = loc.imageUrl
     ? `<div class="locdet-carousel" id="locdet-carousel">
@@ -371,8 +371,39 @@ function openLocDetail(slug, keepTab) {
   const vtmViewHtml = vtmParts.length
     ? vtmParts.join('<div class="diary-divider"></div>')
     : '<div class="cdet-empty">Контекст не заполнен</div>';
-  const vtmEditHtml = `<div class="cdet-section-title" style="margin-bottom:6px">Описание (проза)</div>
-    <textarea class="cdet-edit-textarea" id="locdet-vtm-ta" rows="10">${escHtml(loc.vtmText || '')}</textarea>`;
+  // Форма по полям (не пустая textarea) — переиспользует locdet-field-row/-lbl/-inp,
+  // тот же паттерн, что уже использует соседняя вкладка «Метаданные» (metaEditHtml выше),
+  // designspec §11.3. Маскарад — единственное поле как <select> (3 уровня, тот же
+  // паттерн, что «Опасность» в форме редактирования), остальные — свободный текст.
+  const VTM_MASQ_OPTS = [['', '—'], ['🟢', '🟢 Низкий'], ['🟡', '🟡 Средний'], ['🔴', '🔴 Высокий']];
+  const maqRaw = loc.masquerade || '';
+  const maqSelVal = VTM_MASQ_OPTS.find(([v]) => v && maqRaw.includes(v))?.[0] || '';
+  const vtmEditHtml = `<div class="locdet-edit-fields">
+      <div class="locdet-field-row">
+        <label class="locdet-field-lbl">Статус</label>
+        <input class="form-control locdet-field-inp" id="locdet-vtm-status" value="${escAttr(loc.locStatus || '')}" placeholder="Статус">
+      </div>
+      <div class="locdet-field-row">
+        <label class="locdet-field-lbl">Фракция</label>
+        <input class="form-control locdet-field-inp" id="locdet-vtm-faction" value="${escAttr(loc.faction || '')}" placeholder="Фракция">
+      </div>
+      <div class="locdet-field-row">
+        <label class="locdet-field-lbl">Постоянные фигуры</label>
+        <input class="form-control locdet-field-inp" id="locdet-vtm-figures" value="${escAttr(loc.figures || '')}" placeholder="Постоянные фигуры">
+      </div>
+      <div class="locdet-field-row">
+        <label class="locdet-field-lbl">Угрозы</label>
+        <input class="form-control locdet-field-inp" id="locdet-vtm-threats" value="${escAttr(loc.threats || '')}" placeholder="Угрозы">
+      </div>
+      <div class="locdet-field-row">
+        <label class="locdet-field-lbl">Маскарад</label>
+        <select class="form-control locdet-field-inp" id="locdet-vtm-masquerade">
+          ${VTM_MASQ_OPTS.map(([v, label]) => `<option value="${v}"${v === maqSelVal ? ' selected' : ''}>${label}</option>`).join('')}
+        </select>
+      </div>
+    </div>
+    <div class="cdet-section-title" style="margin:10px 0 6px">Описание (проза)</div>
+    <textarea class="cdet-edit-textarea" id="locdet-vtm-ta" rows="8">${escHtml(loc.vtmText || '')}</textarea>`;
 
   const keyPointsHtml = loc.keyPoints?.length
     ? `<div class="locdet-table">${loc.keyPoints.map(kp =>
@@ -631,6 +662,13 @@ async function _locSavePanel(panel) {
     fields.atmosphere = document.getElementById('locdet-atm-ta')?.value || '';
   } else if (panel === 'vtm') {
     fields.vtmText = document.getElementById('locdet-vtm-ta')?.value || '';
+    fields.vtmTable = {
+      locStatus:  document.getElementById('locdet-vtm-status')?.value.trim() || '',
+      faction:    document.getElementById('locdet-vtm-faction')?.value.trim() || '',
+      figures:    document.getElementById('locdet-vtm-figures')?.value.trim() || '',
+      threats:    document.getElementById('locdet-vtm-threats')?.value.trim() || '',
+      masquerade: document.getElementById('locdet-vtm-masquerade')?.value || '',
+    };
   } else if (panel.startsWith('sens-')) {
     const idx  = parseInt(panel.slice('sens-'.length), 10);
     const val  = document.getElementById(`locdet-${panel}-ta`)?.value ?? '';
@@ -847,6 +885,52 @@ document.getElementById('loc-detail-content').addEventListener('click', e => {
 
 let _locEditSlug = null; // null = create, string = edit
 
+// ── Сенсорная палитра — редактор по каналам в форме openLocEditModal (не путать с
+// _renderSensPanel — та живёт в детальной модалке и сохраняет каждый канал СРАЗУ
+// отдельным запросом; здесь форма копит все поля в один payload и шлёт одним PUT
+// только по общей кнопке «Сохранить», см. location-card-modal-plan.md §3). Свои
+// классы (loc-edit-sens-*), не cdet-rel-row — designspec §12.1: разный класс-нейминг
+// между city.js (cdet-*) и этой модалкой (chr-form-*/loc-edit-*), копировать чужой
+// нейминг сюда означало бы визуально не принадлежать форме, в которой живёт ряд.
+const LOC_EDIT_SENS_CHANNELS = ['Свет', 'Звук', 'Запах', 'Тактильное'];
+let _locEditSensSeq = 0;
+
+function _locEditSensRowHtml(channel = '', value = '') {
+  const known   = LOC_EDIT_SENS_CHANNELS.includes(channel);
+  const selVal  = !channel ? '' : (known ? channel : 'other');
+  const custVal = (!known && channel) ? channel : '';
+  const opts = [
+    `<option value=""${selVal === '' ? ' selected' : ''}>Канал…</option>`,
+    ...LOC_EDIT_SENS_CHANNELS.map(o => `<option value="${escAttr(o)}"${o === selVal ? ' selected' : ''}>${escHtml(o)}</option>`),
+    `<option value="other"${selVal === 'other' ? ' selected' : ''}>Другое…</option>`,
+  ].join('');
+  return `<div class="loc-edit-sens-row" id="loc-edit-sens-row-${++_locEditSensSeq}">
+    <select class="form-control loc-edit-sens-channel-sel">${opts}</select>
+    <input class="form-control loc-edit-sens-channel-custom" placeholder="Свой канал" value="${escAttr(custVal)}" style="${selVal === 'other' ? '' : 'display:none'}">
+    <textarea class="chr-form-textarea loc-edit-sens-value-ta" rows="2" placeholder="Описание…">${escHtml(value || '')}</textarea>
+    <button class="cdet-rel-del-btn loc-edit-sens-del-btn" type="button" title="Удалить канал">✕</button>
+  </div>`;
+}
+
+function _renderLocEditSensRows(list) {
+  const rows = document.getElementById('loc-edit-sens-rows');
+  if (!rows) return;
+  const items = (list && list.length)
+    ? list
+    : ['Свет', 'Звук', 'Запах'].map(channel => ({ channel, value: '' }));
+  rows.innerHTML = items.map(s => _locEditSensRowHtml(s.channel, s.value)).join('');
+}
+
+function _collectLocEditSensRows() {
+  return Array.from(document.querySelectorAll('#loc-edit-sens-rows .loc-edit-sens-row')).map(row => {
+    const sel    = row.querySelector('.loc-edit-sens-channel-sel');
+    const custom = row.querySelector('.loc-edit-sens-channel-custom');
+    const channel = sel.value === 'other' ? custom.value.trim() : sel.value;
+    const value   = row.querySelector('.loc-edit-sens-value-ta').value.trim();
+    return { channel, value };
+  }).filter(s => s.channel && s.value);
+}
+
 // prefilledDistrict: опциональное имя района — предзаполняет и дизейблит поле
 // «Район» (для встраивания модалки в блок «Район» формы создания/редактирования
 // города, где район уже определён контекстом вызова). Актуально только для
@@ -865,11 +949,13 @@ function openLocEditModal(slug, prefilledDistrict) {
   document.getElementById('loc-edit-gen-hint').textContent = '';
 
   // Clear fields
-  ['name','district','neighborhood','address','control','atmosphere','sensory','vtm-context','hooks','image-prompt','context'].forEach(id => {
+  ['name','district','neighborhood','address','control','atmosphere','vtm-context','hooks','image-prompt','context'].forEach(id => {
     const el = document.getElementById(`loc-edit-${id}`);
     if (el) el.value = '';
   });
   document.getElementById('loc-edit-zone').value = '';
+  document.getElementById('loc-edit-danger').value = '';
+  _renderLocEditSensRows(null);
 
   const districtEl = document.getElementById('loc-edit-district');
   districtEl.disabled = false;
@@ -889,14 +975,20 @@ function openLocEditModal(slug, prefilledDistrict) {
       document.getElementById('loc-edit-atmosphere').value  = loc.atmosphere || '';
       document.getElementById('loc-edit-hooks').value       = (loc.hooks || []).join('\n');
       document.getElementById('loc-edit-image-prompt').value = loc.imagePrompt || '';
-      document.getElementById('loc-edit-sensory').value =
-        (loc.sensoryPalette || []).map(s => `| **${s.channel}** | ${s.value} |`).join('\n');
+      _renderLocEditSensRows(loc.sensoryPalette);
       document.getElementById('loc-edit-vtm-context').value = loc.vtmText || '';
       // Zone: try to match emoji
       const zv = loc.zone || '';
       const zoneEl = document.getElementById('loc-edit-zone');
       for (const opt of zoneEl.options) {
         if (opt.value && zv.includes(opt.value)) { zoneEl.value = opt.value; break; }
+      }
+      // Опасность — отдельное поле (техспека §13.1), значение — тот же цветной кружок,
+      // что раньше жил внутри «Зоны».
+      const dv = loc.dangerLevel || '';
+      const dangerEl = document.getElementById('loc-edit-danger');
+      for (const opt of dangerEl.options) {
+        if (opt.value && dv.includes(opt.value)) { dangerEl.value = opt.value; break; }
       }
     }
   }
@@ -980,7 +1072,8 @@ async function saveLocEdit() {
         address:     document.getElementById('loc-edit-address').value.trim(),
         control:     document.getElementById('loc-edit-control').value.trim(),
         zone:        document.getElementById('loc-edit-zone').value,
-        sensoryPalette: document.getElementById('loc-edit-sensory').value.trim(),
+        dangerLevel: document.getElementById('loc-edit-danger').value,
+        sensoryPalette: _sensRebuildTable(_collectLocEditSensRows()),
         vtmText:        document.getElementById('loc-edit-vtm-context').value.trim(),
       };
 
@@ -1011,7 +1104,8 @@ async function saveLocEdit() {
         hooks:        document.getElementById('loc-edit-hooks').value.trim(),
         imagePrompt:  document.getElementById('loc-edit-image-prompt').value.trim(),
         zone:         document.getElementById('loc-edit-zone').value,
-        sensoryPalette: document.getElementById('loc-edit-sensory').value.trim(),
+        dangerLevel:  document.getElementById('loc-edit-danger').value,
+        sensoryPalette: _sensRebuildTable(_collectLocEditSensRows()),
         vtmText:        document.getElementById('loc-edit-vtm-context').value.trim(),
       };
       const hasExtra = Object.values(extraFields).some(v => v);
@@ -1124,8 +1218,7 @@ async function runLocFullGen() {
     if (promptM) document.getElementById('loc-edit-image-prompt').value = promptM[1].trim();
 
     if (parsed.sensoryPalette?.length) {
-      document.getElementById('loc-edit-sensory').value =
-        parsed.sensoryPalette.map(s => `| **${s.channel}** | ${s.value} |`).join('\n');
+      _renderLocEditSensRows(parsed.sensoryPalette);
     }
 
     // Только проза — табличные строки идут отдельным структурным путём;
@@ -1156,6 +1249,20 @@ async function runLocFullGen() {
   document.getElementById('loc-edit-modal').addEventListener('click', e => {
     const regenBtn = e.target.closest('.loc-edit-regen-btn');
     if (regenBtn) runLocFieldRegen(regenBtn.dataset.field);
+  });
+
+  document.getElementById('loc-edit-sens-add-btn')?.addEventListener('click', () => {
+    document.getElementById('loc-edit-sens-rows')?.insertAdjacentHTML('beforeend', _locEditSensRowHtml());
+  });
+  document.getElementById('loc-edit-modal').addEventListener('click', e => {
+    const delBtn = e.target.closest('.loc-edit-sens-del-btn');
+    if (delBtn) delBtn.closest('.loc-edit-sens-row')?.remove();
+  });
+  document.getElementById('loc-edit-modal').addEventListener('change', e => {
+    const sel = e.target.closest('.loc-edit-sens-channel-sel');
+    if (!sel) return;
+    const custom = sel.closest('.loc-edit-sens-row')?.querySelector('.loc-edit-sens-channel-custom');
+    if (custom) custom.style.display = sel.value === 'other' ? '' : 'none';
   });
 
   // "Create location" button on locations page

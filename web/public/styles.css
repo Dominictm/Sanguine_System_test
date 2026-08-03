@@ -3761,6 +3761,12 @@ a:focus-visible {
   flex: 1 1 200px;
 }
 
+/* Заметка — третье, необязательное поле строки «Отмеченных локаций» (техспека §8) —
+   компактнее названия, не претендует на равную долю ряда. */
+.cdet-loc-status-note-inp {
+  flex: 1 1 140px;
+}
+
 /* Район/заметка новой локации (фаза K) — обёртка целиком анимируется как строка. */
 .cdet-loc-row-wrap.row-enter {
   animation: row-enter var(--dur-fast) var(--ease);
@@ -3887,6 +3893,50 @@ a:focus-visible {
 }
 
 .city-district-add-loc-btn:hover {
+  background: rgba(184, 134, 11, 0.2);
+}
+
+/* Read-only карточки района на странице просмотра города (техспека §9.1) — тот же
+   .city-district-card, что и в форме создания, плюс список локаций/привязка. */
+.city-view-districts {
+  margin: 16px 0;
+}
+
+.city-view-district-loc-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.city-view-district-loc-row:last-of-type {
+  border-bottom: none;
+}
+
+.city-view-district-attach-row {
+  display: flex;
+  gap: 8px;
+  margin: 10px 0;
+}
+
+.city-view-district-attach-row select {
+  flex: 1;
+  min-width: 0;
+}
+
+.city-view-district-add-loc-btn {
+  background: rgba(184, 134, 11, 0.1);
+  border: 1px solid var(--gold);
+  color: var(--gold);
+  border-radius: 5px;
+  padding: 6px 12px;
+  font-family: var(--f-body);
+  font-size: var(--fs-sm);
+}
+
+.city-view-district-add-loc-btn:hover {
   background: rgba(184, 134, 11, 0.2);
 }
 
@@ -5721,7 +5771,7 @@ a:focus-visible {
   background: rgba(139, 0, 0, .06);
 }
 
-/* Danger level badges — цветной кружок из поля «Зона» (см. zoneDangerLevel) */
+/* Danger level badges — поле «Опасность» (см. zoneDangerLevel) */
 .badge-danger-low {
   color: var(--c-success);
   border-color: rgba(125, 206, 130, .35);
@@ -12177,6 +12227,42 @@ tr.rumor-told:hover .rumor-cb-cell {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 10px;
+}
+
+/* Сенсорная палитра — редактор по каналам (location-card-modal-plan.md §3).
+   Свои классы, не .cdet-rel-row — другой модуль, другой class-нейминг (designspec §12.1). */
+.loc-edit-sens-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.loc-edit-sens-channel-sel {
+  flex: 0 0 140px;
+}
+
+.loc-edit-sens-channel-custom {
+  flex: 0 0 130px;
+}
+
+.loc-edit-sens-value-ta {
+  flex: 1;
+  min-width: 0;
+}
+
+.loc-edit-sens-del-btn {
+  flex-shrink: 0;
+  align-self: center;
+}
+
+@media (max-width: 640px) {
+  .loc-edit-sens-row {
+    flex-wrap: wrap;
+  }
+  .loc-edit-sens-value-ta {
+    flex-basis: 100%;
+  }
 }
 
 .loc-edit-field-with-gen .chr-form-label {

@@ -209,15 +209,23 @@ function parseLocationRecords(lines) {
     .map(l => String(l).replace(/^\s*-\s?/, '').trim()).filter(Boolean)
     .map(line => {
       const ci = line.indexOf(':');
-      let type = '', rest = line;
+      let type = '', rest = line, note = '';
       if (ci > 0 && ci <= 40) {
         const label = line.slice(0, ci).trim();
-        const value = line.slice(ci + 1).trim();
+        let value = line.slice(ci + 1).trim();
+        // Заметка — третье поле (техспека §8.1), отделено « — »; отрезается ДО проверки
+        // valueOk ниже, иначе пунктуация в свободном тексте заметки ложно бракует строку
+        // как неструктурированную.
+        const dashIdx = value.search(/\s+—\s+/);
+        if (dashIdx !== -1) {
+          note = value.slice(dashIdx).replace(/^\s+—\s+/, '').trim();
+          value = value.slice(0, dashIdx).trim();
+        }
         const labelOk = label && label.length <= 24 && label.split(/\s+/).length <= 2 && !label.includes(',');
         const valueOk = value.length > 0 && value.length <= 48 && !/[.!?,;]/.test(value);
-        if (labelOk && valueOk) { type = label; rest = value; }
+        if (labelOk && valueOk) { type = label; rest = value; } else { note = ''; }
       }
-      return { type, name: rest };
+      return { type, name: rest, note };
     }).filter(r => r.type);
 }
 
@@ -234,7 +242,7 @@ function _rolesByName(records) {
 }
 function _placesByName(records) {
   const map = new Map();
-  records.forEach(r => { if (r.name && !map.has(r.name)) map.set(r.name, r.type); });
+  records.forEach(r => { if (r.name && !map.has(r.name)) map.set(r.name, r); });
   return map;
 }
 
@@ -294,6 +302,15 @@ const SIGNIFICANT_PLACE_TYPES = {
   'Сенешаль':        { field: 'control', mdKey: 'Контроль', value: `${CITY_CONTROL_MARKER} Сенешаль` },
 };
 
+// Заметка (техспека §8.2) допишется к тому же маркированному тексту, что уже пишется в
+// «Контроль» — только туда, «Зона» (Элизиум) заметку не получает (§8.2, буквально: «тому
+// же маркированному тексту, что уже пишется в control»). Формат: «[Город] Статус — Заметка».
+function _significantPlaceValue(conf, note) {
+  const clean = note ? String(note).trim().replace(/—/g, '–') : '';
+  if (conf.field !== 'control' || !clean) return conf.value;
+  return `${conf.value} — ${clean}`;
+}
+
 // Симметрично syncPoliticalCharacterHierarchy, но для «Значимых мест» → zone/control
 // карточки локации (техспека §5.1-5.2). Diff читается из city.md-строк «Тип: Название»
 // (records/prevRecords уже распарсены через parseLocationRecords), не из текущего
@@ -310,23 +327,27 @@ async function syncSignificantPlaceStatus(city, records, prevRecords) {
   catch (e) { warnings.push(`Не удалось прочитать локации города для синка «Значимых мест»: ${e.message}`); return warnings; }
   const locByName = new Map(locs.map(l => [l.title, l]));
 
-  for (const [name, type] of prevByName) {
+  for (const [name, rec] of prevByName) {
     if (currByName.has(name)) continue;
     const loc = locByName.get(name);
-    const conf = SIGNIFICANT_PLACE_TYPES[type];
+    const conf = SIGNIFICANT_PLACE_TYPES[rec.type];
     if (!loc || !conf) continue;
     const current = (conf.field === 'zone' ? loc.zone : loc.control) || '';
-    if (current.trim() !== conf.value) continue; // §5.3 — не наш маркер/ручная правка, не трогаем
+    // §5.3 — маркер-префикс: заметка дописана ПОСЛЕ conf.value, поэтому «наш» текст
+    // проверяем по startsWith, не точным совпадением (иначе строка с заметкой никогда
+    // не считалась бы «нашей» и не сбрасывалась бы при снятии статуса).
+    if (!current.trim().startsWith(conf.value)) continue;
     try { await writeLocationCardField(city, loc.slug, conf.mdKey, ''); }
     catch (e) { warnings.push(`Не удалось сбросить «${conf.mdKey}» у локации «${name}»: ${e.message}`); }
   }
-  for (const [name, type] of currByName) {
+  for (const [name, rec] of currByName) {
     const loc = locByName.get(name);
-    const conf = SIGNIFICANT_PLACE_TYPES[type];
+    const conf = SIGNIFICANT_PLACE_TYPES[rec.type];
     if (!loc || !conf) continue;
     const current = (conf.field === 'zone' ? loc.zone : loc.control) || '';
-    if (current.trim() === conf.value) continue; // уже актуально
-    try { await writeLocationCardField(city, loc.slug, conf.mdKey, conf.value); }
+    const value = _significantPlaceValue(conf, rec.note);
+    if (current.trim() === value) continue; // уже актуально
+    try { await writeLocationCardField(city, loc.slug, conf.mdKey, value); }
     catch (e) { warnings.push(`Не удалось записать «${conf.mdKey}» локации «${name}»: ${e.message}`); }
   }
   return warnings;
