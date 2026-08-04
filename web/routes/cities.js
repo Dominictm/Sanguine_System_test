@@ -15,8 +15,11 @@ const {
 } = require('../lib/db');
 const {
   slugify, buildCityMd, parseCityMd, cityScaffold, sanitizeInlineText, escapeTableCell, unescapeTableCell,
-  buildDistrictMd, parseDistrictMd, DISTRICT_FILENAME,
+  buildDistrictMd, parseDistrictMd, DISTRICT_FILENAME, CITY_SECTIONS,
 } = require('../lib/parsers');
+const {
+  setCityTitle, setCityDescription, upsertCitySectionFromForm, upsertCitySection, replaceCitySectionBullets,
+} = require('../lib/city_md_writer');
 
 const router = express.Router();
 
@@ -97,12 +100,19 @@ router.post('/api/cities', express.json(), async (req, res) => {
       .then(() => writeFileAtomic(path.join(base, rel, '.gitkeep'), ''));
 
     // Единый каркас (тот же, что у tools/new_city.js) — см. cityScaffold в web/lib/parsers.js.
+    // Все 16 канонических секций, а не 8: раньше whitelist молча терял «живые» секции
+    // города, из которых пять — рабочий вход генерации (limits/edicts/hunting/tech →
+    // buildCityConstraints, naming → buildCityNaming). Свежесозданный город уходил в
+    // генерацию без ограничений домена и без именника (§A2).
     const { files, keepDirs } = cityScaffold({
       display, year,
       description: b.description, factions: b.factions,
       political: b.political, locations: b.locations, leitmotif: b.leitmotif,
       specifics: b.specifics, avoid: b.avoid, sources: b.sources,
       districts: b.districts,
+      landmarks: b.landmarks, hunting: b.hunting, edicts: b.edicts,
+      mortals: b.mortals, calendar: b.calendar, tech: b.tech,
+      limits: b.limits, naming: b.naming,
     });
     const warnings = [];
     try {
@@ -380,10 +390,50 @@ router.put('/api/cities/:slug', express.json(), async (req, res) => {
       } catch {}
     }
     let cityMd;
+    const sectionsWritten = [];
     if (typeof b.cityMd === 'string' && b.cityMd.trim()) {
       cityMd = b.cityMd.replace(/^﻿/, '');
     } else if (b.fields && typeof b.fields === 'object') {
-      cityMd = buildCityMd(b.fields);
+      // Год валидируем так же, как в POST: иначе через форму редактирования в H1
+      // попадал произвольный текст и расходился по шапкам карточек (§A6.1).
+      if (typeof b.fields.year === 'string' && b.fields.year.trim()
+          && !/^\d{3,4}$/.test(b.fields.year.trim()))
+        return res.status(400).json({ error: 'Год — это 3–4 цифры (например 2010)' });
+
+      // Точечная правка вместо buildCityMd-ребилда (§A1): пересборка из 16 канонических
+      // секций уничтожала рукописные секции и форматирование (таблицы/блок-цитаты/###),
+      // из-за чего вкладка «Поля» была запрещена таким городам.
+      const current = await fs.readFile(path.join(cityDir(slug), 'city.md'), 'utf-8').catch(() => null);
+      if (current === null) return res.status(404).json({ error: 'city.md не найден' });
+
+      const currentParsed = parseCityMd(current);
+      cityMd = setCityTitle(current, b.fields.display, b.fields.year);
+      if (typeof b.fields.description === 'string' && b.fields.description.trim() !== (currentParsed.description || '').trim())
+        cityMd = setCityDescription(cityMd, b.fields.description);
+
+      for (const [key, heading] of CITY_SECTIONS) {
+        if (typeof b.fields[key] !== 'string') continue;  // ключ не пришёл — секцию не трогаем
+        // Пропускаем секции, которых пользователь не менял. Это не оптимизация, а
+        // сохранность данных: форма показывает УПЛОЩЁННЫЙ parseCityMd-текст (буллеты
+        // сняты, пустые строки и «---» отброшены), и запись его обратно превратила бы
+        // блок-цитаты и ###-подзаголовки рукописного города в буллеты. Пока значение
+        // не тронуто — не трогаем и секцию, её исходный markdown остаётся как есть.
+        if (b.fields[key].trim() === (currentParsed.sections[key] || '').trim()) continue;
+        if (key === 'landmarks') {
+          // «Значимые места» (view-tabs §V5, 2026-08-04) приходят с клиента уже
+          // готовой markdown-таблицей `| Название | Описание |` — upsertCitySectionFromForm
+          // прогнал бы её через citySectionBody (бул­летизация каждой строки без «-»)
+          // и сломал бы таблицу с первого же сохранения. Пишем как есть, тем же
+          // приёмом, что уже применяют keyPoints/vtmText в routes/locations.js.
+          const { text, created } = upsertCitySection(cityMd, heading, b.fields[key]);
+          cityMd = text;
+          sectionsWritten.push(created ? `${key} (создана)` : key);
+          continue;
+        }
+        const { text, created } = upsertCitySectionFromForm(cityMd, heading, b.fields[key]);
+        cityMd = text;
+        sectionsWritten.push(created ? `${key} (создана)` : key);
+      }
     } else {
       return res.status(400).json({ error: 'Нужно передать cityMd (markdown) или fields' });
     }
@@ -407,7 +457,11 @@ router.put('/api/cities/:slug', express.json(), async (req, res) => {
     }
     invalidateChars(slug);
     console.log(`[edit-city] ${slug}`);
-    res.json({ ok: true, slug, parsed, ...(warnings.length ? { warnings } : {}) });
+    res.json({
+      ok: true, slug, parsed,
+      ...(sectionsWritten.length ? { sectionsWritten } : {}),
+      ...(warnings.length ? { warnings } : {}),
+    });
   } catch (e) {
     console.error('[edit-city]', e.message);
     serverError(res, e);
@@ -444,26 +498,56 @@ router.delete('/api/cities/:slug', async (req, res) => {
 // web/lib/parsers/district.js). Только create/read/update — DELETE вне скоупа (§2.4
 // техспеки: удаление района с локациями внутри — отдельная, более рискованная задача).
 
-// GET /api/cities/:slug/districts — список районов города: [{slug, name, type, sect, clan}].
+// Читает список районов города напрямую с диска — та же логика, что у GET ниже,
+// но переиспользуется и синком секции «## Районы» (не завязана на req/res).
+async function _listDistricts(slug) {
+  const root = locsDir(slug);
+  let entries;
+  try { entries = await fs.readdir(root, { withFileTypes: true }); } catch { entries = []; }
+  const out = [];
+  for (const e of entries) {
+    if (!e.isDirectory()) continue;
+    const districtFile = path.join(root, e.name, DISTRICT_FILENAME);
+    const raw = await fs.readFile(districtFile, 'utf-8').catch(() => null);
+    if (raw === null) continue;
+    const { name, type, sect, clan, description } = parseDistrictMd(raw);
+    out.push({ slug: e.name, name: name || e.name, type, sect, clan, description });
+  }
+  out.sort((a, b) => a.name.localeCompare(b.name, 'ru'));
+  return out;
+}
+
+// Секция «## Районы» в city.md — ОДНОСТОРОННЕЕ зеркало district.md-сущностей (§A3.2,
+// решение ОВ-2: district.md остаётся единственным источником истины, дублировать
+// тип/секту/клан в текст секции не нужно — они уже там). Перестраивается целиком при
+// любой мутации района: по буллету на имя, в том же порядке, что отдаёт GET /districts.
+// replaceCitySectionBullets (не upsert!) — та же семантика, что у уже принятого
+// _syncCityFactionsList (routes/archive.js, §11): если секции «## Районы» в файле нет
+// вообще (рукописный city.md без нужной секции), синк молча пропускается с warning,
+// новую секцию сюрпризом не создаём. Non-blocking — район уже сохранён к моменту
+// вызова, сбой записи city.md его не откатывает.
+async function _syncCityDistrictsList(slug) {
+  try {
+    const file = path.join(cityDir(slug), 'city.md');
+    const raw = await fs.readFile(file, 'utf-8').catch(() => null);
+    if (raw === null) return null;
+    const names = (await _listDistricts(slug)).map(d => d.name);
+    const updated = replaceCitySectionBullets(raw, 'Районы', names);
+    if (updated === null) return 'Район сохранён, но в city.md не найдена секция «Районы» — синк пропущен';
+    if (updated === raw) return null; // уже актуально
+    await writeFileAtomic(file, updated, 'utf-8');
+    return null;
+  } catch (e) {
+    return `Район сохранён, но не удалось синхронизировать список «Районы» в описании города: ${e.message}`;
+  }
+}
+
+// GET /api/cities/:slug/districts — список районов города: [{slug, name, type, sect, clan, description}].
 router.get('/api/cities/:slug/districts', async (req, res) => {
   try {
     const slug = req.params.slug;
     if (!(await listCities()).includes(slug)) return res.status(404).json({ error: 'Город не найден' });
-
-    const root = locsDir(slug);
-    let entries;
-    try { entries = await fs.readdir(root, { withFileTypes: true }); } catch { entries = []; }
-    const out = [];
-    for (const e of entries) {
-      if (!e.isDirectory()) continue;
-      const districtFile = path.join(root, e.name, DISTRICT_FILENAME);
-      const raw = await fs.readFile(districtFile, 'utf-8').catch(() => null);
-      if (raw === null) continue;
-      const { name, type, sect, clan } = parseDistrictMd(raw);
-      out.push({ slug: e.name, name: name || e.name, type, sect, clan });
-    }
-    out.sort((a, b) => a.name.localeCompare(b.name, 'ru'));
-    res.json(out);
+    res.json(await _listDistricts(slug));
   } catch (e) { serverError(res, e); }
 });
 
@@ -487,9 +571,10 @@ router.post('/api/cities/:slug/districts', express.json(), async (req, res) => {
     const md = buildDistrictMd({ name, type: b.type, sect: b.sect, clan: b.clan, description: b.description });
     await fs.mkdir(districtDir, { recursive: true });
     await writeFileAtomic(path.join(districtDir, DISTRICT_FILENAME), md, 'utf-8');
+    const warning = await _syncCityDistrictsList(slug);
 
     console.log(`[create-district] ${slug}/${districtSlug} («${name}»)`);
-    res.json({ ok: true, slug: districtSlug, ...parseDistrictMd(md) });
+    res.json({ ok: true, slug: districtSlug, ...parseDistrictMd(md), ...(warning ? { warning } : {}) });
   } catch (e) {
     console.error('[create-district]', e.message);
     serverError(res, e);
@@ -522,11 +607,52 @@ router.put('/api/cities/:slug/districts/:districtSlug', express.json(), async (r
 
     const md = buildDistrictMd(merged);
     await writeFileAtomic(districtFile, md, 'utf-8');
+    const warning = await _syncCityDistrictsList(slug);
 
     console.log(`[edit-district] ${slug}/${districtSlug}`);
-    res.json({ ok: true, slug: districtSlug, ...parseDistrictMd(md) });
+    res.json({ ok: true, slug: districtSlug, ...parseDistrictMd(md), ...(warning ? { warning } : {}) });
   } catch (e) {
     console.error('[edit-district]', e.message);
+    serverError(res, e);
+  }
+});
+
+// DELETE /api/cities/:slug/districts/:districtSlug — soft-delete района (§A5).
+// Запрещено для НЕПУСТОГО района (§16.3-style явная 409, а не тихий авто-перенос
+// локаций куда-то): перенос был бы fs.rename каждой локации + правка ссылок (§B1) +
+// правка «**Округ:**» на карточке — молча выполнять цепочку побочных эффектов по
+// одному клику «Удалить» опаснее, чем показать явную ошибку и попросить пользователя
+// сначала разобраться с локациями. Мягко — в locations/_deleted/, симметрично
+// DELETE /api/locations/:slug; обходы районов/локаций уже пропускают «_»-папки.
+router.delete('/api/cities/:slug/districts/:districtSlug', async (req, res) => {
+  try {
+    const { slug, districtSlug } = req.params;
+    if (!(await listCities()).includes(slug)) return res.status(404).json({ error: 'Город не найден' });
+    if (!/^[a-z0-9_]+$/.test(districtSlug)) return res.status(400).json({ error: 'Недопустимый слаг района' });
+
+    const districtDir = path.join(locsDir(slug), districtSlug);
+    const districtFile = path.join(districtDir, DISTRICT_FILENAME);
+    if (!(await fs.readFile(districtFile, 'utf-8').catch(() => null)))
+      return res.status(404).json({ error: 'Район не найден' });
+
+    const entries = await fs.readdir(districtDir, { withFileTypes: true });
+    const locationDirs = entries.filter(e => e.isDirectory()).map(e => e.name);
+    if (locationDirs.length) {
+      return res.status(409).json({
+        error: `В районе «${districtSlug}» есть локации (${locationDirs.length}) — перенесите или удалите их сначала`,
+        locations: locationDirs,
+      });
+    }
+
+    const trashRoot = path.join(locsDir(slug), '_deleted');
+    await fs.mkdir(trashRoot, { recursive: true });
+    await fs.rename(districtDir, path.join(trashRoot, `district_${districtSlug}_${Date.now()}`));
+    const warning = await _syncCityDistrictsList(slug);
+
+    console.log(`[delete-district] ${slug}/${districtSlug}`);
+    res.json({ ok: true, ...(warning ? { warning } : {}) });
+  } catch (e) {
+    console.error('[delete-district]', e.message);
     serverError(res, e);
   }
 });

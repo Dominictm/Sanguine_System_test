@@ -9,9 +9,10 @@ const path    = require('path');
 const fs      = require('fs').promises;
 const { serverError, aiRateLimit, _logAiCall, _logAiFail, validateImageUpload } = require('../lib/http');
 const {
-  ROOT, reqCity, locsDir, writeFileAtomic, invalidateLocs,
+  ROOT, reqCity, locsDir, cityDir, writeFileAtomic, invalidateLocs,
   getAllLocations, findLocMdPath,
 } = require('../lib/db');
+const { updateMdLinks, findMdLinks } = require('../lib/md_links');
 const { slugify, writePrompt, parseLocation, sanitizeInlineText, parseDistrictMd, DISTRICT_FILENAME } = require('../lib/parsers');
 const { buildCityConstraints } = require('../lib/context_builder');
 
@@ -30,7 +31,7 @@ function _locCardTemplate(name, district) {
 | **Запах** | |
 | **Тактильное** | |
 ---
-## 🩸 Контекст Камарильи / Масок
+## 🩸 VtM-контекст / Маскарад
 | | |
 |---|---|
 | **Статус** | |
@@ -200,6 +201,22 @@ module.exports = function locationsRouter({ makeGenerationClient, genTextWithRet
           continue;
         }
         if (key === 'sensoryPalette') {
+          // Обязательные каналы (§C3, техспека 2026-08-04) — Свет/Звук/Запах нельзя
+          // УДАЛИТЬ, если они УЖЕ есть в карточке (пустое значение — можно, отсутствие
+          // строки — нет). UI больше не даёт кнопку удаления для этих трёх, но это лишь
+          // клиентская защита — тот же PUT доступен и напрямую, проверяем ещё раз здесь.
+          // Требование — только для каналов, что уже были: 3 реальные локации в данных
+          // используют алиасы («Зрение»/«Прикосновение» вместо «Свет»/«Тактильное»,
+          // location-card-modal-plan.md §2.1, нормализация вне скоупа) — им ничего не
+          // навязываем, иначе редактирование ЛЮБОГО их канала стало бы невозможным.
+          const sectionM = card.match(/## (?:👁️\s+)?Сенсорная палитра[^\n]*\n+([\s\S]+?)(?:\n## |\n---|$)/i);
+          const before = sectionM ? sectionM[1] : '';
+          const missing = ['Свет', 'Звук', 'Запах']
+            .filter(ch => new RegExp(`\\*\\*${ch}\\*\\*`).test(before))
+            .filter(ch => !new RegExp(`\\*\\*${ch}\\*\\*`).test(value));
+          if (missing.length) {
+            return res.status(400).json({ error: `Обязательные каналы сенсорики нельзя удалить: ${missing.join(', ')}` });
+          }
           card = card.replace(
             /(## (?:👁️\s+)?Сенсорная палитра[^\n]*\n+)([\s\S]+?)(\n## |\n---|$)/i,
             (_, hdr, _old, tail) => `${hdr}${value}\n${tail}`
@@ -294,11 +311,27 @@ module.exports = function locationsRouter({ makeGenerationClient, genTextWithRet
       );
       await writeFileAtomic(newMdPath, card, 'utf-8');
 
+      const movedFrom = path.relative(locRoot, oldLocDir).split(path.sep).join('/');
+      const movedTo   = path.relative(locRoot, newLocDir).split(path.sep).join('/');
+
+      // Ссылки на переехавшую карточку (из модулей/хроник/архива) — иначе они молча
+      // становятся битыми: папка уехала, а «[Склад](../../locations/villet/…)» остался
+      // (§B1). Глубина вложенности при переносе не меняется, поэтому ИСХОДЯЩИЕ ссылки
+      // внутри самой карточки трогать не нужно — только входящие.
+      // Non-blocking: перенос уже произошёл и не откатывается из-за сбоя правки чужого
+      // файла — тот же паттерн, что у _syncCityFactionsList (§11).
+      let linksUpdated = 0, linkWarning = null;
+      try {
+        linksUpdated = updateMdLinks(cityDir(city), [{ oldRel: movedFrom, newRel: movedTo }]).filesChanged;
+      } catch (e) {
+        linkWarning = `Локация перенесена, но ссылки на неё обновить не удалось: ${e.message}`;
+        console.error('[move-location] fix-links', e.message);
+      }
+
       invalidateLocs(city);
       res.json({
-        ok: true,
-        movedFrom: path.relative(locRoot, oldLocDir).split(path.sep).join('/'),
-        movedTo:   path.relative(locRoot, newLocDir).split(path.sep).join('/'),
+        ok: true, movedFrom, movedTo, linksUpdated,
+        ...(linkWarning ? { warning: linkWarning } : {}),
       });
     } catch (e) { serverError(res, e); }
   });
@@ -425,6 +458,21 @@ ${_locCardTemplate(locName, district?.trim() || '')}
       await writeFileAtomic(locFile, content, 'utf-8');
       invalidateLocs(city);
       res.json({ ok: true, slug: locSlug, district: distFolder });
+    } catch (e) { serverError(res, e); }
+  });
+
+  // ── GET /api/locations/:slug/backlinks — кто ссылается на эту локацию (§B2) ────
+  // Цель удаления не восстановить обратно (в отличие от переноса, §B1) — при DELETE
+  // автоподстановка нового пути невозможна, снимать ссылку молча означало бы стирать
+  // информацию без ведома Рассказчика. Read-only, для предупреждения ПЕРЕД удалением.
+  router.get('/api/locations/:slug/backlinks', async (req, res) => {
+    try {
+      const slug = decodeURIComponent(req.params.slug);
+      const city = reqCity(req);
+      const mdPath = await findLocMdPath(slug, city);
+      if (!mdPath) return res.status(404).json({ error: 'Локация не найдена' });
+      const rel = path.relative(locsDir(city), path.dirname(mdPath)).split(path.sep).join('/');
+      res.json(findMdLinks(cityDir(city), rel));
     } catch (e) { serverError(res, e); }
   });
 

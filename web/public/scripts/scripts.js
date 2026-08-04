@@ -317,6 +317,7 @@ function navigate(page) {
     if (page === 'threads')    loadThreads();
     if (page === 'locations')  loadLocations();
     if (page === 'library')    loadLibrary();
+    if (page === 'kindred')    loadKindred();
     if (page === 'audio-library') loadAudioLibrary();
     if (page === 'factions')   loadFactions();
     if (page === 'rumors')     loadRumors();
@@ -898,6 +899,8 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     if (tab === 'lib-merits')      loadMeritsLibrary('physical');
     if (tab === 'lib-flaws')       loadFlawsLibrary('физические');
     if (tab === 'lib-backgrounds') loadBackgroundsLibrary('general');
+    if (tab === 'kin-clans')       loadKindred('clans');
+    if (tab === 'kin-sects')       loadKindred('sects');
     if (tab === 'guide')           loadGuideTab();
   });
 
@@ -1748,6 +1751,7 @@ const _cityFactionsCreateHost   = document.getElementById('city-factions-editor'
 const _cityDistrictsCreateHost  = document.getElementById('city-districts-editor');
 const _cityPoliticalCreateHost  = document.getElementById('city-political-editor');
 const _cityLocationsCreateHost  = document.getElementById('city-locations-editor');
+const _cityRulesCreateHost      = document.getElementById('city-rules-editor');
 
 document.getElementById('btn-new-city').addEventListener('click', async () => {
   const city = cityNameInput.value.trim();
@@ -1755,14 +1759,6 @@ document.getElementById('btn-new-city').addEventListener('click', async () => {
   if (!city) { showToast('Укажите название города', 'warning'); return; }
   if (!year) { showToast('Укажите год', 'warning'); return; }
   if (!/^\d{3,4}$/.test(year)) { showToast('Год — это 3–4 цифры (например 2010)', 'warning'); return; }
-
-  const districts = _cityDistrictsCreateHost ? _collectDistrictCards(_cityDistrictsCreateHost) : [];
-  // Районы, дающие одинаковую папку (один слаг), будут схлопнуты в один — предупреждаем
-  // (тот же принцип, что и у прежнего CSV-поля — cityScaffold дедуплицирует по слагу).
-  const dSlugs = districts.map(d => slugifyJS(d.name) || d.name.toLowerCase());
-  const dupSlugs = [...new Set(dSlugs.filter((s, i) => dSlugs.indexOf(s) !== i))];
-  if (dupSlugs.length &&
-      !await showConfirm(`Районы дают одинаковую папку (${dupSlugs.join(', ')}) — дубликаты будут пропущены. Продолжить?`, { confirmText: 'Продолжить' })) return;
 
   const btn = document.getElementById('btn-new-city');
   const out = document.getElementById('out-new-city');
@@ -1776,12 +1772,12 @@ document.getElementById('btn-new-city').addEventListener('click', async () => {
     specifics:  document.getElementById('city-specifics').value.trim(),
     avoid:      document.getElementById('city-avoid').value.trim(),
     sources:    document.getElementById('city-sources').value.trim(),
-    // CSV имён — тот же формат, что раньше принимало плоское поле «Районы»: cityScaffold
-    // (web/lib/parsers/city.js) на это опирается для создания папок district_NN/<slug>/
-    // ДО того, как District станет отдельной сущностью со своим district.md
-    // (docs/design/2026-08-02-city-creation-restructure-techspec.md §2, делает параллельный
-    // агент) — сохраняем этот путь рабочим, не полагаясь только на новый эндпоинт ниже.
-    districts:  districts.map(d => d.name).join(','),
+    // Секции «живого города» из свёрнутого блока «Правила и ограничения» (§A2).
+    // Блок рисуется из CITY_RULE_SECTIONS_CREATE (city.js, без landmarks — T4,
+    // 2026-08-04) — оттуда же берём список ключей, чтобы поля не разъехались
+    // с разметкой при добавлении новой секции.
+    ...Object.fromEntries(CITY_RULE_SECTIONS_CREATE.map(([key]) =>
+      [key, document.getElementById(`city-${key}`)?.value.trim() || ''])),
   };
   btn.disabled = true; btn.textContent = '⏳ Создание...';
   if (out) { out.className = 'output-area show'; out.textContent = ''; }
@@ -1793,25 +1789,8 @@ document.getElementById('btn-new-city').addEventListener('click', async () => {
     if (!d.ok) { if (out) out.innerHTML = `<span class="err">⚠ ${escHtml(d.error || 'Ошибка')}</span>`; return; }
     if (Array.isArray(d.warnings)) d.warnings.forEach(w => showToast(w, 'warning'));
 
-    // Подробные метаданные района (тип/влияние/описание) — контракт техспеки §2.4,
-    // POST /api/cities/:slug/districts, делает параллельный агент. Папки под районы уже
-    // создал cityScaffold (см. districts-CSV в payload выше) — если эндпоинта ещё нет в
-    // этой рабочей копии (404) или он конфликтует с уже созданной папкой (409), это не
-    // должно ронять форму: город уже создан, детали района — best-effort надстройка.
-    const districtFailures = [];
-    for (const dist of districts) {
-      try {
-        const r = await fetch(`/api/cities/${encodeURIComponent(d.slug)}/districts`, {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(dist),
-        });
-        if (!r.ok && r.status !== 409) districtFailures.push(dist.name);
-      } catch { districtFailures.push(dist.name); }
-    }
-    if (districtFailures.length) {
-      showToast(`Город создан, но подробности района не сохранились (${districtFailures.join(', ')}) — эндпоинт районов ещё не подключён в этой копии`, 'warning');
-    }
-
+    // Районы больше не заводятся в форме создания (T2, 2026-08-04) — добавляются
+    // постфактум карточками района на странице только что созданного города.
     if (out) out.innerHTML = `<span class="ok">✓ Создан: cities/${escHtml(d.slug)}/ — переключаюсь…</span>`;
     setTimeout(() => { location.search = 'city=' + encodeURIComponent(d.slug); }, 900);
   } catch (e) {

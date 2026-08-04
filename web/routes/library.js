@@ -12,6 +12,8 @@ const { ROOT, writeFileAtomic } = require('../lib/db');
 const { slugify, sanitizeInlineText } = require('../lib/parsers');
 const { parseDisciplineMd, pathArtSlug } = require('../lib/disciplines');
 const { parsePsychicMd } = require('../lib/psychics');
+const { parseClanMd } = require('../lib/clans');
+const { parseSectMd } = require('../lib/sects');
 const { getMerits, getAllMerits, invalidateMerits } = require('../lib/merits-loader');
 const { getFlaws, getAllFlaws, invalidateFlaws } = require('../lib/flaws-loader');
 const { getBackgrounds, getAllBackgrounds, invalidateBackgrounds } = require('../lib/backgrounds-loader');
@@ -100,6 +102,60 @@ async function loadPsychics() {
 
 router.get('/api/library/psychics', async (_req, res) => {
   try { res.json(await loadPsychics()); }
+  catch (e) { serverError(res, e); }
+});
+
+// ── Библиотека: справочник кланов (system/library/clans/*.md) — K3, 2026-08-04 ──
+// Город-нейтральные данные → тот же mtime-кэш, что у дисциплин/психики. Нет
+// арта (в отличие от дисциплин) — не заводим hasArt, пока не понадобится.
+let _clanCache = null; // { sig, list }
+const CLANS_DIR = path.join(ROOT, 'system', 'library', 'clans');
+
+async function loadClans() {
+  const files = (await fs.readdir(CLANS_DIR).catch(() => null));
+  if (!files) return [];
+  const mds = files.filter(f => f.endsWith('.md') && f.toLowerCase() !== 'readme.md').sort();
+  const stats = await Promise.all(mds.map(f => fs.stat(path.join(CLANS_DIR, f)).catch(() => null)));
+  const sig = mds.map((f, i) => `${f}:${stats[i] ? stats[i].mtimeMs : 0}`).join('|');
+  if (_clanCache && _clanCache.sig === sig) return _clanCache.list;
+  const list = [];
+  for (const f of mds) {
+    const slug = f.replace(/\.md$/, '');
+    const md = await fs.readFile(path.join(CLANS_DIR, f), 'utf-8').catch(() => '');
+    if (md) list.push(parseClanMd(md, slug));
+  }
+  _clanCache = { sig, list };
+  return list;
+}
+
+router.get('/api/library/clans', async (_req, res) => {
+  try { res.json(await loadClans()); }
+  catch (e) { serverError(res, e); }
+});
+
+// ── Библиотека: справочник сект (system/library/sects/*.md) — K4, 2026-08-04 ──
+let _sectCache = null; // { sig, list }
+const SECTS_DIR = path.join(ROOT, 'system', 'library', 'sects');
+
+async function loadSects() {
+  const files = (await fs.readdir(SECTS_DIR).catch(() => null));
+  if (!files) return [];
+  const mds = files.filter(f => f.endsWith('.md') && f.toLowerCase() !== 'readme.md').sort();
+  const stats = await Promise.all(mds.map(f => fs.stat(path.join(SECTS_DIR, f)).catch(() => null)));
+  const sig = mds.map((f, i) => `${f}:${stats[i] ? stats[i].mtimeMs : 0}`).join('|');
+  if (_sectCache && _sectCache.sig === sig) return _sectCache.list;
+  const list = [];
+  for (const f of mds) {
+    const slug = f.replace(/\.md$/, '');
+    const md = await fs.readFile(path.join(SECTS_DIR, f), 'utf-8').catch(() => '');
+    if (md) list.push(parseSectMd(md, slug));
+  }
+  _sectCache = { sig, list };
+  return list;
+}
+
+router.get('/api/library/sects', async (_req, res) => {
+  try { res.json(await loadSects()); }
   catch (e) { serverError(res, e); }
 });
 
@@ -322,6 +378,128 @@ router.delete('/api/library/psychics/:slug', async (req, res) => {
     await fs.mkdir(trashDir, { recursive: true });
     await fs.rename(file, path.join(trashDir, `${slug}_${Date.now()}.md`));
     _psyCache = null;
+    res.json({ ok: true });
+  } catch (e) { serverError(res, e); }
+});
+
+// ── Библиотека: CRUD кланов (K3, 2026-08-04) — зеркало disciplines выше, но без
+// «levels» (клан не силовая шкала, одна секция «## Описание»).
+function _clanTemplate({ name, sect, disciplines, weakness, source, note, description }) {
+  const lines = [`# ${name}`];
+  if (sect) lines.push(`- **Секта:** ${sanitizeInlineText(sect)}`);
+  if (disciplines) lines.push(`- **Дисциплины:** ${sanitizeInlineText(disciplines)}`);
+  if (weakness) lines.push(`- **Слабость:** ${sanitizeInlineText(weakness)}`);
+  if (source) lines.push(`- **Источник:** ${sanitizeInlineText(source)}`);
+  lines.push('- **Авторское:** да');
+  if (note) { lines.push(''); for (const l of note.split('\n')) lines.push(`> ${sanitizeInlineText(l)}`); }
+  lines.push('', '## Описание', '', sanitizeInlineText(description || ''), '');
+  return lines.join('\n');
+}
+
+router.post('/api/library/clans', express.json(), async (req, res) => {
+  try {
+    const { name, sect, disciplines, weakness, source, note, description } = req.body || {};
+    if (!name?.trim()) return res.status(400).json({ error: 'Название обязательно' });
+    const slug = slugify(name);
+    if (!slug) return res.status(400).json({ error: 'Не удалось построить slug из названия' });
+    const file = path.join(CLANS_DIR, `${slug}.md`);
+    if (await fs.stat(file).catch(() => null))
+      return res.status(409).json({ error: 'Клан с таким названием уже существует', slug });
+    await writeFileAtomic(file, _clanTemplate({ name: name.trim(), sect, disciplines, weakness, source, note, description }), 'utf-8');
+    _clanCache = null;
+    res.json({ ok: true, slug });
+  } catch (e) { serverError(res, e); }
+});
+
+router.put('/api/library/clans/:slug', express.json(), async (req, res) => {
+  try {
+    const slug = slugify(req.params.slug);   // FIX-17 — see disciplines PUT above
+    if (!slug) return res.status(400).json({ error: 'Недопустимый slug' });
+    const file = path.join(CLANS_DIR, `${slug}.md`);
+    const existing = await fs.readFile(file, 'utf-8').catch(() => null);
+    if (existing == null) return res.status(404).json({ error: 'Клан не найден' });
+    if (!parseClanMd(existing, slug).custom)
+      return res.status(403).json({ error: 'Редактирование доступно только для авторских кланов' });
+    const { name, sect, disciplines, weakness, source, note, description } = req.body || {};
+    if (!name?.trim()) return res.status(400).json({ error: 'Название обязательно' });
+    await writeFileAtomic(file, _clanTemplate({ name: name.trim(), sect, disciplines, weakness, source, note, description }), 'utf-8');
+    _clanCache = null;
+    res.json({ ok: true, slug });
+  } catch (e) { serverError(res, e); }
+});
+
+router.delete('/api/library/clans/:slug', async (req, res) => {
+  try {
+    const slug = slugify(req.params.slug);   // FIX-17 — see disciplines PUT above
+    if (!slug) return res.status(400).json({ error: 'Недопустимый slug' });
+    const file = path.join(CLANS_DIR, `${slug}.md`);
+    const existing = await fs.readFile(file, 'utf-8').catch(() => null);
+    if (existing == null) return res.status(404).json({ error: 'Клан не найден' });
+    if (!parseClanMd(existing, slug).custom)
+      return res.status(403).json({ error: 'Удаление доступно только для авторских кланов' });
+    const trashDir = path.join(CLANS_DIR, '_deleted');
+    await fs.mkdir(trashDir, { recursive: true });
+    await fs.rename(file, path.join(trashDir, `${slug}_${Date.now()}.md`));
+    _clanCache = null;
+    res.json({ ok: true });
+  } catch (e) { serverError(res, e); }
+});
+
+// ── Библиотека: CRUD сект (K4, 2026-08-04) — зеркало clans выше, меньше полей.
+function _sectTemplate({ name, source, note, description }) {
+  const lines = [`# ${name}`];
+  if (source) lines.push(`- **Источник:** ${sanitizeInlineText(source)}`);
+  lines.push('- **Авторское:** да');
+  if (note) { lines.push(''); for (const l of note.split('\n')) lines.push(`> ${sanitizeInlineText(l)}`); }
+  lines.push('', '## Описание', '', sanitizeInlineText(description || ''), '');
+  return lines.join('\n');
+}
+
+router.post('/api/library/sects', express.json(), async (req, res) => {
+  try {
+    const { name, source, note, description } = req.body || {};
+    if (!name?.trim()) return res.status(400).json({ error: 'Название обязательно' });
+    const slug = slugify(name);
+    if (!slug) return res.status(400).json({ error: 'Не удалось построить slug из названия' });
+    const file = path.join(SECTS_DIR, `${slug}.md`);
+    if (await fs.stat(file).catch(() => null))
+      return res.status(409).json({ error: 'Секта с таким названием уже существует', slug });
+    await writeFileAtomic(file, _sectTemplate({ name: name.trim(), source, note, description }), 'utf-8');
+    _sectCache = null;
+    res.json({ ok: true, slug });
+  } catch (e) { serverError(res, e); }
+});
+
+router.put('/api/library/sects/:slug', express.json(), async (req, res) => {
+  try {
+    const slug = slugify(req.params.slug);   // FIX-17 — see disciplines PUT above
+    if (!slug) return res.status(400).json({ error: 'Недопустимый slug' });
+    const file = path.join(SECTS_DIR, `${slug}.md`);
+    const existing = await fs.readFile(file, 'utf-8').catch(() => null);
+    if (existing == null) return res.status(404).json({ error: 'Секта не найдена' });
+    if (!parseSectMd(existing, slug).custom)
+      return res.status(403).json({ error: 'Редактирование доступно только для авторских сект' });
+    const { name, source, note, description } = req.body || {};
+    if (!name?.trim()) return res.status(400).json({ error: 'Название обязательно' });
+    await writeFileAtomic(file, _sectTemplate({ name: name.trim(), source, note, description }), 'utf-8');
+    _sectCache = null;
+    res.json({ ok: true, slug });
+  } catch (e) { serverError(res, e); }
+});
+
+router.delete('/api/library/sects/:slug', async (req, res) => {
+  try {
+    const slug = slugify(req.params.slug);   // FIX-17 — see disciplines PUT above
+    if (!slug) return res.status(400).json({ error: 'Недопустимый slug' });
+    const file = path.join(SECTS_DIR, `${slug}.md`);
+    const existing = await fs.readFile(file, 'utf-8').catch(() => null);
+    if (existing == null) return res.status(404).json({ error: 'Секта не найдена' });
+    if (!parseSectMd(existing, slug).custom)
+      return res.status(403).json({ error: 'Удаление доступно только для авторских сект' });
+    const trashDir = path.join(SECTS_DIR, '_deleted');
+    await fs.mkdir(trashDir, { recursive: true });
+    await fs.rename(file, path.join(trashDir, `${slug}_${Date.now()}.md`));
+    _sectCache = null;
     res.json({ ok: true });
   } catch (e) { serverError(res, e); }
 });

@@ -264,7 +264,7 @@ module.exports = function fillRouter({ makeGenerationClient, genTextWithRetry })
   | **Запах** | |
   | **Тактильное** | |
   ---
-  ## 🩸 Контекст Камарильи / Масок
+  ## 🩸 VtM-контекст / Маскарад
   | | |
   |---|---|
   | **Статус** | |

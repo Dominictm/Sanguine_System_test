@@ -127,6 +127,103 @@ if ($Fix) {
     $broken = @($broken | Where-Object { -not $_.IsImage })
 }
 
+# ─── Auto-fix broken .md links — единственное совпадение по имени файла ──────
+# §B4 (2026-08-04-city-section-techspec.md): -Fix раньше умел чинить только
+# изображения. Страховка «на потом» для .md-ссылок, сломанных МИМО интерфейса
+# (правка файлов руками, git) — интерфейсные операции (§B1: перенос локации,
+# §A5: удаление района, DELETE персонажа) уже чинят/де-линкуют свои ссылки сами,
+# в момент самой операции; здесь — общий, более грубый инструмент для случаев,
+# когда обновлять было некому (сторонняя правка).
+#
+# Правило нарочно консервативное: чиним только когда файл с таким ИМЕНЕМ
+# существует В ЕДИНСТВЕННОМ месте всего просканированного дерева — при 0 или
+# 2+ совпадениях оставляем ссылку как есть и сообщаем (не гадаем, какая из
+# нескольких одноимённых карточек имелась в виду).
+if ($Fix) {
+    # [System.IO.Path]::GetRelativePath не существует в Windows PowerShell 5.1
+    # (это .NET Core API, здесь — .NET Framework) — первая версия этого блока звала
+    # его напрямую; ошибка метода оказалась НЕтерминирующей и утекла дальше по
+    # конвейеру: $newRel/$newLink остались $null, [regex]::Replace на $null тоже упал
+    # нетерминирующей ошибкой, $updated остался от предыдущей итерации/$null, и в
+    # if ($updated -ne $text) сравнение с $null оказалось true — файл ушёл на диск
+    # ПУСТЫМ (WriteAllText($filePath, $null, ...) пишет ''). Поймано на тестовой
+    # фикстуре ДО прогона на реальных данных. Ниже — Uri.MakeRelativeUri (доступен в
+    # обеих версиях .NET) и try/catch на файл и на ссылку, чтобы неожиданная ошибка
+    # пропускала файл нетронутым, а не портила его частичной/пустой записью.
+    function Get-RelLinkPath([string]$fromDir, [string]$toFile) {
+        $fromUri = New-Object System.Uri(($fromDir.TrimEnd('\') + '\'))
+        $toUri   = New-Object System.Uri($toFile)
+        $rel     = $fromUri.MakeRelativeUri($toUri).ToString()
+        return [System.Uri]::UnescapeDataString($rel)
+    }
+
+    $byBasename = @{}
+    foreach ($f in $mdFiles) {
+        if (-not $byBasename.ContainsKey($f.Name)) { $byBasename[$f.Name] = @() }
+        $byBasename[$f.Name] += $f.FullName
+    }
+
+    $mdBroken  = @($broken | Where-Object { $_.Link -match '\.md(#|$)' })
+    $resolved  = New-Object System.Collections.Generic.HashSet[string]
+    $mdFixed   = 0
+
+    foreach ($group in ($mdBroken | Group-Object File)) {
+        $filePath = Join-Path $Root $group.Name
+        try {
+            $rawBytes = [System.IO.File]::ReadAllBytes($filePath)
+            $hasBom   = ($rawBytes.Length -ge 3 -and $rawBytes[0] -eq 0xEF -and
+                         $rawBytes[1] -eq 0xBB -and $rawBytes[2] -eq 0xBF)
+            $text     = [System.IO.File]::ReadAllText($filePath, [System.Text.Encoding]::UTF8) `
+                        -replace "`r`n", "`n"
+        } catch {
+            Write-Host "  ПРОПУЩЕН (не удалось прочитать) $($group.Name): $($_.Exception.Message)" -ForegroundColor DarkYellow
+            continue
+        }
+        $original = $text
+        $dir      = Split-Path -Parent $filePath
+        $touched  = $false
+
+        foreach ($b in $group.Group) {
+            try {
+                if ($b.Link -notmatch '^(.*?\.md)(#.*)?$') { continue }
+                $linkPath = $Matches[1]
+                $fragment = $Matches[2]; if ($null -eq $fragment) { $fragment = '' }
+                $bn = Split-Path -Leaf ([System.Uri]::UnescapeDataString($linkPath))
+                $candidates = $byBasename[$bn]
+                if (-not $candidates -or $candidates.Count -ne 1) { continue }  # 0 или 2+ — не трогаем
+
+                $newRel  = Get-RelLinkPath -fromDir $dir -toFile $candidates[0]
+                $newLink = $newRel + $fragment
+                if ([string]::IsNullOrEmpty($newLink)) { continue }  # защита: никогда не пишем пустую ссылку
+
+                $pattern = [regex]::Escape("]($($b.Link))")
+                $replacement = "](" + $newLink.Replace('$', '$$') + ")"
+                $updated = [regex]::Replace($text, $pattern, $replacement)
+                if ([string]::IsNullOrEmpty($updated)) { continue }  # защита: никогда не обнуляем текст файла
+                if ($updated -ne $text) {
+                    $text = $updated
+                    $touched = $true
+                    [void]$resolved.Add("$($group.Name)|$($b.Link)")
+                }
+            } catch {
+                Write-Host "  ПРОПУЩЕНА ссылка ($($b.Link)) в $($group.Name): $($_.Exception.Message)" -ForegroundColor DarkYellow
+            }
+        }
+
+        if ($touched -and -not [string]::IsNullOrEmpty($text)) {
+            $enc = [System.Text.UTF8Encoding]::new($hasBom)
+            [System.IO.File]::WriteAllText($filePath, $text, $enc)
+            Write-Host "  FIXED  $($group.Name) (.md-ссылки переписаны)" -ForegroundColor Green
+            $mdFixed++
+        }
+    }
+
+    # Из финального отчёта убираем только то, что реально переписали — ссылки с
+    # 0/2+ совпадениями остаются в $broken и по-прежнему видны как BROKEN.
+    $broken = @($broken | Where-Object { -not $resolved.Contains("$($_.File)|$($_.Link)") })
+    $fixedFiles += $mdFixed
+}
+
 # ─── Report ───────────────────────────────────────────────────────────────────
 
 $rulesNote = if ($IncludeRules) { "" } else { " (rules/ excluded)" }

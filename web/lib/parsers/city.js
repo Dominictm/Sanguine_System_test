@@ -8,8 +8,8 @@ const { slugify, escapeTableCell, unescapeTableCell, sanitizeInlineText } = requ
 // Single source of truth for the city.md section layout, shared by tools/new_city.js,
 // POST/PUT /api/cities and the edit form. Order = order rendered in the file.
 const CITY_SECTIONS = [
-  ['political',  'Политический ландшафт'],
   ['factions',   'Фракции'],
+  ['political',  'Политический ландшафт'],
   ['districts',  'Районы'],
   ['landmarks',  'Значимые места'],
   ['locations',  'Ключевые локации'],
@@ -84,7 +84,15 @@ function parseCityMd(raw) {
     const key = headingToKey.get(heading);
     if (!key) continue;
     const bodyTxt = nl === -1 ? '' : part.slice(nl + 1);
-    sections[key] = bodyTxt.split('\n').map(l => l.replace(/^\s*-\s?/, '').trim())
+    sections[key] = bodyTxt.split('\n')
+      // Горизонтальная линейка «---» между секциями — разметка, а не пункт списка.
+      // Отбрасываем ДО снятия буллета: иначе `replace(/^\s*-\s?/)` съедает первый дефис
+      // и оставляет «--» отдельной строкой секции. В рукописных city.md (Париж и т.п.)
+      // такие разделители стоят после каждой секции, и «--» протекало в данные —
+      // в редакторе «Фракции» оно показывалось фиктивной фракцией, а обратная запись
+      // (_replaceCitySection, синк фракций) закрепляла его в файле как «- --».
+      .filter(l => !/^\s*-{3,}\s*$/.test(l))
+      .map(l => l.replace(/^\s*-\s?/, '').trim())
       .filter(l => l && l !== '…').join('\n');
   }
   return { display, year, description, sections };
@@ -119,7 +127,11 @@ function cityScaffold(fields = {}) {
     : '|  |  |  |  |';
 
   const files = {
-    'city.md': buildCityMd(fields),
+    // districts приходит CSV-строкой («Монмартр, Бастилия») — она нужна такой для
+    // создания папок ниже, но в секцию «## Районы» так попадала ОДНИМ буллетом
+    // «- Монмартр, Бастилия». Для текста секции передаём уже разобранный список
+    // построчно — по буллету на район (§A6.2).
+    'city.md': buildCityMd({ ...fields, districts: districts.join('\n') }),
     'archive/events.md':
 `# 📖 Хроника «${display}» — События
 
@@ -196,14 +208,19 @@ ${balanceRows}
     'rules',
   ];
   if (districts.length) {
+    // Плоско — locations/<rayon-slug>/, БЕЗ обёртки district_NN/ (§8 плана отменил
+    // «Округ» как уровень адресации; §A4 — эта функция всё ещё создавала фантомные
+    // обёртки, из-за которых POST /api/cities с районами давал ДВЕ папки на район:
+    // пустую district_NN/<slug>/.gitkeep рядом с настоящей <slug>/district.md,
+    // которую следом создаёт POST /api/cities/:slug/districts).
     // Дедуп по итоговому слагу: два района с одинаковым именем (или дающие один слаг)
-    // не создают дублирующих папок. Оставшиеся нумеруются подряд district_01, 02…
+    // схлопываются в одну папку.
     const seen = new Set();
     districts.forEach((d, i) => {
       const dslug = slugify(d) || `rayon_${String(i + 1).padStart(2, '0')}`;
       if (seen.has(dslug)) return;
       seen.add(dslug);
-      keepDirs.push(`locations/district_${String(seen.size).padStart(2, '0')}/${dslug}`);
+      keepDirs.push(`locations/${dslug}`);
     });
     if (!seen.size) keepDirs.push('locations');
   } else {
@@ -330,6 +347,11 @@ function removePoliticalFaction(raw, name) {
 }
 
 module.exports = {
+  // citySectionBody — та же нормализация «строки формы → тело секции», что применяет
+  // buildCityMd. Экспортируется для точечной записи (lib/city_md_writer.js, §A1):
+  // без неё запись распарсенного значения обратно теряла бы буллеты, и round-trip
+  // «прочитал → записал то же самое» менял файл.
+  citySectionBody: _citySection,
   CITY_SECTIONS, CITY_DEFAULT_DESCRIPTION, buildCityMd, parseCityMd,
   cityScaffold, parsePoliticalFactions, setPoliticalFactionInfluence, removePoliticalFaction,
 };

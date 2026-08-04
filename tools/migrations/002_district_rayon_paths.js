@@ -38,6 +38,7 @@
 
 const fs = require('fs'), path = require('path');
 const { DISTRICT_FILENAME } = require('../../web/lib/parsers/district');
+const { updateMdLinks } = require('../../web/lib/md_links');
 
 function escapeRegExp(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
 function isDirEmpty(dir) { try { return fs.readdirSync(dir).length === 0; } catch { return true; } }
@@ -138,37 +139,10 @@ function migrateLocationsTree(locRoot, renameMap, log) {
 
 // Правит markdown-ссылки вида "...locations/<oldRel>/..." на "...locations/<newRel>/..."
 // во всех .md файлах города (любая глубина «../»). Возвращает число изменённых файлов.
+// Реализация вынесена в web/lib/md_links.js (§B1) — тот же обход теперь нужен и
+// одиночному переносу локации из PUT /api/locations/:slug/district, дублировать нельзя.
 function fixLinks(cityDir, renameMap, log) {
-  if (!renameMap.length) return 0;
-  const sorted = [...renameMap].sort((a, b) => b.oldRel.length - a.oldRel.length);
-  let filesChanged = 0;
-
-  function walk(dir) {
-    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
-      const fp = path.join(dir, e.name);
-      if (e.isDirectory()) walk(fp);
-      else if (e.isFile() && e.name.endsWith('.md')) {
-        const raw = fs.readFileSync(fp, 'utf8');
-        const bom = raw.charCodeAt(0) === 0xFEFF;
-        let text = bom ? raw.slice(1) : raw;
-        let touched = false;
-        for (const { oldRel, newRel } of sorted) {
-          const re = new RegExp(escapeRegExp(`locations/${oldRel}`) + '(?=[/)]|$)', 'g');
-          if (re.test(text)) {
-            text = text.replace(re, `locations/${newRel}`);
-            touched = true;
-          }
-        }
-        if (touched) {
-          fs.writeFileSync(fp, (bom ? '﻿' : '') + text, 'utf8');
-          filesChanged++;
-          log(`ссылки поправлены: ${relPosix(cityDir, fp)}`);
-        }
-      }
-    }
-  }
-  walk(cityDir);
-  return filesChanged;
+  return updateMdLinks(cityDir, renameMap, { prefix: 'locations', log }).filesChanged;
 }
 
 // Правит ИСХОДЯЩИЕ относительные ссылки (вида «../../characters/…», «../../../chronicles/…»)

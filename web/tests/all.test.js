@@ -260,10 +260,29 @@ describe('Parsers — unit', () => {
       assert.equal(parsed.sections.factions, '');  // «- …» отфильтровывается в пустую строку
     });
 
-    it('факции-секция канонична (сразу после political, до locations)', () => {
+    it('горизонтальная линейка «---» между секциями не протекает в данные секции', () => {
+      // Рукописный city.md (Париж и т.п.) разделяет секции линейкой «---». Она попадала
+      // в тело секции, где снятие буллета (`replace(/^\s*-\s?/)`) превращало её в «--» —
+      // отдельный «пункт» списка. Для «Фракций» это выглядело фиктивной фракцией в
+      // редакторе, а двусторонний синк (§11) закреплял её в файле строкой «- --».
+      const md = [
+        '# Тест, 2010 — сеттинг города', '', 'Описание.', '', '---', '',
+        '## Фракции', '', '- Камарилья', '- Анархи', '', '---', '',
+        '## Политический ландшафт', '', '- Князь: Кто-то', '', '---', '',
+      ].join('\n');
+      const parsed = parseCityMd(md);
+      assert.equal(parsed.sections.factions, 'Камарилья\nАнархи',
+        'разделитель «---» не должен становиться пунктом секции');
+      assert.equal(parsed.sections.political, 'Князь: Кто-то');
+      for (const [key, value] of Object.entries(parsed.sections))
+        assert.ok(!/^-+$/m.test(value), `секция ${key} содержит остаток линейки: ${JSON.stringify(value)}`);
+    });
+
+    it('факции-секция канонична (сразу перед political, до locations)', () => {
       const keys = CITY_SECTIONS.map(([k]) => k);
       assert.ok(keys.includes('factions'), 'есть ключ factions');
-      assert.equal(keys.indexOf('factions'), keys.indexOf('political') + 1);
+      assert.equal(keys.indexOf('factions'), keys.indexOf('political') - 1,
+        'Фракции — первая секция, перед Политическим ландшафтом (Властители/Примогенат уже внутри него)');
       assert.ok(keys.indexOf('factions') < keys.indexOf('locations'));
     });
 
@@ -408,6 +427,140 @@ describe('Parsers — unit', () => {
       const parsed = parseCityMd(migrated);
       assert.equal(parsed.sections.political, 'Камарилья держит центр');
       assert.equal(parsed.sections.limits, '');
+    });
+  });
+
+  // Точечная запись city.md вместо полного buildCityMd-ребилда (техспека 2026-08-04 §A1).
+  // Раньше PUT /api/cities с fields пересобирал файл из 16 канонических секций и стирал
+  // всё рукописное — из-за чего вкладка «Поля» была ЗАПРЕЩЕНА городам вроде Парижа.
+  describe('city_md_writer — точечная запись секций city.md (§A1)', () => {
+    const W = require('../lib/city_md_writer');
+
+    // Уменьшенный слепок Парижа: рукописные секции, таблица, блок-цитата,
+    // ###-подзаголовок и своя секция без канонического аналога.
+    const PARIS = [
+      '# Париж, 2010 — сеттинг города', '',
+      'Все сценарии разворачиваются в **Париже 2010**.', '',
+      '---', '',
+      '## Фракции', '', '- Камарилья', '- Анархи', '',
+      '---', '',
+      '## Политический ландшафт', '',
+      '- Париж — территория Камарильи.', '',
+      '> Актуальная карта сил — `archive/political_state.md`.', '',
+      '### Историческая канва', '',
+      '- Гильотинные Ночи.', '',
+      '---', '',
+      '## Ключевые локации', '',
+      '| Локация | Значение |', '|---------|---------|', '| Опера Гарнье | Элизиум |', '',
+      '---', '',
+      '## Уточняющие вопросы перед написанием сценария (Париж)', '',
+      '1. Состав Coterie.', '',
+    ].join('\n');
+
+    it('replaceCitySection меняет тело только целевой секции, соседние не трогает', () => {
+      const out = W.replaceCitySection(PARIS, 'Фракции', '- Камарилья\n- Шабаш');
+      assert.match(out, /## Фракции\n- Камарилья\n- Шабаш\n/);
+      assert.ok(out.includes('> Актуальная карта сил'), 'блок-цитата соседней секции цела');
+      assert.ok(out.includes('### Историческая канва'), '###-подзаголовок цел');
+      assert.ok(out.includes('| Опера Гарнье | Элизиум |'), 'таблица цела');
+      assert.ok(out.includes('## Уточняющие вопросы перед написанием сценария (Париж)'),
+        'рукописная секция без канонического аналога цела');
+    });
+
+    it('replaceCitySection пишет произвольный многострочный текст, не только буллеты', () => {
+      const out = W.replaceCitySection(PARIS, 'Фракции', 'Проза про фракции.\n\n| A | B |\n|---|---|');
+      assert.match(out, /## Фракции\nПроза про фракции\.\n\n\| A \| B \|\n\|---\|---\|\n/);
+    });
+
+    it('replaceCitySection → null, если секции нет (вызывающий решает, что делать)', () => {
+      assert.equal(W.replaceCitySection(PARIS, 'Именник и фактура', 'что-то'), null);
+    });
+
+    it('пустое значение секции → канонический плейсхолдер «- …»', () => {
+      const out = W.replaceCitySection(PARIS, 'Фракции', '');
+      assert.match(out, /## Фракции\n- …\n/);
+      assert.equal(parseCityMd(out).sections.factions, '', 'парсер читает плейсхолдер как пусто');
+    });
+
+    it('upsertCitySection вставляет отсутствующую секцию в каноническое место', () => {
+      // «Районы» идут сразу после «Политический ландшафт» в CITY_SECTIONS,
+      // значит вставка ожидается между ним и «Ключевые локации».
+      const { text, created } = W.upsertCitySection(PARIS, 'Районы', '- Монмартр');
+      assert.equal(created, true);
+      const heads = [...text.matchAll(/^##\s+(.+?)\s*$/gm)].map(m => m[1]);
+      assert.deepEqual(heads, ['Фракции', 'Политический ландшафт', 'Районы', 'Ключевые локации',
+        'Уточняющие вопросы перед написанием сценария (Париж)']);
+      assert.equal(parseCityMd(text).sections.districts, 'Монмартр');
+      assert.ok(text.includes('### Историческая канва'), 'вставка не съела хвост предыдущей секции');
+    });
+
+    it('upsertCitySection на существующей секции = замена, created:false', () => {
+      const { text, created } = W.upsertCitySection(PARIS, 'Фракции', '- Шабаш');
+      assert.equal(created, false);
+      assert.equal(parseCityMd(text).sections.factions, 'Шабаш');
+    });
+
+    it('ИНВАРИАНТ: запись текущих значений не меняет файл байт-в-байт', () => {
+      // Ключевая гарантия §A1.6 — без неё «точечная запись» тихо вырождается в ребилд.
+      const canonical = buildCityMd({
+        display: 'Тест', year: '2010', description: 'Опис.',
+        factions: 'Камарилья\nАнархи', political: 'Князь: Кто-то',
+      });
+      const parsed = parseCityMd(canonical);
+      let out = canonical;
+      out = W.setCityDescription(W.setCityTitle(out, parsed.display, parsed.year), parsed.description);
+      // Тот же путь, которым пойдёт PUT /api/cities: значения из формы нормализуются
+      // через citySectionBody, как это делал buildCityMd.
+      for (const [key, heading] of CITY_SECTIONS)
+        out = W.upsertCitySectionFromForm(out, heading, parsed.sections[key] || '').text;
+      assert.equal(out, canonical, 'повторная запись тех же значений изменила файл');
+    });
+
+    it('идемпотентность на рукописном файле: второй проход ничего не меняет', () => {
+      const once  = W.replaceCitySection(PARIS, 'Фракции', '- Камарилья\n- Шабаш');
+      const twice = W.replaceCitySection(once,  'Фракции', '- Камарилья\n- Шабаш');
+      assert.equal(twice, once);
+    });
+
+    it('setCityTitle переписывает H1; пустые display/year не трогают заголовок', () => {
+      assert.match(W.setCityTitle(PARIS, 'Лион', '1998'), /^# Лион, 1998 — сеттинг города$/m);
+      assert.ok(W.setCityTitle(PARIS, '', '').includes('# Париж, 2010 — сеттинг города'));
+      // Правка одного поля не сносит второе.
+      assert.match(W.setCityTitle(PARIS, 'Лион', ''), /^# Лион, 2010 — сеттинг города$/m);
+    });
+
+    it('setCityDescription меняет только абзац между H1 и первой секцией', () => {
+      const out = W.setCityDescription(PARIS, 'Новое описание.');
+      assert.equal(parseCityMd(out).description, 'Новое описание.');
+      assert.ok(out.includes('## Фракции'), 'первая секция на месте');
+      assert.ok(out.includes('- Камарилья'));
+    });
+
+    it('BOM сохраняется при любой правке', () => {
+      const withBom = '﻿' + PARIS;
+      for (const out of [
+        W.replaceCitySection(withBom, 'Фракции', '- X'),
+        W.upsertCitySection(withBom, 'Районы', '- Y').text,
+        W.setCityTitle(withBom, 'Лион', '1998'),
+        W.setCityDescription(withBom, 'Опис.'),
+      ]) assert.equal(out.charCodeAt(0), 0xFEFF);
+    });
+
+    it('регистр заголовка не важен (как в parseCityMd)', () => {
+      const lower = PARIS.replace('## Фракции', '## фракции');
+      assert.ok(W.replaceCitySection(lower, 'Фракции', '- X'), 'секция найдена при ином регистре');
+    });
+
+    it('customCitySections находит рукописные секции города', () => {
+      assert.deepEqual(W.customCitySections(PARIS),
+        ['Уточняющие вопросы перед написанием сценария (Париж)']);
+      assert.deepEqual(W.customCitySections(buildCityMd({ display: 'X', year: '2020' })), []);
+    });
+
+    it('replaceCitySectionBullets — обёртка для списков (Фракции/Районы)', () => {
+      const out = W.replaceCitySectionBullets(PARIS, 'Фракции', ['Камарилья', ' Шабаш ', '']);
+      assert.match(out, /## Фракции\n- Камарилья\n- Шабаш\n/);
+      assert.match(W.replaceCitySectionBullets(PARIS, 'Фракции', []), /## Фракции\n- …\n/);
     });
   });
 
@@ -681,20 +834,24 @@ describe('Parsers — unit', () => {
       assert.ok(!keepDirs.some(d => d.startsWith('locations/district_')), 'без районов не должно быть district_*');
     });
 
-    it('районы (CSV или массив) → locations/district_NN/<slug>', () => {
+    it('районы (CSV или массив) → locations/<slug>, БЕЗ обёртки district_NN (§A4)', () => {
+      // §8 плана отменил «Округ» как уровень адресации; district_NN-обёртки были
+      // фантомными — POST /api/cities с районами давал ДВЕ папки на район, пустую
+      // district_NN/<slug> рядом с настоящей <slug>/district.md.
       const fromCsv = cityScaffold({ display: 'X', year: '2020', districts: 'Митте, Кройцберг' }).keepDirs;
-      assert.ok(fromCsv.includes('locations/district_01/mitte'));
-      assert.ok(fromCsv.includes('locations/district_02/kroytsberg'));
+      assert.ok(fromCsv.includes('locations/mitte'));
+      assert.ok(fromCsv.includes('locations/kroytsberg'));
+      assert.ok(!fromCsv.some(d => /^locations\/district_/.test(d)), 'обёртки district_NN быть не должно');
       assert.ok(!fromCsv.includes('locations'), 'при наличии районов общей папки locations нет');
       const fromArr = cityScaffold({ display: 'X', year: '2020', districts: ['Митте'] }).keepDirs;
-      assert.ok(fromArr.includes('locations/district_01/mitte'));
+      assert.ok(fromArr.includes('locations/mitte'));
     });
 
-    it('дедуп районов: одинаковый слаг схлопывается, нумерация подряд', () => {
+    it('дедуп районов: одинаковый слаг схлопывается', () => {
       const { keepDirs } = cityScaffold({ display: 'X', year: '2020', districts: 'Митте, Митте, Кройцберг' });
-      const dist = keepDirs.filter(d => d.startsWith('locations/district_'));
-      assert.deepEqual(dist, ['locations/district_01/mitte', 'locations/district_02/kroytsberg'],
-        'дубль «Митте» должен быть схлопнут, районы пронумерованы подряд');
+      const dist = keepDirs.filter(d => d.startsWith('locations/') && d !== 'locations');
+      assert.deepEqual(dist, ['locations/mitte', 'locations/kroytsberg'],
+        'дубль «Митте» должен быть схлопнут');
     });
 
     it('source-guard: POST /api/cities и new_city.js вызывают cityScaffold (без хардкода)', () => {
@@ -2492,6 +2649,81 @@ describe('API — integration', () => {
       assert.ok(!afterDelete);
     });
 
+    it('кланы (K3): создание/правка/удаление работают только для custom, канон защищён', async () => {
+      const name = '__CDP_I_Тестовый клан';
+      const create = await apiJson('/api/library/clans', {
+        method: 'POST',
+        body: JSON.stringify({ name, sect: 'Камарилья', disciplines: 'Дисциплина А', weakness: 'Слабость', description: 'Описание клана' }),
+      });
+      assert.equal(create.status, 200, create.body.error);
+      const slug = create.body.slug;
+      try {
+        const listed = (await apiJson('/api/library/clans')).body.find(c => c.slug === slug);
+        assert.ok(listed, 'новый клан должен попасть в список без рестарта');
+        assert.equal(listed.custom, true);
+        assert.equal(listed.sect, 'Камарилья');
+        assert.equal(listed.description, 'Описание клана');
+
+        const dup = await apiJson('/api/library/clans', { method: 'POST', body: JSON.stringify({ name }) });
+        assert.equal(dup.status, 409);
+
+        const edit = await apiJson(`/api/library/clans/${slug}`, {
+          method: 'PUT', body: JSON.stringify({ name, sect: 'Шабаш', description: 'Правленое описание' }),
+        });
+        assert.equal(edit.status, 200);
+        const afterEdit = (await apiJson('/api/library/clans')).body.find(c => c.slug === slug);
+        assert.equal(afterEdit.sect, 'Шабаш');
+        assert.equal(afterEdit.description, 'Правленое описание');
+
+        // Канон (7 базовых кланов, K6) нельзя редактировать/удалять через API.
+        const canonEdit = await apiJson('/api/library/clans/tremere', { method: 'PUT', body: JSON.stringify({ name: 'Тремер' }) });
+        assert.equal(canonEdit.status, 403);
+        const canonDelete = await apiJson('/api/library/clans/tremere', { method: 'DELETE' });
+        assert.equal(canonDelete.status, 403);
+      } finally {
+        await apiJson(`/api/library/clans/${slug}`, { method: 'DELETE' });
+        await fs.rm(path.join(__dirname, '../../system/library/clans/_deleted'), { recursive: true, force: true });
+      }
+      const afterDelete = (await apiJson('/api/library/clans')).body.find(c => c.slug === slug);
+      assert.ok(!afterDelete, 'удалённый клан не должен больше отдаваться API');
+    });
+
+    it('секты (K4): создание/удаление, custom=true, канон защищён', async () => {
+      const name = '__CDP_I_Тестовая секта';
+      const create = await apiJson('/api/library/sects', {
+        method: 'POST', body: JSON.stringify({ name, description: 'Описание секты' }),
+      });
+      assert.equal(create.status, 200, create.body.error);
+      const slug = create.body.slug;
+      const created = (await apiJson('/api/library/sects')).body.find(s => s.slug === slug);
+      assert.ok(created);
+      assert.equal(created.custom, true);
+
+      const canonDelete = await apiJson('/api/library/sects/kamarilya', { method: 'DELETE' });
+      assert.equal(canonDelete.status, 403);
+
+      const del = await apiJson(`/api/library/sects/${slug}`, { method: 'DELETE' });
+      assert.equal(del.status, 200);
+      await fs.rm(path.join(__dirname, '../../system/library/sects/_deleted'), { recursive: true, force: true });
+      const afterDelete = (await apiJson('/api/library/sects')).body.find(s => s.slug === slug);
+      assert.ok(!afterDelete);
+    });
+
+    it('кланы: 7 базовых кланов corebook V20 присутствуют в справочнике (K6)', async () => {
+      const { status, body } = await apiJson('/api/library/clans');
+      assert.equal(status, 200);
+      const slugs = body.map(c => c.slug).sort();
+      assert.deepEqual(slugs, ['bruja', 'gangrel', 'malkavian', 'nosferatu', 'toreador', 'tremere', 'ventru']);
+      assert.ok(body.every(c => !c.custom), 'базовые кланы — канон, не авторские записи');
+    });
+
+    it('секты: все 7 канонических сект V20 присутствуют в справочнике (K6)', async () => {
+      const { status, body } = await apiJson('/api/library/sects');
+      assert.equal(status, 200);
+      assert.equal(body.length, 7);
+      assert.ok(body.every(s => !s.custom), 'секты — канон, не авторские записи');
+    });
+
     it('достоинства: POST/PUT/DELETE по категории, канон защищён, неизвестная категория → 400', async () => {
       const name = '__CDP_I_Тестовое достоинство';
       const create = await apiJson('/api/library/merits', {
@@ -3699,13 +3931,23 @@ describe('API — integration', () => {
   });
 
   // ── Faction influence diagram (political_state.md) — restores original on teardown ──
+  // city.md восстанавливается ТОЖЕ: PUT/DELETE влияния с §11 двусторонне синкают список
+  // «## Фракции» в city.md (_syncCityFactionsList). Пока у paris/city.md не было этой
+  // секции, синк молча пропускался и тесты её не трогали — как только секция появилась,
+  // тестовые фракции («Тест-фракция <timestamp>») стали дописываться в реальные данные
+  // города и там оставаться. Бэкапим оба файла, а не только political_state.md.
   describe('Faction influence — GET/PUT', () => {
-    const polFile = path.join(CITY_ROOT, 'archive', 'political_state.md');
-    let original = null;
+    const polFile  = path.join(CITY_ROOT, 'archive', 'political_state.md');
+    const cityFile = path.join(CITY_ROOT, 'city.md');
+    let original = null, originalCity = null;
 
-    before(async () => { original = await fs.readFile(polFile, 'utf-8').catch(() => null); });
+    before(async () => {
+      original     = await fs.readFile(polFile, 'utf-8').catch(() => null);
+      originalCity = await fs.readFile(cityFile, 'utf-8').catch(() => null);
+    });
     after(async () => {
       if (original !== null) await fs.writeFile(polFile, original, 'utf-8');
+      if (originalCity !== null) await fs.writeFile(cityFile, originalCity, 'utf-8');
     });
 
     it('GET /api/factions/influence отдаёт распарсенные фракции реального political_state.md', async () => {
@@ -6795,17 +7037,70 @@ describe('city-creation-restructure §15-16: Опасность/сенсорик
     });
 
     it('sensoryPalette — построчная таблица канал/значение раунд-трипится через parseLocation', async () => {
-      const table = '| Канал | |\n|---|---|\n| **Свет** | Тусклый неон |\n| **Звук** | Капель воды |';
+      // §C3 — Свет/Звук/Запах обязательны (карточка их уже содержит, из шаблона
+      // создания): таблица должна нести все три, иначе PUT отклоняется (см. отдельный
+      // блок тестов ниже) — «Тактильное» по-прежнему можно опустить.
+      const table = '| Канал | |\n|---|---|\n| **Свет** | Тусклый неон |\n| **Звук** | Капель воды |\n| **Запах** | Плесень |';
       const put = await apiJson(`/api/locations/${slug}/fields${qs()}`, { method: 'PUT', body: JSON.stringify({
         fields: { sensoryPalette: table },
       }) });
-      assert.equal(put.status, 200);
+      assert.equal(put.status, 200, put.body.error);
       const locs = await apiJson(`/api/locations${qs()}`);
       const loc = locs.body.find(l => l.slug === slug);
       assert.deepEqual(loc.sensoryPalette, [
         { channel: 'Свет', value: 'Тусклый неон' },
         { channel: 'Звук', value: 'Капель воды' },
+        { channel: 'Запах', value: 'Плесень' },
       ]);
+    });
+
+    it('§C3 — попытка убрать обязательный канал (уже существовавший) → 400, файл не меняется', async () => {
+      const before = (await apiJson(`/api/locations${qs()}`)).body.find(l => l.slug === slug);
+      const table = '| Канал | |\n|---|---|\n| **Свет** | Тусклый неон |\n| **Звук** | Капель воды |';
+      const put = await apiJson(`/api/locations/${slug}/fields${qs()}`, { method: 'PUT', body: JSON.stringify({
+        fields: { sensoryPalette: table },
+      }) });
+      assert.equal(put.status, 400);
+      assert.match(put.body.error, /Запах/);
+      const after = (await apiJson(`/api/locations${qs()}`)).body.find(l => l.slug === slug);
+      assert.deepEqual(after.sensoryPalette, before.sensoryPalette, 'отклонённый PUT не должен был ничего поменять');
+    });
+
+    it('§C3 — обязательный канал с ПУСТЫМ значением (не отсутствующей строкой) сохраняется без ошибки', async () => {
+      const table = '| Канал | |\n|---|---|\n| **Свет** |  |\n| **Звук** | Капель воды |\n| **Запах** | Плесень |';
+      const put = await apiJson(`/api/locations/${slug}/fields${qs()}`, { method: 'PUT', body: JSON.stringify({
+        fields: { sensoryPalette: table },
+      }) });
+      assert.equal(put.status, 200, put.body.error);
+    });
+
+    it('§C3 — локация с каналами-алиасами (Зрение вместо Свет, как реальные данные Балмонта) редактируется свободно', async () => {
+      // Нормализация алиасов — вне скоупа (location-card-modal-plan.md §2.1/§2.3):
+      // требование не навязывается каналу, которого под каноническим именем в
+      // карточке никогда не было — иначе редактирование ЛЮБОГО канала у такой
+      // локации стало бы невозможным. POST /api/locations всегда сеет стандартный
+      // шаблон (Свет/Звук/Запах уже есть) — такую карточку одним PUT в «алиасную» не
+      // превратить, это ловит сам же новый guard. Реальные алиасные карточки в данных
+      // созданы не через текущий API — пишем файл на диск напрямую, как и есть у них.
+      const aliasSlug = 'test_alias_channels_loc';
+      const aliasDir = path.join(cityDir, 'locations', 'alias_test_rayon', aliasSlug);
+      await fs.mkdir(aliasDir, { recursive: true });
+      await fs.writeFile(path.join(aliasDir, `${aliasSlug}.md`), [
+        '# Локация С Алиасами',
+        '> **Название:** Локация С Алиасами | **Округ:** Alias Test | **Контроль:** —',
+        '---', '## 🎭 Атмосфера', 'Тест.', '## 👁️ Сенсорная палитра',
+        '| Канал | |', '|---|---|',
+        '| **Зрение** | Полумрак |', '| **Прикосновение** | Сырость |', '',
+      ].join('\n'), 'utf-8');
+
+      try {
+        const put = await apiJson(`/api/locations/${aliasSlug}/fields${qs()}`, { method: 'PUT', body: JSON.stringify({
+          fields: { sensoryPalette: '| Канал | |\n|---|---|\n| **Зрение** | Полная тьма |\n| **Прикосновение** | Сырость |' },
+        }) });
+        assert.equal(put.status, 200, put.body.error);
+      } finally {
+        await fs.rm(aliasDir, { recursive: true, force: true });
+      }
     });
 
     it('vtmTable — построчная сборка по полям (не задевает vtmText прозу рядом)', async () => {
@@ -6911,6 +7206,112 @@ describe('city-creation-restructure §15-16: Опасность/сенсорик
       assert.equal(loc.district, 'Настоящий Район');
     });
 
+    it('§B1 — ссылки на переехавшую локацию обновляются, битых не остаётся', async () => {
+      // Сценарий из отчёта QA: локация переехала villet → antrepo, а ссылка на неё
+      // в модуле осталась указывать на старый путь и стала битой молча.
+      const created = await apiJson(`/api/locations${qs()}`, { method: 'POST', body: JSON.stringify({
+        name: 'Склад со Ссылками', district: 'Исходный Район',
+      }) });
+      assert.equal(created.status, 200, created.body.error);
+      const locSlug = created.body.slug;
+
+      // Файл-«ссылатель» на два уровня глубже locations/ — как реальный модуль хроники.
+      const refDir = path.join(cityDir, 'chronicles', 'test_chr', 'modules', 'test_mod');
+      await fs.mkdir(refDir, { recursive: true });
+      const refFile = path.join(refDir, 'test_mod.md');
+      await fs.writeFile(refFile, [
+        '# Модуль',
+        `| Сцена | [Склад](../../../../locations/ishodnyy_rayon/${locSlug}/${locSlug}.md) |`,
+        `| Прочее | [Другая](../../../../locations/ishodnyy_rayon/drugaya/drugaya.md) |`,
+        '',
+      ].join('\n'), 'utf-8');
+
+      const move = await apiJson(`/api/locations/${locSlug}/district${qs()}`, {
+        method: 'PUT', body: JSON.stringify({ district: 'Целевой Район' }),
+      });
+      assert.equal(move.status, 200, move.body.error);
+      assert.equal(move.body.linksUpdated, 1, 'должен быть поправлен ровно один файл');
+      assert.ok(!move.body.warning, move.body.warning);
+
+      const after = await fs.readFile(refFile, 'utf-8');
+      assert.ok(after.includes(`locations/tselevoy_rayon/${locSlug}/${locSlug}.md`),
+        'ссылка должна указывать на новый путь');
+      assert.ok(!after.includes(`locations/ishodnyy_rayon/${locSlug}/`),
+        'старого пути остаться не должно');
+      assert.ok(after.includes('locations/ishodnyy_rayon/drugaya/drugaya.md'),
+        'ссылка на ДРУГУЮ локацию в том же файле не должна пострадать');
+
+      await fs.rm(path.join(cityDir, 'chronicles', 'test_chr'), { recursive: true, force: true });
+    });
+
+    it('§B1 — файл с BOM переживает правку ссылок без потери BOM', async () => {
+      const created = await apiJson(`/api/locations${qs()}`, { method: 'POST', body: JSON.stringify({
+        name: 'Локация Бом', district: 'Бом Район А',
+      }) });
+      const locSlug = created.body.slug;
+      const refFile = path.join(cityDir, 'archive', 'bom_ref.md');
+      await fs.writeFile(refFile,
+        `﻿# Архив\n\n[Ссылка](../locations/bom_rayon_a/${locSlug}/${locSlug}.md)\n`, 'utf-8');
+
+      const move = await apiJson(`/api/locations/${locSlug}/district${qs()}`, {
+        method: 'PUT', body: JSON.stringify({ district: 'Бом Район Б' }),
+      });
+      assert.equal(move.status, 200);
+      assert.equal(move.body.linksUpdated, 1);
+
+      const after = await fs.readFile(refFile, 'utf-8');
+      assert.equal(after.charCodeAt(0), 0xFEFF, 'BOM потерян при правке');
+      assert.ok(after.includes(`locations/bom_rayon_b/${locSlug}/`));
+      await fs.rm(refFile, { force: true });
+    });
+
+    it('§B1 — без входящих ссылок linksUpdated:0, это не ошибка', async () => {
+      const created = await apiJson(`/api/locations${qs()}`, { method: 'POST', body: JSON.stringify({
+        name: 'Локация Без Ссылок', district: 'Пустой Район А',
+      }) });
+      const move = await apiJson(`/api/locations/${created.body.slug}/district${qs()}`, {
+        method: 'PUT', body: JSON.stringify({ district: 'Пустой Район Б' }),
+      });
+      assert.equal(move.status, 200);
+      assert.equal(move.body.linksUpdated, 0);
+    });
+
+    it('§B2 — GET /backlinks находит ссылающиеся файлы, не трогая их', async () => {
+      const created = await apiJson(`/api/locations${qs()}`, { method: 'POST', body: JSON.stringify({
+        name: 'Локация Со Ссылками На Себя', district: 'Район Бэклинков',
+      }) });
+      const locSlug = created.body.slug;
+      const refDir = path.join(cityDir, 'chronicles', 'test_bl_chr', 'modules', 'test_bl_mod');
+      await fs.mkdir(refDir, { recursive: true });
+      const refFile = path.join(refDir, 'test_bl_mod.md');
+      await fs.writeFile(refFile,
+        `[Ссылка](../../../../locations/rayon_beklinkov/${locSlug}/${locSlug}.md)\n`, 'utf-8');
+
+      const bl = await apiJson(`/api/locations/${locSlug}/backlinks${qs()}`);
+      assert.equal(bl.status, 200);
+      assert.equal(bl.body.count, 1);
+      assert.ok(bl.body.files[0].includes('test_bl_mod.md'));
+      const untouched = await fs.readFile(refFile, 'utf-8');
+      assert.ok(untouched.includes(`locations/rayon_beklinkov/${locSlug}/`), 'read-only — файл не должен был измениться');
+
+      await fs.rm(path.join(cityDir, 'chronicles', 'test_bl_chr'), { recursive: true, force: true });
+    });
+
+    it('§B2 — без входящих ссылок count:0', async () => {
+      const created = await apiJson(`/api/locations${qs()}`, { method: 'POST', body: JSON.stringify({
+        name: 'Локация Без Бэклинков', district: 'Район Одиночка',
+      }) });
+      const bl = await apiJson(`/api/locations/${created.body.slug}/backlinks${qs()}`);
+      assert.equal(bl.status, 200);
+      assert.equal(bl.body.count, 0);
+      assert.deepEqual(bl.body.files, []);
+    });
+
+    it('§B2 — несуществующая локация → 404', async () => {
+      const r = await apiJson(`/api/locations/net_takoy_lokacii/backlinks${qs()}`);
+      assert.equal(r.status, 404);
+    });
+
     it('перенос в тот же район — no-op (§9.3), папка не трогается', async () => {
       const r = await apiJson(`/api/locations/${slug}/district${qs()}`, { method: 'PUT', body: JSON.stringify({ district: 'Настоящий Район' }) });
       assert.equal(r.status, 200);
@@ -6939,7 +7340,7 @@ describe('city-creation-restructure §15-16: Опасность/сенсорик
   describe('Районы (District) — POST/GET/PUT /api/cities/:slug/districts (техспека §2)', () => {
     it('POST создаёт district.md; GET отдаёт его в списке', async () => {
       const create = await apiJson(`/api/cities/${citySlug}/districts`, { method: 'POST', body: JSON.stringify({
-        name: 'Тестовый Округ', type: 'Квартал', sect: 'Камарилья',
+        name: 'Тестовый Округ', type: 'Квартал', sect: 'Камарилья', description: 'Портовый район с доками.',
       }) });
       assert.equal(create.status, 200, create.body.error);
       assert.ok(await fs.stat(path.join(cityDir, 'locations', create.body.slug, 'district.md')).catch(() => null));
@@ -6951,6 +7352,8 @@ describe('city-creation-restructure §15-16: Опасность/сенсорик
       assert.equal(found.name, 'Тестовый Округ');
       assert.equal(found.type, 'Квартал');
       assert.equal(found.sect, 'Камарилья');
+      assert.equal(found.description, 'Портовый район с доками.',
+        'GET-список раньше не отдавал description — карточка на странице просмотра не могла его показать ни при каких условиях');
     });
 
     it('без названия → 400', async () => {
@@ -6983,6 +7386,388 @@ describe('city-creation-restructure §15-16: Опасность/сенсорик
       const districtSlug = list.body[0].slug;
       const r = await apiJson(`/api/cities/${citySlug}/districts/${districtSlug}`, { method: 'PUT', body: JSON.stringify({ name: '  ' }) });
       assert.equal(r.status, 400);
+    });
+  });
+
+  describe('DELETE /api/cities/:slug/districts/:districtSlug (§A5)', () => {
+    it('пустой район удаляется (soft-delete в locations/_deleted/)', async () => {
+      const create = await apiJson(`/api/cities/${citySlug}/districts`, { method: 'POST', body: JSON.stringify({ name: 'Удаляемый Пустой' }) });
+      assert.equal(create.status, 200, create.body.error);
+      const del = await apiJson(`/api/cities/${citySlug}/districts/${create.body.slug}`, { method: 'DELETE' });
+      assert.equal(del.status, 200, del.body.error);
+      assert.ok(!(await fs.stat(path.join(cityDir, 'locations', create.body.slug)).catch(() => null)),
+        'папка района не должна остаться на прежнем месте');
+      const trash = await fs.readdir(path.join(cityDir, 'locations', '_deleted')).catch(() => []);
+      assert.ok(trash.some(e => e.startsWith(`district_${create.body.slug}_`)), 'район должен уехать в _deleted');
+    });
+
+    it('удаление непустого района → 409 со списком локаций, район НЕ удаляется', async () => {
+      const create = await apiJson(`/api/cities/${citySlug}/districts`, { method: 'POST', body: JSON.stringify({ name: 'Удаляемый Непустой' }) });
+      assert.equal(create.status, 200);
+      const loc = await apiJson(`/api/locations${qs()}`, { method: 'POST', body: JSON.stringify({ name: 'Заложник Района', district: 'Удаляемый Непустой' }) });
+      assert.equal(loc.status, 200, loc.body.error);
+
+      const del = await apiJson(`/api/cities/${citySlug}/districts/${create.body.slug}`, { method: 'DELETE' });
+      assert.equal(del.status, 409);
+      assert.match(del.body.error, /1/, 'сообщение должно называть число локаций');
+      assert.deepEqual(del.body.locations, [loc.body.slug]);
+      assert.ok(await fs.stat(path.join(cityDir, 'locations', create.body.slug, 'district.md')).catch(() => null),
+        'район должен остаться на месте после отказа');
+      assert.ok(await fs.stat(path.join(cityDir, 'locations', create.body.slug, loc.body.slug)).catch(() => null),
+        'локация внутри района не должна была пострадать');
+    });
+
+    it('удаление района убирает его из секции «## Районы»', async () => {
+      const create = await apiJson(`/api/cities/${citySlug}/districts`, { method: 'POST', body: JSON.stringify({ name: 'Временный Для Синка' }) });
+      assert.equal(create.status, 200);
+      let parsed = parseCityMd(await fs.readFile(path.join(cityDir, 'city.md'), 'utf-8'));
+      assert.ok(parsed.sections.districts.includes('Временный Для Синка'));
+
+      const del = await apiJson(`/api/cities/${citySlug}/districts/${create.body.slug}`, { method: 'DELETE' });
+      assert.equal(del.status, 200);
+      parsed = parseCityMd(await fs.readFile(path.join(cityDir, 'city.md'), 'utf-8'));
+      assert.ok(!parsed.sections.districts.includes('Временный Для Синка'),
+        'удалённый район не должен оставаться в зеркале city.md');
+    });
+
+    it('несуществующий район → 404; недопустимый слаг → 400', async () => {
+      const notFound = await apiJson(`/api/cities/${citySlug}/districts/net_takogo_rayona`, { method: 'DELETE' });
+      assert.equal(notFound.status, 404);
+      const bad = await apiJson(`/api/cities/${citySlug}/districts/${encodeURIComponent('../../etc')}`, { method: 'DELETE' });
+      assert.ok([400, 404].includes(bad.status), 'выход за пределы слага должен быть отклонён, не выполнен');
+    });
+  });
+
+  describe('«## Районы» в city.md — одностороннее зеркало District-сущностей (§A3.2)', () => {
+    let slug, dir;
+    before(async () => {
+      const r = await apiJson('/api/cities', { method: 'POST', body: JSON.stringify({ name: 'A3 Mirror City', year: '2010' }) });
+      assert.equal(r.status, 200, r.body.error);
+      slug = r.body.slug;
+      dir  = path.join(__dirname, '../../cities', slug);
+    });
+    after(async () => { await fs.rm(dir, { recursive: true, force: true }); });
+
+    it('POST района создаёт/дополняет секцию «## Районы» именем нового района', async () => {
+      const r1 = await apiJson(`/api/cities/${slug}/districts`, { method: 'POST', body: JSON.stringify({ name: 'Альфа' }) });
+      assert.equal(r1.status, 200, r1.body.error);
+      assert.ok(!r1.body.warning, r1.body.warning);
+      let parsed = parseCityMd(await fs.readFile(path.join(dir, 'city.md'), 'utf-8'));
+      assert.equal(parsed.sections.districts, 'Альфа');
+
+      const r2 = await apiJson(`/api/cities/${slug}/districts`, { method: 'POST', body: JSON.stringify({ name: 'Бета' }) });
+      assert.equal(r2.status, 200);
+      parsed = parseCityMd(await fs.readFile(path.join(dir, 'city.md'), 'utf-8'));
+      assert.deepEqual(parsed.sections.districts.split('\n').sort(), ['Альфа', 'Бета']);
+    });
+
+    it('PUT переименования района обновляет имя в секции, не задваивая строку', async () => {
+      const list = await apiJson(`/api/cities/${slug}/districts`);
+      const alphaSlug = list.body.find(d => d.name === 'Альфа').slug;
+      const put = await apiJson(`/api/cities/${slug}/districts/${alphaSlug}`, { method: 'PUT', body: JSON.stringify({ name: 'Альфа-Прим' }) });
+      assert.equal(put.status, 200, put.body.error);
+
+      const parsed = parseCityMd(await fs.readFile(path.join(dir, 'city.md'), 'utf-8'));
+      const names = parsed.sections.districts.split('\n').sort();
+      assert.deepEqual(names, ['Альфа-Прим', 'Бета'], 'старое имя должно исчезнуть, новое — появиться, без дублей');
+    });
+
+    it('city.md без секции «## Районы» — синк невозможен, POST района всё равно 200 с warning', async () => {
+      const cityMdPath = path.join(dir, 'city.md');
+      const original = await fs.readFile(cityMdPath, 'utf-8');
+      try {
+        await fs.writeFile(cityMdPath, original.replace(/## Районы\n[\s\S]*?(?=\n## )/, ''), 'utf-8');
+        const r = await apiJson(`/api/cities/${slug}/districts`, { method: 'POST', body: JSON.stringify({ name: 'Гамма' }) });
+        assert.equal(r.status, 200, 'создание района не должно откатываться из-за сбоя синка города');
+        assert.ok(r.body.warning, 'ожидался warning — секция «Районы» не найдена');
+        const list = await apiJson(`/api/cities/${slug}/districts`);
+        assert.ok(list.body.some(d => d.name === 'Гамма'), 'district.md всё равно должен был создаться');
+      } finally {
+        await fs.writeFile(cityMdPath, original, 'utf-8');
+        // district.md «Гамма» создан НА ДИСКЕ независимо от отката city.md выше —
+        // не убрать его здесь означало бы, что следующий тест в этом describe (реальный
+        // GET /districts) видит район, которого нет в city.md, и ловит это как «баг».
+        await fs.rm(path.join(dir, 'locations', 'gamma'), { recursive: true, force: true });
+      }
+    });
+
+    it('повторный синк с тем же составом районов — не меняет файл (идемпотентность)', async () => {
+      const before = await fs.readFile(path.join(dir, 'city.md'), 'utf-8');
+      // PUT без реального изменения состава районов (правим только тип) не должен трогать
+      // байты секции «## Районы» — тот же инвариант, что и у §A1, но для синка через
+      // upsertCitySectionBullets: тут перестройка секции ПРОИСХОДИТ каждый раз (это
+      // выравнивание списка, не point-diff), но при одинаковом наборе имён итоговый
+      // текст обязан совпасть с тем, что уже на диске.
+      const list = await apiJson(`/api/cities/${slug}/districts`);
+      const target = list.body[0];
+      const put = await apiJson(`/api/cities/${slug}/districts/${target.slug}`, { method: 'PUT', body: JSON.stringify({ type: target.type || '' }) });
+      assert.equal(put.status, 200);
+      assert.equal(await fs.readFile(path.join(dir, 'city.md'), 'utf-8'), before);
+    });
+  });
+
+  describe('POST /api/cities — все 16 секций и разбор CSV районов (§A2, §A6.2)', () => {
+    const RULE_KEYS = ['landmarks', 'hunting', 'edicts', 'mortals', 'calendar', 'tech', 'limits', 'naming'];
+    let slug, dir;
+
+    before(async () => {
+      const fields = {
+        name: 'A2 Zhivoy Gorod', year: '2010',
+        description: 'Описание.', factions: 'Камарилья', political: 'Князь: Кто-то',
+        locations: 'Элизиум: Где-то', leitmotif: 'Лейтмотив', specifics: 'Специфика',
+        avoid: 'Избегать', sources: 'Источники',
+        districts: 'Первый Ку, Второй Ку',
+      };
+      for (const k of RULE_KEYS) fields[k] = `значение-${k}`;
+      const r = await apiJson('/api/cities', { method: 'POST', body: JSON.stringify(fields) });
+      assert.equal(r.status, 200, r.body.error);
+      slug = r.body.slug;
+      dir  = path.join(__dirname, '../../cities', slug);
+    });
+    after(async () => { await fs.rm(dir, { recursive: true, force: true }); });
+
+    it('§A2 — все 16 канонических секций долетают до city.md (раньше 8 молча терялись)', async () => {
+      const parsed = parseCityMd(await fs.readFile(path.join(dir, 'city.md'), 'utf-8'));
+      for (const k of RULE_KEYS)
+        assert.equal(parsed.sections[k], `значение-${k}`, `секция ${k} потерялась при создании`);
+      const empty = CITY_SECTIONS.filter(([k]) => !(parsed.sections[k] || '').trim()).map(([k]) => k);
+      assert.deepEqual(empty, [], `пустыми остались секции: ${empty.join(', ')}`);
+    });
+
+    it('§A2 — промты генерации получают ограничения и именник свежесозданного города', () => {
+      const { buildCityConstraints, buildCityNaming } = require('../lib/context_builder');
+      const c = buildCityConstraints(slug);
+      assert.ok(c.includes('ОГРАНИЧЕНИЯ ГОРОДА'), 'блок ограничений пуст — генерация пойдёт без лимитов домена');
+      assert.ok(c.includes('значение-limits') && c.includes('значение-edicts'));
+      assert.ok(buildCityNaming(slug).includes('значение-naming'), 'именник не подмешивается');
+    });
+
+    it('§A6.2 — CSV районов ложится в секцию по буллету на район, не одной строкой', async () => {
+      const parsed = parseCityMd(await fs.readFile(path.join(dir, 'city.md'), 'utf-8'));
+      assert.equal(parsed.sections.districts, 'Первый Ку\nВторой Ку');
+      assert.ok(!parsed.sections.districts.includes(','), 'CSV не должен попадать в секцию как есть');
+    });
+
+    it('§A4 — папки районов плоские, без фантомной обёртки district_NN', async () => {
+      for (const d of ['pervyy_ku', 'vtoroy_ku']) {
+        assert.ok(await fs.stat(path.join(dir, 'locations', d)).catch(() => null), `папка района ${d} не создана`);
+        assert.ok(!(await fs.stat(path.join(dir, 'locations', 'district_01', d)).catch(() => null))
+               && !(await fs.stat(path.join(dir, 'locations', 'district_02', d)).catch(() => null)),
+          `${d} не должен лежать внутри district_NN`);
+      }
+    });
+  });
+
+  // §A1 — PUT с fields больше не пересобирает файл из 16 канонических секций.
+  describe('PUT /api/cities — точечная запись секций, рукописный city.md не разрушается (§A1)', () => {
+    const cityMdPath = () => path.join(cityDir, 'city.md');
+    const baseFields = () => ({ display: 'Fifteen Sixteen Testcity', year: '2010' });
+
+    it('рукописные секции и форматирование переживают сохранение формы', async () => {
+      // Слепок реального Парижа: своя секция без канонического аналога, таблица,
+      // блок-цитата, ###-подзаголовок. До §A1 всё это стиралось при первом же PUT.
+      const handwritten = [
+        '# Fifteen Sixteen Testcity, 2010 — сеттинг города', '',
+        'Описание города.', '',
+        '---', '',
+        '## Политический ландшафт', '',
+        '- Камарилья держит центр.', '',
+        '> Карта сил — `archive/political_state.md`.', '',
+        '### Историческая канва', '',
+        '- Своя история города.', '',
+        '---', '',
+        '## Ключевые локации', '',
+        '| Локация | Значение |', '|---------|---------|', '| Опера | Элизиум |', '',
+        '---', '',
+        '## Уточняющие вопросы перед сценарием (город)', '',
+        '1. Состав Coterie.', '',
+      ].join('\n');
+      const original = await fs.readFile(cityMdPath(), 'utf-8');
+      try {
+        await fs.writeFile(cityMdPath(), handwritten, 'utf-8');
+
+        const put = await apiJson(`/api/cities/${citySlug}`, { method: 'PUT', body: JSON.stringify({
+          fields: { ...baseFields(), limits: 'Не больше 2 Элизиумов' },
+        }) });
+        assert.equal(put.status, 200, put.body.error);
+
+        const after = await fs.readFile(cityMdPath(), 'utf-8');
+        assert.ok(after.includes('## Уточняющие вопросы перед сценарием (город)'),
+          'рукописная секция без канонического аналога должна уцелеть');
+        assert.ok(after.includes('> Карта сил — `archive/political_state.md`.'), 'блок-цитата цела');
+        assert.ok(after.includes('### Историческая канва'), '###-подзаголовок цел');
+        assert.ok(after.includes('| Опера | Элизиум |'), 'таблица цела');
+        assert.equal(parseCityMd(after).sections.limits, 'Не больше 2 Элизиумов',
+          'новая секция записана');
+      } finally {
+        await fs.writeFile(cityMdPath(), original, 'utf-8');
+      }
+    });
+
+    it('нетронутая секция не переписывается — рукописный markdown внутри неё цел', async () => {
+      // Найдено прогоном на КОПИИ реального Парижа: секции переживали сохранение, но их
+      // ВНУТРЕННЕЕ форматирование деградировало — форма отдаёт уплощённый parseCityMd-текст
+      // (буллеты сняты, пустые строки и «---» отброшены), и запись его обратно превращала
+      // блок-цитаты и ###-подзаголовки в буллеты. Секции без изменений теперь не пишутся.
+      const handwritten = [
+        '# Fifteen Sixteen Testcity, 2010 — сеттинг города', '', 'Описание.', '',
+        '## Политический ландшафт', '',
+        '- Камарилья держит центр.', '',
+        '> Карта сил — `archive/political_state.md`.', '',
+        '### Историческая канва', '',
+        '- Своя история.', '',
+        '## Ограничения генерации', '- …', '',
+      ].join('\n');
+      const original = await fs.readFile(cityMdPath(), 'utf-8');
+      try {
+        await fs.writeFile(cityMdPath(), handwritten, 'utf-8');
+        const sections = parseCityMd(handwritten).sections;
+        const fields = { ...baseFields(), description: 'Описание.' };
+        for (const [key] of CITY_SECTIONS) fields[key] = sections[key] || '';
+        fields.limits = 'Новое ограничение';   // меняем ровно одну секцию
+
+        const put = await apiJson(`/api/cities/${citySlug}`, { method: 'PUT', body: JSON.stringify({ fields }) });
+        assert.equal(put.status, 200, put.body.error);
+        assert.deepEqual(put.body.sectionsWritten, ['limits'],
+          'переписаться должна только изменённая секция');
+
+        const after = await fs.readFile(cityMdPath(), 'utf-8');
+        assert.ok(after.includes('> Карта сил — `archive/political_state.md`.'),
+          'блок-цитата не должна превратиться в буллет');
+        assert.ok(after.includes('### Историческая канва'),
+          '###-подзаголовок не должен превратиться в буллет');
+        assert.ok(!/- > Карта сил/.test(after) && !/- ### Историческая/.test(after),
+          'ничего не должно быть забуллечено');
+        assert.equal(parseCityMd(after).sections.limits, 'Новое ограничение');
+      } finally {
+        await fs.writeFile(cityMdPath(), original, 'utf-8');
+      }
+    });
+
+    it('идемпотентность: повторное сохранение тех же значений не меняет файл', async () => {
+      const before = await fs.readFile(cityMdPath(), 'utf-8');
+      const sections = parseCityMd(before).sections;
+      const fields = { ...baseFields(), description: parseCityMd(before).description };
+      for (const [key] of CITY_SECTIONS) fields[key] = sections[key] || '';
+
+      const put1 = await apiJson(`/api/cities/${citySlug}`, { method: 'PUT', body: JSON.stringify({ fields }) });
+      assert.equal(put1.status, 200);
+      const after1 = await fs.readFile(cityMdPath(), 'utf-8');
+      const put2 = await apiJson(`/api/cities/${citySlug}`, { method: 'PUT', body: JSON.stringify({ fields }) });
+      assert.equal(put2.status, 200);
+      assert.equal(await fs.readFile(cityMdPath(), 'utf-8'), after1,
+        'второе сохранение тех же значений изменило файл');
+    });
+
+    it('ключ, которого нет в fields, не трогает свою секцию', async () => {
+      await apiJson(`/api/cities/${citySlug}`, { method: 'PUT', body: JSON.stringify({
+        fields: { ...baseFields(), naming: 'Именник города' },
+      }) });
+      // Второй PUT без ключа naming — значение должно остаться.
+      await apiJson(`/api/cities/${citySlug}`, { method: 'PUT', body: JSON.stringify({
+        fields: { ...baseFields(), limits: 'Что-то другое' },
+      }) });
+      const parsed = parseCityMd(await fs.readFile(cityMdPath(), 'utf-8'));
+      assert.equal(parsed.sections.naming, 'Именник города');
+      assert.equal(parsed.sections.limits, 'Что-то другое');
+    });
+
+    it('отсутствующая секция создаётся и отмечается в sectionsWritten', async () => {
+      const original = await fs.readFile(cityMdPath(), 'utf-8');
+      try {
+        await fs.writeFile(cityMdPath(), original.replace(/## Именник и фактура\n[\s\S]*?(?=\n## |$)/, ''), 'utf-8');
+        const put = await apiJson(`/api/cities/${citySlug}`, { method: 'PUT', body: JSON.stringify({
+          fields: { ...baseFields(), naming: 'Восстановленный именник' },
+        }) });
+        assert.equal(put.status, 200);
+        assert.ok(put.body.sectionsWritten.includes('naming (создана)'), JSON.stringify(put.body.sectionsWritten));
+        assert.equal(parseCityMd(await fs.readFile(cityMdPath(), 'utf-8')).sections.naming, 'Восстановленный именник');
+      } finally {
+        await fs.writeFile(cityMdPath(), original, 'utf-8');
+      }
+    });
+
+    it('§A6.1 — невалидный год отклоняется (раньше PUT принимал любой текст)', async () => {
+      const bad = await apiJson(`/api/cities/${citySlug}`, { method: 'PUT', body: JSON.stringify({
+        fields: { display: 'Fifteen Sixteen Testcity', year: 'не-год-вообще' },
+      }) });
+      assert.equal(bad.status, 400);
+      assert.match(bad.body.error, /3–4 цифры/);
+      const parsed = parseCityMd(await fs.readFile(cityMdPath(), 'utf-8'));
+      assert.equal(parsed.year, '2010', 'год в файле не должен был измениться');
+    });
+
+    it('ветка cityMd (вкладка Markdown) продолжает писать текст как есть', async () => {
+      const original = await fs.readFile(cityMdPath(), 'utf-8');
+      try {
+        const raw = '# Fifteen Sixteen Testcity, 2010 — сеттинг города\n\nСырой markdown.\n\n## Своя секция\n\n- пункт\n';
+        const put = await apiJson(`/api/cities/${citySlug}`, { method: 'PUT', body: JSON.stringify({ cityMd: raw }) });
+        assert.equal(put.status, 200);
+        assert.equal(await fs.readFile(cityMdPath(), 'utf-8'), raw);
+      } finally {
+        await fs.writeFile(cityMdPath(), original, 'utf-8');
+      }
+    });
+
+    // «Значимые места» (§V5, view-tabs 2026-08-04) — единственная секция, чьё
+    // значение приходит уже готовой markdown-таблицей и не должна проходить
+    // через citySectionBody (бул­летизацию каждой строки без «-»), иначе
+    // «| Название | Описание |» стало бы «- | Название | Описание |».
+    it('landmarks пишется как есть, без буллетизации таблицы', async () => {
+      const original = await fs.readFile(cityMdPath(), 'utf-8');
+      try {
+        const table = '| Название | Описание |\n|---|---|\n| Опера Гарнье | Главный Элизиум |';
+        const put = await apiJson(`/api/cities/${citySlug}`, { method: 'PUT', body: JSON.stringify({
+          fields: { ...baseFields(), landmarks: table },
+        }) });
+        assert.equal(put.status, 200, put.body.error);
+        const after = await fs.readFile(cityMdPath(), 'utf-8');
+        assert.ok(after.includes('| Опера Гарнье | Главный Элизиум |'), 'таблица записана как есть');
+        assert.ok(!after.includes('- | Опера Гарнье'), 'таблица не забуллечена');
+        assert.equal(parseCityMd(after).sections.landmarks, table);
+      } finally {
+        await fs.writeFile(cityMdPath(), original, 'utf-8');
+      }
+    });
+
+    it('landmarks: повторное сохранение той же таблицы не меняет файл (round-trip)', async () => {
+      const original = await fs.readFile(cityMdPath(), 'utf-8');
+      try {
+        const table = '| Название | Описание |\n|---|---|\n| Катакомбы | Владения Nosferatu |';
+        await apiJson(`/api/cities/${citySlug}`, { method: 'PUT', body: JSON.stringify({
+          fields: { ...baseFields(), landmarks: table },
+        }) });
+        const after1 = await fs.readFile(cityMdPath(), 'utf-8');
+        const put2 = await apiJson(`/api/cities/${citySlug}`, { method: 'PUT', body: JSON.stringify({
+          fields: { ...baseFields(), landmarks: parseCityMd(after1).sections.landmarks },
+        }) });
+        assert.equal(put2.status, 200);
+        // sectionsWritten в ответе появляется только при непустом списке (routes/cities.js) —
+        // отсутствие ключа здесь и значит «ничего не переписано», unchanged section skip сработал.
+        assert.equal(put2.body.sectionsWritten, undefined, 'unchanged section skip должен сработать и для таблицы');
+        assert.equal(await fs.readFile(cityMdPath(), 'utf-8'), after1);
+      } finally {
+        await fs.writeFile(cityMdPath(), original, 'utf-8');
+      }
+    });
+
+    it('landmarks: «|» в названии/описании не сдвигает колонки при следующем чтении', async () => {
+      // Клиент экранирует «|» → «∣» до отправки (fold, тот же приём, что уже
+      // применяет _collectLocDetKeyPoints для «Ключевых точек» локации) — сервер
+      // просто пишет таблицу как есть, здесь проверяем, что уже экранированное
+      // значение не ломает разбор колонок.
+      const original = await fs.readFile(cityMdPath(), 'utf-8');
+      try {
+        const table = '| Название | Описание |\n|---|---|\n| Бар «Кровь ∣ Вино» | Нейтральная территория |';
+        const put = await apiJson(`/api/cities/${citySlug}`, { method: 'PUT', body: JSON.stringify({
+          fields: { ...baseFields(), landmarks: table },
+        }) });
+        assert.equal(put.status, 200);
+        const parsed = parseCityMd(await fs.readFile(cityMdPath(), 'utf-8'));
+        assert.equal(parsed.sections.landmarks, table);
+      } finally {
+        await fs.writeFile(cityMdPath(), original, 'utf-8');
+      }
     });
   });
 

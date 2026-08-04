@@ -3897,9 +3897,35 @@ a:focus-visible {
 }
 
 /* Read-only карточки района на странице просмотра города (техспека §9.1) — тот же
-   .city-district-card, что и в форме создания, плюс список локаций/привязка. */
+   .city-district-card, что и в форме создания, плюс список локаций/привязка.
+   padding — здесь, а не только margin: у .city-page-header/.city-page-body
+   свой inset 28px, а .city-create-section-label ниже сама горизонтального
+   отступа не даёт (в форме создания она сидит внутри уже отступленной формы) —
+   без этого «РАЙОНЫ» и карточки районов прижимались к самому краю страницы. */
 .city-view-districts {
   margin: 16px 0;
+  padding: 0 28px;
+}
+
+/* Вкладка «География» (city-view-tabs, V5, 2026-08-04) уже даёт свой
+   горизонтальный отступ через .city-view-panel (28px) — без сброса блок
+   районов получил бы двойной отступ (28+28) слева/справа первым же блоком
+   вкладки. */
+.city-view-panel .city-view-districts {
+  padding: 0;
+}
+
+/* .city-view-districts — первый блок вкладки «География» (см. _cityViewGeographyHtml()),
+   идёт сразу после заголовка вкладки без промежуточного поля — свой
+   border-top/margin-top/padding-top у .city-create-section-label здесь
+   задваивает разделитель (две почти слипшиеся линии с пустым провалом
+   между ними). Общее правило .city-create-section-label (форма создания
+   города, где секция идёт ПОСЛЕ другого поля) не трогаем — там divider
+   нужен. */
+.city-view-districts .city-create-section-label {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
 }
 
 .city-view-district-loc-row {
@@ -3981,6 +4007,18 @@ a:focus-visible {
   background: color-mix(in srgb, var(--accent) 22%, transparent);
   border-color: var(--accent);
   color: var(--text);
+}
+
+/* Статичный чип (вкладка «Фракции» просмотра города, city-view-tabs §V4/§3) —
+   гасит cursor/hover того же .cdet-faction-chip: без него read-only <span>
+   визуально приглашает кликнуть, хотя клик ничего не делает (designspec §3). */
+.cdet-faction-chip.chip-view {
+  cursor: default;
+}
+
+.cdet-faction-chip.chip-view:hover {
+  border-color: var(--border);
+  color: var(--text2);
 }
 
 .cdet-upload-row {
@@ -4390,6 +4428,19 @@ a:focus-visible {
   display: block;
 }
 
+/* Панели вкладок ПРОСМОТРА города (V1, city-view-tabs, 2026-08-04) — своя пара
+   классов, не .city-edit-panel: разные экраны (форма/просмотр), даже если
+   правила совпадают почти дословно с .city-page-prose (те же 28px по бокам,
+   что и у .city-page-header) — разделение по смыслу, не по пикселям. */
+.city-view-panel {
+  display: none;
+  padding: 22px 28px 28px;
+}
+
+.city-view-panel.active {
+  display: block;
+}
+
 .city-md-editor {
   width: 100%;
   font-family: var(--f-mono);
@@ -4453,10 +4504,12 @@ a:focus-visible {
 
 .chr-form-label {
   display: block;
-  font-size: var(--fs-xs);
+  font-family: var(--f-heading);
+  font-size: var(--fs-sm);
+  text-transform: uppercase;
+  letter-spacing: .09em;
   color: var(--text-dim);
-  margin-bottom: 5px;
-  letter-spacing: .05em;
+  margin-bottom: 6px;
 }
 
 .chr-form-input {
@@ -6299,6 +6352,25 @@ a:focus-visible {
 .hooks-add-btn:hover {
   background: rgba(139, 0, 0, .18);
   border-color: rgba(180, 60, 60, .7);
+}
+
+/* Форма «Ключевые точки» (§C1) — две .hooks-input в одной .hooks-item строке вместо
+   одной (как у «Крючков»); пропорции зеркалят колонки просмотра (.locdet-table
+   .locdet-key/-val) — «Место» короче, «Описание» занимает остаток строки. */
+.keypt-place-inp {
+  flex: 0 0 30%;
+}
+.keypt-desc-inp {
+  flex: 1;
+}
+
+/* «Значимые места» города (вкладка «География», V5) — тот же приём/пропорции,
+   что «Ключевые точки» локации выше, отдельные классы для отдельного экрана. */
+.city-landmark-title-inp {
+  flex: 0 0 30%;
+}
+.city-landmark-desc-inp {
+  flex: 1;
 }
 
 /* ── Character image gallery (desc edit mode) ───────────────── */
@@ -9968,6 +10040,33 @@ a.md-link-loc:hover {
   color: var(--text3);
 }
 
+/* K1 (2026-08-04) — Edit/Delete в шапке детейл-модалки библиотеки. Третий
+   элемент .v20-disc-detail-head (название/мета/действия) — переиспользует
+   .cdet-edit-btn/.cdet-delete-btn из шапки персонажа как есть, но без
+   position:absolute (та модификация специфична для sticky-шапки персонажа —
+   у .v20-disc-modal нет отдельной sticky-шапки, кнопки живут в обычном
+   flex-потоке заголовка). */
+.v20-disc-detail-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.v20-disc-detail-actions .cdet-delete-btn {
+  position: static;
+  font-size: var(--fs-lg);
+  padding: 4px 6px;
+}
+
+/* Режим правки внутри детейл-модалки (K1) — верхняя панель с той же парой
+   кнопок, когда статичного .v20-disc-detail-head ещё нет (имя переезжает в
+   поле формы, см. _v20EnterLibEdit). */
+.v20-disc-edit-topbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 14px;
+}
+
 /* Факты биографии, доступные только определённой секте (напр. Шабашу) —
    пометка на карточке и в заголовке модалки. */
 .lib-card-sect {
@@ -12229,41 +12328,8 @@ tr.rumor-told:hover .rumor-cb-cell {
   gap: 10px;
 }
 
-/* Сенсорная палитра — редактор по каналам (location-card-modal-plan.md §3).
-   Свои классы, не .cdet-rel-row — другой модуль, другой class-нейминг (designspec §12.1). */
-.loc-edit-sens-row {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  margin-bottom: 8px;
-}
-
-.loc-edit-sens-channel-sel {
-  flex: 0 0 140px;
-}
-
-.loc-edit-sens-channel-custom {
-  flex: 0 0 130px;
-}
-
-.loc-edit-sens-value-ta {
-  flex: 1;
-  min-width: 0;
-}
-
-.loc-edit-sens-del-btn {
-  flex-shrink: 0;
-  align-self: center;
-}
-
-@media (max-width: 640px) {
-  .loc-edit-sens-row {
-    flex-wrap: wrap;
-  }
-  .loc-edit-sens-value-ta {
-    flex-basis: 100%;
-  }
-}
+/* .loc-edit-sens-* (редактор сенсорики в форме создания/редактирования локации)
+   убран вместе с разделом — §C2, docs/design/2026-08-02-location-card-modal-plan.md §6. */
 
 .loc-edit-field-with-gen .chr-form-label {
   flex: 1;

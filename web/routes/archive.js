@@ -8,6 +8,7 @@ const path    = require('path');
 const fs      = require('fs').promises;
 const { serverError } = require('../lib/http');
 const { archiveDir, cityDir, reqCity, writeFileAtomic, getAllCharacters, getAllLocations } = require('../lib/db');
+const { replaceCitySectionBullets } = require('../lib/city_md_writer');
 const {
   parsePoliticalFactions, setPoliticalFactionInfluence, removePoliticalFaction, parseCityMd,
   parseTimelineMd, addTimelineEpoch, removeTimelineEpoch,
@@ -86,25 +87,6 @@ router.get('/api/factions/influence', async (req, res) => {
   } catch (e) { serverError(res, e); }
 });
 
-// Точечная замена ТОЛЬКО секции heading внутри уже готового city.md — НЕ полный
-// buildCityMd(parsed.sections)-ребилд: последний прогоняет КАЖДУЮ секцию через
-// _citySection() (выравнивает всё под простой буллет-список), что на реальном
-// «рукописном» city.md с блок-цитатами/подзаголовками/таблицами (напр. текущий
-// cities/paris/city.md) необратимо разбирает форматирование за пределами самой
-// «Фракции» — задевать любую секцию, кроме той, что реально меняем, здесь нельзя.
-// Возвращает null, если заголовок не найден (нестандартный city.md — синк пропускаем,
-// не создаём секцию сюрпризом).
-function _replaceCitySection(raw, heading, bulletLines) {
-  const body = bulletLines.length ? bulletLines.map(l => `- ${l}`).join('\n') : '- …';
-  const esc  = heading.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  // (?![\s\S]) — истинный конец строки, а не $ с флагом m (тот матчит конец КАЖДОЙ
-  // строки, не только всего текста — заставлял ленивый квантификатор останавливаться
-  // на первой же строке секции вместо всей секции целиком; проверено на реальных данных).
-  const re   = new RegExp(`(^##\\s+${esc}\\s*\\n)([\\s\\S]*?)(?=\\n##\\s+|(?![\\s\\S]))`, 'm');
-  if (!re.test(raw)) return null;
-  return raw.replace(re, (_, hdr) => `${hdr}${body}\n`);
-}
-
 // Двусторонний синк «Фракции» ↔ панель «Влияние фракций» (техспека §11, решение (a)).
 // mutate(names) возвращает НОВЫЙ массив имён либо null (no-op — имя уже там/уже нет,
 // ничего не пишем). Не бросает — правка political_state.md уже произошла к моменту
@@ -119,7 +101,9 @@ async function _syncCityFactionsList(city, mutate) {
     const names = (parsed.sections.factions || '').split('\n').map(s => s.trim()).filter(Boolean);
     const mutated = mutate(names);
     if (!mutated) return null; // уже актуально
-    const updatedRaw = _replaceCitySection(raw, 'Фракции', mutated);
+    // Точечная замена одной секции — общий модуль lib/city_md_writer (§A1); раньше
+    // здесь жила локальная копия этой функции, теперь источник один на весь проект.
+    const updatedRaw = replaceCitySectionBullets(raw, 'Фракции', mutated);
     if (updatedRaw === null) return 'Фракция сохранена, но в city.md не найдена секция «Фракции» — синк пропущен';
     await writeFileAtomic(file, updatedRaw, 'utf-8');
     return null;

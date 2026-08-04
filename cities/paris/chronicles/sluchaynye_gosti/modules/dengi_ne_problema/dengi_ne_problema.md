@@ -21,7 +21,7 @@
 | Сцена 1 | Промзона Сен-Дени (убежище) | [Промзона Сен-Дени](../../../../locations/sen_deni/promzona_sen_deni/promzona_sen_deni.md) |
 | Сцена 2 | «Chasse & Nature», 15-й арр. | [Шасс-э-Натюр](../../../../locations/vozhirar/shass_e_natyur/shass_e_natyur.md) |
 | Путь А | Credit Mutuel, бульвар Осман, 8-й | [Кредит Мютюэль](../../../../locations/osman/kredit_myutyuel/kredit_myutyuel.md) |
-| Путь Б | Склад у канала Юрк, 19-й | [Склад Канал Юрк](../../../../locations/villet/sklad_kanal_yurk/sklad_kanal_yurk.md) |
+| Путь Б | Склад у канала Юрк, 19-й | [Склад Канал Юрк](../../../../locations/antrepo/sklad_kanal_yurk/sklad_kanal_yurk.md) |
 | Финал | Гараж Жирона, рю де Толбиак, 13-й | [Гараж Жирон](../../../../locations/tolbiak/garazh_zhiron/garazh_zhiron.md) |
 
 ---

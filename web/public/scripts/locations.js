@@ -174,23 +174,35 @@ function _sensRebuildTable(list) {
   return (list || []).map(s => `| **${s.channel}** | ${s.value || ''} |`).join('\n');
 }
 
+// Обязательные каналы (§C3, техспека 2026-08-04) — Свет/Звук/Запах нельзя удалить
+// из детальной модалки (кнопки нет вовсе, не просто дизейблена); backend дублирует
+// запрет на PUT /fields (routes/locations.js, key==='sensoryPalette') — не полагаемся
+// только на скрытую кнопку. «Тактильное» и произвольные добавленные каналы остаются
+// удаляемыми, статус-кво (loc-plan §2.3).
+const MANDATORY_SENS_CHANNELS = ['Свет', 'Звук', 'Запах'];
+
 function _renderSensPanel(loc) {
   const DEFAULT_CHANNELS = ['Свет', 'Звук', 'Запах', 'Тактильное'];
   const list = loc.sensoryPalette?.length
     ? loc.sensoryPalette
     : DEFAULT_CHANNELS.map(channel => ({ channel, value: '' }));
 
-  const sectionsHtml = list.map((s, i) => `
+  const sectionsHtml = list.map((s, i) => {
+    const mandatory = MANDATORY_SENS_CHANNELS.includes(s.channel);
+    // Пустой обязательный канал — ⚠️, не нейтральное «Пусто»: незаполненность видна
+    // сразу, не открывая вкладку (тот же принцип, что маркер на кнопке вкладки ниже).
+    const emptyView = mandatory ? '<div class="cdet-empty">⚠️ Не заполнено</div>' : '<div class="cdet-empty">Пусто</div>';
+    return `
     <div class="modp-scenario-section">
       <div class="modp-section-header-row">
         <div class="modp-section-label">${escHtml(s.channel)}</div>
         <div class="modp-scenario-sec-btns">
           <button class="cdet-edit-btn" data-editloc="sens-${i}">✏ Редактировать</button>
           <button class="cdet-edit-btn" data-sens-regen="${i}">🪄 Сгенерировать</button>
-          <button class="hooks-del-btn" data-sens-del="${i}" title="Удалить канал">✕</button>
+          ${mandatory ? '' : `<button class="hooks-del-btn" data-sens-del="${i}" title="Удалить канал">✕</button>`}
         </div>
       </div>
-      <div id="locdet-sens-${i}-view">${s.value ? escHtml(s.value) : '<div class="cdet-empty">Пусто</div>'}</div>
+      <div id="locdet-sens-${i}-view">${s.value ? escHtml(s.value) : emptyView}</div>
       <div id="locdet-sens-${i}-edit" style="display:none">
         <textarea class="cdet-edit-textarea" id="locdet-sens-${i}-ta" rows="2">${escHtml(s.value || '')}</textarea>
       </div>
@@ -200,7 +212,8 @@ function _renderSensPanel(loc) {
         <span class="cdet-save-msg" id="locdet-sens-${i}-msg" style="display:none">✓ Сохранено</span>
       </div>
     </div>
-    ${i < list.length - 1 ? '<div class="modp-section-divider"></div>' : ''}`).join('');
+    ${i < list.length - 1 ? '<div class="modp-section-divider"></div>' : ''}`;
+  }).join('');
 
   return `
     <div id="locdet-sens-list">${sectionsHtml}</div>
@@ -412,11 +425,32 @@ function openLocDetail(slug, keepTab) {
           <div class="locdet-val">${escHtml(kp.desc)}</div>
         </div>`).join('')}</div>`
     : '<div class="cdet-empty">Ключевые точки не заполнены</div>';
-  const keyRawTable = (loc.keyPoints || []).map(kp => `| ${kp.place} | ${kp.desc} |`).join('\n')
-    || '| Место | Описание |\n|---|---|\n| | |';
-  const keyEditHtml = `<textarea class="cdet-edit-textarea" id="locdet-keys-ta" rows="10">${escHtml(keyRawTable)}</textarea>`;
+  // Форма по 2 полям вместо raw-textarea (§C1, тот же паттерн, что уже применён к
+  // «Крючкам» рядом — hooks-item/hooks-input/hooks-del-btn переиспользуются как есть,
+  // здесь просто два .hooks-input в строке вместо одного). Место/Описание — реальные
+  // ячейки markdown-таблицы (не список), поэтому «|» внутри значений сворачиваем в
+  // лукалайк ∣, иначе стороннее значение сдвинуло бы соседнюю колонку при следующем
+  // разборе — тот же приём, что уже применяют vtmTable/subtype (routes/locations.js).
+  const keyEditHtml = `
+    <div id="locdet-keys-edit-list">
+      ${(loc.keyPoints || []).map(kp => `
+        <div class="hooks-item">
+          <input class="hooks-input keypt-place-inp" value="${escAttr(kp.place)}" placeholder="Место…">
+          <input class="hooks-input keypt-desc-inp" value="${escAttr(kp.desc)}" placeholder="Описание…">
+          <button class="hooks-del-btn" title="Удалить">✕</button>
+        </div>`).join('')}
+    </div>
+    <button class="hooks-add-btn" id="locdet-keys-add">+ Добавить точку</button>`;
 
   const sensPanelHtml = _renderSensPanel(loc);
+  // Маркер на кнопке вкладки — незаполненность видна без захода на вкладку (§C3).
+  // Каналов, которых в карточке нет вовсе (алиасы «Зрение» и т.п., см. комментарий
+  // у MANDATORY_SENS_CHANNELS), это тоже засчитывает как «не заполнено» — корректно,
+  // раз обязательного канала под этим именем на самом деле нет.
+  const sensHasEmpty = MANDATORY_SENS_CHANNELS.some(ch => {
+    const found = loc.sensoryPalette?.find(s => s.channel === ch);
+    return !found?.value;
+  });
 
   const hooksViewHtml = loc.hooks?.length
     ? `<div class="locdet-hooks">${loc.hooks.map((h, i) =>
@@ -485,7 +519,7 @@ function openLocDetail(slug, keepTab) {
         <button class="cdet-tab active" data-tab="meta">Метаданные</button>
         <button class="cdet-tab" data-tab="atm">Атмосфера</button>
         <button class="cdet-tab" data-tab="vtm">VtM</button>
-        <button class="cdet-tab" data-tab="sens">Сенсорика</button>
+        <button class="cdet-tab" data-tab="sens">Сенсорика${sensHasEmpty ? ' ⚠️' : ''}</button>
         <button class="cdet-tab" data-tab="keys">Ключевые точки</button>
         <button class="cdet-tab" data-tab="hooks">Крючки</button>
         <button class="cdet-tab" data-tab="images">🖼 Изображения</button>
@@ -599,6 +633,17 @@ document.getElementById('loc-detail-content').addEventListener('click', e => {
     if (item) { item.remove(); _renumberHooks(); }
     return;
   }
+  if (e.target.closest('#locdet-keys-add')) {
+    const list = document.getElementById('locdet-keys-edit-list');
+    if (list) {
+      const div = document.createElement('div');
+      div.className = 'hooks-item';
+      div.innerHTML = `<input class="hooks-input keypt-place-inp" placeholder="Место…"><input class="hooks-input keypt-desc-inp" placeholder="Описание…"><button class="hooks-del-btn" title="Удалить">✕</button>`;
+      list.appendChild(div);
+      div.querySelector('.keypt-place-inp')?.focus();
+    }
+    return;
+  }
   if (e.target.closest('#locdet-hooks-add')) {
     const list = document.getElementById('locdet-hooks-edit-list');
     if (list) {
@@ -638,6 +683,24 @@ function _renumberHooks() {
     const num = item.querySelector('.hooks-num');
     if (num) num.textContent = i + 1;
   });
+}
+
+// §C1 — строки формы «Ключевые точки» обратно в markdown-таблицу. Пустой список
+// (не единственный случай — счищена и последняя строка) даёт тот же пустой шаблон,
+// что и _locCardTemplate/routes/locations.js, чтобы карточка визуально не отличалась
+// от только что созданной. «|» в значениях сворачивается в ∣ (см. комментарий у
+// keyEditHtml) — реальная таблица, не список, соседняя колонка иначе бы сдвинулась.
+function _collectLocDetKeyPoints() {
+  const esc = s => String(s).replace(/\|/g, '∣');
+  const rows = Array.from(document.querySelectorAll('#locdet-keys-edit-list .hooks-item'))
+    .map(item => ({
+      place: item.querySelector('.keypt-place-inp')?.value.trim() || '',
+      desc:  item.querySelector('.keypt-desc-inp')?.value.trim() || '',
+    }))
+    .filter(r => r.place || r.desc);
+  return rows.length
+    ? `| Место | Описание |\n|---|---|\n${rows.map(r => `| ${esc(r.place)} | ${esc(r.desc)} |`).join('\n')}`
+    : '| Место | Описание |\n|---|---|\n| | |';
 }
 
 function _locToggleEdit(panel, enter) {
@@ -680,7 +743,7 @@ async function _locSavePanel(panel) {
     list[idx] = { ...list[idx], value: val };
     fields.sensoryPalette = _sensRebuildTable(list);
   } else if (panel === 'keys') {
-    fields.keyPoints = document.getElementById('locdet-keys-ta')?.value || '';
+    fields.keyPoints = _collectLocDetKeyPoints();
   } else if (panel === 'hooks') {
     const hookInputs = document.querySelectorAll('#locdet-hooks-edit-list .hooks-input');
     fields.hooks = Array.from(hookInputs).map(i => i.value.trim()).filter(Boolean).join('\n');
@@ -885,52 +948,6 @@ document.getElementById('loc-detail-content').addEventListener('click', e => {
 
 let _locEditSlug = null; // null = create, string = edit
 
-// ── Сенсорная палитра — редактор по каналам в форме openLocEditModal (не путать с
-// _renderSensPanel — та живёт в детальной модалке и сохраняет каждый канал СРАЗУ
-// отдельным запросом; здесь форма копит все поля в один payload и шлёт одним PUT
-// только по общей кнопке «Сохранить», см. location-card-modal-plan.md §3). Свои
-// классы (loc-edit-sens-*), не cdet-rel-row — designspec §12.1: разный класс-нейминг
-// между city.js (cdet-*) и этой модалкой (chr-form-*/loc-edit-*), копировать чужой
-// нейминг сюда означало бы визуально не принадлежать форме, в которой живёт ряд.
-const LOC_EDIT_SENS_CHANNELS = ['Свет', 'Звук', 'Запах', 'Тактильное'];
-let _locEditSensSeq = 0;
-
-function _locEditSensRowHtml(channel = '', value = '') {
-  const known   = LOC_EDIT_SENS_CHANNELS.includes(channel);
-  const selVal  = !channel ? '' : (known ? channel : 'other');
-  const custVal = (!known && channel) ? channel : '';
-  const opts = [
-    `<option value=""${selVal === '' ? ' selected' : ''}>Канал…</option>`,
-    ...LOC_EDIT_SENS_CHANNELS.map(o => `<option value="${escAttr(o)}"${o === selVal ? ' selected' : ''}>${escHtml(o)}</option>`),
-    `<option value="other"${selVal === 'other' ? ' selected' : ''}>Другое…</option>`,
-  ].join('');
-  return `<div class="loc-edit-sens-row" id="loc-edit-sens-row-${++_locEditSensSeq}">
-    <select class="form-control loc-edit-sens-channel-sel">${opts}</select>
-    <input class="form-control loc-edit-sens-channel-custom" placeholder="Свой канал" value="${escAttr(custVal)}" style="${selVal === 'other' ? '' : 'display:none'}">
-    <textarea class="chr-form-textarea loc-edit-sens-value-ta" rows="2" placeholder="Описание…">${escHtml(value || '')}</textarea>
-    <button class="cdet-rel-del-btn loc-edit-sens-del-btn" type="button" title="Удалить канал">✕</button>
-  </div>`;
-}
-
-function _renderLocEditSensRows(list) {
-  const rows = document.getElementById('loc-edit-sens-rows');
-  if (!rows) return;
-  const items = (list && list.length)
-    ? list
-    : ['Свет', 'Звук', 'Запах'].map(channel => ({ channel, value: '' }));
-  rows.innerHTML = items.map(s => _locEditSensRowHtml(s.channel, s.value)).join('');
-}
-
-function _collectLocEditSensRows() {
-  return Array.from(document.querySelectorAll('#loc-edit-sens-rows .loc-edit-sens-row')).map(row => {
-    const sel    = row.querySelector('.loc-edit-sens-channel-sel');
-    const custom = row.querySelector('.loc-edit-sens-channel-custom');
-    const channel = sel.value === 'other' ? custom.value.trim() : sel.value;
-    const value   = row.querySelector('.loc-edit-sens-value-ta').value.trim();
-    return { channel, value };
-  }).filter(s => s.channel && s.value);
-}
-
 // prefilledDistrict: опциональное имя района — предзаполняет и дизейблит поле
 // «Район» (для встраивания модалки в блок «Район» формы создания/редактирования
 // города, где район уже определён контекстом вызова). Актуально только для
@@ -955,7 +972,6 @@ function openLocEditModal(slug, prefilledDistrict) {
   });
   document.getElementById('loc-edit-zone').value = '';
   document.getElementById('loc-edit-danger').value = '';
-  _renderLocEditSensRows(null);
 
   const districtEl = document.getElementById('loc-edit-district');
   districtEl.disabled = false;
@@ -975,7 +991,6 @@ function openLocEditModal(slug, prefilledDistrict) {
       document.getElementById('loc-edit-atmosphere').value  = loc.atmosphere || '';
       document.getElementById('loc-edit-hooks').value       = (loc.hooks || []).join('\n');
       document.getElementById('loc-edit-image-prompt').value = loc.imagePrompt || '';
-      _renderLocEditSensRows(loc.sensoryPalette);
       document.getElementById('loc-edit-vtm-context').value = loc.vtmText || '';
       // Zone: try to match emoji
       const zv = loc.zone || '';
@@ -1073,7 +1088,10 @@ async function saveLocEdit() {
         control:     document.getElementById('loc-edit-control').value.trim(),
         zone:        document.getElementById('loc-edit-zone').value,
         dangerLevel: document.getElementById('loc-edit-danger').value,
-        sensoryPalette: _sensRebuildTable(_collectLocEditSensRows()),
+        // sensoryPalette здесь НЕ отправляется (§C2) — раздел убран из формы,
+        // сенсорика правится только в детальной модалке (_locSavePanel('sens-N')).
+        // Отсутствующий в fields ключ PUT /fields не трогает — существующие каналы
+        // локации остаются как есть, не затираются пустой строкой.
         vtmText:        document.getElementById('loc-edit-vtm-context').value.trim(),
       };
 
@@ -1105,7 +1123,9 @@ async function saveLocEdit() {
         imagePrompt:  document.getElementById('loc-edit-image-prompt').value.trim(),
         zone:         document.getElementById('loc-edit-zone').value,
         dangerLevel:  document.getElementById('loc-edit-danger').value,
-        sensoryPalette: _sensRebuildTable(_collectLocEditSensRows()),
+        // sensoryPalette здесь тоже не заполняется (§C2) — сенсорика на этапе создания
+        // недоступна намеренно, тем же принципом, что уже работает для «Ключевых
+        // точек»/VtM-таблицы: заполняется после, в детальной модалке.
         vtmText:        document.getElementById('loc-edit-vtm-context').value.trim(),
       };
       const hasExtra = Object.values(extraFields).some(v => v);
@@ -1133,7 +1153,19 @@ async function saveLocEdit() {
 
 async function deleteLocCurrent() {
   if (!_locEditSlug) return;
-  if (!await showConfirm(`Удалить локацию «${_locEditSlug}»? Это действие необратимо.`, { danger: true, confirmText: 'Удалить' })) return;
+  // §B2 — цель удаления не восстановить обратно (в отличие от переноса, §B1): ссылки
+  // на неё станут битыми без возможности автоподстановки нового пути. Read-only
+  // проверка ПЕРЕД confirm — предупреждаем, но не блокируем: решение за Рассказчиком.
+  let warnText = '';
+  try {
+    const bl = await fetch(`/api/locations/${encodeURIComponent(_locEditSlug)}/backlinks?city=${encodeURIComponent(CITY)}`).then(r => r.ok ? r.json() : null);
+    if (bl && bl.count > 0) {
+      const shown = bl.files.slice(0, 5).join(', ') + (bl.files.length > 5 ? `, ещё ${bl.files.length - 5}…` : '');
+      warnText = ` На эту локацию ссылаются файлы (${bl.count}): ${shown} — ссылки станут битыми.`;
+    }
+  } catch { /* проверка best-effort — сбой не должен блокировать сам confirm */ }
+
+  if (!await showConfirm(`Удалить локацию «${_locEditSlug}»? Это действие необратимо.${warnText}`, { danger: true, confirmText: 'Удалить' })) return;
   const btn = document.getElementById('loc-edit-delete-btn');
   btn.disabled = true;
   try {
@@ -1217,9 +1249,11 @@ async function runLocFullGen() {
     const promptM = content.match(/```\s*\n([\s\S]+?)```/);
     if (promptM) document.getElementById('loc-edit-image-prompt').value = promptM[1].trim();
 
-    if (parsed.sensoryPalette?.length) {
-      _renderLocEditSensRows(parsed.sensoryPalette);
-    }
+    // parsed.sensoryPalette из ответа AI-генерации здесь больше не подставляется
+    // (§C2) — форме негде её показать. Сенсорика, сгенерированная вместе с полной
+    // карточкой, для этого пути теряется — принятое следствие решения не дублировать
+    // редактор каналов в форме; подробное заполнение — после, в детальной модалке
+    // (которая умеет генерировать по каналу отдельно, с тем же результатом).
 
     // Только проза — табличные строки идут отдельным структурным путём;
     // отправка их же как vtmText задвоила бы таблицу поверх существующей.
@@ -1249,20 +1283,6 @@ async function runLocFullGen() {
   document.getElementById('loc-edit-modal').addEventListener('click', e => {
     const regenBtn = e.target.closest('.loc-edit-regen-btn');
     if (regenBtn) runLocFieldRegen(regenBtn.dataset.field);
-  });
-
-  document.getElementById('loc-edit-sens-add-btn')?.addEventListener('click', () => {
-    document.getElementById('loc-edit-sens-rows')?.insertAdjacentHTML('beforeend', _locEditSensRowHtml());
-  });
-  document.getElementById('loc-edit-modal').addEventListener('click', e => {
-    const delBtn = e.target.closest('.loc-edit-sens-del-btn');
-    if (delBtn) delBtn.closest('.loc-edit-sens-row')?.remove();
-  });
-  document.getElementById('loc-edit-modal').addEventListener('change', e => {
-    const sel = e.target.closest('.loc-edit-sens-channel-sel');
-    if (!sel) return;
-    const custom = sel.closest('.loc-edit-sens-row')?.querySelector('.loc-edit-sens-channel-custom');
-    if (custom) custom.style.display = sel.value === 'other' ? '' : 'none';
   });
 
   // "Create location" button on locations page

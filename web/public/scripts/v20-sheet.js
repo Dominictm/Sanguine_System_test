@@ -777,17 +777,10 @@ function _libDisciplineListHtml() {
 // Библиотека → вкладка «Дисциплины»: карточки (как у персонажей), а не список —
 // клик открывает ту же модалку, что и ссылка на дисциплину в листе персонажа
 // (см. _v20OpenDisciplineModal), а не подменяет содержимое страницы.
-// Кнопки правки/удаления на карточке библиотеки — только для «custom» записей
-// (Фаза I). category опционален (нужен только для merits/flaws/backgrounds,
-// где PUT/DELETE адресуются по /:category/:slug, а не просто /:slug).
-function _libCardActionsHtml(kind, slug, category) {
-  const catAttr = category ? ` data-lib-category="${escAttr(category)}"` : '';
-  return `<div class="lib-card-actions">
-    <button type="button" class="lib-card-action-btn" data-lib-edit="${kind}" data-lib-slug="${escAttr(slug)}"${catAttr} title="Редактировать">✏️</button>
-    <button type="button" class="lib-card-action-btn" data-lib-delete="${kind}" data-lib-slug="${escAttr(slug)}"${catAttr} title="Удалить">🗑</button>
-  </div>`;
-}
-
+// Правка/удаление авторских записей — из шапки открытой детейл-модалки (K1,
+// 2026-08-04), не отдельными иконками на карточке — карточка снова просто
+// одна кнопка, без .lib-card-wrap/.lib-card-actions (были нужны только чтобы
+// вложить вторую кнопку рядом с кликабельной карточкой).
 function _libDisciplineCardsHtml() {
   return `<div class="lib-cards">${(_disciplinesCache || []).map(d => {
     const art = d.hasArt
@@ -795,13 +788,9 @@ function _libDisciplineCardsHtml() {
       : '';
     const badge = d.custom ? '<span class="lib-card-custom-badge">✏️ Авторское</span>' : '';
     const inner = `<div class="lib-card-name">${escHtml(_libStripEn(d.name))}</div><div class="lib-card-meta">${escHtml(_libCleanClans(d.clans))}</div>${badge}`;
-    const actions = d.custom ? _libCardActionsHtml('disciplines', d.slug) : '';
-    return `<div class="lib-card-wrap">
-      <button type="button" class="lib-card${d.hasArt ? ' has-art' : ''}" data-disc-slug="${escAttr(d.slug)}">
-        ${art}${d.hasArt ? `<div class="lib-card-overlay">${inner}</div>` : inner}
-      </button>
-      ${actions}
-    </div>`;
+    return `<button type="button" class="lib-card${d.hasArt ? ' has-art' : ''}" data-disc-slug="${escAttr(d.slug)}">
+      ${art}${d.hasArt ? `<div class="lib-card-overlay">${inner}</div>` : inner}
+    </button>`;
   }).join('')}</div>`;
 }
 
@@ -859,22 +848,24 @@ function _v20RenderDisciplineLibrary() {
   body.innerHTML = `<h3>📚 Справочник дисциплин</h3>${_libDisciplineListHtml()}`;
 }
 function _v20RenderDisciplineDetail(slug) {
-  const body = document.getElementById('v20-disc-modal-body');
-  if (!body) return;
-  body.innerHTML = `<button type="button" class="v20-disc-back" data-disc-back>← к списку</button>${_libDisciplineDetailHtml(_discBySlug(slug))}`;
+  const d = _discBySlug(slug);
+  const html = `<button type="button" class="v20-disc-back" data-disc-back>← к списку</button>${_libDisciplineDetailHtml(d)}`;
+  _v20SetLibDetailBody(html, d ? { kind: 'disciplines', slug, category: null, custom: !!d.custom } : null);
 }
 
 // Path-detail: одна колонка Пути (Некромантия/Тауматургия/колдовские) в общей модалке.
+// У Путей нет собственного CRUD (это часть дисциплины, не отдельная запись) — view=null.
 function _v20RenderDisciplinePathDetail(discSlug, pathName) {
   const body = document.getElementById('v20-disc-modal-body');
   if (!body) return;
   const d = _discBySlug(discSlug);
   const p = d && (d.paths || []).find(x => x.name === pathName);
-  if (!p) { body.innerHTML = '<div class="v20-disc-empty">Путь не найден.</div>'; return; }
-  body.innerHTML = `<div class="v20-disc-detail-head"><h3>${escHtml(p.name)}</h3>` +
+  if (!p) { _v20SetLibDetailBody('<div class="v20-disc-empty">Путь не найден.</div>', null); return; }
+  const html = `<div class="v20-disc-detail-head"><h3>${escHtml(p.name)}</h3>` +
     `<span class="v20-disc-clans">${escHtml(d.name)}</span></div>` +
     `${p.note ? `<div class="v20-disc-note">${escHtml(p.note)}</div>` : ''}` +
     `${(p.levels || []).map(_libPowerHtml).join('')}`;
+  _v20SetLibDetailBody(html, null);
 }
 async function _v20OpenDisciplinePathModal(discSlug, pathName) {
   _v20OpenLibModalShell();
@@ -883,25 +874,153 @@ async function _v20OpenDisciplinePathModal(discSlug, pathName) {
 }
 
 // Combo-detail: имя, предпосылки, описание, механика.
+// Комбо-дисциплины не имеют своего CRUD (JSON без custom-механики) — view=null.
 function _v20RenderComboDetail(slug) {
-  const body = document.getElementById('v20-disc-modal-body');
-  if (!body) return;
   const c = _comboBySlug(slug);
-  if (!c) { body.innerHTML = '<div class="v20-disc-empty">Комбо не найдено.</div>'; return; }
-  body.innerHTML = `<div class="v20-disc-detail-head"><h3>${escHtml(c.name)}</h3>` +
+  if (!c) { _v20SetLibDetailBody('<div class="v20-disc-empty">Комбо не найдено.</div>', null); return; }
+  const html = `<div class="v20-disc-detail-head"><h3>${escHtml(c.name)}</h3>` +
     `<span class="v20-disc-clans">${escHtml(c.clans || '')}</span></div>` +
     `<div class="v20-disc-note">Требует: ${escHtml(c.prereq || '—')}</div>` +
     `${c.literary ? `<div class="lib-power-sec"><div class="lib-power-label">Литературное описание</div><p class="lib-power-text">${escHtml(c.literary)}</p></div>` : ''}` +
     `${c.system ? `<div class="lib-power-sec"><div class="lib-power-label">Система</div><p class="lib-power-text lib-power-sys">${escHtml(c.system)}</p></div>` : ''}`;
+  _v20SetLibDetailBody(html, null);
 }
 async function _v20OpenComboModal(slug) {
   _v20OpenLibModalShell();
   await ensureCombos();
   _v20RenderComboDetail(slug);
 }
-function _v20CloseDisciplineModal() {
+// ── K1 (2026-08-04): просмотр/правка/удаление одной записи в общей модалке ──
+// _v20CurrentLibView — что сейчас показано (top-level запись, не Path/Combo-
+// детейл — у тех своего CRUD нет, view остаётся null). Устанавливается
+// централизованно через _v20SetLibDetailBody, не в каждом рендерере отдельно.
+let _v20CurrentLibView = null; // { kind, slug, category, custom } | null
+let _v20LibEditMode = false;
+let _v20LibEditDirty = false;
+
+function _v20DetailActionsHtml() {
+  return `<div class="v20-disc-detail-actions">
+    <button type="button" class="cdet-edit-btn" id="v20-disc-edit-btn">✏ Редактировать</button>
+    <button type="button" class="cdet-delete-btn" id="v20-disc-delete-btn" title="Удалить">🗑</button>
+  </div>`;
+}
+
+// Общая точка входа для всех «просмотр записи» рендереров (дисциплина/
+// психика/merit/flaw/background/клан/секта) — устанавливает body.innerHTML,
+// запоминает текущий view и, если запись авторская, дорисовывает Edit/Delete
+// в шапку (.v20-disc-detail-head, если она есть в разметке детейла).
+// view = null — для Path/Combo-детейлов (нет CRUD, кнопки не нужны).
+function _v20SetLibDetailBody(html, view) {
+  const body = document.getElementById('v20-disc-modal-body');
+  if (!body) return;
+  body.innerHTML = html;
+  _v20CurrentLibView = view;
+  _v20LibEditMode = false;
+  _v20LibEditDirty = false;
+  if (view && view.custom) {
+    const head = body.querySelector('.v20-disc-detail-head');
+    if (head) head.insertAdjacentHTML('beforeend', _v20DetailActionsHtml());
+  }
+}
+
+async function _v20EnterLibEdit() {
+  const v = _v20CurrentLibView;
+  if (!v || !v.custom) return;
+  const rec = _libFindRecord(v.kind, v.slug, v.category);
+  if (!rec) return;
+  const body = document.getElementById('v20-disc-modal-body');
+  if (!body) return;
+  _v20LibEditMode = true;
+  _v20LibEditDirty = false;
+  body.innerHTML = `
+    <div class="v20-disc-edit-topbar">${_v20DetailActionsHtml()}</div>
+    <div id="v20-disc-edit-fields"></div>
+    <div id="v20-disc-edit-error" class="chr-form-error" style="display:none"></div>`;
+  body.querySelector('#v20-disc-edit-btn').textContent = '✓ Сохранить';
+  body.querySelector('#v20-disc-edit-btn').classList.add('active');
+  const fieldsBox = document.getElementById('v20-disc-edit-fields');
+  await _libRenderForm(fieldsBox, v.kind, rec);
+  fieldsBox.addEventListener('input', () => { _v20LibEditDirty = true; });
+  fieldsBox.addEventListener('change', () => { _v20LibEditDirty = true; });
+}
+
+// Возвращает true при успехе (модалка возвращается в просмотр со свежими
+// данными), false при ошибке (форма остаётся в режиме правки, ввод не теряется).
+async function _v20SaveLibEdit() {
+  const v = _v20CurrentLibView;
+  if (!v) return false;
+  const cfg = _LIB_KIND_CONFIG[v.kind];
+  const fieldsBox = document.getElementById('v20-disc-edit-fields');
+  const errEl = document.getElementById('v20-disc-edit-error');
+  if (!fieldsBox || !cfg) return false;
+  const body = _libCollectForm(fieldsBox, v.kind);
+  if (!body.name) { errEl.textContent = 'Название обязательно'; errEl.style.display = ''; return false; }
+
+  const isJsonTrack = !!cfg.categories;
+  const url = isJsonTrack
+    ? `/api/library/${v.kind}/${encodeURIComponent(v.category)}/${encodeURIComponent(v.slug)}`
+    : `/api/library/${v.kind}/${encodeURIComponent(v.slug)}`;
+
+  const btn = document.getElementById('v20-disc-edit-btn');
+  if (btn) btn.disabled = true;
+  try {
+    const r = await fetch(url, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+    }).then(x => x.json());
+    if (!r.ok) { errEl.textContent = r.error || 'Ошибка сохранения'; errEl.style.display = ''; return false; }
+    await cfg.reload(v.category);
+    _v20ReopenLibDetail(v.kind, v.slug, v.category);
+    return true;
+  } catch (e) {
+    errEl.textContent = e.message; errEl.style.display = '';
+    return false;
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+// Перерисовывает detail в режиме просмотра со свежими данными — общая точка
+// после сохранения, не 7 разных if-веток в вызывающем коде.
+function _v20ReopenLibDetail(kind, slug, category) {
+  if (kind === 'disciplines') _v20RenderDisciplineDetail(slug);
+  else if (kind === 'psychics') _v20RenderPsychicDetail(slug);
+  else if (kind === 'merits') _v20RenderMeritDetail(slug, category);
+  else if (kind === 'flaws') _v20RenderFlawDetail(slug, category);
+  else if (kind === 'backgrounds') _v20RenderBackgroundDetail(slug, category);
+  else if (kind === 'clans') _v20RenderClanDetail(slug);
+  else if (kind === 'sects') _v20RenderSectDetail(slug);
+}
+
+async function _v20DeleteCurrentLibRecord() {
+  const v = _v20CurrentLibView;
+  if (!v || !v.custom) return;
+  const cfg = _LIB_KIND_CONFIG[v.kind];
+  const rec = _libFindRecord(v.kind, v.slug, v.category);
+  const ok = await showConfirm(`Удалить «${rec?.name || v.slug}»? Это действие необратимо.`, { danger: true, confirmText: 'Удалить' });
+  if (!ok) return;
+  const isJsonTrack = !!cfg.categories;
+  const url = isJsonTrack
+    ? `/api/library/${v.kind}/${encodeURIComponent(v.category)}/${encodeURIComponent(v.slug)}`
+    : `/api/library/${v.kind}/${encodeURIComponent(v.slug)}`;
+  const r = await fetch(url, { method: 'DELETE' }).then(x => x.json()).catch(e => ({ error: e.message }));
+  if (!r.ok) { showToast(r.error || 'Не удалось удалить', 'error'); return; }
+  _v20LibEditMode = false; _v20LibEditDirty = false;
+  await cfg.reload(v.category);
+  _v20CloseDisciplineModal();
+}
+
+async function _v20CloseDisciplineModal() {
   const m = document.getElementById('v20-disc-modal-backdrop');
   if (!m || !m.classList.contains('open')) return;
+  if (_v20LibEditMode && _v20LibEditDirty) {
+    const save = await showConfirm('Есть несохранённые правки. Сохранить перед закрытием?',
+      { confirmText: 'Сохранить', cancelText: 'Не сохранять' });
+    if (save) {
+      const ok = await _v20SaveLibEdit();
+      if (!ok) return; // ошибка сохранения — не закрывать, дать поправить
+    }
+  }
+  _v20LibEditMode = false; _v20LibEditDirty = false; _v20CurrentLibView = null;
   m.classList.remove('open');
   // Возврат фокуса инициатору открытия (см. _v20OpenLibModalShell).
   if (_v20LibModalOpener && document.contains(_v20LibModalOpener)) _v20LibModalOpener.focus();
@@ -948,6 +1067,11 @@ function _v20EnsureLibModal() {
     const item = e.target.closest('[data-disc-slug]'); if (item) { _v20RenderDisciplineDetail(item.dataset.discSlug); return; }
     const pback = e.target.closest('[data-psy-back]'); if (pback) { _v20RenderPsychicLibrary(); return; }
     const pitem = e.target.closest('[data-psy-slug]'); if (pitem) { _v20RenderPsychicDetail(pitem.dataset.psySlug); return; }
+    // K1 — шапка детейла: Редактировать/Сохранить (один переключатель) и Удалить.
+    const editBtn = e.target.closest('#v20-disc-edit-btn');
+    if (editBtn) { if (_v20LibEditMode) _v20SaveLibEdit(); else _v20EnterLibEdit(); return; }
+    const delBtn = e.target.closest('#v20-disc-delete-btn');
+    if (delBtn) { _v20DeleteCurrentLibRecord(); return; }
   });
   document.addEventListener('keydown', e => { if (e.key === 'Escape') _v20CloseDisciplineModal(); });
   // Лёгкая ловушка фокуса: Tab циклится внутри открытой модалки.
@@ -1032,13 +1156,9 @@ function _libPsychicCardsHtml() {
       : '';
     const badge = p.custom ? '<span class="lib-card-custom-badge">✏️ Авторское</span>' : '';
     const inner = `<div class="lib-card-name">${escHtml(_libStripEn(p.name))}</div><div class="lib-card-meta">${escHtml(p.category || '')}</div>${badge}`;
-    const actions = p.custom ? _libCardActionsHtml('psychics', p.slug) : '';
-    return `<div class="lib-card-wrap">
-      <button type="button" class="lib-card${p.hasArt ? ' has-art' : ''}" data-psy-slug="${escAttr(p.slug)}">
-        ${art}${p.hasArt ? `<div class="lib-card-overlay">${inner}</div>` : inner}
-      </button>
-      ${actions}
-    </div>`;
+    return `<button type="button" class="lib-card${p.hasArt ? ' has-art' : ''}" data-psy-slug="${escAttr(p.slug)}">
+      ${art}${p.hasArt ? `<div class="lib-card-overlay">${inner}</div>` : inner}
+    </button>`;
   }).join('')}</div>`;
 }
 function _libRenderPsyList() {
@@ -1076,12 +1196,9 @@ function _libMeritCardsHtml(category) {
     const inner = `<div class="lib-card-name">${escHtml(m.name)}</div>
       <div class="lib-card-points">${'<span class="lib-dot"></span>'.repeat(m.points)}</div>
       ${m.custom ? '<span class="lib-card-custom-badge">✏️ Авторское</span>' : ''}`;
-    return `<div class="lib-card-wrap">
-      <button type="button" class="lib-card${m.hasArt ? ' has-art' : ''}" data-merit-slug="${escAttr(m.slug)}" data-merit-category="${category}">
-        ${art}${m.hasArt ? `<div class="lib-card-overlay">${inner}</div>` : inner}
-      </button>
-      ${m.custom ? _libCardActionsHtml('merits', m.slug, category) : ''}
-    </div>`;
+    return `<button type="button" class="lib-card${m.hasArt ? ' has-art' : ''}" data-merit-slug="${escAttr(m.slug)}" data-merit-category="${category}">
+      ${art}${m.hasArt ? `<div class="lib-card-overlay">${inner}</div>` : inner}
+    </button>`;
   }).join('')}</div>`;
 }
 
@@ -1091,10 +1208,9 @@ function _libRenderMeritList(category) {
 }
 
 function _v20RenderMeritDetail(slug, category) {
-  const body = document.getElementById('v20-disc-modal-body');
-  if (!body) return;
   const merit = (_meritsCache[category] || []).find(m => m.slug === slug);
-  body.innerHTML = `<button type="button" class="v20-disc-back" data-modal-close>← закрыть</button>${_libMeritDetailHtml(merit)}`;
+  const html = `<button type="button" class="v20-disc-back" data-modal-close>← закрыть</button>${_libMeritDetailHtml(merit)}`;
+  _v20SetLibDetailBody(html, merit ? { kind: 'merits', slug, category, custom: !!merit.custom } : null);
 }
 
 async function _v20OpenMeritModal(slug, category) {
@@ -1141,12 +1257,9 @@ function _libFlawCardsHtml(category) {
     const inner = `<div class="lib-card-name">${escHtml(m.name)}</div>
       <div class="lib-card-points">${'<span class="lib-dot"></span>'.repeat(m.points)}</div>
       ${m.custom ? '<span class="lib-card-custom-badge">✏️ Авторское</span>' : ''}`;
-    return `<div class="lib-card-wrap">
-      <button type="button" class="lib-card${m.hasArt ? ' has-art' : ''}" data-flaw-slug="${escAttr(m.slug)}" data-flaw-category="${category}">
-        ${art}${m.hasArt ? `<div class="lib-card-overlay">${inner}</div>` : inner}
-      </button>
-      ${m.custom ? _libCardActionsHtml('flaws', m.slug, category) : ''}
-    </div>`;
+    return `<button type="button" class="lib-card${m.hasArt ? ' has-art' : ''}" data-flaw-slug="${escAttr(m.slug)}" data-flaw-category="${category}">
+      ${art}${m.hasArt ? `<div class="lib-card-overlay">${inner}</div>` : inner}
+    </button>`;
   }).join('')}</div>`;
 }
 
@@ -1156,10 +1269,9 @@ function _libRenderFlawList(category) {
 }
 
 function _v20RenderFlawDetail(slug, category) {
-  const body = document.getElementById('v20-disc-modal-body');
-  if (!body) return;
   const flaw = (_flawsCache[category] || []).find(m => m.slug === slug);
-  body.innerHTML = `<button type="button" class="v20-disc-back" data-modal-close>← закрыть</button>${_libFlawDetailHtml(flaw)}`;
+  const html = `<button type="button" class="v20-disc-back" data-modal-close>← закрыть</button>${_libFlawDetailHtml(flaw)}`;
+  _v20SetLibDetailBody(html, flaw ? { kind: 'flaws', slug, category, custom: !!flaw.custom } : null);
 }
 
 async function _v20OpenFlawModal(slug, category) {
@@ -1227,12 +1339,9 @@ function _libBackgroundCardsHtml(category) {
     const inner = `<div class="lib-card-name">${escHtml(b.name)}</div>
       ${b.sectOnly ? `<div class="lib-card-sect">Только ${escHtml(b.sectOnly)}</div>` : ''}
       ${b.custom ? '<span class="lib-card-custom-badge">✏️ Авторское</span>' : ''}`;
-    return `<div class="lib-card-wrap">
-      <button type="button" class="lib-card${b.hasArt ? ' has-art' : ''}" data-bg-slug="${escAttr(b.slug)}" data-bg-category="${category}">
-        ${art}${b.hasArt ? `<div class="lib-card-overlay">${inner}</div>` : inner}
-      </button>
-      ${b.custom ? _libCardActionsHtml('backgrounds', b.slug, category) : ''}
-    </div>`;
+    return `<button type="button" class="lib-card${b.hasArt ? ' has-art' : ''}" data-bg-slug="${escAttr(b.slug)}" data-bg-category="${category}">
+      ${art}${b.hasArt ? `<div class="lib-card-overlay">${inner}</div>` : inner}
+    </button>`;
   }).join('')}</div>`;
 }
 
@@ -1242,9 +1351,9 @@ function _libRenderBackgroundList(category) {
 }
 
 function _v20RenderBackgroundDetail(slug, category) {
-  const body = document.getElementById('v20-disc-modal-body');
-  if (!body) return;
-  body.innerHTML = `<button type="button" class="v20-disc-back" data-modal-close>← закрыть</button>${_libBackgroundDetailHtml(_backgroundBySlug(category, slug))}`;
+  const bg = _backgroundBySlug(category, slug);
+  const html = `<button type="button" class="v20-disc-back" data-modal-close>← закрыть</button>${_libBackgroundDetailHtml(bg)}`;
+  _v20SetLibDetailBody(html, bg ? { kind: 'backgrounds', slug, category, custom: !!bg.custom } : null);
 }
 
 async function _v20OpenBackgroundModal(slug, category) {
@@ -1272,6 +1381,137 @@ document.getElementById('lib-backgrounds-body')?.addEventListener('click', e => 
   if (card) _v20OpenBackgroundModal(card.dataset.bgSlug, card.dataset.bgCategory);
 });
 
+// ── Страница «Сородичи» → «Кланы» (K5, 2026-08-04) — карточки/детейл зеркалят
+// дисциплины: тот же .lib-cards/.lib-card, тот же общий modal shell, K1 для
+// правки/удаления авторских записей. Секта показывается прямо на карточке
+// (.lib-card-sect — тот же класс, что уже помечает секто-ограниченные факты
+// биографии, не второй бейдж под ту же задачу).
+let _clansCache = null;
+async function ensureClans() {
+  if (_clansCache) return _clansCache;
+  try {
+    const data = await fetch('/api/library/clans').then(r => r.json());
+    _clansCache = Array.isArray(data) ? data : [];
+  } catch { _clansCache = []; }
+  return _clansCache;
+}
+function _clanBySlug(slug) { return (_clansCache || []).find(c => c.slug === slug) || null; }
+
+function _libClanDetailHtml(c) {
+  if (!c) return '<div class="cdet-empty">Клан не найден в справочнике.</div>';
+  const sect = c.sect ? `<span class="lib-card-sect">${escHtml(c.sect)}</span>` : '';
+  const rows = [
+    c.disciplines ? `<div class="lib-power-sec"><div class="lib-power-label">Дисциплины</div><p class="lib-power-text">${escHtml(c.disciplines)}</p></div>` : '',
+    c.weakness ? `<div class="lib-power-sec"><div class="lib-power-label">Слабость</div><p class="lib-power-text">${escHtml(c.weakness)}</p></div>` : '',
+  ].join('');
+  const note = c.note ? `<div class="v20-disc-note">${escHtml(c.note)}</div>` : '';
+  const desc = c.description ? `<p class="lib-power-text">${escHtml(c.description)}</p>` : '';
+  return `<div class="v20-disc-detail-head"><h3>${escHtml(c.name)}</h3>${sect}</div>${note}${rows}${desc}`;
+}
+
+function _libClanCardsHtml() {
+  return `<div class="lib-cards">${(_clansCache || []).map(c => {
+    const badge = c.custom ? '<span class="lib-card-custom-badge">✏️ Авторское</span>' : '';
+    const sect = c.sect ? `<div class="lib-card-sect">${escHtml(c.sect)}</div>` : '';
+    return `<button type="button" class="lib-card" data-clan-slug="${escAttr(c.slug)}">
+      <div class="lib-card-name">${escHtml(_libStripEn(c.name))}</div>${sect}${badge}
+    </button>`;
+  }).join('')}</div>`;
+}
+
+function _v20RenderClanDetail(slug) {
+  const c = _clanBySlug(slug);
+  _v20SetLibDetailBody(_libClanDetailHtml(c), c ? { kind: 'clans', slug, category: null, custom: !!c.custom } : null);
+}
+
+async function _v20OpenClanModal(slug) {
+  _v20OpenLibModalShell();
+  const body = document.getElementById('v20-disc-modal-body');
+  if (body) body.innerHTML = '<div class="loading-state"><div class="spinner"></div>Загрузка справочника…</div>';
+  await ensureClans();
+  _v20RenderClanDetail(slug);
+}
+
+function _libRenderClanList() {
+  const body = document.getElementById('lib-clans-body');
+  if (body) body.innerHTML = _libClanCardsHtml();
+}
+
+document.getElementById('lib-clans-body')?.addEventListener('click', e => {
+  const card = e.target.closest('[data-clan-slug]');
+  if (card) _v20OpenClanModal(card.dataset.clanSlug);
+});
+
+// ── Страница «Сородичи» → «Секты» (K5) — зеркало кланов выше, без секто-бейджа
+// (секта сама на себя не ссылается) и без «Дисциплины»/«Слабость».
+let _sectsCache = null;
+async function ensureSects() {
+  if (_sectsCache) return _sectsCache;
+  try {
+    const data = await fetch('/api/library/sects').then(r => r.json());
+    _sectsCache = Array.isArray(data) ? data : [];
+  } catch { _sectsCache = []; }
+  return _sectsCache;
+}
+function _sectBySlug(slug) { return (_sectsCache || []).find(s => s.slug === slug) || null; }
+
+function _libSectDetailHtml(s) {
+  if (!s) return '<div class="cdet-empty">Секта не найдена в справочнике.</div>';
+  const note = s.note ? `<div class="v20-disc-note">${escHtml(s.note)}</div>` : '';
+  const desc = s.description ? `<p class="lib-power-text">${escHtml(s.description)}</p>` : '';
+  return `<div class="v20-disc-detail-head"><h3>${escHtml(s.name)}</h3></div>${note}${desc}`;
+}
+
+function _libSectCardsHtml() {
+  return `<div class="lib-cards">${(_sectsCache || []).map(s => {
+    const badge = s.custom ? '<span class="lib-card-custom-badge">✏️ Авторское</span>' : '';
+    return `<button type="button" class="lib-card" data-sect-slug="${escAttr(s.slug)}">
+      <div class="lib-card-name">${escHtml(s.name)}</div>${badge}
+    </button>`;
+  }).join('')}</div>`;
+}
+
+function _v20RenderSectDetail(slug) {
+  const s = _sectBySlug(slug);
+  _v20SetLibDetailBody(_libSectDetailHtml(s), s ? { kind: 'sects', slug, category: null, custom: !!s.custom } : null);
+}
+
+async function _v20OpenSectModal(slug) {
+  _v20OpenLibModalShell();
+  const body = document.getElementById('v20-disc-modal-body');
+  if (body) body.innerHTML = '<div class="loading-state"><div class="spinner"></div>Загрузка справочника…</div>';
+  await ensureSects();
+  _v20RenderSectDetail(slug);
+}
+
+function _libRenderSectList() {
+  const body = document.getElementById('lib-sects-body');
+  if (body) body.innerHTML = _libSectCardsHtml();
+}
+
+document.getElementById('lib-sects-body')?.addEventListener('click', e => {
+  const card = e.target.closest('[data-sect-slug]');
+  if (card) _v20OpenSectModal(card.dataset.sectSlug);
+});
+
+// Точка входа страницы «Сородичи» (навигация — scripts.js, navigate()).
+// which опционален — переключение вкладки без перезагрузки данных (обе уже
+// в кэше после первого открытия страницы).
+async function loadKindred(which) {
+  if (!which || which === 'clans') {
+    const body = document.getElementById('lib-clans-body');
+    if (body && !_clansCache) body.innerHTML = '<div class="loading-state"><div class="spinner"></div>Загрузка...</div>';
+    await ensureClans();
+    _libRenderClanList();
+  }
+  if (!which || which === 'sects') {
+    const body = document.getElementById('lib-sects-body');
+    if (body && !_sectsCache) body.innerHTML = '<div class="loading-state"><div class="spinner"></div>Загрузка...</div>';
+    await ensureSects();
+    _libRenderSectList();
+  }
+}
+
 // ── Mortal sheet: «Психические способности» row reference (зеркало v20DisciplineKey/
 // _v20OpenDisciplineModal выше, но источник — _psychicsCache/ensurePsychics(), не дисциплины).
 // Имя силы из листа («Психометрия», «Биоконтроль») → slug в справочнике психических способностей.
@@ -1292,9 +1532,9 @@ function _v20RenderPsychicLibrary() {
   body.innerHTML = `<h3>📚 Справочник психических способностей</h3>${_libPsyListHtml()}`;
 }
 function _v20RenderPsychicDetail(slug) {
-  const body = document.getElementById('v20-disc-modal-body');
-  if (!body) return;
-  body.innerHTML = `<button type="button" class="v20-disc-back" data-psy-back>← к списку</button>${_libPsyDetailHtml(_psyBySlug(slug))}`;
+  const p = _psyBySlug(slug);
+  const html = `<button type="button" class="v20-disc-back" data-psy-back>← к списку</button>${_libPsyDetailHtml(p)}`;
+  _v20SetLibDetailBody(html, p ? { kind: 'psychics', slug, category: null, custom: !!p.custom } : null);
 }
 // Reuses the same modal shell/backdrop as _v20OpenDisciplineModal (#v20-disc-modal-backdrop) —
 // only one of the two modals is ever open at a time (vampire sheet has no psychic rows and vice

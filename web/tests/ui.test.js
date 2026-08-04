@@ -311,7 +311,12 @@ describe('UI — Selenium (Chrome)', () => {
     const districtSlug = slugify('Тестовый район');
     const cardPath    = () => path.join(ROOT, 'cities', UI_CITY, 'locations', districtSlug, locSlug, `${locSlug}.md`);
 
-    it('создание с уровнем опасности и сенсорным каналом — оба поля попадают в карточку', async () => {
+    it('создание с уровнем опасности; сенсорный канал заполняется отдельно, в детальной модалке (§C2)', async () => {
+      // «Сенсорная палитра» убрана из формы создания/редактирования (§C2, план
+      // 2026-08-02-location-card-modal-plan.md §6) — тот же функционал уже есть в
+      // детальной модалке просмотра (вкладка «Сенсорика»), дублировать не стали.
+      // Тест теперь бьётся на два шага: создание (только уровень опасности — то,
+      // что форма всё ещё умеет), затем заполнение канала через detail-модалку.
       await driver.get(`${BASE}?city=${UI_CITY}`);
       await navTo('locations');
       await clickEl(await id_('loc-page-create-btn'));
@@ -323,18 +328,36 @@ describe('UI — Selenium (Chrome)', () => {
 
       // Опасность — <select> с эмодзи-значениями (🟢/🟡/🔴), отдельное поле от Зоны.
       await new Select(await id_('loc-edit-danger')).selectByValue('🟡');
-      // Модалка при открытии на создание уже сеет 3 пустых ряда сенсорики (Свет/
-      // Звук/Запах) — заполняем первый ряд, без клика «+ Добавить канал».
-      const sensTa = await css('#loc-edit-sens-rows .loc-edit-sens-row:first-child .loc-edit-sens-value-ta');
-      await sensTa.sendKeys('Тусклый неон и мигающие лампы.');
+      // «Сенсорной палитры» в этой форме больше нет — раздел проверяется ниже, через
+      // вкладку «Сенсорика» детальной модалки, а не здесь.
 
       await clickEl(await id_('loc-edit-save-btn'));
       await driver.wait(async () => (await count('#loc-edit-modal.open')) === 0,
         10000, 'модалка локации не закрылась после сохранения');
 
       await driver.wait(() => fs.existsSync(cardPath()), 5000, 'карточка не создана на диске');
-      const raw = fs.readFileSync(cardPath(), 'utf-8');
+      let raw = fs.readFileSync(cardPath(), 'utf-8');
       assert.match(raw, /\*\*Опасность:\*\*\s*🟡/, 'уровень опасности не записался в карточку');
+      assert.ok(!/loc-edit-sens/.test(raw), 'сама разметка id не должна была протечь в карточку (страховка от регресса)');
+
+      // Заполняем канал «Свет» через detail-модалку — единственное оставшееся место,
+      // где сенсорика редактируется (сохраняет сразу, своей кнопкой на канал).
+      await driver.get(`${BASE}?city=${UI_CITY}`);
+      await navTo('locations');
+      await clickEl(await css(`.loc-card[data-slug="${locSlug}"]`));
+      await css('#loc-detail-modal.open');
+      await clickEl(await css('#loc-detail-content .cdet-tab[data-tab="sens"]'));
+      await css('#loc-detail-content .cdet-panel[data-panel="sens"].active');
+      await clickEl(await css('#loc-detail-content [data-editloc="sens-0"]'));
+      await driver.wait(until.elementIsVisible(await id_('locdet-sens-0-ta')), 5000, 'форма канала не раскрылась');
+      await typeIn('locdet-sens-0-ta', 'Тусклый неон и мигающие лампы.');
+      await clickEl(await css('#loc-detail-content [data-saveloc="sens-0"]'));
+      await driver.wait(async () => {
+        try {
+          raw = fs.readFileSync(cardPath(), 'utf-8');
+          return /Тусклый неон и мигающие лампы\./.test(raw);
+        } catch { return false; }
+      }, 8000, 'канал «Свет» не сохранился через детальную модалку');
       assert.match(raw, /\|\s*\*\*Свет\*\*\s*\|\s*Тусклый неон и мигающие лампы\.\s*\|/,
         'сенсорный канал «Свет» не записался в карточку');
     });

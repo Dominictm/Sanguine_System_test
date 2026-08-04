@@ -1,9 +1,13 @@
 'use strict';
-// Фаза I — создание/правка/удаление авторских элементов библиотеки (дисциплины,
-// психические способности, достоинства, недостатки, факты биографии). Канон
-// защищён на сервере (см. web/routes/library.js) — эта форма лишь собирает
-// поля и вызывает POST/PUT/DELETE; список полей меняется в зависимости от
-// «kind» (см. _LIB_KIND_CONFIG).
+// Фаза I — создание авторских элементов библиотеки (дисциплины, психические
+// способности, достоинства, недостатки, факты биографии, кланы, секты).
+// Правка/удаление СУЩЕСТВУЮЩИХ элементов переехала в единую детейл-модалку
+// (v20-sheet.js, K1, 2026-08-04) — этот файл отвечает только за форму
+// создания (#lib-edit-modal) и общий источник конфигурации полей
+// (_LIB_FIELD_DEFS/_LIB_KIND_CONFIG), который переиспользует и K1.
+// Канон защищён на сервере (см. web/routes/library.js) — эта форма лишь
+// собирает поля и вызывает POST/PUT; список полей меняется в зависимости
+// от «kind» (см. _LIB_KIND_CONFIG).
 
 const _LIB_MERIT_CATS = [
   ['physical', 'Физические'], ['mental', 'Умственные'],
@@ -18,8 +22,39 @@ const _LIB_BG_CATS = [
   ['mage', 'Маги'], ['changeling', 'Подменыши'],
 ];
 
-// Конфиг per-kind: какие поля показывать, как собрать тело запроса, как
-// перезагрузить список после сохранения/удаления.
+// Единый источник разметки поля по ключу — переиспользуется формой создания
+// (#lib-edit-modal) И режимом правки внутри детейл-модалки (K1,
+// _v20RenderLibEditForm) — один рендерер, не два расходящихся куска HTML.
+// «name» не входит в fields конкретного kind — рендерится отдельно, всегда первым.
+const _LIB_FIELD_DEFS = {
+  name:             { label: 'Название', type: 'text' },
+  clans:            { label: 'Клан / принадлежность', type: 'text' },
+  'category-text':  { label: 'Категория', type: 'text' },
+  'category-select':{ label: 'Категория', type: 'select' },
+  source:           { label: 'Источник', type: 'text' },
+  note:             { label: 'Примечание', type: 'textarea', rows: 2 },
+  points:           { label: 'Стоимость (очки)', type: 'number', min: 1, max: 7 },
+  description:      { label: 'Описание', type: 'textarea', rows: 4 },
+  'system-text':    { label: 'Уровни (по строке: «1: текст»)', type: 'textarea', rows: 4 },
+  levels:           { label: 'Уровни силы', type: 'levels' },
+  'discipline-list':{ label: 'Дисциплины клана', type: 'text' },
+  weakness:         { label: 'Слабость', type: 'textarea', rows: 2 },
+};
+
+// Ключ поля → свойство записи, если они называются по-разному (историческое
+// расхождение, было и в прежней версии формы: category-text читает rec.category,
+// system-text — rec.system).
+const _LIB_FIELD_RECORD_KEY = {
+  'category-text': 'category',
+  'system-text': 'system',
+  'discipline-list': 'disciplines',
+};
+
+// Конфиг per-kind: какие поля показывать (порядок = порядок в форме), как
+// собрать тело запроса, как перезагрузить список после сохранения/удаления.
+// clans/sects — K3/K4 (2026-08-04): «Секта» клана переиспользует уже
+// существующий тип поля category-select (список опций — секты из K4, не
+// второй хардкод того же списка) с подписью, переопределённой на «Секта».
 const _LIB_KIND_CONFIG = {
   disciplines: {
     title: 'дисциплину', fields: ['clans', 'source', 'note', 'levels'],
@@ -41,10 +76,17 @@ const _LIB_KIND_CONFIG = {
     title: 'факт биографии', fields: ['category-select', 'description', 'system-text'], categories: _LIB_BG_CATS,
     reload: category => loadBackgroundsLibrary(category),
   },
+  clans: {
+    title: 'клан', fields: ['category-select', 'discipline-list', 'weakness', 'source', 'note', 'description'],
+    fieldLabels: { 'category-select': 'Секта' }, categoryRecordKey: 'sect',
+    categoriesAsync: async () => (await ensureSects()).map(s => [s.name, s.name]),
+    reload: () => { _clansCache = null; return loadKindred('clans'); },
+  },
+  sects: {
+    title: 'секту', fields: ['source', 'note', 'description'],
+    reload: () => { _sectsCache = null; return loadKindred('sects'); },
+  },
 };
-
-// Состояние текущей открытой модалки: kind + (для правки) slug/категория исходной записи.
-let _libEditState = { kind: null, slug: null, category: null };
 
 function _libLevelRowHtml(lvl = {}) {
   return `<div class="mod-fill-chips lib-level-row" style="align-items:flex-start;gap:6px;margin-bottom:6px">
@@ -56,13 +98,63 @@ function _libLevelRowHtml(lvl = {}) {
   </div>`;
 }
 
-function _libRenderLevels(levels) {
-  const box = document.getElementById('lib-edit-levels');
+// root — контейнер, внутри которого искать/собирать поля: либо #lib-edit-modal
+// (форма создания), либо #v20-disc-modal-body (режим правки внутри K1). Оба
+// используют одну и ту же разметку (_libFieldRowHtml), поэтому один и тот же
+// набор функций работает для обоих без дублирования.
+function _libFieldRowHtml(key, value, labelOverride) {
+  const def = _LIB_FIELD_DEFS[key];
+  if (!def) return '';
+  const label = labelOverride || def.label;
+  if (key === 'levels') {
+    return `<div class="chr-form-group" data-lib-field="levels">
+      <label class="chr-form-label">${escHtml(label)}</label>
+      <div class="lib-levels-list" data-lib-levels-list></div>
+      <button type="button" class="mod-fill-add-btn" data-lib-add-level>+ Уровень</button>
+    </div>`;
+  }
+  if (def.type === 'select') {
+    return `<div class="chr-form-group" data-lib-field="${key}">
+      <label class="chr-form-label">${escHtml(label)}</label>
+      <select class="chr-form-input" data-lib-input></select>
+    </div>`;
+  }
+  if (def.type === 'textarea') {
+    return `<div class="chr-form-group" data-lib-field="${key}">
+      <label class="chr-form-label">${escHtml(label)}</label>
+      <textarea class="chr-form-input chr-form-textarea" rows="${def.rows || 3}" data-lib-input>${escHtml(value || '')}</textarea>
+    </div>`;
+  }
+  const numAttrs = def.type === 'number' ? ` type="number" min="${def.min ?? ''}" max="${def.max ?? ''}"` : ' type="text" autocomplete="off"';
+  return `<div class="chr-form-group" data-lib-field="${key}">
+    <label class="chr-form-label">${key === 'name' ? label + ' *' : label}</label>
+    <input class="chr-form-input"${numAttrs} value="${escAttr(value ?? '')}" data-lib-input>
+  </div>`;
+}
+
+// Полная разметка формы (имя всегда первым + поля kind.fields) — общий вызов
+// для формы создания и для режима правки K1.
+function _libFormFieldsHtml(kind, rec = {}) {
+  const cfg = _LIB_KIND_CONFIG[kind];
+  if (!cfg) return '';
+  const labels = cfg.fieldLabels || {};
+  let html = _libFieldRowHtml('name', rec.name || '');
+  for (const key of cfg.fields) {
+    if (key === 'levels') { html += _libFieldRowHtml('levels'); continue; }
+    if (key === 'category-select') { html += _libFieldRowHtml(key, '', labels[key]); continue; }
+    const recKey = _LIB_FIELD_RECORD_KEY[key] || key;
+    html += _libFieldRowHtml(key, rec[recKey], labels[key]);
+  }
+  return html;
+}
+
+function _libRenderLevels(root, levels) {
+  const box = root.querySelector('[data-lib-levels-list]');
   if (box) box.innerHTML = (levels && levels.length ? levels : [{}]).map(_libLevelRowHtml).join('');
 }
 
-function _libCollectLevels() {
-  return Array.from(document.querySelectorAll('#lib-edit-levels .lib-level-row')).map(row => ({
+function _libCollectLevels(root) {
+  return Array.from(root.querySelectorAll('[data-lib-levels-list] .lib-level-row')).map(row => ({
     level: parseInt(row.querySelector('[data-lib-level-n]').value, 10) || 1,
     name: row.querySelector('[data-lib-level-name]').value.trim(),
     literary: row.querySelector('[data-lib-level-literary]').value.trim(),
@@ -70,107 +162,97 @@ function _libCollectLevels() {
   })).filter(l => l.name);
 }
 
-function _libSetFieldVisibility(fields) {
-  document.querySelectorAll('#lib-edit-modal [data-lib-field]').forEach(el => {
-    el.style.display = fields.includes(el.dataset.libField) ? '' : 'none';
-  });
+function _libFieldInput(root, key) {
+  return root.querySelector(`[data-lib-field="${key}"] [data-lib-input]`);
 }
 
-function _libFillCategorySelect(categories, selected) {
-  const sel = document.getElementById('lib-edit-category-select');
+async function _libFillCategorySelect(root, kind, selected) {
+  const cfg = _LIB_KIND_CONFIG[kind];
+  const sel = _libFieldInput(root, 'category-select');
   if (!sel) return;
-  sel.innerHTML = categories.map(([v, label]) => `<option value="${escAttr(v)}">${escHtml(label)}</option>`).join('');
+  const options = cfg.categoriesAsync ? await cfg.categoriesAsync() : (cfg.categories || []);
+  sel.innerHTML = options.map(([v, label]) => `<option value="${escAttr(v)}">${escHtml(label)}</option>`).join('');
   if (selected) sel.value = selected;
 }
 
-function _libOpenCreateModal(kind, category) {
+// Заполняет root (сам контейнер полей — не модалка целиком) разметкой формы
+// (создание ИЛИ правка — одна функция на оба случая) и текущими значениями
+// rec (пустой объект для создания).
+async function _libRenderForm(root, kind, rec = {}) {
   const cfg = _LIB_KIND_CONFIG[kind];
   if (!cfg) return;
-  _libEditState = { kind, slug: null, category: category || null };
-  document.getElementById('lib-edit-title').textContent = `Новое: ${cfg.title}`;
-  document.getElementById('lib-edit-name').value = '';
-  document.getElementById('lib-edit-clans').value = '';
-  document.getElementById('lib-edit-category-text').value = '';
-  document.getElementById('lib-edit-source').value = '';
-  document.getElementById('lib-edit-note').value = '';
-  document.getElementById('lib-edit-points').value = '';
-  document.getElementById('lib-edit-description').value = '';
-  document.getElementById('lib-edit-system').value = '';
-  document.getElementById('lib-edit-error').style.display = 'none';
-  if (cfg.categories) _libFillCategorySelect(cfg.categories, category);
-  if (cfg.fields.includes('levels')) _libRenderLevels([]);
-  _libSetFieldVisibility(cfg.fields);
-  openModal('lib-edit-modal', '#lib-edit-name');
+  root.innerHTML = _libFormFieldsHtml(kind, rec);
+  if (cfg.fields.includes('category-select')) {
+    const selected = rec[cfg.categoryRecordKey || 'category'] || '';
+    await _libFillCategorySelect(root, kind, selected);
+  }
+  if (cfg.fields.includes('levels')) _libRenderLevels(root, rec.levels || []);
 }
 
+function _libCollectForm(root, kind) {
+  const cfg = _LIB_KIND_CONFIG[kind];
+  const body = { name: (_libFieldInput(root, 'name')?.value || '').trim() };
+  for (const key of cfg.fields) {
+    if (key === 'levels') { body.levels = _libCollectLevels(root); continue; }
+    if (key === 'category-select') continue; // собирается отдельно ниже (ключ различается: category/sect)
+    const recKey = _LIB_FIELD_RECORD_KEY[key] || key;
+    body[recKey] = (_libFieldInput(root, key)?.value || '').trim();
+  }
+  if (cfg.fields.includes('category-select')) {
+    const val = _libFieldInput(root, 'category-select')?.value || '';
+    body[cfg.categoryRecordKey || 'category'] = val;
+  }
+  return body;
+}
+
+// Единая точка поиска записи по kind/slug/category — используется и формой
+// создания (для reload после сохранения — не нужен), и K1 (v20-sheet.js) для
+// заполнения режима правки и текста подтверждения удаления.
 function _libFindRecord(kind, slug, category) {
   if (kind === 'disciplines') return _discBySlug(slug);
   if (kind === 'psychics') return _psyBySlug(slug);
   if (kind === 'merits') return (_meritsCache[category] || []).find(x => x.slug === slug);
   if (kind === 'flaws') return (_flawsCache[category] || []).find(x => x.slug === slug);
   if (kind === 'backgrounds') return _backgroundBySlug(category, slug);
+  if (kind === 'clans') return _clanBySlug(slug);
+  if (kind === 'sects') return _sectBySlug(slug);
   return null;
 }
 
-function _libOpenEditModal(kind, slug, category) {
+// ── Форма создания (#lib-edit-modal) — без правки, только POST ──────────────
+let _libCreateKind = null;
+
+async function _libOpenCreateModal(kind, category) {
   const cfg = _LIB_KIND_CONFIG[kind];
-  const rec = _libFindRecord(kind, slug, category);
-  if (!cfg || !rec) return;
-  _libEditState = { kind, slug, category: category || null };
-  document.getElementById('lib-edit-title').textContent = `Правка: ${cfg.title}`;
-  document.getElementById('lib-edit-name').value = rec.name || '';
-  document.getElementById('lib-edit-clans').value = rec.clans || '';
-  document.getElementById('lib-edit-category-text').value = rec.category || '';
-  document.getElementById('lib-edit-source').value = rec.source || '';
-  document.getElementById('lib-edit-note').value = rec.note || '';
-  document.getElementById('lib-edit-points').value = rec.points ?? '';
-  document.getElementById('lib-edit-description').value = rec.description || '';
-  document.getElementById('lib-edit-system').value = rec.system || '';
+  if (!cfg) return;
+  _libCreateKind = kind;
+  document.getElementById('lib-edit-title').textContent = `Новое: ${cfg.title}`;
+  const fieldsBox = document.getElementById('lib-edit-fields');
   document.getElementById('lib-edit-error').style.display = 'none';
-  if (cfg.categories) _libFillCategorySelect(cfg.categories, category);
-  if (cfg.fields.includes('levels')) _libRenderLevels(rec.levels || []);
-  _libSetFieldVisibility(cfg.fields);
-  openModal('lib-edit-modal', '#lib-edit-name');
+  const rec = cfg.categoryRecordKey ? {} : { category };
+  await _libRenderForm(fieldsBox, kind, rec);
+  openModal('lib-edit-modal', '[data-lib-field="name"] input');
 }
 
-async function _libSaveEdit() {
-  const { kind, slug, category: origCategory } = _libEditState;
+async function _libSaveCreate() {
+  const kind = _libCreateKind;
   const cfg = _LIB_KIND_CONFIG[kind];
   if (!cfg) return;
   const errEl = document.getElementById('lib-edit-error');
   errEl.style.display = 'none';
-  const name = document.getElementById('lib-edit-name').value.trim();
-  if (!name) { errEl.textContent = 'Название обязательно'; errEl.style.display = ''; return; }
-
-  const body = { name };
-  if (cfg.fields.includes('clans')) body.clans = document.getElementById('lib-edit-clans').value.trim();
-  if (cfg.fields.includes('category-text')) body.category = document.getElementById('lib-edit-category-text').value.trim();
-  if (cfg.fields.includes('source')) body.source = document.getElementById('lib-edit-source').value.trim();
-  if (cfg.fields.includes('note')) body.note = document.getElementById('lib-edit-note').value.trim();
-  if (cfg.fields.includes('levels')) body.levels = _libCollectLevels();
-  if (cfg.fields.includes('points')) body.points = parseInt(document.getElementById('lib-edit-points').value, 10) || 0;
-  if (cfg.fields.includes('description')) body.description = document.getElementById('lib-edit-description').value.trim();
-  if (cfg.fields.includes('system-text')) body.system = document.getElementById('lib-edit-system').value.trim();
-
-  const category = cfg.categories ? document.getElementById('lib-edit-category-select').value : null;
-  if (cfg.categories) body.category = category;
-
-  const isEdit = !!slug;
-  const url = isEdit
-    ? (cfg.categories ? `/api/library/${kind}/${encodeURIComponent(category)}/${encodeURIComponent(slug)}` : `/api/library/${kind}/${encodeURIComponent(slug)}`)
-    : `/api/library/${kind}`;
+  const fieldsBox = document.getElementById('lib-edit-fields');
+  const body = _libCollectForm(fieldsBox, kind);
+  if (!body.name) { errEl.textContent = 'Название обязательно'; errEl.style.display = ''; return; }
 
   const submitBtn = document.getElementById('lib-edit-submit');
   submitBtn.disabled = true;
   try {
-    const r = await fetch(url, {
-      method: isEdit ? 'PUT' : 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
+    const r = await fetch(`/api/library/${kind}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
     }).then(x => x.json());
     if (!r.ok) { errEl.textContent = r.error || 'Ошибка сохранения'; errEl.style.display = ''; return; }
     closeModal('lib-edit-modal');
-    await cfg.reload(category || origCategory);
+    await cfg.reload(body.category);
   } catch (e) {
     errEl.textContent = e.message;
     errEl.style.display = '';
@@ -179,64 +261,30 @@ async function _libSaveEdit() {
   }
 }
 
-let _libDeleteState = { kind: null, slug: null, category: null };
-
-function _libOpenDeleteModal(kind, slug, category) {
-  const rec = _libFindRecord(kind, slug, category);
-  _libDeleteState = { kind, slug, category: category || null };
-  document.getElementById('lib-delete-body').textContent = `Удалить «${rec ? rec.name : slug}»? Это действие необратимо.`;
-  openModal('lib-delete-modal');
-}
-
-async function _libConfirmDelete() {
-  const { kind, slug, category } = _libDeleteState;
-  const cfg = _LIB_KIND_CONFIG[kind];
-  if (!cfg) return;
-  const url = cfg.categories
-    ? `/api/library/${kind}/${encodeURIComponent(category)}/${encodeURIComponent(slug)}`
-    : `/api/library/${kind}/${encodeURIComponent(slug)}`;
-  const r = await fetch(url, { method: 'DELETE' }).then(x => x.json()).catch(e => ({ error: e.message }));
-  closeModal('lib-delete-modal');
-  if (r.ok) await cfg.reload(category);
-}
-
 document.getElementById('lib-edit-cancel')?.addEventListener('click', () => closeModal('lib-edit-modal'));
-document.getElementById('lib-edit-submit')?.addEventListener('click', _libSaveEdit);
+document.getElementById('lib-edit-submit')?.addEventListener('click', _libSaveCreate);
 document.getElementById('lib-edit-modal')?.addEventListener('click', e => {
   if (e.target === document.getElementById('lib-edit-modal')) closeModal('lib-edit-modal');
-});
-document.getElementById('lib-edit-add-level')?.addEventListener('click', () => {
-  document.getElementById('lib-edit-levels').insertAdjacentHTML('beforeend', _libLevelRowHtml());
-});
-document.getElementById('lib-edit-levels')?.addEventListener('click', e => {
+  if (e.target.closest('[data-lib-add-level]')) {
+    document.querySelector('#lib-edit-modal [data-lib-levels-list]')?.insertAdjacentHTML('beforeend', _libLevelRowHtml());
+  }
   if (e.target.closest('[data-lib-level-remove]')) e.target.closest('.lib-level-row').remove();
 });
 
-document.getElementById('lib-delete-cancel')?.addEventListener('click', () => closeModal('lib-delete-modal'));
-document.getElementById('lib-delete-confirm')?.addEventListener('click', _libConfirmDelete);
-document.getElementById('lib-delete-modal')?.addEventListener('click', e => {
-  if (e.target === document.getElementById('lib-delete-modal')) closeModal('lib-delete-modal');
-});
-
-// «+ Добавить» — категория (для merits/flaws/backgrounds) берётся с активной подвкладки.
-document.getElementById('page-library')?.addEventListener('click', e => {
-  const addBtn = e.target.closest('[data-lib-add]');
-  if (addBtn) {
+// «+ Добавить» — категория (для merits/flaws/backgrounds) берётся с активной
+// подвкладки; kind может открываться и со страницы «Библиотека», и со
+// страницы «Сородичи» (clans/sects) — один обработчик на оба контейнера.
+function _libWireAddButtons(containerId) {
+  document.getElementById(containerId)?.addEventListener('click', e => {
+    const addBtn = e.target.closest('[data-lib-add]');
+    if (!addBtn) return;
     const kind = addBtn.dataset.libAdd;
     let category = null;
     if (kind === 'merits') category = document.querySelector('.merits-subtab-btn.active')?.dataset.meritCat;
     if (kind === 'flaws') category = document.querySelector('.flaws-subtab-btn.active')?.dataset.flawCat;
     if (kind === 'backgrounds') category = document.querySelector('.backgrounds-subtab-btn.active')?.dataset.bgCat;
     _libOpenCreateModal(kind, category);
-    return;
-  }
-  const editBtn = e.target.closest('[data-lib-edit]');
-  if (editBtn) {
-    _libOpenEditModal(editBtn.dataset.libEdit, editBtn.dataset.libSlug, editBtn.dataset.libCategory);
-    return;
-  }
-  const delBtn = e.target.closest('[data-lib-delete]');
-  if (delBtn) {
-    _libOpenDeleteModal(delBtn.dataset.libDelete, delBtn.dataset.libSlug, delBtn.dataset.libCategory);
-  }
-});
+  });
+}
+_libWireAddButtons('page-library');
+_libWireAddButtons('page-kindred');
