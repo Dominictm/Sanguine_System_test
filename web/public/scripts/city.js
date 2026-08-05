@@ -976,52 +976,78 @@ function parseLandmarkRows(text) {
   return raw.split('\n').map(l => l.trim()).filter(Boolean).map(name => ({ name, desc: '' }));
 }
 
-function _cityLandmarkRowHtml(r = { name: '', desc: '' }) {
-  return `<div class="hooks-item">
-    <input class="hooks-input city-landmark-title-inp" value="${escAttr(r.name)}" placeholder="Название…">
-    <input class="hooks-input city-landmark-desc-inp" value="${escAttr(r.desc)}" placeholder="Описание…">
-    <button class="hooks-del-btn" type="button" title="Удалить">✕</button>
-  </div>`;
+// Спойлер-блок (техспека 2026-08-05, Т1-Т4): каждое действие (правка/
+// удаление/создание записи) — отдельный PUT сразу же, общей кнопки
+// «Сохранить» на весь список больше нет. _cityLandmarksRows — источник
+// правды на время просмотра вкладки: мутируется КОПИЯ на каждое действие,
+// применяется в _cityLandmarksRows только по успеху сети (см.
+// _saveLandmarksMutation) — при ошибке экран остаётся как был.
+let _cityLandmarksRows = [];
+
+function _cityLandmarkItemHtml(r, i) {
+  return `<details class="city-landmark-item" data-landmark-idx="${i}">
+    <summary class="city-landmark-summary">${escHtml(r.name)}</summary>
+    <div class="city-landmark-body">
+      <input class="form-control city-landmark-name-inp" value="${escAttr(r.name)}" placeholder="Название…">
+      <textarea class="form-control city-landmark-desc-inp" rows="2" placeholder="Описание…">${escHtml(r.desc)}</textarea>
+      <div class="city-landmark-item-actions">
+        <button type="button" class="chr-modal-btn create city-landmark-save-btn">✓ Сохранить</button>
+        <button type="button" class="chr-modal-btn danger city-landmark-del-btn">🗑 Удалить</button>
+      </div>
+    </div>
+  </details>`;
+}
+
+// Полный ре-рендер списка после любого мутирующего действия — проще и
+// надёжнее точечного патча одного <details> по индексу (индексы сдвигаются
+// после add/delete); список короткий, цена перерисовки не ощущается.
+function _renderCityLandmarksList() {
+  if (!_cityLandmarksRows.length) return '<div class="cdet-empty">Значимых мест пока нет</div>';
+  return _cityLandmarksRows.map(_cityLandmarkItemHtml).join('');
+}
+
+function _cityLandmarkCreateRowHtml() {
+  return `
+    <div id="city-landmark-create-row" class="hooks-item" style="display:none">
+      <input class="hooks-input city-landmark-title-inp" id="city-landmark-create-name" placeholder="Название…">
+      <input class="hooks-input city-landmark-desc-inp" id="city-landmark-create-desc" placeholder="Описание…">
+      <button type="button" class="chr-modal-btn create" id="city-landmark-create-save">✓ Сохранить</button>
+      <button type="button" class="chr-modal-btn cancel" id="city-landmark-create-cancel">Отмена</button>
+    </div>
+    <button class="hooks-add-btn" type="button" id="city-landmarks-add-btn">+ Добавить запись</button>`;
 }
 
 function _cityViewLandmarksHtml(sec) {
-  const rows = parseLandmarkRows(sec.landmarks || '');
+  _cityLandmarksRows = parseLandmarkRows(sec.landmarks || '');
   return `
     <div class="form-group">
       <label class="form-label">Значимые места</label>
-      ${rows.length ? '' : '<div class="cdet-empty">Значимых мест пока нет</div>'}
-      <div id="city-landmarks-list">${rows.map(_cityLandmarkRowHtml).join('')}</div>
-      <button class="hooks-add-btn" type="button" id="city-landmarks-add">+ Добавить запись</button>
-      <button class="btn-submit" type="button" id="city-landmarks-save">✓ Сохранить</button>
+      <div id="city-landmarks-list">${_renderCityLandmarksList()}</div>
+      ${_cityLandmarkCreateRowHtml()}
     </div>`;
 }
 
-// Собирает строки формы в готовую markdown-таблицу — тот же приём (fold «|» в
-// «∣»), что уже применяет _collectLocDetKeyPoints для «Ключевых точек» локации
-// (web/public/scripts/locations.js) — не второй способ экранирования в проекте.
-// 0 записей → таблица с одной пустой строкой данных (тот же приём, что и у
-// keyPoints), не плейсхолдер «- …» — секция уже в табличном формате, изменение
-// формата назад на буллет было бы лишним особым случаем.
-function _collectCityLandmarksTable() {
+// Сериализация в markdown-таблицу — тот же приём (fold «|» в «∣»), что уже
+// применяет _collectLocDetKeyPoints для «Ключевых точек» локации
+// (web/public/scripts/locations.js), только принимает готовый массив, а не
+// читает DOM (каждое действие мутирует только свою запись, не весь экран).
+// 0 записей → таблица с одной пустой строкой данных — секция уже в
+// табличном формате, откат на буллет-лист был бы лишним особым случаем.
+function _serializeLandmarksTable(rows) {
   const esc = s => String(s).replace(/\|/g, '∣');
-  const rows = Array.from(document.querySelectorAll('#city-landmarks-list .hooks-item'))
-    .map(item => ({
-      name: item.querySelector('.city-landmark-title-inp')?.value.trim() || '',
-      desc: item.querySelector('.city-landmark-desc-inp')?.value.trim() || '',
-    }))
-    .filter(r => r.name || r.desc);
-  return rows.length
-    ? `| Название | Описание |\n|---|---|\n${rows.map(r => `| ${esc(r.name)} | ${esc(r.desc)} |`).join('\n')}`
+  const clean = rows.filter(r => r.name || r.desc);
+  return clean.length
+    ? `| Название | Описание |\n|---|---|\n${clean.map(r => `| ${esc(r.name)} | ${esc(r.desc)} |`).join('\n')}`
     : '| Название | Описание |\n|---|---|\n| | |';
 }
 
-// Единственный сетевой вызов на весь цикл добавления/удаления записей —
-// «Добавить»/«✕» только правят DOM, в сеть уходит только «Сохранить»
-// (техспека §V5, тот же принцип, что и у «Ключевых точек» локации).
-async function _saveCityLandmarks() {
-  const btn = document.getElementById('city-landmarks-save');
-  const table = _collectCityLandmarksTable();
-  if (btn) { btn.disabled = true; btn.textContent = '⏳ Сохранение...'; }
+// mutate: (rows) => rows — чистая функция над КОПИЕЙ текущего состояния.
+// onOk() вызывается только по успеху — при ошибке _cityLandmarksRows не
+// трогается, поля на экране остаются как были.
+async function _saveLandmarksMutation(mutate, btn, onOk) {
+  const next = mutate(_cityLandmarksRows.slice());
+  const table = _serializeLandmarksTable(next);
+  if (btn) btn.disabled = true;
   try {
     const r = await fetch(`/api/cities/${encodeURIComponent(_cityDetail.slug)}`, {
       method: 'PUT', headers: { 'Content-Type': 'application/json' },
@@ -1029,18 +1055,26 @@ async function _saveCityLandmarks() {
     }).then(x => x.json());
     if (!r.ok) {
       showToast(r.error || 'Не удалось сохранить', 'error');
-      if (btn) { btn.disabled = false; btn.textContent = '✓ Сохранить'; }
+      if (btn) btn.disabled = false;
       return;
     }
-    showToast('Значимые места сохранены', 'success');
-    await loadCityPage();
-    // loadCityPage()/_renderCityView() всегда открывается на «Общей» — вернуть
-    // пользователя туда, где он только что сохранял запись.
-    document.querySelector('[data-city-view-tab="geography"]')?.click();
+    _cityLandmarksRows = next;
+    onOk();
   } catch (e) {
     showToast('Не удалось сохранить: ' + e.message, 'error');
-    if (btn) { btn.disabled = false; btn.textContent = '✓ Сохранить'; }
+    if (btn) btn.disabled = false;
   }
+}
+
+function _closeLandmarkCreateRow() {
+  const row = document.getElementById('city-landmark-create-row');
+  if (row) row.style.display = 'none';
+  const nameInp = document.getElementById('city-landmark-create-name');
+  const descInp = document.getElementById('city-landmark-create-desc');
+  if (nameInp) nameInp.value = '';
+  if (descInp) descInp.value = '';
+  const addBtn = document.getElementById('city-landmarks-add-btn');
+  if (addBtn) addBtn.style.display = '';
 }
 
 function _cityViewGeographyHtml(sec) {
@@ -1374,24 +1408,64 @@ document.addEventListener('click', async e => {
     return;
   }
 
-  // «Значимые места» (V5) — добавить/удалить строка чисто в DOM, сеть — только
-  // на «Сохранить». .hooks-del-btn делит класс с «Ключевыми точками» локации
-  // (locations.js) — там своя делегация, скоуп на #loc-detail-content, здесь
-  // скоупим на #city-landmarks-list явно, чтобы не пересекались.
-  if (e.target.closest('#city-landmarks-add')) {
-    const list = document.getElementById('city-landmarks-list');
-    if (list) {
-      list.insertAdjacentHTML('beforeend', _cityLandmarkRowHtml());
-      list.lastElementChild?.querySelector('.city-landmark-title-inp')?.focus();
-    }
+  // «Значимые места» — блок спойлеров (техспека 2026-08-05, Т1-Т4): каждое
+  // действие — свой PUT сразу же, см. _saveLandmarksMutation выше.
+  if (e.target.closest('.city-landmark-save-btn')) {
+    const item = e.target.closest('.city-landmark-item');
+    const i = Number(item.dataset.landmarkIdx);
+    const name = item.querySelector('.city-landmark-name-inp').value.trim();
+    const desc = item.querySelector('.city-landmark-desc-inp').value.trim();
+    if (!name) { showToast('Укажите название', 'error'); return; }
+    await _saveLandmarksMutation(
+      rows => { rows[i] = { name, desc }; return rows; },
+      e.target,
+      () => {
+        showToast('Сохранено', 'success');
+        const list = document.getElementById('city-landmarks-list');
+        if (list) list.innerHTML = _renderCityLandmarksList();
+      },
+    );
     return;
   }
-  const landmarkDelBtn = e.target.closest('.hooks-del-btn');
-  if (landmarkDelBtn && landmarkDelBtn.closest('#city-landmarks-list')) {
-    _removeRelRow(landmarkDelBtn.closest('.hooks-item'));
+  if (e.target.closest('.city-landmark-del-btn')) {
+    const item = e.target.closest('.city-landmark-item');
+    const i = Number(item.dataset.landmarkIdx);
+    if (!(await showConfirm(`Удалить «${_cityLandmarksRows[i].name}»?`, { danger: true, confirmText: 'Удалить' }))) return;
+    await _saveLandmarksMutation(
+      rows => { rows.splice(i, 1); return rows; },
+      e.target,
+      () => {
+        showToast('Удалено', 'success');
+        const list = document.getElementById('city-landmarks-list');
+        if (list) list.innerHTML = _renderCityLandmarksList();
+      },
+    );
     return;
   }
-  if (e.target.closest('#city-landmarks-save')) { await _saveCityLandmarks(); return; }
+  if (e.target.closest('#city-landmarks-add-btn')) {
+    const row = document.getElementById('city-landmark-create-row');
+    if (row) row.style.display = 'flex';
+    e.target.style.display = 'none';
+    document.getElementById('city-landmark-create-name')?.focus();
+    return;
+  }
+  if (e.target.closest('#city-landmark-create-cancel')) { _closeLandmarkCreateRow(); return; }
+  if (e.target.closest('#city-landmark-create-save')) {
+    const name = document.getElementById('city-landmark-create-name').value.trim();
+    const desc = document.getElementById('city-landmark-create-desc').value.trim();
+    if (!name) { showToast('Укажите название', 'error'); return; }
+    await _saveLandmarksMutation(
+      rows => { rows.push({ name, desc }); return rows; },
+      e.target,
+      () => {
+        showToast('Добавлено', 'success');
+        const list = document.getElementById('city-landmarks-list');
+        if (list) list.innerHTML = _renderCityLandmarksList();
+        _closeLandmarkCreateRow();
+      },
+    );
+    return;
+  }
 
   if (e.target.closest('[data-city-save]'))   { await _saveCityEdit(); return; }
   if (e.target.closest('[data-city-delete]')) { await _deleteCity(); return; }

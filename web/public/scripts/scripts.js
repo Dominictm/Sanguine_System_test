@@ -316,8 +316,7 @@ function navigate(page) {
     if (page === 'city')       loadCityPage();
     if (page === 'threads')    loadThreads();
     if (page === 'locations')  loadLocations();
-    if (page === 'library')    loadLibrary();
-    if (page === 'kindred')    loadKindred();
+    if (page === 'library')    loadKindred();
     if (page === 'audio-library') loadAudioLibrary();
     if (page === 'factions')   loadFactions();
     if (page === 'rumors')     loadRumors();
@@ -887,6 +886,7 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
     document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.id === `tab-${tab}`));
     if (tab === 'ai-settings')     loadAiSettings();
+    if (tab === 'lib-kindred')     loadKindred();
     if (tab === 'lib-disciplines') {
       document.querySelectorAll('.disciplines-subtab-btn').forEach(b => {
         const isAll = b.dataset.discGroup === 'all';
@@ -899,8 +899,6 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     if (tab === 'lib-merits')      loadMeritsLibrary('physical');
     if (tab === 'lib-flaws')       loadFlawsLibrary('физические');
     if (tab === 'lib-backgrounds') loadBackgroundsLibrary('general');
-    if (tab === 'kin-clans')       loadKindred('clans');
-    if (tab === 'kin-sects')       loadKindred('sects');
     if (tab === 'guide')           loadGuideTab();
   });
 
@@ -955,6 +953,26 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     });
     btn.classList.add('active'); btn.setAttribute('aria-pressed', 'true');
     loadLibrary(group);
+  });
+
+  // Kindred subtabs (clans/sects), вложены в единственную панель верхней
+  // вкладки «Сородичи» (lib-kindred). Не переиспользуют .tab-btn/.tab-panel —
+  // эти классы ловит глобальный делегат выше в этом файле, который погасил бы
+  // активность верхней вкладки при клике сюда. Визуал переиспользует
+  // .disciplines-subtab-bar/-btn (тот же компонент, что и у «Дисциплин»),
+  // поведение — отдельный data-атрибут и отдельный обработчик.
+  document.addEventListener('click', e => {
+    const btn = e.target.closest('[data-kin-group]');
+    if (!btn) return;
+    const group = btn.dataset.kinGroup;
+    const bar = btn.closest('.disciplines-subtab-bar');
+    bar.querySelectorAll('[data-kin-group]').forEach(b => {
+      b.classList.remove('active'); b.setAttribute('aria-pressed', 'false');
+    });
+    btn.classList.add('active'); btn.setAttribute('aria-pressed', 'true');
+    document.querySelectorAll('.kindred-subpanel').forEach(p =>
+      p.classList.toggle('active', p.id === `kin-sub-${group}`));
+    loadKindred(group);
   });
 });
 

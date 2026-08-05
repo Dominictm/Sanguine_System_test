@@ -2290,6 +2290,18 @@ body {
   display: block;
 }
 
+/* «Сородичи» внутри «Библиотеки» (K7-K10, 2026-08-05): Кланы/Секты — второй
+   уровень вкладок вложенный в одну .tab-panel, не сама .tab-panel (см.
+   scripts.js — глобальный делегат .tab-btn/.tab-panel погасил бы верхнюю
+   вкладку при клике сюда), поэтому отдельная пара правил show/hide. */
+.kindred-subpanel {
+  display: none;
+}
+
+.kindred-subpanel.active {
+  display: block;
+}
+
 /* Библиотека — вкладки унифицированы со стилем модального окна персонажа
    (.cdet-tab-bar/.cdet-tab): равноширокие вкладки, тонированная плашка,
    градиент на активной. Scoped to #page-library — .tab-bar/.tab-btn is
@@ -6371,6 +6383,67 @@ a:focus-visible {
 }
 .city-landmark-desc-inp {
   flex: 1;
+}
+
+/* «Значимые места» — блок спойлеров (2026-08-05): та же структура «рамка +
+   ▸/▾-маркер», что у .city-create-spoiler, но без uppercase/letter-spacing/
+   gold — капсом название конкретного места читалось бы как кричащий лейбл,
+   не как имя. */
+#city-landmarks-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.city-landmark-item {
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--bg2);
+}
+
+.city-landmark-summary {
+  padding: 11px 14px;
+  cursor: pointer;
+  list-style: none;
+  font-family: var(--f-body);
+  font-size: var(--fs-body);
+  color: var(--text2);
+  transition: color .15s;
+}
+
+.city-landmark-summary::-webkit-details-marker {
+  display: none;
+}
+
+.city-landmark-summary::before {
+  content: '▸ ';
+  color: var(--text3);
+}
+
+.city-landmark-item[open] > .city-landmark-summary::before {
+  content: '▾ ';
+}
+
+.city-landmark-item[open] > .city-landmark-summary {
+  color: var(--text);
+}
+
+.city-landmark-summary:hover {
+  color: var(--gold2);
+}
+
+.city-landmark-body {
+  padding: 0 14px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.city-landmark-item-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
 }
 
 /* ── Character image gallery (desc edit mode) ───────────────── */
@@ -10596,7 +10669,7 @@ a.md-link-loc:hover {
   font-size: var(--fs-xl);
   line-height: 1.5;
   color: var(--text2);
-  max-width: 70ch;
+  max-width: 90ch;
 }
 
 .lib-power-sys {

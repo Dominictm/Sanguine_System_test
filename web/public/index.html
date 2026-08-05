@@ -79,9 +79,6 @@
         <span class="nav-icon">🎵</span><span>Звуки</span>
       </a>
       <div class="nav-group-label">Архив</div>
-      <a class="nav-item" data-page="kindred" title="Сородичи" aria-label="Сородичи">
-        <span class="nav-icon">🩸</span><span>Сородичи</span>
-      </a>
       <a class="nav-item" data-page="library" title="Библиотека" aria-label="Библиотека">
         <span class="nav-icon">📚</span><span>Библиотека</span>
       </a>
@@ -723,35 +720,6 @@
       </div>
     </section>
 
-    <!-- Сородичи: кланы/секты (K5, 2026-08-04) — прямой клон структуры «Библиотеки»
-         (page-header → .tab-bar → .lib-panel/.lib-cards), без второго уровня вкладок,
-         который у «Дисциплин» нужен для Путей/Комбо, а у «Кланов»/«Сект» — нет. -->
-    <section id="page-kindred" class="page">
-      <div class="page-header">
-        <h1 class="page-title">Сородичи</h1>
-        <span class="page-sub">кланы и секты V20</span>
-      </div>
-
-      <div class="tab-bar">
-        <button class="tab-btn active" data-tab="kin-clans">Кланы</button>
-        <button class="tab-btn" data-tab="kin-sects">Секты</button>
-      </div>
-
-      <div class="tab-panel active" id="tab-kin-clans">
-        <div class="lib-add-row"><button type="button" class="mod-fill-add-btn" data-lib-add="clans">+ Добавить клан</button></div>
-        <div class="lib-panel" id="lib-clans-body">
-          <div class="loading-state"><div class="spinner"></div>Загрузка...</div>
-        </div>
-      </div>
-
-      <div class="tab-panel" id="tab-kin-sects">
-        <div class="lib-add-row"><button type="button" class="mod-fill-add-btn" data-lib-add="sects">+ Добавить секту</button></div>
-        <div class="lib-panel" id="lib-sects-body">
-          <div class="loading-state"><div class="spinner"></div>Загрузка...</div>
-        </div>
-      </div>
-    </section>
-
     <!-- Library -->
     <section id="page-library" class="page">
       <div class="page-header">
@@ -760,14 +728,42 @@
       </div>
 
       <div class="tab-bar">
-        <button class="tab-btn active" data-tab="lib-disciplines">Дисциплины</button>
+        <button class="tab-btn active" data-tab="lib-kindred">Сородичи</button>
+        <button class="tab-btn" data-tab="lib-disciplines">Дисциплины</button>
         <button class="tab-btn" data-tab="lib-psychics">Психические способности</button>
         <button class="tab-btn" data-tab="lib-merits">✦ Достоинства</button>
         <button class="tab-btn" data-tab="lib-flaws">✦ Недостатки</button>
         <button class="tab-btn" data-tab="lib-backgrounds">Факты биографии</button>
       </div>
 
-      <div class="tab-panel active" id="tab-lib-disciplines">
+      <!-- Сородичи: кланы/секты (K5, 2026-08-04; перенесено из отдельной страницы
+           в K7-K10, 2026-08-05). Второй уровень вкладок («Кланы»/«Секты») НЕ
+           переиспользует .tab-btn/.tab-panel — эти классы ловит глобальный
+           делегат (scripts.js), который погасил бы активность вкладки «Сородичи»
+           при клике внутрь неё. Визуал — переиспользованный .disciplines-subtab-bar,
+           поведение — отдельный data-kin-group + свой обработчик (scripts.js). -->
+      <div class="tab-panel active" id="tab-lib-kindred">
+        <div class="disciplines-subtab-bar">
+          <button class="disciplines-subtab-btn active" data-kin-group="clans" aria-pressed="true">Кланы</button>
+          <button class="disciplines-subtab-btn" data-kin-group="sects" aria-pressed="false">Секты</button>
+        </div>
+
+        <div class="kindred-subpanel active" id="kin-sub-clans">
+          <div class="lib-add-row"><button type="button" class="mod-fill-add-btn" data-lib-add="clans">+ Добавить клан</button></div>
+          <div class="lib-panel" id="lib-clans-body">
+            <div class="loading-state"><div class="spinner"></div>Загрузка...</div>
+          </div>
+        </div>
+
+        <div class="kindred-subpanel" id="kin-sub-sects">
+          <div class="lib-add-row"><button type="button" class="mod-fill-add-btn" data-lib-add="sects">+ Добавить секту</button></div>
+          <div class="lib-panel" id="lib-sects-body">
+            <div class="loading-state"><div class="spinner"></div>Загрузка...</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="tab-panel" id="tab-lib-disciplines">
         <div class="disciplines-subtab-bar">
           <button class="disciplines-subtab-btn active" data-disc-group="all" aria-pressed="true">Дисциплины</button>
           <button class="disciplines-subtab-btn" data-disc-group="combo" aria-pressed="false">Комбо Дисциплины</button>

@@ -2709,12 +2709,16 @@ describe('API — integration', () => {
       assert.ok(!afterDelete);
     });
 
-    it('кланы: 7 базовых кланов corebook V20 присутствуют в справочнике (K6)', async () => {
+    it('кланы: полный список с wod.su присутствует в справочнике (K6, расширено 2026-08-05)', async () => {
       const { status, body } = await apiJson('/api/library/clans');
       assert.equal(status, 200);
-      const slugs = body.map(c => c.slug).sort();
-      assert.deepEqual(slugs, ['bruja', 'gangrel', 'malkavian', 'nosferatu', 'toreador', 'tremere', 'ventru']);
-      assert.ok(body.every(c => !c.custom), 'базовые кланы — канон, не авторские записи');
+      assert.equal(body.length, 41, '7 базовых corebook + 3 доп. Камарильи + 13 Независимых + 18 Шабаша');
+      const slugs = body.map(c => c.slug);
+      for (const s of ['bruja', 'gangrel', 'malkavian', 'nosferatu', 'toreador', 'tremere', 'ventru']) {
+        assert.ok(slugs.includes(s), `базовый клан ${s} отсутствует`);
+      }
+      assert.ok(body.every(c => !c.custom), 'все кланы — канон, не авторские записи');
+      assert.ok(body.every(c => c.sect && c.disciplines && c.weakness), 'у каждого клана заполнены секта/дисциплины/слабость');
     });
 
     it('секты: все 7 канонических сект V20 присутствуют в справочнике (K6)', async () => {

@@ -272,8 +272,8 @@ document.getElementById('lib-edit-modal')?.addEventListener('click', e => {
 });
 
 // «+ Добавить» — категория (для merits/flaws/backgrounds) берётся с активной
-// подвкладки; kind может открываться и со страницы «Библиотека», и со
-// страницы «Сородичи» (clans/sects) — один обработчик на оба контейнера.
+// подвкладки; один обработчик на контейнер #page-library хватает и на
+// clans/sects внутри вкладки «Сородичи».
 function _libWireAddButtons(containerId) {
   document.getElementById(containerId)?.addEventListener('click', e => {
     const addBtn = e.target.closest('[data-lib-add]');
@@ -287,4 +287,3 @@ function _libWireAddButtons(containerId) {
   });
 }
 _libWireAddButtons('page-library');
-_libWireAddButtons('page-kindred');

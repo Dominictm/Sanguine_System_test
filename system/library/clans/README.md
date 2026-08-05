@@ -36,15 +36,21 @@
 
 ## Статус наполнения
 
+Полный список с wod.su — 41 запись (2026-08-05): 7 базовых кланов corebook
+V20 + все дополнительные записи разделов «Камарилья»/«Независимые»/«Шабаш»
+индекса wod.su/vampire/clans.
+
 | | |
 |---|---|
-| Полный контент (7 базовых кланов corebook V20) | `bruja.md`, `ventru.md`, `gangrel.md`, `malkavian.md`, `nosferatu.md`, `toreador.md`, `tremere.md` |
-| ⏸️ Отложено (не в этом цикле) | остальные кланы Камарильи/Независимых (~13), Шабаш-«отступники»/антитрайб (~15), сект-варианты/бладлайны с wod.fandom.com (до 174 записей категории «Кланы» — расширение отдельным запросом) |
+| Камарилья (7 базовых кланов + 3 доп. записи) | `bruja.md`, `ventru.md`, `gangrel.md`, `malkavian.md`, `nosferatu.md`, `toreador.md`, `tremere.md`, `caitiff.md`, `gargoyles.md`, `lasombra-antitribu.md` |
+| Независимые (13) | `assamite.md`, `baali.md`, `cappadocian.md`, `children-of-osiris.md`, `daughters-of-cacophony.md`, `followers-of-set.md`, `giovanni.md`, `nagaraja.md`, `old-clan-tzimisce.md`, `ravnos.md`, `salubri.md`, `samedi.md`, `true-brujah.md` |
+| Шабаш (18) | `ahrimanes.md`, `assamite-antitribu.md`, `blood-brothers.md`, `brujah-antitribu.md`, `gangrel-antitribu.md`, `harbingers-of-skulls.md`, `kiasyd.md`, `lasombra.md`, `malkavian-antitribu.md`, `nosferatu-antitribu.md`, `panders.md`, `ravnos-antitribu.md`, `salubri-antitribu.md`, `serpents-of-the-light.md`, `toreador-antitribu.md`, `tremere-antitribu.md`, `tzimisce.md`, `ventrue-antitribu.md` |
+| ⏸️ Отложено (не в этом цикле) | сект-варианты/бладлайны с wod.fandom.com сверх индекса wod.su (категория «Кланы» насчитывает до 174 записей — расширение отдельным запросом) |
 
 Источники: [wod.su/vampire/clans](https://wod.su/vampire/clans) (индекс +
-подстраницы отдельных кланов). wod.fandom.com — тоже доступен (прямой HTTP-
-запрос с обычным `User-Agent`, не через специализированные fetch-инструменты,
-которые могут получать `402` на этом домене) — источник для будущего
-расширения за пределы 7 базовых.
+подстраницы отдельных кланов, разделы «Камарилья»/«Независимые»/«Шабаш»).
+wod.fandom.com — тоже доступен (прямой HTTP-запрос с обычным `User-Agent`,
+не через специализированные fetch-инструменты, которые могут получать `402`
+на этом домене) — источник для будущего расширения сверх индекса wod.su.
 
 > Примечание: `README.md` сервером пропускается (не клан).
