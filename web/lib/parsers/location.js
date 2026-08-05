@@ -33,8 +33,8 @@ function parseLocation(rawContent, folderName) {
   }
 
   loc.subtype      = metaField('Название');
-  loc.district     = metaField('Округ');
-  loc.neighborhood = metaField('Район');
+  loc.district     = metaField('Район');
+  loc.neighborhood = metaField('Дополнение к адресу');
   loc.address      = metaField('Адрес');
   loc.zone         = metaField('Зона');
   loc.dangerLevel  = metaField('Опасность');

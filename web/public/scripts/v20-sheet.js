@@ -989,6 +989,7 @@ function _v20ReopenLibDetail(kind, slug, category) {
   else if (kind === 'backgrounds') _v20RenderBackgroundDetail(slug, category);
   else if (kind === 'clans') _v20RenderClanDetail(slug);
   else if (kind === 'sects') _v20RenderSectDetail(slug);
+  else if (kind === 'titles') _v20RenderTitleDetail(slug);
 }
 
 async function _v20DeleteCurrentLibRecord() {
@@ -1411,10 +1412,14 @@ function _libClanDetailHtml(c) {
 
 function _libClanCardsHtml() {
   return `<div class="lib-cards">${(_clansCache || []).map(c => {
+    const art = c.hasArt
+      ? `<img class="lib-card-art" loading="lazy" decoding="async" src="/img/system/library/clans/${escAttr(c.slug)}.png" alt="">`
+      : '';
     const badge = c.custom ? '<span class="lib-card-custom-badge">✏️ Авторское</span>' : '';
     const sect = c.sect ? `<div class="lib-card-sect">${escHtml(c.sect)}</div>` : '';
-    return `<button type="button" class="lib-card" data-clan-slug="${escAttr(c.slug)}">
-      <div class="lib-card-name">${escHtml(_libStripEn(c.name))}</div>${sect}${badge}
+    const inner = `<div class="lib-card-name">${escHtml(_libStripEn(c.name))}</div>${sect}${badge}`;
+    return `<button type="button" class="lib-card${c.hasArt ? ' has-art' : ''}" data-clan-slug="${escAttr(c.slug)}">
+      ${art}${c.hasArt ? `<div class="lib-card-overlay">${inner}</div>` : inner}
     </button>`;
   }).join('')}</div>`;
 }
@@ -1464,9 +1469,13 @@ function _libSectDetailHtml(s) {
 
 function _libSectCardsHtml() {
   return `<div class="lib-cards">${(_sectsCache || []).map(s => {
+    const art = s.hasArt
+      ? `<img class="lib-card-art" loading="lazy" decoding="async" src="/img/system/library/sects/${escAttr(s.slug)}.png" alt="">`
+      : '';
     const badge = s.custom ? '<span class="lib-card-custom-badge">✏️ Авторское</span>' : '';
-    return `<button type="button" class="lib-card" data-sect-slug="${escAttr(s.slug)}">
-      <div class="lib-card-name">${escHtml(s.name)}</div>${badge}
+    const inner = `<div class="lib-card-name">${escHtml(s.name)}</div>${badge}`;
+    return `<button type="button" class="lib-card${s.hasArt ? ' has-art' : ''}" data-sect-slug="${escAttr(s.slug)}">
+      ${art}${s.hasArt ? `<div class="lib-card-overlay">${inner}</div>` : inner}
     </button>`;
   }).join('')}</div>`;
 }
@@ -1494,6 +1503,67 @@ document.getElementById('lib-sects-body')?.addEventListener('click', e => {
   if (card) _v20OpenSectModal(card.dataset.sectSlug);
 });
 
+// ── Страница «Сородичи» → «Титулы» (2026-08-06) — зеркало секты выше, с двумя
+// отличиями: «Принадлежность» (affiliation, свободный текст — не всегда секта,
+// переиспользует .lib-card-sect как у клановой «Секты») и бейдж «Негативный».
+let _titlesCache = null;
+async function ensureTitles() {
+  if (_titlesCache) return _titlesCache;
+  try {
+    const data = await fetch('/api/library/titles').then(r => r.json());
+    _titlesCache = Array.isArray(data) ? data : [];
+  } catch { _titlesCache = []; }
+  return _titlesCache;
+}
+function _titleBySlug(slug) { return (_titlesCache || []).find(t => t.slug === slug) || null; }
+
+function _libTitleDetailHtml(t) {
+  if (!t) return '<div class="cdet-empty">Титул не найден в справочнике.</div>';
+  const aff = t.affiliation ? `<span class="lib-card-sect">${escHtml(t.affiliation)}</span>` : '';
+  const negBadge = t.negative ? '<span class="lib-card-negative-badge">⚠️ Негативный титул</span>' : '';
+  const note = t.note ? `<div class="v20-disc-note">${escHtml(t.note)}</div>` : '';
+  const desc = t.description ? `<p class="lib-power-text">${escHtml(t.description)}</p>` : '';
+  return `<div class="v20-disc-detail-head"><h3>${escHtml(t.name)}</h3>${aff}</div>${negBadge}${note}${desc}`;
+}
+
+function _libTitleCardsHtml() {
+  return `<div class="lib-cards">${(_titlesCache || []).map(t => {
+    const art = t.hasArt
+      ? `<img class="lib-card-art" loading="lazy" decoding="async" src="/img/system/library/titles/${escAttr(t.slug)}.png" alt="">`
+      : '';
+    const badge = t.custom ? '<span class="lib-card-custom-badge">✏️ Авторское</span>' : '';
+    const negBadge = t.negative ? '<span class="lib-card-negative-badge">⚠️ Негативный</span>' : '';
+    const aff = t.affiliation ? `<div class="lib-card-sect">${escHtml(t.affiliation)}</div>` : '';
+    const inner = `<div class="lib-card-name">${escHtml(t.name)}</div>${aff}${negBadge}${badge}`;
+    return `<button type="button" class="lib-card${t.hasArt ? ' has-art' : ''}" data-title-slug="${escAttr(t.slug)}">
+      ${art}${t.hasArt ? `<div class="lib-card-overlay">${inner}</div>` : inner}
+    </button>`;
+  }).join('')}</div>`;
+}
+
+function _v20RenderTitleDetail(slug) {
+  const t = _titleBySlug(slug);
+  _v20SetLibDetailBody(_libTitleDetailHtml(t), t ? { kind: 'titles', slug, category: null, custom: !!t.custom } : null);
+}
+
+async function _v20OpenTitleModal(slug) {
+  _v20OpenLibModalShell();
+  const body = document.getElementById('v20-disc-modal-body');
+  if (body) body.innerHTML = '<div class="loading-state"><div class="spinner"></div>Загрузка справочника…</div>';
+  await ensureTitles();
+  _v20RenderTitleDetail(slug);
+}
+
+function _libRenderTitleList() {
+  const body = document.getElementById('lib-titles-body');
+  if (body) body.innerHTML = _libTitleCardsHtml();
+}
+
+document.getElementById('lib-titles-body')?.addEventListener('click', e => {
+  const card = e.target.closest('[data-title-slug]');
+  if (card) _v20OpenTitleModal(card.dataset.titleSlug);
+});
+
 // Точка входа страницы «Сородичи» (навигация — scripts.js, navigate()).
 // which опционален — переключение вкладки без перезагрузки данных (обе уже
 // в кэше после первого открытия страницы).
@@ -1509,6 +1579,12 @@ async function loadKindred(which) {
     if (body && !_sectsCache) body.innerHTML = '<div class="loading-state"><div class="spinner"></div>Загрузка...</div>';
     await ensureSects();
     _libRenderSectList();
+  }
+  if (!which || which === 'titles') {
+    const body = document.getElementById('lib-titles-body');
+    if (body && !_titlesCache) body.innerHTML = '<div class="loading-state"><div class="spinner"></div>Загрузка...</div>';
+    await ensureTitles();
+    _libRenderTitleList();
   }
 }
 

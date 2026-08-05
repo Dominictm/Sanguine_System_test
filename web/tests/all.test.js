@@ -292,16 +292,6 @@ describe('Parsers — unit', () => {
         assert.ok(keys.includes(k), `нет секции ${k}`);
     });
 
-    it('browser parity — public/city.js CITY_SECTION_DEFS зеркалит CITY_SECTIONS', () => {
-      const src = require('fs').readFileSync(
-        path.join(__dirname, '../public/scripts/city.js'), 'utf-8');
-      const m = src.match(/const CITY_SECTION_DEFS\s*=\s*(\[[\s\S]*?\n\]);/);
-      assert.ok(m, 'CITY_SECTION_DEFS literal not found in city.js');
-      // eslint-disable-next-line no-new-func
-      const browserDefs = (new Function(`return (${m[1]})`))();
-      assert.deepEqual(browserDefs, CITY_SECTIONS,
-        'browser CITY_SECTION_DEFS диверговал от CITY_SECTIONS — держите в синхроне');
-    });
   });
 
   describe('buildCityConstraints — ограничения города для промтов генерации (D2)', () => {
@@ -594,6 +584,44 @@ describe('Parsers — unit', () => {
         const after = mig.migrate(`> **Зона:** ${emoji} Тест |`);
         assert.match(after, new RegExp(`\\*\\*Опасность:\\*\\* ${emoji}`));
       }
+    });
+  });
+
+  describe('миграция 005 — переименование полей карточки локации: Округ→Район, Район→Дополнение к адресу', () => {
+    const mig = require('../../tools/migrations/005_location_district_label_rename.js');
+
+    it('test() узнаёт карточку со старой подписью «Округ» — единственный однозначный маркер немигрированной карточки', () => {
+      assert.equal(mig.test('> **Название:** X | **Округ:** 1 | **Контроль:** Y'), true);
+      assert.equal(mig.test('> **Название:** X | **Округ:** 1 | **Район:** Антрепо | **Контроль:** Y'), true);
+      assert.equal(mig.test('> **Название:** X | **Район:** Антрепо | **Дополнение к адресу:** Z | **Контроль:** Y'), false,
+        'уже переименовано (Район теперь значит district) — не должно повторно триггерить миграцию');
+    });
+
+    it('migrate() — Округ→Район, Район→Дополнение к адресу за один проход, без коллизии между полями', () => {
+      const before = '> **Название:** X | **Округ:** 1-й | **Район:** Антрепо | **Адрес:** Y';
+      const after  = mig.migrate(before);
+      assert.match(after, /\*\*Район:\*\* 1-й/, 'старый «Округ» стал «Районом»');
+      assert.match(after, /\*\*Дополнение к адресу:\*\* Антрепо/, 'старый «Район» стал «Дополнением к адресу»');
+      assert.doesNotMatch(after, /\*\*Округ:\*\*/);
+      assert.equal(mig.test(after), false, 'после миграции test() должен быть false');
+      // Повторный прогон migrate() на уже мигрированной карточке (раннер не должен
+      // так делать сам, test()===false это предотвращает — но migrate() не должна
+      // портить данные, даже если её вызвать напрямую) не должен переименовать
+      // новый «Район» (=district) в «Дополнение к адресу» повторно.
+      const twice = mig.migrate(after);
+      assert.match(twice, /\*\*Район:\*\* 1-й/, 'повторный прогон не должен тронуть уже верный «Район»');
+      assert.equal((twice.match(/Дополнение к адресу/g) || []).length, 1, 'повторный прогон не должен задвоить «Дополнение к адресу»');
+    });
+
+    it('карточка только с «Округ» (без «Район») — переименовывается корректно, ничего лишнего не добавляется', () => {
+      const before = '> **Название:** X | **Округ:** 1 | **Контроль:** Y';
+      const after  = mig.migrate(before);
+      assert.match(after, /\*\*Район:\*\* 1/);
+      assert.doesNotMatch(after, /Дополнение к адресу/);
+    });
+
+    it('карточка без обеих подписей — test() false, миграция не трогает файл', () => {
+      assert.equal(mig.test('> **Название:** X | **Адрес:** Y | **Контроль:** Z'), false);
     });
   });
 
@@ -1666,7 +1694,7 @@ describe('Parsers — unit', () => {
   describe('parseLocation', () => {
     const CARD = [
       '# Клуб Носферату',
-      '> **Название:** Клуб | **Округ:** 1 | **Зона:** 🔴 Опасная | **Опасность:** 🟡 Средний | **Контроль:** Шабаш',
+      '> **Название:** Клуб | **Район:** 1 | **Зона:** 🔴 Опасная | **Опасность:** 🟡 Средний | **Контроль:** Шабаш',
       '## 🎭 Атмосфера', 'Дымный подвал.', '',
       '## 🩸 Контекст', '**Маскарад:** 🔴 высокий риск', '',
       '## 🪝 Крючки', '1. Первый крючок', '2. Второй крючок',
@@ -2812,7 +2840,7 @@ describe('API — integration', () => {
 
     it('POST /api/locations/parse-generated парсит сырой AI-текст (общий с parseLocation)', async () => {
       const text = `# Тестовая локация
-> **Название:** Тест | **Округ:** 1-й | **Район:** Тест | **Адрес:** ул. Тестовая | **Зона:** 🟡 | **Контроль:** Никто
+> **Название:** Тест | **Район:** 1-й | **Дополнение к адресу:** Тест | **Адрес:** ул. Тестовая | **Зона:** 🟡 | **Контроль:** Никто
 ---
 ## 🎭 Атмосфера
 Тестовая атмосфера в двух предложениях.
@@ -7091,7 +7119,7 @@ describe('city-creation-restructure §15-16: Опасность/сенсорик
       await fs.mkdir(aliasDir, { recursive: true });
       await fs.writeFile(path.join(aliasDir, `${aliasSlug}.md`), [
         '# Локация С Алиасами',
-        '> **Название:** Локация С Алиасами | **Округ:** Alias Test | **Контроль:** —',
+        '> **Название:** Локация С Алиасами | **Район:** Alias Test | **Контроль:** —',
         '---', '## 🎭 Атмосфера', 'Тест.', '## 👁️ Сенсорная палитра',
         '| Канал | |', '|---|---|',
         '| **Зрение** | Полумрак |', '| **Прикосновение** | Сырость |', '',
@@ -7184,7 +7212,7 @@ describe('city-creation-restructure §15-16: Опасность/сенсорик
       assert.equal(r.status, 400);
     });
 
-    it('перенос в район без district.md — «Округ» карточки становится слагом района (район ещё не формальная сущность)', async () => {
+    it('перенос в район без district.md — «Район» карточки становится слагом района (район ещё не формальная сущность)', async () => {
       const r = await apiJson(`/api/locations/${slug}/district${qs()}`, { method: 'PUT', body: JSON.stringify({ district: 'Новый Квартал' }) });
       assert.equal(r.status, 200, r.body.error);
       assert.ok(r.body.movedFrom && r.body.movedTo);
@@ -7198,7 +7226,7 @@ describe('city-creation-restructure §15-16: Опасность/сенсорик
       assert.ok(!(await fs.stat(oldDir).catch(() => null)), 'старая папка должна исчезнуть');
     });
 
-    it('перенос в район с district.md (формальная сущность) — «Округ» становится display-именем района (техспека §9.1)', async () => {
+    it('перенос в район с district.md (формальная сущность) — «Район» становится display-именем района (техспека §9.1)', async () => {
       const distCreate = await apiJson(`/api/cities/${citySlug}/districts`, { method: 'POST', body: JSON.stringify({ name: 'Настоящий Район' }) });
       assert.equal(distCreate.status, 200, distCreate.body.error);
 

@@ -498,6 +498,16 @@ router.delete('/api/cities/:slug', async (req, res) => {
 // web/lib/parsers/district.js). Только create/read/update — DELETE вне скоупа (§2.4
 // техспеки: удаление района с локациями внутри — отдельная, более рискованная задача).
 
+// Служебные папки locations/, которые физически могут содержать district.md
+// (или сами по себе — директории), но районами не являются: `_deleted` —
+// корзина мягкого удаления (db.js/cities.js/locations.js уже пропускают её
+// везде при обходе), `drugie` (slugify('Другие')) — служебный отстойник для
+// локаций без явной привязки (см. routes/locations.js: `distFolder =
+// slugify(district) || 'Другие'`), у него тоже может завестись district.md
+// (например, если через него когда-то физически перемещали локацию), но в
+// списке «Районы» ему делать нечего — это не редактируемая сущность.
+const DEFAULT_DISTRICT_SLUG = slugify('Другие');
+
 // Читает список районов города напрямую с диска — та же логика, что у GET ниже,
 // но переиспользуется и синком секции «## Районы» (не завязана на req/res).
 async function _listDistricts(slug) {
@@ -507,6 +517,7 @@ async function _listDistricts(slug) {
   const out = [];
   for (const e of entries) {
     if (!e.isDirectory()) continue;
+    if (e.name.startsWith('_') || e.name === DEFAULT_DISTRICT_SLUG) continue;
     const districtFile = path.join(root, e.name, DISTRICT_FILENAME);
     const raw = await fs.readFile(districtFile, 'utf-8').catch(() => null);
     if (raw === null) continue;
@@ -620,7 +631,7 @@ router.put('/api/cities/:slug/districts/:districtSlug', express.json(), async (r
 // DELETE /api/cities/:slug/districts/:districtSlug — soft-delete района (§A5).
 // Запрещено для НЕПУСТОГО района (§16.3-style явная 409, а не тихий авто-перенос
 // локаций куда-то): перенос был бы fs.rename каждой локации + правка ссылок (§B1) +
-// правка «**Округ:**» на карточке — молча выполнять цепочку побочных эффектов по
+// правка «**Район:**» на карточке — молча выполнять цепочку побочных эффектов по
 // одному клику «Удалить» опаснее, чем показать явную ошибку и попросить пользователя
 // сначала разобраться с локациями. Мягко — в locations/_deleted/, симметрично
 // DELETE /api/locations/:slug; обходы районов/локаций уже пропускают «_»-папки.

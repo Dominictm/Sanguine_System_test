@@ -746,6 +746,7 @@
         <div class="disciplines-subtab-bar">
           <button class="disciplines-subtab-btn active" data-kin-group="clans" aria-pressed="true">Кланы</button>
           <button class="disciplines-subtab-btn" data-kin-group="sects" aria-pressed="false">Секты</button>
+          <button class="disciplines-subtab-btn" data-kin-group="titles" aria-pressed="false">Титулы</button>
         </div>
 
         <div class="kindred-subpanel active" id="kin-sub-clans">
@@ -758,6 +759,13 @@
         <div class="kindred-subpanel" id="kin-sub-sects">
           <div class="lib-add-row"><button type="button" class="mod-fill-add-btn" data-lib-add="sects">+ Добавить секту</button></div>
           <div class="lib-panel" id="lib-sects-body">
+            <div class="loading-state"><div class="spinner"></div>Загрузка...</div>
+          </div>
+        </div>
+
+        <div class="kindred-subpanel" id="kin-sub-titles">
+          <div class="lib-add-row"><button type="button" class="mod-fill-add-btn" data-lib-add="titles">+ Добавить титул</button></div>
+          <div class="lib-panel" id="lib-titles-body">
             <div class="loading-state"><div class="spinner"></div>Загрузка...</div>
           </div>
         </div>
@@ -1253,8 +1261,8 @@
           <datalist id="loc-district-list"></datalist>
         </div>
         <div class="chr-form-group">
-          <label class="chr-form-label" for="loc-edit-neighborhood">Квартал<span class="field-tip" tabindex="0" data-tip="Более узкое уточнение места внутри района — конкретный квартал или подрайон.">ⓘ</span></label>
-          <input class="chr-form-input" id="loc-edit-neighborhood" type="text" placeholder="Район" autocomplete="off">
+          <label class="chr-form-label" for="loc-edit-neighborhood">Дополнение к адресу<span class="field-tip" tabindex="0" data-tip="Уточнение внутри района — конкретный квартал, подрайон или ориентир.">ⓘ</span></label>
+          <input class="chr-form-input" id="loc-edit-neighborhood" type="text" placeholder="Кв. 12, второй этаж…" autocomplete="off">
         </div>
       </div>
 

@@ -68,43 +68,12 @@ document.getElementById('cities-grid')?.addEventListener('click', e => {
 // City Detail Modal
 // ═══════════════════════════════════════════════════════════════
 
-// Канонические секции city.md — зеркало CITY_SECTIONS в web/lib/parsers.js.
-const CITY_SECTION_DEFS = [
-  ['factions',   'Фракции'],
-  ['political',  'Политический ландшафт'],
-  ['districts',  'Районы'],
-  ['landmarks',  'Значимые места'],
-  ['locations',  'Ключевые локации'],
-  ['hunting',    'Охотничьи угодья'],
-  ['edicts',     'Законы домена'],
-  ['mortals',    'Смертные институции'],
-  ['calendar',   'Календарь города'],
-  ['tech',       'Технологии и Маскарад'],
-  ['limits',     'Ограничения генерации'],
-  ['naming',     'Именник и фактура'],
-  ['leitmotif',  'Лейтмотивы и атмосфера'],
-  ['specifics',  'Специфика ответа'],
-  ['avoid',      'Чего избегать'],
-  ['sources',    'Источники'],
-];
 // Секты и независимые кланы V20 (system/rules/reference_wod.md) — варианты для
 // мультиселекта секции «Фракции». Независимые — канонические 4 клана V20
 // (Каппадокийцы — вымерший/Dark Ages клан, в набор не входят).
 const CITY_SECTS = ['Камарилья', 'Анархи', 'Шабаш'];
 const CITY_INDEPENDENT_CLANS = ['Ассамиты', 'Следующие Луны', 'Джованни', 'Равнос'];
 let _cityDetail = null;  // { slug, cityMd, parsed, characters, modules, locations, active }
-
-// Секции вне канонического набора (рукописный city.md, как у Парижа) — СПИСОК, не флаг.
-// Раньше возвращался boolean и по нему вкладка «Поля» ЗАПРЕЩАЛАСЬ: PUT с fields делал
-// полный buildCityMd-ребилд и такие секции терялись. С точечной записью (§A1) они
-// переживают сохранение, поэтому теперь это информирование — перечисляем, что уцелеет.
-// Зеркало customCitySections() из web/lib/city_md_writer.js.
-function _cityCustomSections(cityMd) {
-  const known = new Set(CITY_SECTION_DEFS.map(([, h]) => h.toLowerCase()));
-  return [...String(cityMd).matchAll(/^##\s+(.+?)\s*$/gm)]
-    .map(m => m[1].trim())
-    .filter(h => !known.has(h.toLowerCase()));
-}
 
 // ── Структурные редакторы секций «Политический ландшафт» / «Ключевые локации» ──
 // Строки-записи (роль/имя/имя2 и тип/имя) поверх готовой row-инфраструктуры .cdet-rel-*.
@@ -556,14 +525,18 @@ async function _saveDistrictCard(card) {
     if (j.warning) showToast(j.warning, 'warning');
 
     if (!existingSlug && j.slug) {
-      // Новая карточка стала персистентной — помечаем на месте, без перерисовки формы.
-      card.dataset.districtSlug = j.slug;
-      card.querySelector('.city-district-card-title').textContent = `📍 ${fields.name}`;
-      // Карточка стала персистентной — «Убрать» (DOM-only) заменяем на «Удалить»
-      // (реальный DELETE .../districts), тем же способом, каким карточка рендерилась
-      // бы, будь она сразу persisted (_districtCardHtml, opts.persisted).
-      const oldDel = card.querySelector('.city-district-del-btn');
-      if (oldDel) oldDel.outerHTML = '<button class="cdet-rel-del-btn city-district-delete-btn" type="button" title="Удалить район">✕ Удалить</button>';
+      // Новая карточка района с вкладки «География» (mode:'edit', единственный живой
+      // вызывающий этой функции — форма создания города сохраняет районы пачкой,
+      // без _saveDistrictCard) вставлена «+ Добавить район» сырым HTML прямо в
+      // .city-district-cards, БЕЗ обёртки-спойлера <details class="city-landmark-item">
+      // и блока «Локации в районе» — их строит только _cityViewDistrictsHtml() при
+      // полной перерисовке. Патчить на месте нечем, поэтому — та же перезагрузка +
+      // возврат на вкладку/спойлер, что и у detach/attach локации
+      // (_restoreDistrictSpoilerState), только раскрываем уже СОЗДАННЫЙ район.
+      showToast(`Район «${fields.name}» создан`, 'success');
+      await loadCityPage();
+      _restoreDistrictSpoilerState(j.slug);
+      return;
     }
     if (msg) { msg.textContent = '✓ Сохранено'; msg.style.color = ''; msg.style.display = ''; setTimeout(() => { if (msg) msg.style.display = 'none'; }, 2500); }
   } catch (e) {
@@ -784,31 +757,32 @@ async function loadCityPage() {
   _renderCityView();
 }
 
-// Паритет с формой создания (техспека §9.1) — read-only карточки района на странице
-// просмотра. Переиспользует .locdet-table/-row/-key/-val — тот же паттерн «список пар
-// ключ-значение», что уже показывает вкладка «Метаданные» детальной модалки локации
-// (designspec §7.1), не третий способ показывать пары «подпись: значение» в проекте.
+// «Районы» — спойлер, содержащий спойлеры (техспека 2026-08-05, Часть II).
+// Каждая карточка района — интерактивная (правка/сохранение/удаление района,
+// _districtCardHtml в режиме 'edit' — та же функция, что раньше жила только в
+// старой форме редактирования, _cityDistrictsEditEditorHtml), не read-only, как
+// было раньше: карточку района больше не нужно открывать где-то ещё, чтобы
+// поправить её поля. Список локаций внутри района (Открыть/Открепить) и строка
+// «Привязать» — без изменений механики относительно прежней read-only версии,
+// просто теперь видны только при раскрытии спойлера конкретного района.
 function _cityViewDistrictsHtml() {
   const d = _cityDetail;
   const districts = d.districts || [];
   const locations = d.locations || [];
-  // Раздел раньше пропадал целиком при 0 районов — блок с заголовком остаётся,
-  // с пустым состоянием, вместо того чтобы «Районы» незаметно исчезали со страницы.
-  if (!districts.length) {
-    return `<div class="city-view-districts">
-      <div class="city-create-section-label">Районы</div>
-      <div class="cdet-empty">Районов пока нет</div>
-    </div>`;
-  }
+  const sec = (d.parsed && d.parsed.sections) || {};
+  const factionNames = _factionNamesFromSection(sec);
 
-  const cards = districts.map(dist => {
+  const districtItemHtml = dist => {
     const inDistrict = locations.filter(l => (l.dirRelPath || '').split('/')[0] === dist.slug);
     const elsewhere   = locations.filter(l => (l.dirRelPath || '').split('/')[0] !== dist.slug);
 
     const locsHtml = inDistrict.length
       ? inDistrict.map(l => `<div class="city-view-district-loc-row">
           <span>${escHtml(l.title || l.slug)}</span>
-          <button class="chr-modal-btn" type="button" data-open-loc="${escAttr(l.slug)}">Открыть</button>
+          <div class="city-view-district-loc-actions">
+            <button class="chr-modal-btn" type="button" data-open-loc="${escAttr(l.slug)}">Открыть</button>
+            <button class="chr-modal-btn danger" type="button" data-detach-loc-btn data-loc-slug="${escAttr(l.slug)}" data-loc-title="${escAttr(l.title || l.slug)}" data-district-slug="${escAttr(dist.slug)}">Открепить</button>
+          </div>
         </div>`).join('')
       : '<div class="cdet-empty">Пока пусто</div>';
 
@@ -817,35 +791,53 @@ function _cityViewDistrictsHtml() {
           <select class="form-control city-view-district-attach-sel">
             ${elsewhere.map(l => `<option value="${escAttr(l.slug)}">${escHtml(l.title || l.slug)}</option>`).join('')}
           </select>
-          <button class="chr-modal-btn" type="button" data-attach-loc-btn data-district-slug="${escAttr(dist.slug)}">Привязать</button>
+          <button class="chr-modal-btn" type="button" data-attach-loc-btn data-district-slug="${escAttr(dist.slug)}" data-district-label="${escAttr(dist.name || dist.slug)}">Привязать</button>
         </div>`
       : `<div class="city-view-district-attach-row">
           <select class="form-control city-view-district-attach-sel" disabled><option>Нет свободных локаций</option></select>
           <button class="chr-modal-btn" type="button" disabled>Привязать</button>
         </div>`;
 
-    return `<div class="city-district-card city-district-card-view">
-      <div class="city-district-card-head">
-        <span class="city-district-card-title">📍 ${escHtml(dist.name || dist.slug)}</span>
-      </div>
-      <div class="locdet-table">
-        <div class="locdet-row"><div class="locdet-key">Тип</div><div class="locdet-val">${escHtml(dist.type || '—')}</div></div>
-        <div class="locdet-row"><div class="locdet-key">Влияние</div><div class="locdet-val">${escHtml([dist.sect, dist.clan].filter(Boolean).join(' / ') || '—')}</div></div>
-        <div class="locdet-row"><div class="locdet-key">Описание</div><div class="locdet-val">${escHtml(dist.description || '—')}</div></div>
-      </div>
-      <div class="city-district-locs">
-        <div class="cdet-rels-hint">Локации в районе:</div>
+    const cardInner = _districtCardHtml(dist, factionNames, { mode: 'edit', distSlug: dist.slug });
+
+    return `<details class="city-landmark-item" data-district-slug="${escAttr(dist.slug)}">
+      <summary class="city-landmark-summary">📍 ${escHtml(dist.name || dist.slug)}</summary>
+      <div class="city-landmark-body">
+        ${cardInner}
+        <div class="form-label" style="margin-top:12px">Локации в районе</div>
         ${locsHtml}
         ${attachRow}
         <button class="city-view-district-add-loc-btn" type="button" data-district-name="${escAttr(dist.name || dist.slug)}">+ Создать новую</button>
       </div>
-    </div>`;
-  }).join('');
+    </details>`;
+  };
 
-  return `<div class="city-view-districts">
-    <div class="city-create-section-label">Районы</div>
-    <div class="city-district-cards">${cards}</div>
-  </div>`;
+  const listHtml = districts.length
+    ? `<div id="city-districts-view-list">${districts.map(districtItemHtml).join('')}</div>`
+    : '<div class="cdet-empty">Районов пока нет</div>';
+
+  return `<details class="city-create-spoiler city-create-subspoiler" id="city-districts-outer-spoiler">
+    <summary>Районы</summary>
+    <div class="city-districts-editor" data-mode="edit">
+      <div class="city-district-cards">${listHtml}</div>
+      <button class="cdet-rel-add-btn city-districts-add-btn" type="button">+ Добавить район</button>
+    </div>
+  </details>`;
+}
+
+// После привязки/открепления локации (полная перезагрузка вкладки — тот же
+// компромисс, что и у _saveCityTabEdit) возвращаем пользователя туда, где он
+// был: вкладка «География», раскрытый спойлер «Районы», раскрытый спойлер
+// конкретного района, из которого действие вызвано — иначе каждое открепление
+// схлопывает всё обратно и приходится заново искать нужный район.
+function _restoreDistrictSpoilerState(districtSlug) {
+  document.querySelector('[data-city-view-tab="geography"]')?.click();
+  const outer = document.getElementById('city-districts-outer-spoiler');
+  if (outer) outer.open = true;
+  if (districtSlug) {
+    const item = document.querySelector(`.city-landmark-item[data-district-slug="${CSS.escape(districtSlug)}"]`);
+    if (item) item.open = true;
+  }
 }
 
 // ── Вкладки просмотра города (V1-V5, 2026-08-04) ────────────────────────────────
@@ -899,6 +891,68 @@ function _cityViewGeneralHtml(sec, d) {
       <summary>Правила и ограничения города</summary>
       ${CITY_VIEW_RULES_FIELDS.map(([key, heading]) => _cityViewFieldHtml(heading, sec[key])).join('')}
     </details>`;
+}
+
+// Одно текстовое поле формы — общий кирпичик для всех edit-версий вкладок
+// просмотра города (Часть I, 2026-08-05). Тот же `data-city-field`-контракт,
+// что был у старой формы-полотна _renderCityEdit (убрана целиком) — просто
+// теперь рендерится по одному полю за раз, россыпью по своим вкладкам.
+function _cityEditFieldHtml(key, heading, val, rows = 3) {
+  return `<div class="form-group">
+    <label class="form-label">${escHtml(heading)}${fieldTip(CITY_FIELD_TIPS[heading])}</label>
+    <textarea class="form-control" data-city-field="${key}" rows="${rows}" placeholder="По строке на пункт…">${escHtml(val || '')}</textarea>
+  </div>`;
+}
+
+// Edit-версия вкладки «Общая» — зеркало _cityViewGeneralHtml выше, поле в поле,
+// но с редактируемыми input/textarea вместо .md-body. Название/Год — на
+// верхнем уровне PUT-контракта (display/year), не в fields.* — см.
+// _saveCityTabEdit('general').
+function _cityGeneralEditHtml(sec, d) {
+  const display     = (d.parsed && d.parsed.display) || d.slug;
+  const year        = (d.parsed && d.parsed.year) || '';
+  const description = (d.parsed && d.parsed.description) || '';
+  return `
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Название *${fieldTip(CITY_FIELD_TIPS['Название'])}</label>
+        <input class="form-control" data-city-field="display" type="text" value="${escAttr(display)}">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Год${fieldTip(CITY_FIELD_TIPS['Год'])}</label>
+        <input class="form-control" data-city-field="year" type="text" maxlength="9" value="${escAttr(year)}">
+      </div>
+    </div>
+    ${_cityEditFieldHtml('description', 'Сеттинг', description)}
+    ${_cityEditFieldHtml('edicts', 'Законы домена', sec.edicts)}
+    ${_cityEditFieldHtml('calendar', 'Календарь города', sec.calendar)}
+    ${_cityEditFieldHtml('tech', 'Технологии и Маскарад', sec.tech)}
+    ${_cityEditFieldHtml('leitmotif', 'Лейтмотивы и атмосфера', sec.leitmotif)}
+    ${_cityEditFieldHtml('specifics', 'Специфика ответа', sec.specifics)}
+    ${_cityEditFieldHtml('avoid', 'Чего избегать', sec.avoid)}
+    ${_cityEditFieldHtml('sources', 'Источники', sec.sources, 2)}
+    <details class="city-create-spoiler city-create-subspoiler">
+      <summary>Правила и ограничения города</summary>
+      ${CITY_VIEW_RULES_FIELDS.map(([key, heading]) => _cityEditFieldHtml(key, heading, sec[key])).join('')}
+    </details>`;
+}
+
+// Обёртка «своя кнопка редактирования на вкладку» (Часть I) — тот же паттерн,
+// что уже даёт char-detail.js для панелей персонажа (bio/rels/desc):
+// -view/-edit/-bar с общими _cityToggleTabEdit/_saveCityTabEdit ниже, вместо
+// отдельной формы-полотна на весь город.
+function _cityTabPanelHtml(tab, viewHtml, editHtml) {
+  return `
+    <div class="cdet-info-header">
+      <button class="cdet-edit-btn" data-city-tab-edit="${tab}">✏ Редактировать</button>
+    </div>
+    <div id="city-${tab}-view">${viewHtml}</div>
+    <div id="city-${tab}-edit" style="display:none">${editHtml}</div>
+    <div class="cdet-edit-bar" id="city-${tab}-bar" style="display:none">
+      <button class="cdet-save-btn" data-city-tab-save="${tab}">Сохранить</button>
+      <button class="cdet-cancel-btn" data-city-tab-cancel="${tab}">Отмена</button>
+      <span class="cdet-save-msg" id="city-${tab}-msg" style="display:none">✓ Сохранено</span>
+    </div>`;
 }
 
 function _cityViewRecordRow(key, val) {
@@ -1077,12 +1131,22 @@ function _closeLandmarkCreateRow() {
   if (addBtn) addBtn.style.display = '';
 }
 
+// Районы/Значимые места — не под тумблером «Редактировать» вкладки: у каждой
+// записи там уже своё сохранение (спойлер-карточка, K1-паттерн), как
+// «Дневники» персонажа не участвуют в общем _togglePanelEdit char-detail.js.
+// Под тумблер попадают только оставшиеся текстовые поля вкладки.
+function _cityGeoRemainingEditHtml(sec) {
+  return `
+    ${_cityLocEditorHtml(sec)}
+    ${_cityEditFieldHtml('hunting', 'Охотничьи угодья', sec.hunting)}`;
+}
 function _cityViewGeographyHtml(sec) {
   return `
     ${_cityViewDistrictsHtml()}
     ${_cityViewLandmarksHtml(sec)}
-    ${_cityViewFieldHtml('Ключевые локации', sec.locations)}
-    ${_cityViewFieldHtml('Охотничьи угодья', sec.hunting)}`;
+    ${_cityTabPanelHtml('geography',
+      `${_cityViewFieldHtml('Ключевые локации', sec.locations)}${_cityViewFieldHtml('Охотничьи угодья', sec.hunting)}`,
+      _cityGeoRemainingEditHtml(sec))}`;
 }
 
 function _renderCityView() {
@@ -1112,7 +1176,6 @@ function _renderCityView() {
         ? '<span class="chp-status chp-status-active">Активен</span>'
         : `<button class="mod-gen-scenario-btn" data-switch-city="${escHtml(d.slug)}">Переключиться на этот город</button>`}
       <div class="city-detail-actions">
-        <button class="city-edit-btn" data-city-edit>✏ Редактировать</button>
         <button class="city-del-btn" data-city-delete title="Удалить домен">🗑 Удалить</button>
       </div>
     </div>
@@ -1123,9 +1186,9 @@ function _renderCityView() {
       <button class="cdet-tab" data-city-view-tab="geography">География</button>
     </div>
     <div class="city-page-body">
-      <div class="city-view-panel active" data-city-view-pane="general">${_cityViewGeneralHtml(sec, d)}</div>
-      <div class="city-view-panel" data-city-view-pane="political">${_cityViewPoliticalHtml(sec)}</div>
-      <div class="city-view-panel" data-city-view-pane="factions">${_cityViewFactionsHtml(sec)}</div>
+      <div class="city-view-panel active" data-city-view-pane="general">${_cityTabPanelHtml('general', _cityViewGeneralHtml(sec, d), _cityGeneralEditHtml(sec, d))}</div>
+      <div class="city-view-panel" data-city-view-pane="political">${_cityTabPanelHtml('political', _cityViewPoliticalHtml(sec), _cityPolEditorHtml(sec))}</div>
+      <div class="city-view-panel" data-city-view-pane="factions">${_cityTabPanelHtml('factions', _cityViewFactionsHtml(sec), _cityFactionsEditorHtml(sec))}</div>
       <div class="city-view-panel" data-city-view-pane="geography">${_cityViewGeographyHtml(sec)}</div>
     </div>`;
 }
@@ -1153,8 +1216,39 @@ async function _attachLocationToDistrict(districtSlug, locSlug, locLabel, distri
     const linksNote = res.linksUpdated ? `, ссылок обновлено: ${res.linksUpdated}` : '';
     showToast(`«${locLabel}» привязана к району «${districtLabel}»${linksNote}`, 'success');
     await loadCityPage();
+    _restoreDistrictSpoilerState(districtSlug);
   } catch (e) {
     showToast(`Не удалось привязать локацию: ${e.message}`, 'error');
+  }
+}
+
+// Открепление локации от района (техспека 2026-08-05, Часть II/IV) — зеркало
+// _attachLocationToDistrict выше: тот же физический перенос папки через
+// PUT /district, то же подтверждение (последствие заметное), но целевой район
+// всегда «Другие» — общий район для локаций без формальной привязки (тот же
+// фолбэк, что уже использует POST /api/locations при создании без района).
+// «Удалить» здесь — открепление, не удаление самой локации (подтверждено
+// постановщиком): карточка остаётся, просто переезжает в «Другие».
+async function _detachLocationFromDistrict(locSlug, locTitle, districtSlug) {
+  const ok = await showConfirm(
+    `Открепить «${locTitle}» от района? Локация переедет в общий район «Другие».`,
+    { confirmText: 'Открепить' }
+  );
+  if (!ok) return;
+  try {
+    const r = await fetch(`/api/locations/${encodeURIComponent(locSlug)}/district?city=${encodeURIComponent(_cityDetail.slug)}`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ district: 'Другие' }),
+    });
+    if (!r.ok) throw new Error((await r.json()).error || r.statusText);
+    const res = await r.json().catch(() => ({}));
+    if (res.warning) showToast(res.warning, 'warning');
+    const linksNote = res.linksUpdated ? `, ссылок обновлено: ${res.linksUpdated}` : '';
+    showToast(`«${locTitle}» откреплена от района${linksNote}`, 'success');
+    await loadCityPage();
+    _restoreDistrictSpoilerState(districtSlug);
+  } catch (e) {
+    showToast(`Не удалось открепить локацию: ${e.message}`, 'error');
   }
 }
 
@@ -1179,79 +1273,6 @@ const CITY_FIELD_TIPS = {
   'Ограничения генерации': 'Жёсткие лимиты для AI: «Элизиумов не больше 2», «в районе не более 4 станций метро». Генерация не создаёт локации сверх этих правил.',
   'Именник и фактура': 'Банк имён по слоям общества, клановые конвенции, фактура эпохи (цены, транспорт, сленг). AI берёт имена новых НПС отсюда.',
 };
-
-function _renderCityEdit() {
-  const d = _cityDetail;
-  const content = document.getElementById('city-detail-content');
-  const sec = (d.parsed && d.parsed.sections) || {};
-  const custom = _cityCustomSections(d.cityMd);
-
-  // Ключи «живого города» (landmarks/hunting/edicts/…) выносятся из общего плоского
-  // цикла в отдельный свёрнутый блок «Правила и ограничения города» ниже (T5,
-  // 2026-08-04) — тот же компонент и заголовок, что в форме создания.
-  const ruleKeys = new Set(CITY_RULE_SECTIONS.map(([key]) => key));
-  const fieldRows = CITY_SECTION_DEFS.map(([key, heading]) => {
-    if (key === 'political') return _cityPolEditorHtml(sec);
-    if (key === 'factions')  return _cityFactionsEditorHtml(sec);
-    if (key === 'locations') return _cityLocEditorHtml(sec);
-    // §A3 — карточки District-сущностей вместо textarea; секция «## Районы» в city.md
-    // теперь одностороннее зеркало (синкается сервером при POST/PUT района), форма её
-    // не редактирует напрямую — см. пропуск ключа 'districts' в _saveCityEdit ниже.
-    if (key === 'districts') return _cityDistrictsEditEditorHtml(d.districts, _factionNamesFromSection(sec));
-    if (ruleKeys.has(key)) return '';
-    return `
-    <div class="form-group">
-      <label class="form-label">${escHtml(heading)}${fieldTip(CITY_FIELD_TIPS[heading])}</label>
-      <textarea class="form-control" data-city-field="${key}" rows="3"
-        placeholder="По строке на пункт…">${escHtml(sec[key] || '')}</textarea>
-    </div>`;
-  }).join('');
-
-  content.innerHTML = `
-    <div class="city-page-header">
-      <button class="modp-back-btn" data-city-back>← К городам</button>
-      <div class="city-page-title-wrap">
-        <div class="city-page-title">Редактирование: ${escHtml((d.parsed && d.parsed.display) || d.slug)}</div>
-      </div>
-      <div class="cdet-tab-bar city-edit-tabs">
-        <button class="cdet-tab active" data-city-tab="fields">Поля</button>
-        <button class="cdet-tab" data-city-tab="markdown">Markdown</button>
-      </div>
-    </div>
-    <div class="city-page-body">
-      <div class="cdet-panel city-edit-panel active" data-city-pane="fields">
-        ${custom.length ? `<div class="canon-warn" style="margin-bottom:10px">У этого города есть свои секции (${custom.map(escHtml).join(', ')}) — они сохранятся без изменений.</div>` : ''}
-        <div class="form-row">
-          <div class="form-group">
-            <label class="form-label">Название *${fieldTip(CITY_FIELD_TIPS['Название'])}</label>
-            <input class="form-control" data-city-field="display" type="text" value="${escAttr((d.parsed && d.parsed.display) || '')}">
-          </div>
-          <div class="form-group">
-            <label class="form-label">Год${fieldTip(CITY_FIELD_TIPS['Год'])}</label>
-            <input class="form-control" data-city-field="year" type="text" maxlength="9" value="${escAttr((d.parsed && d.parsed.year) || '')}">
-          </div>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Сеттинг${fieldTip(CITY_FIELD_TIPS['Сеттинг'])}</label>
-          <textarea class="form-control" data-city-field="description" rows="3"
-            placeholder="Общее описание города — эпоха, тон, в рамках какого канона разворачиваются сцены…">${escHtml((d.parsed && d.parsed.description) || '')}</textarea>
-        </div>
-        ${fieldRows}
-        <details class="city-create-spoiler city-create-subspoiler">
-          <summary>Правила и ограничения города</summary>
-          ${_cityRulesEditorHtml('edit', sec)}
-        </details>
-      </div>
-      <div class="cdet-panel city-edit-panel" data-city-pane="markdown">
-        <textarea class="form-control city-md-editor" data-city-field="cityMd" rows="20" spellcheck="false">${escHtml(d.cityMd)}</textarea>
-      </div>
-      <div class="city-edit-footer">
-        <button class="btn-submit" data-city-save>✓ Сохранить</button>
-        <button class="mod-gen-scenario-btn" data-city-cancel>Отмена</button>
-        <span class="city-edit-status" data-city-status></span>
-      </div>
-    </div>`;
-}
 
 // Мультиселект-чип фракции (aria-pressed = состояние) — делегировано на document,
 // чтобы работало и в модалке редактирования, и в форме создания города.
@@ -1342,7 +1363,13 @@ document.addEventListener('click', async e => {
     if (list) {
       const mode = editor.dataset.mode === 'edit' ? 'edit' : 'create';
       const formRoot = editor.closest('.city-create-spoiler, .city-edit-panel');
-      const names = mode === 'edit' ? _currentFactionNames(formRoot) : _currentFactionNames();
+      // В старой форме редактирования formRoot содержит живые чипы «Фракции» —
+      // _currentFactionNames их находит. На вкладке «География» просмотра
+      // города (Часть II, 2026-08-05) «Районы» и «Фракции» — разные табы,
+      // общего formRoot с чипами нет — фолбэк на разбор сырого текста секции
+      // (тот же источник, что и при первом рендере списка районов).
+      const liveNames = mode === 'edit' ? _currentFactionNames(formRoot) : _currentFactionNames();
+      const names = liveNames.length ? liveNames : _factionNamesFromSection((_cityDetail.parsed && _cityDetail.parsed.sections) || {});
       list.insertAdjacentHTML('beforeend', _districtCardHtml({}, names, { mode }));
       list.lastElementChild?.classList.add('row-enter');
       list.lastElementChild?.querySelector('.city-district-name')?.focus();
@@ -1371,13 +1398,21 @@ document.addEventListener('click', async e => {
   }
   const viewDistLocBtn = e.target.closest('.city-view-district-add-loc-btn');
   if (viewDistLocBtn) { _openDistrictLocationModal(viewDistLocBtn.dataset.districtName || ''); return; }
+  const detachBtn = e.target.closest('[data-detach-loc-btn]');
+  if (detachBtn) {
+    _detachLocationFromDistrict(detachBtn.dataset.locSlug, detachBtn.dataset.locTitle, detachBtn.dataset.districtSlug);
+    return;
+  }
   const attachBtn = e.target.closest('[data-attach-loc-btn]');
   if (attachBtn) {
     const sel = attachBtn.closest('.city-view-district-attach-row')?.querySelector('.city-view-district-attach-sel');
     const locSlug = sel?.value;
     if (!locSlug) return;
     const districtSlug  = attachBtn.dataset.districtSlug;
-    const districtLabel = attachBtn.closest('.city-district-card')?.querySelector('.city-district-card-title')?.textContent.replace(/^📍\s*/, '') || districtSlug;
+    // data-district-label — прямой атрибут, не DOM-обход до .city-district-card-title:
+    // с 2026-08-05 (Часть II) карточка района и строка «Привязать» — соседние блоки
+    // внутри .city-landmark-body, не вложены друг в друга, .closest() их не найдёт.
+    const districtLabel = attachBtn.dataset.districtLabel || districtSlug;
     const locLabel = sel.options[sel.selectedIndex]?.textContent || locSlug;
     _attachLocationToDistrict(districtSlug, locSlug, locLabel, districtLabel);
     return;
@@ -1386,20 +1421,16 @@ document.addEventListener('click', async e => {
   const sw = e.target.closest('[data-switch-city]');
   if (sw) { location.search = 'city=' + encodeURIComponent(sw.dataset.switchCity); return; }
 
-  if (e.target.closest('[data-city-edit]'))   { _renderCityEdit(); return; }
-  if (e.target.closest('[data-city-cancel]')) { _renderCityView(); return; }
+  // Своя кнопка «Редактировать»/«Сохранить»/«Отмена» на вкладку (Часть I,
+  // 2026-08-05) — заменяет прежнюю форму-полотно целиком.
+  const tabEditBtn = e.target.closest('[data-city-tab-edit]');
+  if (tabEditBtn) { _cityToggleTabEdit(tabEditBtn.dataset.cityTabEdit, true); return; }
+  const tabCancelBtn = e.target.closest('[data-city-tab-cancel]');
+  if (tabCancelBtn) { _cityToggleTabEdit(tabCancelBtn.dataset.cityTabCancel, false); return; }
+  const tabSaveBtn = e.target.closest('[data-city-tab-save]');
+  if (tabSaveBtn) { await _saveCityTabEdit(tabSaveBtn.dataset.cityTabSave); return; }
 
-  const tab = e.target.closest('[data-city-tab]');
-  if (tab && !tab.disabled) {
-    const which = tab.dataset.cityTab;
-    document.querySelectorAll('[data-city-tab]').forEach(b => b.classList.toggle('active', b === tab));
-    document.querySelectorAll('[data-city-pane]').forEach(p => p.classList.toggle('active', p.dataset.cityPane === which));
-    return;
-  }
-  // Вкладки формы ПРОСМОТРА (V1, 2026-08-04) — отдельный атрибут/классы от
-  // [data-city-tab]/[data-city-pane] выше (форма редактирования): оба рендера
-  // пишут в один #city-detail-content, но не одновременно — коллизий по DOM
-  // нет, раздельные атрибуты просто чище читаются.
+  // Вкладки формы просмотра города (V1, 2026-08-04; правка Часть I, 2026-08-05).
   const viewTab = e.target.closest('[data-city-view-tab]');
   if (viewTab) {
     const which = viewTab.dataset.cityViewTab;
@@ -1467,7 +1498,6 @@ document.addEventListener('click', async e => {
     return;
   }
 
-  if (e.target.closest('[data-city-save]'))   { await _saveCityEdit(); return; }
   if (e.target.closest('[data-city-delete]')) { await _deleteCity(); return; }
 });
 
@@ -1495,87 +1525,104 @@ document.addEventListener('input', e => {
   if (fields) fields.hidden = !nameInp.value.trim() || _cityEditLocs.includes(nameInp.value.trim());
 });
 
-async function _saveCityEdit() {
+// Переключение вкладки просмотра города в/из режима правки (Часть I,
+// 2026-08-05) — зеркало char-detail.js: _togglePanelEdit(panel, on).
+function _cityToggleTabEdit(tab, on) {
+  const view = document.getElementById(`city-${tab}-view`);
+  const edit = document.getElementById(`city-${tab}-edit`);
+  const bar  = document.getElementById(`city-${tab}-bar`);
+  const btn  = document.querySelector(`[data-city-tab-edit="${tab}"]`);
+  if (!view || !edit) return;
+  view.style.display = on ? 'none' : '';
+  edit.style.display = on ? '' : 'none';
+  if (bar) bar.style.display = on ? 'flex' : 'none';
+  if (btn) btn.classList.toggle('active', on);
+}
+
+// Сохранение ОДНОЙ вкладки — свой PUT с подмножеством fields.<ключи вкладки>,
+// не общий на весь город (Часть I). Бэкенд уже поддерживает частичные PUT —
+// ключ, не пришедший в fields, PUT /api/cities не трогает (унаследовано от
+// прежней _saveCityEdit, здесь просто по одной вкладке за раз).
+async function _saveCityTabEdit(tab) {
   const d = _cityDetail;
-  const statusEl = document.querySelector('[data-city-status]');
-  const activePane = document.querySelector('[data-city-pane].active')?.dataset.cityPane || 'fields';
-  const q = v => document.querySelector(`[data-city-field="${v}"]`);
+  const editRoot = document.getElementById(`city-${tab}-edit`);
+  const bar   = document.getElementById(`city-${tab}-bar`);
+  const msgEl = document.getElementById(`city-${tab}-msg`);
+  const btn   = bar?.querySelector('.cdet-save-btn');
+  if (!editRoot) return;
+  const q = key => editRoot.querySelector(`[data-city-field="${key}"]`)?.value.trim() || '';
 
   let payload;
-  if (activePane === 'markdown') {
-    const cityMd = q('cityMd').value;
-    if (!/^#\s+\S/m.test(cityMd)) { if (statusEl) statusEl.textContent = '⚠ city.md должен начинаться с # …'; return; }
-    payload = { cityMd };
+  if (tab === 'general') {
+    const display = q('display');
+    if (!display) { if (msgEl) { msgEl.textContent = '⚠ Укажите название'; msgEl.style.color = 'var(--c-error)'; msgEl.style.display = ''; } return; }
+    payload = {
+      display, year: q('year'),
+      fields: {
+        description: q('description'), edicts: q('edicts'), calendar: q('calendar'), tech: q('tech'),
+        leitmotif: q('leitmotif'), specifics: q('specifics'), avoid: q('avoid'), sources: q('sources'),
+        ...Object.fromEntries(CITY_VIEW_RULES_FIELDS.map(([key]) => [key, q(key)])),
+      },
+    };
+  } else if (tab === 'political') {
+    payload = { fields: { political: _collectPoliticalRows(editRoot) } };
+  } else if (tab === 'factions') {
+    payload = { fields: { factions: _collectFactions(editRoot) } };
+  } else if (tab === 'geography') {
+    payload = { fields: { locations: _collectLocationRows(editRoot), hunting: q('hunting') } };
   } else {
-    const display = q('display').value.trim();
-    if (!display) { if (statusEl) statusEl.textContent = '⚠ Укажите название'; return; }
-    const editRoot = document.getElementById('city-detail-content');
-    const fields = { display, year: q('year').value.trim(), description: q('description').value.trim() };
-    for (const [key] of CITY_SECTION_DEFS) {
-      if (key === 'political')      fields[key] = _collectPoliticalRows(editRoot);
-      else if (key === 'factions')  fields[key] = _collectFactions(editRoot);
-      else if (key === 'locations') fields[key] = _collectLocationRows(editRoot);
-      // 'districts' сюда не попадает вовсе: секция «## Районы» — зеркало, которое
-      // синкает сервер при POST/PUT района (§A3.2), а не поле общей формы города.
-      // Ключ, не пришедший в fields, PUT /api/cities не трогает (§A1.6).
-      else if (key === 'districts') continue;
-      else                          fields[key] = q(key).value.trim();
-    }
-    payload = { fields };
+    return;
   }
 
-  const btn = document.querySelector('[data-city-save]');
   if (btn) { btn.disabled = true; btn.textContent = '⏳ Сохранение...'; }
   try {
     const r = await fetch(`/api/cities/${encodeURIComponent(d.slug)}`, {
       method: 'PUT', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
-    }).then(r => r.json());
-    if (!r.ok) { if (statusEl) statusEl.textContent = '⚠ ' + (r.error || 'Ошибка'); return; }
-    // Синк «Иерархии»/zone-control в карточки персонажей/локаций (§4.2/§5.2 техспеки) —
-    // не блокирующие ошибки: город уже сохранён, это просто оповещение, не диалог.
+    }).then(x => x.json());
+    if (!r.ok) {
+      if (msgEl) { msgEl.textContent = '⚠ ' + (r.error || 'Ошибка'); msgEl.style.color = 'var(--c-error)'; msgEl.style.display = ''; }
+      return;
+    }
+    // Синк «Иерархии»/zone-control в карточки персонажей/локаций — не блокирующие
+    // ошибки: вкладка уже сохранена, это просто оповещение, не диалог.
     if (Array.isArray(r.warnings)) r.warnings.forEach(w => showToast(w, 'warning'));
 
-    // Новые локации из «Ключевых локаций» — создаём настоящие карточки
-    // (POST /api/locations), а не просто текстовый тег в city.md (фаза K).
-    if (activePane !== 'markdown' && _pendingNewLocations.length) {
-      if (statusEl) statusEl.textContent = `⏳ Создаю локации (${_pendingNewLocations.length})...`;
+    // Новые локации из «Ключевых локаций» (вкладка «География») — создаём
+    // настоящие карточки (POST /api/locations), а не просто текстовый тег.
+    if (tab === 'geography' && _pendingNewLocations.length) {
       for (const req of _pendingNewLocations) {
         try {
           const lr = await fetch(`/api/locations?city=${encodeURIComponent(d.slug)}`, {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ name: req.name, district: req.district }),
           }).then(x => x.json());
-          // 409 «уже существует» — гонка с параллельным созданием той же локации,
-          // не ошибка сохранения города; для остального пропускаем эту заявку.
           if (lr.slug && req.note) {
             await fetch(`/api/locations/${encodeURIComponent(lr.slug)}/fields?city=${encodeURIComponent(d.slug)}`, {
               method: 'PUT', headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ fields: { atmosphere: req.note } }),
             });
           }
-        } catch { /* одна неудавшаяся локация не должна срывать сохранение города */ }
+        } catch { /* одна неудавшаяся локация не должна срывать сохранение вкладки */ }
       }
       _pendingNewLocations = [];
     }
 
-    // Перечитываем детально и возвращаемся в просмотр; обновляем грид доменов.
-    const [fresh, freshLocs, freshDistricts] = await Promise.all([
-      fetch(`/api/cities/${encodeURIComponent(d.slug)}/detail`).then(r => r.json()),
-      fetch(`/api/locations?city=${encodeURIComponent(d.slug)}`).then(r => r.json()).catch(() => []),
-      fetch(`/api/cities/${encodeURIComponent(d.slug)}/districts`).then(r => r.ok ? r.json() : []).catch(() => []),
-    ]);
-    _cityDetail = {
-      ...fresh, slug: d.slug, active: d.slug === CITY,
-      locations: Array.isArray(freshLocs) ? freshLocs : [],
-      districts: Array.isArray(freshDistricts) ? freshDistricts : [],
-    };
-    _renderCityView();
+    showToast('Сохранено', 'success');
+    // Полная перезагрузка вкладки, не точечный патч одного поля — тот же
+    // компромисс, что уже был у прежней _saveCityEdit: проще и надёжнее, чем
+    // вручную пересобирать локальное состояние после структурных полей
+    // (Фракции/Политика могут создавать новые записи персонажей и т.п.).
+    // Плата — уже открытые спойлеры «Районы»/«Значимые места» на вкладке
+    // «География» схлопнутся вместе с перерисовкой; тот же trade-off,
+    // который приняли для landmarks/districts раньше в этом цикле.
+    await loadCityPage();
+    document.querySelector(`[data-city-view-tab="${tab}"]`)?.click();
     if (document.getElementById('cities-grid')) loadCitiesGrid();
   } catch (err) {
-    if (statusEl) statusEl.textContent = '⚠ ' + err.message;
+    if (msgEl) { msgEl.textContent = '⚠ ' + err.message; msgEl.style.color = 'var(--c-error)'; msgEl.style.display = ''; }
   } finally {
-    if (btn) { btn.disabled = false; btn.textContent = '✓ Сохранить'; }
+    if (btn) { btn.disabled = false; btn.textContent = 'Сохранить'; }
   }
 }
 

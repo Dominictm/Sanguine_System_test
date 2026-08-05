@@ -29,6 +29,7 @@ const _LIB_BG_CATS = [
 const _LIB_FIELD_DEFS = {
   name:             { label: 'Название', type: 'text' },
   clans:            { label: 'Клан / принадлежность', type: 'text' },
+  affiliation:      { label: 'Принадлежность', type: 'text' },
   'category-text':  { label: 'Категория', type: 'text' },
   'category-select':{ label: 'Категория', type: 'select' },
   source:           { label: 'Источник', type: 'text' },
@@ -39,6 +40,7 @@ const _LIB_FIELD_DEFS = {
   levels:           { label: 'Уровни силы', type: 'levels' },
   'discipline-list':{ label: 'Дисциплины клана', type: 'text' },
   weakness:         { label: 'Слабость', type: 'textarea', rows: 2 },
+  'checkbox-negative': { label: 'Негативный титул', type: 'checkbox' },
 };
 
 // Ключ поля → свойство записи, если они называются по-разному (историческое
@@ -48,6 +50,7 @@ const _LIB_FIELD_RECORD_KEY = {
   'category-text': 'category',
   'system-text': 'system',
   'discipline-list': 'disciplines',
+  'checkbox-negative': 'negative',
 };
 
 // Конфиг per-kind: какие поля показывать (порядок = порядок в форме), как
@@ -86,6 +89,16 @@ const _LIB_KIND_CONFIG = {
     title: 'секту', fields: ['source', 'note', 'description'],
     reload: () => { _sectsCache = null; return loadKindred('sects'); },
   },
+  titles: {
+    // «Принадлежность» — отдельный ключ поля affiliation (НЕ переиспользует
+    // 'clans', как предлагала первая версия техспеки §7: _LIB_FIELD_RECORD_KEY
+    // — плоская мапа по ключу поля без учёта kind, и 'clans' там уже неявно
+    // маппится на rec.clans для disciplines; remap на affiliation сломал бы
+    // форму Дисциплин). Тип поля тот же ('text'), только ключ и record-key
+    // другие — коллизий с существующими kind'ами нет.
+    title: 'титул', fields: ['affiliation', 'checkbox-negative', 'source', 'note', 'description'],
+    reload: () => { _titlesCache = null; return loadKindred('titles'); },
+  },
 };
 
 function _libLevelRowHtml(lvl = {}) {
@@ -111,6 +124,14 @@ function _libFieldRowHtml(key, value, labelOverride) {
       <label class="chr-form-label">${escHtml(label)}</label>
       <div class="lib-levels-list" data-lib-levels-list></div>
       <button type="button" class="mod-fill-add-btn" data-lib-add-level>+ Уровень</button>
+    </div>`;
+  }
+  if (def.type === 'checkbox') {
+    return `<div class="chr-form-group chr-form-checkbox-row" data-lib-field="${key}">
+      <label class="chr-form-checkbox-label">
+        <input type="checkbox" data-lib-input${value ? ' checked' : ''}>
+        ${escHtml(label)}
+      </label>
     </div>`;
   }
   if (def.type === 'select') {
@@ -195,6 +216,7 @@ function _libCollectForm(root, kind) {
   for (const key of cfg.fields) {
     if (key === 'levels') { body.levels = _libCollectLevels(root); continue; }
     if (key === 'category-select') continue; // собирается отдельно ниже (ключ различается: category/sect)
+    if (key === 'checkbox-negative') { body.negative = !!_libFieldInput(root, key)?.checked; continue; }
     const recKey = _LIB_FIELD_RECORD_KEY[key] || key;
     body[recKey] = (_libFieldInput(root, key)?.value || '').trim();
   }
@@ -216,6 +238,7 @@ function _libFindRecord(kind, slug, category) {
   if (kind === 'backgrounds') return _backgroundBySlug(category, slug);
   if (kind === 'clans') return _clanBySlug(slug);
   if (kind === 'sects') return _sectBySlug(slug);
+  if (kind === 'titles') return _titleBySlug(slug);
   return null;
 }
 

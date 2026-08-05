@@ -24,6 +24,52 @@ function fieldTip(text) {
   return ` <span class="field-tip" tabindex="0" data-tip="${escAttr(text)}">ⓘ</span>`;
 }
 
+// Всплывающий попап для .field-tip — единый DOM-элемент в <body>, позиционируется
+// через getBoundingClientRect() на hover/focus (см. .field-tip-popup в styles.css
+// для истории, почему это не CSS ::after). Делегировано на document, а не навешено
+// при создании иконки, — .field-tip вставляется через innerHTML в десятках мест
+// (fieldTip() выше), отдельных обработчиков на каждый инстанс не будет.
+let _fieldTipPopupEl = null;
+function _fieldTipPopup() {
+  if (!_fieldTipPopupEl) {
+    _fieldTipPopupEl = document.createElement('div');
+    _fieldTipPopupEl.className = 'field-tip-popup';
+    document.body.appendChild(_fieldTipPopupEl);
+  }
+  return _fieldTipPopupEl;
+}
+function _showFieldTip(trigger) {
+  const text = trigger.dataset.tip;
+  if (!text) return;
+  const popup = _fieldTipPopup();
+  popup.textContent = text;
+  const r = trigger.getBoundingClientRect();
+  const width = Math.min(300, window.innerWidth * 0.6, 320);
+  let left = r.right + 9;
+  if (left + width > window.innerWidth - 8) left = r.left - width - 9;
+  popup.style.left = Math.max(8, left) + 'px';
+  popup.style.top = (r.top + r.height / 2) + 'px';
+  popup.classList.add('show');
+}
+function _hideFieldTip() {
+  if (_fieldTipPopupEl) _fieldTipPopupEl.classList.remove('show');
+}
+document.addEventListener('mouseover', e => {
+  const t = e.target.closest('.field-tip');
+  if (t) _showFieldTip(t);
+});
+document.addEventListener('mouseout', e => {
+  const t = e.target.closest('.field-tip');
+  if (t && !t.contains(e.relatedTarget)) _hideFieldTip();
+});
+document.addEventListener('focusin', e => {
+  const t = e.target.closest('.field-tip');
+  if (t) _showFieldTip(t);
+});
+document.addEventListener('focusout', e => {
+  if (e.target.closest('.field-tip')) _hideFieldTip();
+});
+
 // ── Toast / Confirm utilities ──────────────────────────────
 function showToast(message, type = 'info', duration = 4000) {
   const container = document.getElementById('toast-container');

@@ -14,6 +14,7 @@ const { parseDisciplineMd, pathArtSlug } = require('../lib/disciplines');
 const { parsePsychicMd } = require('../lib/psychics');
 const { parseClanMd } = require('../lib/clans');
 const { parseSectMd } = require('../lib/sects');
+const { parseTitleMd } = require('../lib/titles');
 const { getMerits, getAllMerits, invalidateMerits } = require('../lib/merits-loader');
 const { getFlaws, getAllFlaws, invalidateFlaws } = require('../lib/flaws-loader');
 const { getBackgrounds, getAllBackgrounds, invalidateBackgrounds } = require('../lib/backgrounds-loader');
@@ -106,8 +107,8 @@ router.get('/api/library/psychics', async (_req, res) => {
 });
 
 // ── Библиотека: справочник кланов (system/library/clans/*.md) — K3, 2026-08-04 ──
-// Город-нейтральные данные → тот же mtime-кэш, что у дисциплин/психики. Нет
-// арта (в отличие от дисциплин) — не заводим hasArt, пока не понадобится.
+// Город-нейтральные данные → тот же mtime-кэш, что у дисциплин/психики.
+// hasArt — см. _withArt/_artFileSet ниже (те же PNG-конвенции, что у дисциплин).
 let _clanCache = null; // { sig, list }
 const CLANS_DIR = path.join(ROOT, 'system', 'library', 'clans');
 
@@ -129,7 +130,7 @@ async function loadClans() {
 }
 
 router.get('/api/library/clans', async (_req, res) => {
-  try { res.json(await loadClans()); }
+  try { res.json(_withArt(await loadClans(), await _artFileSet('clans'))); }
   catch (e) { serverError(res, e); }
 });
 
@@ -155,7 +156,35 @@ async function loadSects() {
 }
 
 router.get('/api/library/sects', async (_req, res) => {
-  try { res.json(await loadSects()); }
+  try { res.json(_withArt(await loadSects(), await _artFileSet('sects'))); }
+  catch (e) { serverError(res, e); }
+});
+
+// ── Библиотека: справочник титулов (system/library/titles/*.md) — 2026-08-06 ──
+// Зеркало clans/sects выше. Отличие от Клана/Секты: поле «Принадлежность»
+// (свободный текст) вместо «Секта», и boolean-флаг «Негативный».
+let _titleCache = null; // { sig, list }
+const TITLES_DIR = path.join(ROOT, 'system', 'library', 'titles');
+
+async function loadTitles() {
+  const files = (await fs.readdir(TITLES_DIR).catch(() => null));
+  if (!files) return [];
+  const mds = files.filter(f => f.endsWith('.md') && f.toLowerCase() !== 'readme.md').sort();
+  const stats = await Promise.all(mds.map(f => fs.stat(path.join(TITLES_DIR, f)).catch(() => null)));
+  const sig = mds.map((f, i) => `${f}:${stats[i] ? stats[i].mtimeMs : 0}`).join('|');
+  if (_titleCache && _titleCache.sig === sig) return _titleCache.list;
+  const list = [];
+  for (const f of mds) {
+    const slug = f.replace(/\.md$/, '');
+    const md = await fs.readFile(path.join(TITLES_DIR, f), 'utf-8').catch(() => '');
+    if (md) list.push(parseTitleMd(md, slug));
+  }
+  _titleCache = { sig, list };
+  return list;
+}
+
+router.get('/api/library/titles', async (_req, res) => {
+  try { res.json(_withArt(await loadTitles(), await _artFileSet('titles'))); }
   catch (e) { serverError(res, e); }
 });
 
@@ -500,6 +529,68 @@ router.delete('/api/library/sects/:slug', async (req, res) => {
     await fs.mkdir(trashDir, { recursive: true });
     await fs.rename(file, path.join(trashDir, `${slug}_${Date.now()}.md`));
     _sectCache = null;
+    res.json({ ok: true });
+  } catch (e) { serverError(res, e); }
+});
+
+// ── Библиотека: CRUD титулов (2026-08-06) — зеркало сект выше, с двумя
+// дополнительными полями: «Принадлежность» (affiliation) и boolean «Негативный».
+function _titleTemplate({ name, affiliation, negative, source, note, description }) {
+  const lines = [`# ${name}`];
+  if (affiliation) lines.push(`- **Принадлежность:** ${sanitizeInlineText(affiliation)}`);
+  if (negative) lines.push('- **Негативный:** да');
+  if (source) lines.push(`- **Источник:** ${sanitizeInlineText(source)}`);
+  lines.push('- **Авторское:** да');
+  if (note) { lines.push(''); for (const l of note.split('\n')) lines.push(`> ${sanitizeInlineText(l)}`); }
+  lines.push('', '## Описание', '', sanitizeInlineText(description || ''), '');
+  return lines.join('\n');
+}
+
+router.post('/api/library/titles', express.json(), async (req, res) => {
+  try {
+    const { name, affiliation, negative, source, note, description } = req.body || {};
+    if (!name?.trim()) return res.status(400).json({ error: 'Название обязательно' });
+    const slug = slugify(name);
+    if (!slug) return res.status(400).json({ error: 'Не удалось построить slug из названия' });
+    const file = path.join(TITLES_DIR, `${slug}.md`);
+    if (await fs.stat(file).catch(() => null))
+      return res.status(409).json({ error: 'Титул с таким названием уже существует', slug });
+    await writeFileAtomic(file, _titleTemplate({ name: name.trim(), affiliation, negative, source, note, description }), 'utf-8');
+    _titleCache = null;
+    res.json({ ok: true, slug });
+  } catch (e) { serverError(res, e); }
+});
+
+router.put('/api/library/titles/:slug', express.json(), async (req, res) => {
+  try {
+    const slug = slugify(req.params.slug);   // FIX-17 — see disciplines PUT above
+    if (!slug) return res.status(400).json({ error: 'Недопустимый slug' });
+    const file = path.join(TITLES_DIR, `${slug}.md`);
+    const existing = await fs.readFile(file, 'utf-8').catch(() => null);
+    if (existing == null) return res.status(404).json({ error: 'Титул не найден' });
+    if (!parseTitleMd(existing, slug).custom)
+      return res.status(403).json({ error: 'Редактирование доступно только для авторских титулов' });
+    const { name, affiliation, negative, source, note, description } = req.body || {};
+    if (!name?.trim()) return res.status(400).json({ error: 'Название обязательно' });
+    await writeFileAtomic(file, _titleTemplate({ name: name.trim(), affiliation, negative, source, note, description }), 'utf-8');
+    _titleCache = null;
+    res.json({ ok: true, slug });
+  } catch (e) { serverError(res, e); }
+});
+
+router.delete('/api/library/titles/:slug', async (req, res) => {
+  try {
+    const slug = slugify(req.params.slug);   // FIX-17 — see disciplines PUT above
+    if (!slug) return res.status(400).json({ error: 'Недопустимый slug' });
+    const file = path.join(TITLES_DIR, `${slug}.md`);
+    const existing = await fs.readFile(file, 'utf-8').catch(() => null);
+    if (existing == null) return res.status(404).json({ error: 'Титул не найден' });
+    if (!parseTitleMd(existing, slug).custom)
+      return res.status(403).json({ error: 'Удаление доступно только для авторских титулов' });
+    const trashDir = path.join(TITLES_DIR, '_deleted');
+    await fs.mkdir(trashDir, { recursive: true });
+    await fs.rename(file, path.join(trashDir, `${slug}_${Date.now()}.md`));
+    _titleCache = null;
     res.json({ ok: true });
   } catch (e) { serverError(res, e); }
 });

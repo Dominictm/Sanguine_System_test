@@ -19,7 +19,7 @@ const { buildCityConstraints } = require('../lib/context_builder');
 // ── Location card template (standalone) ──────────────────────────────────────
 function _locCardTemplate(name, district) {
   return `# ${name}
-> **Название:** ${name} | **Округ:** ${district || '[округ]'} | **Район:** [район] | **Адрес:** [адрес] | **Зона:** [📍 Локация] | **Опасность:** [🟢/🟡/🔴] | **Контроль:** [фракция]
+> **Название:** ${name} | **Район:** ${district || '[район]'} | **Дополнение к адресу:** [доп. к адресу] | **Адрес:** [адрес] | **Зона:** [📍 Локация] | **Опасность:** [🟢/🟡/🔴] | **Контроль:** [фракция]
 ---
 ## 🎭 Атмосфера
 [2–3 предложения]
@@ -252,7 +252,7 @@ module.exports = function locationsRouter({ makeGenerationClient, genTextWithRet
           continue;
         }
         // Inline metadata fields — same one-line-pipe-row shape as «Название» above.
-        const fieldMap = { district: 'Округ', neighborhood: 'Район', address: 'Адрес', control: 'Контроль', zone: 'Зона', dangerLevel: 'Опасность' };
+        const fieldMap = { district: 'Район', neighborhood: 'Дополнение к адресу', address: 'Адрес', control: 'Контроль', zone: 'Зона', dangerLevel: 'Опасность' };
         const mdKey = fieldMap[key];
         if (mdKey) {
           const esc = mdKey.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -297,7 +297,7 @@ module.exports = function locationsRouter({ makeGenerationClient, genTextWithRet
       await fs.mkdir(path.dirname(newLocDir), { recursive: true });
       await fs.rename(oldLocDir, newLocDir);
 
-      // Округ — читаем «Название» из district.md, если район уже заведён как сущность;
+      // Район — читаем «Название» из district.md, если район уже заведён как сущность;
       // иначе (район ещё не формальная сущность — POST /api/locations терпим к этому же
       // случаю) записываем сам slug как текст, лучше, чем оставить старое значение.
       const districtMdRaw = await fs.readFile(path.join(newLocDir, '..', DISTRICT_FILENAME), 'utf-8').catch(() => null);
@@ -306,7 +306,7 @@ module.exports = function locationsRouter({ makeGenerationClient, genTextWithRet
       const newMdPath = path.join(newLocDir, path.basename(mdPath));
       let card = await fs.readFile(newMdPath, 'utf-8');
       card = card.replace(
-        /(\*\*Округ:\*\*)\s*([^|\n]+?)(?=\s*\||\s*\n|$)/m,
+        /(\*\*Район:\*\*)\s*([^|\n]+?)(?=\s*\||\s*\n|$)/m,
         `$1 ${sanitizeInlineText(districtDisplay).replace(/\|/g, '∣')}`
       );
       await writeFileAtomic(newMdPath, card, 'utf-8');

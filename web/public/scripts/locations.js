@@ -348,18 +348,29 @@ function openLocDetail(slug, keepTab) {
   // ── Panels content ────────────────────────────────────────────
 
   const metaFields = [
-    ['subtype',      'Название',   loc.subtype],
-    ['district',     'Округ',      loc.district],
-    ['neighborhood', 'Район',      loc.neighborhood],
-    ['address',      'Адрес',      loc.address],
-    ['control',      'Контроль',   loc.control],
+    ['subtype',      'Название',              loc.subtype],
+    ['district',     'Район',                 loc.district],
+    ['neighborhood', 'Дополнение к адресу',   loc.neighborhood],
+    ['address',      'Адрес',                 loc.address],
+    ['control',      'Контроль',              loc.control],
   ];
   const metaViewHtml = `<div class="locdet-table">${
     metaFields.filter(([, , v]) => v).map(([, k, v]) =>
       `<div class="locdet-row"><div class="locdet-key">${escHtml(k)}</div><div class="locdet-val">${escHtml(v)}</div></div>`).join('')
   }</div>`;
-  const metaEditHtml = `<div class="locdet-edit-fields">${metaFields.map(([key, label, val]) =>
-    `<div class="locdet-field-row">
+  // «Район» (district) — не обычное текстовое поле: выбор из уже существующих
+  // районов (тот же #loc-district-list datalist, что и в модалке создания/
+  // редактирования локации) + кнопка открепления (техспека 2026-08-05, Часть
+  // IV). Сохраняется отдельным путём от остальных полей meta — см. _locSavePanel.
+  const metaEditHtml = `<div class="locdet-edit-fields">${metaFields.map(([key, label, val]) => key === 'district'
+    ? `<div class="locdet-field-row">
+         <label class="locdet-field-lbl">${escHtml(label)}</label>
+         <div class="locdet-district-row">
+           <input class="form-control locdet-field-inp" id="locdet-meta-district" value="${escHtml(val || '')}" placeholder="${escHtml(label)}" list="loc-district-list" autocomplete="off">
+           <button type="button" class="chr-modal-btn danger" id="locdet-meta-district-clear" title="Открепить от района">✕</button>
+         </div>
+       </div>`
+    : `<div class="locdet-field-row">
        <label class="locdet-field-lbl">${escHtml(label)}</label>
        <input class="form-control locdet-field-inp" id="locdet-meta-${key}" value="${escHtml(val || '')}" placeholder="${escHtml(label)}">
      </div>`).join('')}</div>`;
@@ -662,10 +673,25 @@ document.getElementById('loc-detail-content').addEventListener('click', e => {
   const cancelBtn = e.target.closest('[data-cancelloc]');
   const uploadBtn = e.target.closest('#locdet-upload-btn');
 
-  if (editBtn)   { _locToggleEdit(editBtn.dataset.editloc, true);    return; }
+  if (editBtn) {
+    _locToggleEdit(editBtn.dataset.editloc, true);
+    // Датаlist существующих районов — тот же источник, что и в модалке
+    // создания/редактирования локации, только здесь ему негде было
+    // populate'иться раньше (openLocEditModal туда не вызывалась).
+    if (editBtn.dataset.editloc === 'meta') _loadDistrictsList();
+    return;
+  }
   if (cancelBtn) { _locToggleEdit(cancelBtn.dataset.cancelloc, false); return; }
   if (saveBtn)   { _locSavePanel(saveBtn.dataset.saveloc);           return; }
   if (uploadBtn) { _locTriggerUpload(uploadBtn.dataset.slug);        return; }
+  if (e.target.closest('#locdet-meta-district-clear')) {
+    // Открепление — не пустая строка (PUT /district отклоняет её, 400 «Укажи
+    // район»), а явное значение «Другие», тот же фолбэк, что уже использует
+    // создание локации без указанного района.
+    const inp = document.getElementById('locdet-meta-district');
+    if (inp) { inp.value = 'Другие'; inp.focus(); }
+    return;
+  }
 
   const tab = e.target.closest('.cdet-tab');
   if (!tab) return;
@@ -748,13 +774,42 @@ async function _locSavePanel(panel) {
     const hookInputs = document.querySelectorAll('#locdet-hooks-edit-list .hooks-input');
     fields.hooks = Array.from(hookInputs).map(i => i.value.trim()).filter(Boolean).join('\n');
   } else if (panel === 'meta') {
-    for (const key of ['subtype', 'district', 'neighborhood', 'address', 'control']) {
+    for (const key of ['subtype', 'neighborhood', 'address', 'control']) {
       const el = document.getElementById(`locdet-meta-${key}`);
       if (el) fields[key] = el.value;
     }
+    // district — НЕ через общий PUT /fields (это только текст, папка не
+    // переезжает) — отдельный PUT /district ниже, физический перенос, тот
+    // же путь, что уже проверен _attachLocationToDistrict/
+    // _detachLocationFromDistrict (city.js). Меняем только если правда
+    // изменилось — не дёргать подтверждение на каждое сохранение meta.
   } else if (panel === 'images') {
     fields.imagePrompt    = document.getElementById('locdet-img-prompt-ta')?.value || '';
     fields.negativePrompt = document.getElementById('locdet-img-neg-ta')?.value || '';
+  }
+
+  if (panel === 'meta') {
+    const districtInp = document.getElementById('locdet-meta-district');
+    const loc = STATE.locations.find(l => l.slug === slug);
+    const newDistrict = districtInp?.value.trim() || '';
+    const oldDistrict = loc?.district || '';
+    if (newDistrict && newDistrict !== oldDistrict) {
+      const ok = await showConfirm(
+        `Перенести локацию в район «${newDistrict}»? Папка локации физически переедет на диске.`,
+        { confirmText: 'Перенести' }
+      );
+      if (!ok) return;
+      try {
+        const r = await fetch(`/api/locations/${encodeURIComponent(slug)}/district${window.location.search}`, {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ district: newDistrict }),
+        });
+        if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || r.statusText);
+      } catch (e) {
+        if (msgEl) { msgEl.textContent = '✗ ' + e.message; msgEl.style.display = ''; }
+        return;
+      }
+    }
   }
 
   try {
