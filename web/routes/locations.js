@@ -420,7 +420,10 @@ module.exports = function locationsRouter({ makeGenerationClient, genTextWithRet
       const locFile = path.join(locDir, `${locSlug}.md`);
 
       if (await fs.stat(locFile).catch(() => null))
-        return res.status(409).json({ error: 'Локация уже существует', slug: locSlug });
+        return res.status(409).json({
+          error: `Локация «${locName}» уже существует в районе «${district?.trim() || distFolder}» — выбери другое название`,
+          slug: locSlug,
+        });
 
       // Техспека §16.3 — slug локации обязан быть уникален по ВСЕМУ городу, не только
       // внутри целевого района: findLocMdPath() (PUT /fields, DELETE, upload-image,

@@ -1624,22 +1624,38 @@ async function _saveCityTabEdit(tab) {
 
     // Новые локации из «Ключевых локаций» (вкладка «География») — создаём
     // настоящие карточки (POST /api/locations), а не просто текстовый тег.
+    // 2026-08-06, QA-фикс: fetch() не бросает на HTTP-ошибках — POST при
+    // коллизии slug (409) тоже возвращает тело с `slug` (slug ЧУЖОЙ, уже
+    // существующей карточки), и старая проверка `if (lr.slug && req.note)`
+    // не отличала «создано» от «409, slug чужой» — писала req.note в
+    // atmosphere чужой локации молча. Теперь смотрим на res.ok явно.
     if (tab === 'geography' && _pendingNewLocations.length) {
+      const failedNames = [];
       for (const req of _pendingNewLocations) {
         try {
-          const lr = await fetch(`/api/locations?city=${encodeURIComponent(d.slug)}`, {
+          const res = await fetch(`/api/locations?city=${encodeURIComponent(d.slug)}`, {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ name: req.name, district: req.district }),
-          }).then(x => x.json());
+          });
+          const lr = await res.json();
+          if (!res.ok) {
+            failedNames.push(`«${req.name}»: ${lr.error || 'не удалось создать'}`);
+            continue;
+          }
           if (lr.slug && req.note) {
             await fetch(`/api/locations/${encodeURIComponent(lr.slug)}/fields?city=${encodeURIComponent(d.slug)}`, {
               method: 'PUT', headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ fields: { atmosphere: req.note } }),
             });
           }
-        } catch { /* одна неудавшаяся локация не должна срывать сохранение вкладки */ }
+        } catch (e) {
+          failedNames.push(`«${req.name}»: ${e.message}`);
+        }
       }
       _pendingNewLocations = [];
+      if (failedNames.length) {
+        showToast(`Не удалось создать локации из «Отмеченных локаций»: ${failedNames.join('; ')}`, 'error');
+      }
     }
 
     showToast('Сохранено', 'success');
