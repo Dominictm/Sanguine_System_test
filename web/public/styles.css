@@ -6214,6 +6214,43 @@ a:focus-visible {
   flex: 1;
 }
 
+/* «Фракция/Хозяин» + чекбокс «Частный домен» на VtM-вкладке локации (2026-08-06, план
+   «карточка локации» §3.2/§3.4) — тот же паттерн «инпут + доп. контрол в одном ряду»,
+   что .locdet-district-row выше (район + кнопка открепления). */
+.locdet-faction-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.locdet-faction-row .locdet-field-inp {
+  flex: 1;
+}
+.locdet-checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--fs-2xs);
+  font-family: var(--f-heading);
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  color: var(--text3);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+/* Короткая вспышка при очистке поля «Фракция»/«Хозяин» переключением чекбокса —
+   без неё исчезновение введённого текста выглядит как баг, не как следствие клика. */
+.locdet-field-inp.field-cleared-flash {
+  animation: locFieldClearedFlash .6s ease-out;
+}
+@keyframes locFieldClearedFlash {
+  0%   { background: rgba(139, 0, 0, .25); }
+  100% { background: var(--bg3); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .locdet-field-inp.field-cleared-flash { animation: none; }
+}
+
 .locdet-field-lbl {
   font-size: var(--fs-2xs);
   font-family: var(--f-heading);
@@ -6290,6 +6327,45 @@ a:focus-visible {
   color: var(--text2);
   font-style: italic;
   line-height: 1.5;
+}
+
+/* «Отмеченные локации» города (вкладка «География», просмотр) — трёхколоночная
+   таблица (Статус/Название/Заметки), 2026-08-06, план «карточка локации» §4/Тема 4.
+   Отдельный компонент, не модификатор .locdet-row (та — фиксированная 2-колоночная
+   key/val пара, под три равнозначные текстовые колонки не подходит). */
+.city-loc-view-table {
+  display: flex;
+  flex-direction: column;
+}
+.city-loc-view-row {
+  display: grid;
+  grid-template-columns: 140px 1fr 1fr;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(139, 0, 0, 0.301);
+  align-items: start;
+}
+.city-loc-view-row:last-child { border-bottom: none; }
+.city-loc-view-head {
+  font-family: var(--f-heading);
+  font-size: var(--fs-2xs);
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--text3);
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 6px;
+}
+.city-loc-view-status,
+.city-loc-view-name,
+.city-loc-view-note {
+  font-size: var(--fs-body);
+  color: var(--text2);
+}
+/* Заметки — содержательный текст переменной длины, не лейбл: переносим, а не
+   обрезаем эллипсисом (дизайн-документ §4.2). */
+.city-loc-view-note {
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 .locdet-hooks {
@@ -12508,6 +12584,19 @@ tr.rumor-told:hover .rumor-cb-cell {
   background: rgba(180, 40, 40, .22);
 }
 
+/* Кнопка «Удалить» в детальной модалке локации, рядом с «Редактировать / Генерация»
+   (.cdet-edit-btn) — деструктивное действие не должно выглядеть так же нейтрально,
+   как соседняя недеструктивная кнопка. Та же цветовая пара, что .loc-edit-delete-btn
+   (форма редактирования) — единообразие двух кнопок удаления одного смысла. */
+.locdet-delete-btn {
+  color: rgba(220, 100, 100, .85);
+  border-color: rgba(139, 0, 0, .5);
+}
+.locdet-delete-btn:hover {
+  background: rgba(139, 0, 0, .18);
+  border-color: rgba(180, 60, 60, .7);
+}
+
 /* ── Module Locations Panel ──────────────────────────────────────────────── */
 
 .modp-locs-toolbar {
@@ -12603,7 +12692,8 @@ tr.rumor-told:hover .rumor-cb-cell {
 }
 
 .modp-loc-card-unlink,
-.modp-npc-card-del {
+.modp-npc-card-del,
+.loc-card-del-btn {
   position: absolute;
   top: 8px;
   right: 8px;
@@ -12625,7 +12715,7 @@ tr.rumor-told:hover .rumor-cb-cell {
 }
 
 @media (pointer: coarse) {
-  .modp-loc-card-unlink, .modp-npc-card-del {
+  .modp-loc-card-unlink, .modp-npc-card-del, .loc-card-del-btn {
     min-width: 44px;
     min-height: 44px;
   }
@@ -12649,7 +12739,8 @@ tr.rumor-told:hover .rumor-cb-cell {
 }
 
 .modp-loc-card-unlink:hover,
-.modp-npc-card-del:hover {
+.modp-npc-card-del:hover,
+.loc-card-del-btn:hover {
   color: var(--c-danger-text);
   background: rgba(0, 0, 0, .75);
 }

@@ -39,6 +39,10 @@ function parseLocation(rawContent, folderName) {
   loc.zone         = metaField('Зона');
   loc.dangerLevel  = metaField('Опасность');
   loc.control      = metaField('Контроль');
+  // «Частный домен» (2026-08-06, план «карточка локации» §3.4) — чекбокс на VtM-
+  // вкладке: переключает, что хранит поле «Фракция» (loc.faction) — название фракции
+  // или имя персонажа-хозяина. Само поле faction парсер не различает (просто текст).
+  loc.privateDomain = /^да$/i.test(metaField('Частный домен') || '');
 
   // Atmosphere — emoji and exact wording optional
   const atmM = content.match(/## (?:🎭\s+)?Атмосфера[^\n]*\n+([\s\S]+?)(?=\n## |\n---)/);

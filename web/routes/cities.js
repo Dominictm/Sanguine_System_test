@@ -11,7 +11,7 @@ const {
   ROOT, CITIES_DIR, DEFAULT_CITY, cityDir, locsDir,
   listCities, writeFileAtomic, invalidateChars,
   getAllCharacters, getAllLocations, listModules, countMdFiles,
-  EDITABLE_FIELD_MAP, writeCharacterCardField, writeLocationCardField,
+  EDITABLE_FIELD_MAP, writeCharacterCardField, writeLocationVtmTableField,
 } = require('../lib/db');
 const {
   slugify, buildCityMd, parseCityMd, cityScaffold, sanitizeInlineText, escapeTableCell, unescapeTableCell,
@@ -70,6 +70,28 @@ router.get('/api/cities/:slug/detail', async (req, res) => {
     try { locations = await countMdFiles(locsDir(slug)); } catch {}
 
     res.json({ slug, cityMd, parsed, characters, modules, locations });
+  } catch (e) { serverError(res, e); }
+});
+
+// Плоский список фракций города (секты/независимые кланы/«Другие»/«Фракции смертных»/
+// «Государственные») — источник для select «Фракция» на VtM-вкладке локации
+// (2026-08-06, план «карточка локации» §3.2). НЕ переиспользует /api/factions (тот —
+// другой источник, таблица «политического ландшафта», не секция «Фракции» city.md,
+// см. техспеку §7.5) и не группирует по категориям (та группировка — только для UI
+// вкладки «Фракции» самого города, здесь нужен единый плоский список для datalist).
+router.get('/api/cities/:slug/factions-list', async (req, res) => {
+  try {
+    const slug = req.params.slug;
+    if (!(await listCities()).includes(slug)) return res.status(404).json({ error: 'Город не найден' });
+    const md = await fs.readFile(path.join(cityDir(slug), 'city.md'), 'utf-8').catch(() => '');
+    const sec = parseCityMd(md).sections || {};
+    const parseList = text => String(text || '').split('\n').map(l => l.replace(/^\s*-\s?/, '').trim()).filter(Boolean);
+    const all = [...new Set([
+      ...parseList(sec.factions),
+      ...parseList(sec.factionsMortal),
+      ...parseList(sec.factionsState),
+    ])];
+    res.json(all);
   } catch (e) { serverError(res, e); }
 });
 
@@ -296,36 +318,41 @@ async function syncPoliticalCharacterHierarchy(city, cityDisplay, records, prevR
   return warnings;
 }
 
-// Маркер-префикс в поле «Контроль» локации — отличает значения, которые записала форма
-// города (см. ниже), от текста, вписанного пользователем вручную (техспека §5.3): сброс
-// при снятии статуса срабатывает только по точному совпадению с этим значением.
+// Маркер-префикс в поле «Статус» (вкладка VtM) локации — отличает значения, которые
+// записала форма города (см. ниже), от текста, вписанного пользователем вручную
+// (техспека §5.3): сброс при снятии статуса срабатывает только по точному совпадению
+// с этим значением.
 const CITY_CONTROL_MARKER = '[Город]';
-// «Тип» из «Значимых мест» → куда его писать на карточке САМОЙ локации (план Аналитика
-// §4.1 п.7 — переиспользуем «Зона»/«Контроль», без нового поля). «Элизиум» пишет
-// в «Зона» тем же значением, что и ZONE_CLASS_LABELS.elysium на клиенте (web/public/
-// scripts/locations.js) — иначе zoneClass() на карточке не опознает его как Элизиум.
+// «Тип» из «Значимых мест» → куда его писать на карточке САМОЙ локации. 2026-08-06,
+// план «карточка локации» §7.1/§3.1: раньше «Элизиум» писал в «Зона» (метаданные,
+// значение как у ZONE_CLASS_LABELS.elysium), остальные 4 типа — в «Контроль», с
+// маркером-префиксом. Оба поля больше не трогаем («Зону» решили не менять вовсе) —
+// все 5 типов теперь пишут в ОДНО поле «Статус» вкладки VtM (writeLocationVtmTableField,
+// строка markdown-таблицы, не метаданные-бюллет) — единообразно, без частных случаев.
 const SIGNIFICANT_PLACE_TYPES = {
-  'Элизиум':        { field: 'zone',    mdKey: 'Зона',     value: '🏛️ Элизиум' },
-  'Приёмная князя':  { field: 'control', mdKey: 'Контроль', value: `${CITY_CONTROL_MARKER} Приёмная князя` },
-  'Убежище':         { field: 'control', mdKey: 'Контроль', value: `${CITY_CONTROL_MARKER} Убежище` },
-  'Шериф':           { field: 'control', mdKey: 'Контроль', value: `${CITY_CONTROL_MARKER} Шериф` },
-  'Сенешаль':        { field: 'control', mdKey: 'Контроль', value: `${CITY_CONTROL_MARKER} Сенешаль` },
+  'Элизиум':        { field: 'locStatus', value: `${CITY_CONTROL_MARKER} Элизиум` },
+  'Приёмная князя':  { field: 'locStatus', value: `${CITY_CONTROL_MARKER} Приёмная князя` },
+  'Убежище':         { field: 'locStatus', value: `${CITY_CONTROL_MARKER} Убежище` },
+  'Шериф':           { field: 'locStatus', value: `${CITY_CONTROL_MARKER} Шериф` },
+  'Сенешаль':        { field: 'locStatus', value: `${CITY_CONTROL_MARKER} Сенешаль` },
 };
 
-// Заметка (техспека §8.2) допишется к тому же маркированному тексту, что уже пишется в
-// «Контроль» — только туда, «Зона» (Элизиум) заметку не получает (§8.2, буквально: «тому
-// же маркированному тексту, что уже пишется в control»). Формат: «[Город] Статус — Заметка».
+// Заметка (техспека §8.2) допишется к маркированному тексту — единый получатель
+// («Статус»), значит и заметка теперь доступна всем 5 типам одинаково (раньше
+// «Зона»/Элизиум была исключением из-за короткого формата бейджа — этого поля
+// больше не касаемся, ограничение снято). Формат: «[Город] Статус — Заметка».
 function _significantPlaceValue(conf, note) {
   const clean = note ? String(note).trim().replace(/—/g, '–') : '';
-  if (conf.field !== 'control' || !clean) return conf.value;
+  if (!clean) return conf.value;
   return `${conf.value} — ${clean}`;
 }
 
-// Симметрично syncPoliticalCharacterHierarchy, но для «Значимых мест» → zone/control
-// карточки локации (техспека §5.1-5.2). Diff читается из city.md-строк «Тип: Название»
-// (records/prevRecords уже распарсены через parseLocationRecords), не из текущего
-// содержимого zone/control — это делает сам diff надёжным (§5.1); свободные/«Другое»
-// типы без маппинга в SIGNIFICANT_PLACE_TYPES не синкаются никуда, кроме city.md.
+// Симметрично syncPoliticalCharacterHierarchy, но для «Значимых мест» → «Статус»
+// (вкладка VtM) карточки локации (техспека §5.1-5.2, редирект-правка §7.1/§3.1). Diff
+// читается из city.md-строк «Тип: Название» (records/prevRecords уже распарсены через
+// parseLocationRecords), не из текущего содержимого loc.locStatus — это делает сам
+// diff надёжным (§5.1); свободные/«Другое» типы без маппинга в SIGNIFICANT_PLACE_TYPES
+// не синкаются никуда, кроме city.md.
 async function syncSignificantPlaceStatus(city, records, prevRecords) {
   const warnings = [];
   const currByName = _placesByName(records);
@@ -342,23 +369,23 @@ async function syncSignificantPlaceStatus(city, records, prevRecords) {
     const loc = locByName.get(name);
     const conf = SIGNIFICANT_PLACE_TYPES[rec.type];
     if (!loc || !conf) continue;
-    const current = (conf.field === 'zone' ? loc.zone : loc.control) || '';
+    const current = loc[conf.field] || '';
     // §5.3 — маркер-префикс: заметка дописана ПОСЛЕ conf.value, поэтому «наш» текст
     // проверяем по startsWith, не точным совпадением (иначе строка с заметкой никогда
     // не считалась бы «нашей» и не сбрасывалась бы при снятии статуса).
     if (!current.trim().startsWith(conf.value)) continue;
-    try { await writeLocationCardField(city, loc.slug, conf.mdKey, ''); }
-    catch (e) { warnings.push(`Не удалось сбросить «${conf.mdKey}» у локации «${name}»: ${e.message}`); }
+    try { await writeLocationVtmTableField(city, loc.slug, conf.field, ''); }
+    catch (e) { warnings.push(`Не удалось сбросить «Статус» у локации «${name}»: ${e.message}`); }
   }
   for (const [name, rec] of currByName) {
     const loc = locByName.get(name);
     const conf = SIGNIFICANT_PLACE_TYPES[rec.type];
     if (!loc || !conf) continue;
-    const current = (conf.field === 'zone' ? loc.zone : loc.control) || '';
+    const current = loc[conf.field] || '';
     const value = _significantPlaceValue(conf, rec.note);
     if (current.trim() === value) continue; // уже актуально
-    try { await writeLocationCardField(city, loc.slug, conf.mdKey, value); }
-    catch (e) { warnings.push(`Не удалось записать «${conf.mdKey}» локации «${name}»: ${e.message}`); }
+    try { await writeLocationVtmTableField(city, loc.slug, conf.field, value); }
+    catch (e) { warnings.push(`Не удалось записать «Статус» локации «${name}»: ${e.message}`); }
   }
   return warnings;
 }

@@ -310,18 +310,18 @@ function _cityLocEditorHtml(sec, idPrefix = 'cdet-edit') {
   const districts = _parseDistrictNames(sec.districts);
   return `
     <div class="form-group">
-      <label class="form-label">Ключевые локации<span class="field-tip" tabindex="0" data-tip="Свободное описание значимых мест города — общий обзор, без привязки к конкретным статусам. Пример: «Опера как элизиум, катакомбы под Монпарнасом как убежище шабашитов».">ⓘ</span></label>
-      <div class="cdet-rels-hint">Общее описание ключевых локаций города.</div>
-      <textarea class="form-control" data-city-field="locations-narrative" rows="3"
-        placeholder="По строке на пункт…">${escHtml(narrative)}</textarea>
-    </div>
-    <div class="form-group">
       <label class="form-label">Отмеченные локации<span class="field-tip" tabindex="0" data-tip="Привязка конкретной локации к городскому статусу — Элизиум, резиденция Князя и т.д. Выбери уже существующую локацию или впиши новое название — тогда при сохранении создастся настоящая карточка. Пример: Статус «Элизиум» → Локация «Опера Гарнье».">ⓘ</span></label>
-      <div class="cdet-rels-hint">Статус локации — из списка или свой. Название — из созданных локаций или своё: новое имя создаст настоящую карточку локации (район + заметка ниже), а не просто текст. При выборе существующей локации со статусом «Элизиум»/«Приёмная князя»/«Убежище»/«Шериф»/«Сенешаль» её карточка получит запись в поле «Зона»/«Контроль» автоматически.</div>
+      <div class="cdet-rels-hint">Статус локации — из списка или свой. Название — из созданных локаций или своё: новое имя создаст настоящую карточку локации (район + заметка ниже), а не просто текст. При выборе существующей локации со статусом «Элизиум»/«Приёмная князя»/«Убежище»/«Шериф»/«Сенешаль» её карточка получит запись в поле «Статус» (вкладка VtM) автоматически.</div>
       <div class="cdet-location-rows" data-loc-id-prefix="${escAttr(idPrefix)}">${rows}</div>
       <button class="cdet-rel-add-btn cdet-location-add-btn" type="button">+ Добавить запись</button>
       <datalist id="${idPrefix}-city-loc-names">${_cityEditLocs.map(n => `<option value="${escAttr(n)}">`).join('')}</datalist>
       <datalist id="${idPrefix}-city-district-names">${districts.map(n => `<option value="${escAttr(n)}">`).join('')}</datalist>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Общее описание ключевых локаций города<span class="field-tip" tabindex="0" data-tip="Свободное описание значимых мест города — общий обзор, без привязки к конкретным статусам. Пример: «Опера как элизиум, катакомбы под Монпарнасом как убежище шабашитов».">ⓘ</span></label>
+      <div class="cdet-rels-hint">Общее описание ключевых локаций города.</div>
+      <textarea class="form-control" data-city-field="locations-narrative" rows="3"
+        placeholder="По строке на пункт…">${escHtml(narrative)}</textarea>
     </div>`;
 }
 // ── Блок «Район» (форма создания города, designspec §2.1) ─────────────────────
@@ -982,6 +982,40 @@ function _cityViewPoliticalHtml(sec) {
     ${_cityViewFieldHtml('Политический ландшафт', narrative)}`;
 }
 
+// Просмотр «Отмеченные локации» (2026-08-06, план «карточка локации» §8/Тема 4) —
+// таблица (Статус локации / Название локации / Заметки) вместо одного нечленимого
+// текстового блока. Тот же разбор, что уже использует редактор (_cityLocEditorHtml,
+// round-trip не ломается), просто другое представление для просмотра. Нарратив
+// («Общее описание ключевых локаций города») — отдельный блок под таблицей,
+// переиспользует _cityViewFieldHtml как есть.
+function _cityViewLocationRow(r) {
+  return `<div class="city-loc-view-row">
+    <div class="city-loc-view-status">${escHtml(r.type || '—')}</div>
+    <div class="city-loc-view-name">${escHtml(r.name || '—')}</div>
+    <div class="city-loc-view-note">${escHtml(r.note || '—')}</div>
+  </div>`;
+}
+function _cityViewLocationsHtml(sec) {
+  const { narrative, recordLines } = _splitCitySectionRecords(sec.locations || '', _LOC_LABELS);
+  const records = _parseLocationLines(recordLines);
+  const tableHtml = records.length
+    ? `<div class="city-loc-view-table">
+         <div class="city-loc-view-row city-loc-view-head">
+           <div class="city-loc-view-status">Статус локации</div>
+           <div class="city-loc-view-name">Название локации</div>
+           <div class="city-loc-view-note">Заметки</div>
+         </div>
+         ${records.map(_cityViewLocationRow).join('')}
+       </div>`
+    : '<div class="cdet-empty">Нет отмеченных локаций</div>';
+  return `
+    <div class="form-group">
+      <label class="form-label">Отмеченные локации</label>
+      ${tableHtml}
+    </div>
+    ${_cityViewFieldHtml('Общее описание ключевых локаций города', narrative)}`;
+}
+
 // Статичные чипы (<span>, не <button>) — переиспользуют разбор из
 // _cityFactionsEditorHtml, но не переключаются: .chip-view (styles.css) гасит
 // cursor/hover/active того же класса, чтобы не выглядеть кликабельным там, где
@@ -1145,7 +1179,7 @@ function _cityViewGeographyHtml(sec) {
     ${_cityViewDistrictsHtml()}
     ${_cityViewLandmarksHtml(sec)}
     ${_cityTabPanelHtml('geography',
-      `${_cityViewFieldHtml('Ключевые локации', sec.locations)}${_cityViewFieldHtml('Охотничьи угодья', sec.hunting)}`,
+      `${_cityViewLocationsHtml(sec)}${_cityViewFieldHtml('Охотничьи угодья', sec.hunting)}`,
       _cityGeoRemainingEditHtml(sec))}`;
 }
 

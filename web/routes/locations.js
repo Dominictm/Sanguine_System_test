@@ -15,6 +15,7 @@ const {
 const { updateMdLinks, findMdLinks } = require('../lib/md_links');
 const { slugify, writePrompt, parseLocation, sanitizeInlineText, parseDistrictMd, DISTRICT_FILENAME } = require('../lib/parsers');
 const { buildCityConstraints } = require('../lib/context_builder');
+const { unlinkLocationFromAllModules } = require('./modules/shared');
 
 // ── Location card template (standalone) ──────────────────────────────────────
 function _locCardTemplate(name, district) {
@@ -249,6 +250,25 @@ module.exports = function locationsRouter({ makeGenerationClient, genTextWithRet
               return `${hdr}${lines.join('\n')}${tail}`;
             }
           );
+          continue;
+        }
+        if (key === 'privateDomain') {
+          // «Частный домен» (2026-08-06, план «карточка локации» §3.4) — новый бюллет,
+          // не входит в _locCardTemplate() ниже, значит у СУЩЕСТВУЮЩИХ карточек его
+          // ещё нет нигде в файле. Generic fieldMap-путь ниже только ЗАМЕНЯЕТ уже
+          // существующее вхождение **Label:** — если строки вообще нет, regex не
+          // совпадёт и значение молча не запишется (та же ловушка, что была с VtM-
+          // таблицей, см. techspec §7.1/§3.1). Insert-if-missing: дописываем в конец
+          // первой строки-цитаты с метаданными (там же Зона/Опасность/Контроль),
+          // не отдельным бюллетом — единообразно с форматом шаблона.
+          const label = 'Частный домен';
+          const esc = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          const re = new RegExp(`(\\*\\*${esc}:\\*\\*)\\s*([^|\\n]+?)(?=\\s*\\||\\s*\\n|$)`, 'm');
+          if (re.test(card)) {
+            card = card.replace(re, `$1 ${sanitizeInlineText(value).replace(/\|/g, '∣')}`);
+          } else if (value) {
+            card = card.replace(/^(>.*)$/m, `$1 | **${label}:** ${sanitizeInlineText(value).replace(/\|/g, '∣')}`);
+          }
           continue;
         }
         // Inline metadata fields — same one-line-pipe-row shape as «Название» above.
@@ -490,8 +510,11 @@ ${_locCardTemplate(locName, district?.trim() || '')}
       const dst = path.join(trashRoot, `${slug}_${Date.now()}`);
       await fs.rename(path.dirname(mdPath), dst);
       invalidateLocs(city);
+
+      const unlinkedFrom = await unlinkLocationFromAllModules(city, slug);
+
       console.log(`[delete-location] ${city}/${slug} → locations/_deleted/${path.basename(dst)}`);
-      res.json({ ok: true, movedTo: `locations/_deleted/${path.basename(dst)}` });
+      res.json({ ok: true, movedTo: `locations/_deleted/${path.basename(dst)}`, unlinkedFrom });
     } catch (e) { serverError(res, e); }
   });
 

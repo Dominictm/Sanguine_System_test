@@ -169,6 +169,40 @@ async function writeLocationCardField(city, slug, mdKey, rawValue) {
   return true;
 }
 
+// Пишет ОДНУ строку VtM-таблицы локации (| **Label** | значение |) — то же место
+// хранения, что locStatus/faction/figures/threats/masquerade (парсер — parsers/location.js,
+// «VtM table fields»). В отличие от writeLocationCardField (бюллеты **Label:** с
+// двоеточием), формат таблицы другой (**Label** без двоеточия, между `|`) — нужна
+// отдельная функция, иначе запись в «Статус»/«Фракция» и т.п. тихо не находит
+// совпадение и молча ничего не меняет (2026-08-06, техспека «карточка локации» §3.1 —
+// выделено из PUT /api/locations/:slug/fields, ветка vtmTable, чтобы не дублировать
+// regex между HTTP-путём и sync-путём из «Отмеченных локаций» города).
+const VTM_TABLE_FIELD_LABELS = { locStatus: 'Статус', faction: 'Фракция', figures: 'Постоянные фигуры', threats: 'Угрозы', masquerade: 'Маскарад' };
+async function writeLocationVtmTableField(city, slug, key, value) {
+  const label = VTM_TABLE_FIELD_LABELS[key];
+  if (!label) throw new Error(`Неизвестный VtM-ключ таблицы: ${key}`);
+  const mdPath = await findLocMdPath(slug, city);
+  if (!mdPath) return false;
+  let card = await fs.readFile(mdPath, 'utf-8');
+  const cellVal = sanitizeInlineText(String(value ?? '').trim()).replace(/\|/g, '∣');
+  card = card.replace(
+    /(## (?:🩸\s+)?(?:VtM[^\n]*|Контекст[^\n]*)\n+)([\s\S]+?)(\n## |\n---|$)/i,
+    (_, hdr, body, tail) => {
+      const lines = body.split('\n');
+      const esc = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const rowRe = new RegExp(`^\\|\\s*\\*\\*${esc}\\*\\*\\s*\\|`);
+      const idx = lines.findIndex(l => rowRe.test(l));
+      if (!cellVal) { if (idx !== -1) lines.splice(idx, 1); return hdr + lines.join('\n') + tail; }
+      const row = `| **${label}** | ${cellVal} |`;
+      if (idx !== -1) lines[idx] = row; else lines.push(row);
+      return hdr + lines.join('\n') + tail;
+    }
+  );
+  await writeFileAtomic(mdPath, card, 'utf-8');
+  invalidateLocs(city);
+  return true;
+}
+
 async function getAllLocations(city = DEFAULT_CITY) {
   const lc = _locCache[city];
   if (lc && Date.now() - lc.ts < LOCS_TTL) return lc.locs;
@@ -567,7 +601,7 @@ module.exports = {
   readOpenThreadsRaw,
   countMdFiles, mapLimit, tableCell,
   EDITABLE_FIELD_MAP, SHEET_HEADER_FROM_CARD, _setSheetHeaderCell,
-  writeCharacterCardField, writeLocationCardField,
+  writeCharacterCardField, writeLocationCardField, writeLocationVtmTableField,
   RU_MONTH_STEMS, eventDateScore, aggregateEvents,
   makeNameResolver, getDiaryIndex, eventMonthKey,
   renderChronicleEventsSkeleton, renderOpenThreadsSkeleton,

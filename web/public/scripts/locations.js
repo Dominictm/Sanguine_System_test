@@ -114,11 +114,18 @@ function renderLocations() {
 // чтобы вторая не превращалась в отдельный обеднённый список-строку.
 function _locCardHtml(loc, { delay = '', overlayExtra = '' } = {}) {
   const zc    = zoneClass(loc.zone);
+  const dLvl  = zoneDangerLevel(loc.dangerLevel);
   const mLvl  = loc.masqueradeLevel || 'unknown';
-  const masqBadge = MASQ_BADGE_LABELS[mLvl]
-    ? `<span class="badge badge-masq-${mLvl}">${MASQ_BADGE_LABELS[mLvl]}</span>`
+  // Компактные бейджи (2026-08-06, план «карточка локации» §1-2): только иконка + цвет
+  // заливки/рамки — «Зона контроля» (zoneBadge) убрана с карточки целиком (осталась
+  // только в детальной модалке), «Опасность»/«Маскарад» показывают полный текст по title,
+  // не в самом бейдже — на компактной сетке карточек полные подписи не помещались.
+  const dangerBadge = dLvl !== 'unknown'
+    ? `<span class="badge badge-danger-${dLvl}" title="${escAttr(DANGER_BADGE_LABELS[dLvl])}">⚔️</span>`
     : '';
-  const zoneBadge = `<span class="badge badge-loc-${zc}">${ZONE_CLASS_LABELS[zc]}</span>`;
+  const masqBadge = mLvl !== 'unknown'
+    ? `<span class="badge badge-masq-${mLvl}" title="${escAttr(MASQ_BADGE_LABELS[mLvl])}">🎭</span>`
+    : '';
 
   const distLine = [loc.district, loc.neighborhood].filter(Boolean).map(escHtml).join(' · ');
   const cardTitle = loc.subtype || loc.title || loc.slug;
@@ -126,18 +133,25 @@ function _locCardHtml(loc, { delay = '', overlayExtra = '' } = {}) {
     <div class="loc-title">${escHtml(cardTitle)}</div>
     ${distLine    ? `<div class="loc-district">${distLine}</div>` : ''}
     ${loc.address ? `<div class="loc-address">${escHtml(loc.address)}</div>` : ''}
-    <div class="loc-badges">${zoneBadge}${masqBadge}</div>`;
+    <div class="loc-badges">${dangerBadge}${masqBadge}</div>`;
+  // Иконка удаления — всегда видима (не hover-reveal, см. план §2.1 — деструктивное
+  // действие с подтверждением, прятать её не даёт защиты, только вредит на touch).
+  // Клик обрабатывается делегатом (см. ниже, data-del-loc) — stopPropagation там же,
+  // чтобы не открывать карточку одновременно с удалением.
+  const delBtn = `<button type="button" class="loc-card-del-btn" data-del-loc="${escHtml(loc.slug)}" title="Удалить локацию" aria-label="Удалить локацию">🗑</button>`;
 
   if (loc.imageUrl) {
     return `<div class="loc-card has-art" data-slug="${escHtml(loc.slug)}" ${delay}>
       <img class="loc-card-img" src="${loc.imageUrl}" alt="${escHtml(loc.title || loc.slug)}" loading="lazy" decoding="async">
       <div class="loc-card-overlay">${textBlock}</div>
+      ${delBtn}
       ${overlayExtra}
     </div>`;
   }
   return `<div class="loc-card" data-slug="${escHtml(loc.slug)}" ${delay}>
     <span class="loc-zone-icon">${ZONE_CLASS_LABELS[zc][0]}</span>
     ${textBlock}
+    ${delBtn}
     ${overlayExtra}
   </div>`;
 }
@@ -382,10 +396,11 @@ function openLocDetail(slug, keepTab) {
 
   const vtmSections = [
     ['Статус',            loc.locStatus],
-    ['Фракция',           loc.faction],
+    [loc.privateDomain ? 'Хозяин' : 'Фракция', loc.faction],
     ['Постоянные фигуры', loc.figures],
     ['Угрозы',            loc.threats],
     ['Маскарад',          loc.masquerade],
+    ['Опасность',         DANGER_BADGE_LABELS[zoneDangerLevel(loc.dangerLevel)] || ''],
   ].filter(([, v]) => v);
   const vtmParts = [];
   if (loc.vtmText) vtmParts.push(`<div class="locdet-atm">${escHtml(loc.vtmText)}</div>`);
@@ -402,14 +417,27 @@ function openLocDetail(slug, keepTab) {
   const VTM_MASQ_OPTS = [['', '—'], ['🟢', '🟢 Низкий'], ['🟡', '🟡 Средний'], ['🔴', '🔴 Высокий']];
   const maqRaw = loc.masquerade || '';
   const maqSelVal = VTM_MASQ_OPTS.find(([v]) => v && maqRaw.includes(v))?.[0] || '';
+  const VTM_DANGER_OPTS = [['', '—'], ['🟢', '🟢 Низкая'], ['🟡', '🟡 Средняя'], ['🔴', '🔴 Высокая']];
+  const dangerRaw = loc.dangerLevel || '';
+  const dangerSelVal = VTM_DANGER_OPTS.find(([v]) => v && dangerRaw.includes(v))?.[0] || '';
+  // «Частный домен» (§3.4) — переключает лейбл/даталист поля «Фракция» ↔ «Хозяин».
+  // Начальное состояние строится здесь (не только через change-обработчик), чтобы уже
+  // сохранённая карточка с privateDomain: true открывалась сразу в режиме «Хозяин».
+  const factionLbl  = loc.privateDomain ? 'Хозяин' : 'Фракция';
+  const factionList = loc.privateDomain ? 'locdet-owner-chars-list' : 'locdet-factions-list';
   const vtmEditHtml = `<div class="locdet-edit-fields">
       <div class="locdet-field-row">
         <label class="locdet-field-lbl">Статус</label>
         <input class="form-control locdet-field-inp" id="locdet-vtm-status" value="${escAttr(loc.locStatus || '')}" placeholder="Статус">
       </div>
       <div class="locdet-field-row">
-        <label class="locdet-field-lbl">Фракция</label>
-        <input class="form-control locdet-field-inp" id="locdet-vtm-faction" value="${escAttr(loc.faction || '')}" placeholder="Фракция">
+        <label class="locdet-field-lbl" id="locdet-vtm-faction-lbl">${factionLbl}</label>
+        <div class="locdet-faction-row">
+          <input class="form-control locdet-field-inp" id="locdet-vtm-faction" list="${factionList}" value="${escAttr(loc.faction || '')}" placeholder="${factionLbl}" autocomplete="off">
+          <label class="locdet-checkbox-row"><input type="checkbox" id="locdet-vtm-private-domain"${loc.privateDomain ? ' checked' : ''}>Частный домен</label>
+        </div>
+        <datalist id="locdet-factions-list"></datalist>
+        <datalist id="locdet-owner-chars-list"></datalist>
       </div>
       <div class="locdet-field-row">
         <label class="locdet-field-lbl">Постоянные фигуры</label>
@@ -423,6 +451,12 @@ function openLocDetail(slug, keepTab) {
         <label class="locdet-field-lbl">Маскарад</label>
         <select class="form-control locdet-field-inp" id="locdet-vtm-masquerade">
           ${VTM_MASQ_OPTS.map(([v, label]) => `<option value="${v}"${v === maqSelVal ? ' selected' : ''}>${label}</option>`).join('')}
+        </select>
+      </div>
+      <div class="locdet-field-row">
+        <label class="locdet-field-lbl">Опасность</label>
+        <select class="form-control locdet-field-inp" id="locdet-vtm-danger">
+          ${VTM_DANGER_OPTS.map(([v, label]) => `<option value="${v}"${v === dangerSelVal ? ' selected' : ''}>${label}</option>`).join('')}
         </select>
       </div>
     </div>
@@ -511,6 +545,7 @@ function openLocDetail(slug, keepTab) {
         <div class="cdet-name">${escHtml(loc.title || loc.slug)}</div>
         ${loc.subtype ? `<div class="locdet-subtype">${escHtml(loc.subtype)}</div>` : ''}
         <button class="cdet-edit-btn" id="locdet-open-edit-modal" data-slug="${escHtml(slug)}" style="margin-bottom:6px">✏ Редактировать / Генерация</button>
+        <button class="cdet-edit-btn locdet-delete-btn" id="locdet-delete-btn" data-slug="${escHtml(slug)}" style="margin-bottom:6px">🗑 Удалить</button>
         <div class="locdet-legend-row">
           <div class="locdet-legend-item">
             <span class="locdet-legend-lbl">Зона контроля</span>
@@ -571,6 +606,8 @@ function openLocDetail(slug, keepTab) {
 
 // Location card clicks
 document.getElementById('locs-grid').addEventListener('click', e => {
+  const delBtn = e.target.closest('.loc-card-del-btn');
+  if (delBtn) { deleteLoc(delBtn.dataset.delLoc); return; }
   const card = e.target.closest('.loc-card[data-slug]');
   if (card) openLocDetail(card.dataset.slug);
 });
@@ -679,6 +716,7 @@ document.getElementById('loc-detail-content').addEventListener('click', e => {
     // создания/редактирования локации, только здесь ему негде было
     // populate'иться раньше (openLocEditModal туда не вызывалась).
     if (editBtn.dataset.editloc === 'meta') _loadDistrictsList();
+    if (editBtn.dataset.editloc === 'vtm') { _loadCityFactionsList(); _fillOwnerCharsList(); }
     return;
   }
   if (cancelBtn) { _locToggleEdit(cancelBtn.dataset.cancelloc, false); return; }
@@ -758,6 +796,11 @@ async function _locSavePanel(panel) {
       threats:    document.getElementById('locdet-vtm-threats')?.value.trim() || '',
       masquerade: document.getElementById('locdet-vtm-masquerade')?.value || '',
     };
+    // «Опасность»/«Частный домен» — обычные метаданные-бюллеты (**Label:**), НЕ строки
+    // VtM-таблицы — сохраняются отдельными полями verbatim, не через vtmTable
+    // (2026-08-06, план «карточка локации» §3.3-3.4).
+    fields.dangerLevel   = document.getElementById('locdet-vtm-danger')?.value || '';
+    fields.privateDomain = document.getElementById('locdet-vtm-private-domain')?.checked ? 'да' : '';
   } else if (panel.startsWith('sens-')) {
     const idx  = parseInt(panel.slice('sens-'.length), 10);
     const val  = document.getElementById(`locdet-${panel}-ta`)?.value ?? '';
@@ -1109,6 +1152,56 @@ async function _loadFactionsList() {
   } catch { /* молча */ }
 }
 
+// «Фракция» на VtM-вкладке детальной модалки (§3.2, план «карточка локации») — НЕ тот
+// же источник, что _loadFactionsList() выше (тот — /api/factions, «политический
+// ландшафт»; этот — секция «Фракции» city.md, тот же принцип, что дропдаун «Влияние —
+// Фракции» района, см. техспеку §7.2/§7.5 — расхождение источников отмечено, но не
+// устраняется в этой задаче).
+async function _loadCityFactionsList() {
+  const dl = document.getElementById('locdet-factions-list');
+  if (!dl) return;
+  try {
+    const list = await fetch(`/api/cities/${encodeURIComponent(CITY)}/factions-list`).then(r => r.ok ? r.json() : []);
+    dl.innerHTML = (Array.isArray(list) ? list : []).map(f => `<option value="${escAttr(f)}">`).join('');
+  } catch { /* автодополнение необязательно для работы поля */ }
+}
+// Даталист «Хозяин» (режим «Частный домен») — персонажи-вампиры уже загруженного
+// реестра города, доп. сетевой запрос не нужен (§3.4).
+function _fillOwnerCharsList() {
+  const dl = document.getElementById('locdet-owner-chars-list');
+  if (!dl) return;
+  const names = (STATE.characters || []).filter(c => c.lineage === 'vampire').map(c => c.name);
+  dl.innerHTML = names.map(n => `<option value="${escAttr(n)}">`).join('');
+}
+
+// Чекбокс «Частный домен» (§3.4) — переключает лейбл/даталист поля «Фракция» ↔
+// «Хозяин». Очищает поле при переключении (значение из одного режима семантически
+// невалидно в другом) — но только «со вспышкой», если реально было что чистить, и
+// только если там реально ЧТО-ТО было (дизайн-документ §3.2, не мигать вхолостую).
+document.addEventListener('change', e => {
+  if (!e.target.matches('#locdet-vtm-private-domain')) return;
+  const input = document.getElementById('locdet-vtm-faction');
+  const lbl   = document.getElementById('locdet-vtm-faction-lbl');
+  if (!input || !lbl) return;
+  const hadValue = !!input.value.trim();
+  input.value = '';
+  if (e.target.checked) {
+    lbl.textContent = 'Хозяин';
+    input.placeholder = 'Персонаж';
+    input.setAttribute('list', 'locdet-owner-chars-list');
+  } else {
+    lbl.textContent = 'Фракция';
+    input.placeholder = 'Фракция';
+    input.setAttribute('list', 'locdet-factions-list');
+  }
+  if (hadValue) {
+    input.classList.remove('field-cleared-flash');
+    void input.offsetWidth; // restart animation if triggered twice in a row
+    input.classList.add('field-cleared-flash');
+    input.addEventListener('animationend', () => input.classList.remove('field-cleared-flash'), { once: true });
+  }
+});
+
 function closeLocEditModal() {
   closeModal('loc-edit-modal');
   _locEditSlug = null;
@@ -1206,37 +1299,46 @@ async function saveLocEdit() {
   }
 }
 
-async function deleteLocCurrent() {
-  if (!_locEditSlug) return;
+// slug по умолчанию = _locEditSlug — сохраняет старое поведение вызова из формы
+// редактирования/генерации (`#loc-edit-modal`) без правок в остальных её местах.
+// Явный slug — новые точки входа (карточка сетки, детальная модалка), где формы
+// редактирования вообще нет на экране (2026-08-06, план «карточка локации» §2.1-2.3).
+async function deleteLoc(slug = _locEditSlug) {
+  if (!slug) return;
   // §B2 — цель удаления не восстановить обратно (в отличие от переноса, §B1): ссылки
   // на неё станут битыми без возможности автоподстановки нового пути. Read-only
   // проверка ПЕРЕД confirm — предупреждаем, но не блокируем: решение за Рассказчиком.
   let warnText = '';
   try {
-    const bl = await fetch(`/api/locations/${encodeURIComponent(_locEditSlug)}/backlinks?city=${encodeURIComponent(CITY)}`).then(r => r.ok ? r.json() : null);
+    const bl = await fetch(`/api/locations/${encodeURIComponent(slug)}/backlinks?city=${encodeURIComponent(CITY)}`).then(r => r.ok ? r.json() : null);
     if (bl && bl.count > 0) {
       const shown = bl.files.slice(0, 5).join(', ') + (bl.files.length > 5 ? `, ещё ${bl.files.length - 5}…` : '');
       warnText = ` На эту локацию ссылаются файлы (${bl.count}): ${shown} — ссылки станут битыми.`;
     }
   } catch { /* проверка best-effort — сбой не должен блокировать сам confirm */ }
 
-  if (!await showConfirm(`Удалить локацию «${_locEditSlug}»? Это действие необратимо.${warnText}`, { danger: true, confirmText: 'Удалить' })) return;
+  if (!await showConfirm(`Удалить локацию «${slug}»? Это действие необратимо.${warnText}`, { danger: true, confirmText: 'Удалить' })) return;
+  // Кнопка формы редактирования — может отсутствовать на экране (вызов с карточки/
+  // детальной модалки, форма не открыта); отключаем, только если она есть.
   const btn = document.getElementById('loc-edit-delete-btn');
-  btn.disabled = true;
+  if (btn) btn.disabled = true;
   try {
-    const r = await fetch(`/api/locations/${encodeURIComponent(_locEditSlug)}?city=${encodeURIComponent(CITY)}`, { method: 'DELETE' });
+    const r = await fetch(`/api/locations/${encodeURIComponent(slug)}?city=${encodeURIComponent(CITY)}`, { method: 'DELETE' });
     if (!r.ok) throw new Error((await r.json()).error || r.statusText);
-    closeLocEditModal();
-    // Close detail modal if open for this slug
-    closeModal('loc-detail-modal');
+    closeLocEditModal();          // no-op, если форма не открыта
+    closeModal('loc-detail-modal'); // no-op, если модалка не открыта
     STATE.locations = [];
     await loadLocations();
+    showToast('Локация удалена', 'success');
   } catch (e) {
-    document.getElementById('loc-edit-error').textContent = e.message;
-    document.getElementById('loc-edit-error').style.display = '';
-    btn.disabled = false;
+    const errDiv = document.getElementById('loc-edit-error');
+    if (errDiv) { errDiv.textContent = e.message; errDiv.style.display = ''; }
+    else showToast('Не удалось удалить: ' + e.message, 'error');
+    if (btn) btn.disabled = false;
   }
 }
+// Обратная совместимость — старый вызов из формы `#loc-edit-modal` без аргумента.
+const deleteLocCurrent = () => deleteLoc();
 
 async function runLocFieldRegen(field) {
   const slug = _locEditSlug;
@@ -1348,10 +1450,12 @@ async function runLocFullGen() {
     window.location.href = `/api/export/locations${window.location.search}`;
   });
 
-  // "Edit" button in loc-detail-modal (delegated)
+  // "Edit"/"Delete" buttons in loc-detail-modal (delegated)
   document.getElementById('loc-detail-content').addEventListener('click', e => {
     const editBtn = e.target.closest('#locdet-open-edit-modal');
-    if (editBtn) openLocEditModal(editBtn.dataset.slug);
+    if (editBtn) { openLocEditModal(editBtn.dataset.slug); return; }
+    const delBtn = e.target.closest('#locdet-delete-btn');
+    if (delBtn) deleteLoc(delBtn.dataset.slug);
   });
 })();
 
@@ -1461,6 +1565,8 @@ async function _renderModuleLocPanel(data) {
       _modLocUnlink(chronicle, modName, unlinkBtn.dataset.unlink);
       return;
     }
+    const delBtn = e.target.closest('.loc-card-del-btn');
+    if (delBtn) { deleteLoc(delBtn.dataset.delLoc); return; }
     const card = e.target.closest('.loc-card');
     if (card) {
       const slug = card.dataset.slug;

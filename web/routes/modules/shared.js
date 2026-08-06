@@ -387,6 +387,36 @@ function _writeModuleLocSlugs(raw, slugs) {
   return n.trimEnd() + '\n\n' + section;
 }
 
+// Обходит chronicles/*/modules/*/<mod>.md текущего города и убирает slug удаляемой
+// локации из списка привязанных везде, где он встречается (тихий cascade-unlink,
+// 2026-08-06, план «карточка локации» §2.4/§3.3 — вызывается ПОСЛЕ soft-delete
+// локации из DELETE /api/locations/:slug, чтобы «Связанные локации» модуля не
+// остались с карточкой-заглушкой на удалённый slug).
+async function unlinkLocationFromAllModules(city, locSlug) {
+  const unlinkedFrom = [];
+  const chrRoot = chroniclesDir(city);
+  let chronicles;
+  try { chronicles = await fs.readdir(chrRoot, { withFileTypes: true }); } catch { return unlinkedFrom; }
+  for (const chrEnt of chronicles) {
+    if (!chrEnt.isDirectory() || chrEnt.name.startsWith('_')) continue;
+    const modulesRoot = path.join(chrRoot, chrEnt.name, 'modules');
+    let modules;
+    try { modules = await fs.readdir(modulesRoot, { withFileTypes: true }); } catch { continue; }
+    for (const modEnt of modules) {
+      if (!modEnt.isDirectory()) continue;
+      const modFile = path.join(modulesRoot, modEnt.name, `${modEnt.name}.md`);
+      let raw;
+      try { raw = await fs.readFile(modFile, 'utf-8'); } catch { continue; }
+      const existing = _parseModuleLocSlugs(raw);
+      if (!existing.includes(locSlug)) continue;
+      const filtered = existing.filter(s => s !== locSlug);
+      await writeFileAtomic(modFile, _writeModuleLocSlugs(raw, filtered), 'utf-8');
+      unlinkedFrom.push(`${chrEnt.name}/${modEnt.name}`);
+    }
+  }
+  return unlinkedFrom;
+}
+
 // Parse sessions.md (Phase B log) into [{title, date, scenes, status, body}]
 function _parseSessions(raw) {
   if (!raw) return [];
@@ -804,7 +834,7 @@ module.exports = {
   _cleanLocName, _locType, _extractMetaList, _extractLocNamesFromScenario, _extractNpcNamesFromScenario,
   _renderModuleNpcMd, _charTimelineDigest, _extractScenarioSection, _SCENE_HEADING_RE,
   _parseScenarioScenesDirect, _parseScenarioScenesLegacy, _parseScenarioScenes, _parseScenarioLocations,
-  _parseModuleLocSlugs, _writeModuleLocSlugs, _parseSessions, _cleanNpcName, _npcCardHref,
+  _parseModuleLocSlugs, _writeModuleLocSlugs, unlinkLocationFromAllModules, _parseSessions, _cleanNpcName, _npcCardHref,
   _parseNpcEntries, _findNpcMdSection, _findNpcMdSections, _removeNpcEntry, _parseNpcMdGroups, _renderSessionBlock,
   _writeSessionsFile, _patchModuleMain, _claudeOnlyModel,
   _upsertSceneNoteEntry, _upsertModuleSection, _readModuleSection,

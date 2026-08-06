@@ -7002,7 +7002,11 @@ describe('city-creation-restructure: город → персонаж/локац�
       'у нового персонажа должна проставиться «Иерархия»');
   });
 
-  it('Значимые места: смена локации со статусом «Элизиум» переносит «Зону»', async () => {
+  it('Значимые места: смена локации со статусом «Элизиум» переносит «Статус» (VtM)', async () => {
+    // 2026-08-06, план «карточка локации» §7.1/§3.1: раньше «Элизиум» синкался в
+    // «Зону» карточки локации (метаданные) — теперь все 5 типов «Значимых мест»
+    // пишут в «Статус» вкладки VtM (строка markdown-таблицы), «Зону» решили не
+    // трогать вовсе. Тест обновлён под новую цель синка, сценарий не менялся.
     const locA = await apiJson(`/api/locations${qs()}`, { method: 'POST', body: JSON.stringify({ name: 'Реструкт Элизиум А' }) });
     assert.equal(locA.status, 200, locA.body.error);
     const locB = await apiJson(`/api/locations${qs()}`, { method: 'POST', body: JSON.stringify({ name: 'Реструкт Элизиум Б' }) });
@@ -7015,9 +7019,9 @@ describe('city-creation-restructure: город → персонаж/локац�
 
     const afterFirst = await apiJson(`/api/locations${qs()}`);
     const aAfterFirst = afterFirst.body.find(l => l.title === 'Реструкт Элизиум А');
-    assert.equal(aAfterFirst.zone, '🏛️ Элизиум', 'у выбранной локации должна проставиться «Зона»');
+    assert.equal(aAfterFirst.locStatus, '[Город] Элизиум', 'у выбранной локации должен проставиться «Статус»');
 
-    // Смена значимого места на другую локацию — прежняя должна лишиться «Зоны».
+    // Смена значимого места на другую локацию — прежняя должна лишиться «Статуса».
     const put2 = await apiJson(`/api/cities/${citySlug}`, { method: 'PUT', body: JSON.stringify({
       fields: { display: 'Restructure Hierarchy Testcity', year: '2010', locations: 'Элизиум: Реструкт Элизиум Б' },
     }) });
@@ -7026,8 +7030,8 @@ describe('city-creation-restructure: город → персонаж/локац�
     const afterSecond = await apiJson(`/api/locations${qs()}`);
     const aAfterSecond = afterSecond.body.find(l => l.title === 'Реструкт Элизиум А');
     const bAfterSecond = afterSecond.body.find(l => l.title === 'Реструкт Элизиум Б');
-    assert.ok(!aAfterSecond.zone, 'у прежней локации «Зона» должна очиститься');
-    assert.equal(bAfterSecond.zone, '🏛️ Элизиум', 'у новой локации должна проставиться «Зона»');
+    assert.ok(!aAfterSecond.locStatus, 'у прежней локации «Статус» должен очиститься');
+    assert.equal(bAfterSecond.locStatus, '[Город] Элизиум', 'у новой локации должен проставиться «Статус»');
   });
 });
 
