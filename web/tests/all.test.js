@@ -7006,7 +7006,10 @@ describe('city-creation-restructure: город → персонаж/локац�
     // 2026-08-06, план «карточка локации» §7.1/§3.1: раньше «Элизиум» синкался в
     // «Зону» карточки локации (метаданные) — теперь все 5 типов «Значимых мест»
     // пишут в «Статус» вкладки VtM (строка markdown-таблицы), «Зону» решили не
-    // трогать вовсе. Тест обновлён под новую цель синка, сценарий не менялся.
+    // трогать вовсе. Позже (техспека «Статус заменяет Зону», тот же день) формат
+    // самого значения тоже сменился: было «[Город] Элизиум» (маркер+заметка),
+    // стало чистое «Элизиум» — заметка теперь живёт только в city.md. Тест
+    // обновлён под новый формат, сценарий не менялся.
     const locA = await apiJson(`/api/locations${qs()}`, { method: 'POST', body: JSON.stringify({ name: 'Реструкт Элизиум А' }) });
     assert.equal(locA.status, 200, locA.body.error);
     const locB = await apiJson(`/api/locations${qs()}`, { method: 'POST', body: JSON.stringify({ name: 'Реструкт Элизиум Б' }) });
@@ -7019,7 +7022,7 @@ describe('city-creation-restructure: город → персонаж/локац�
 
     const afterFirst = await apiJson(`/api/locations${qs()}`);
     const aAfterFirst = afterFirst.body.find(l => l.title === 'Реструкт Элизиум А');
-    assert.equal(aAfterFirst.locStatus, '[Город] Элизиум', 'у выбранной локации должен проставиться «Статус»');
+    assert.equal(aAfterFirst.locStatus, 'Элизиум', 'у выбранной локации должен проставиться «Статус»');
 
     // Смена значимого места на другую локацию — прежняя должна лишиться «Статуса».
     const put2 = await apiJson(`/api/cities/${citySlug}`, { method: 'PUT', body: JSON.stringify({
@@ -7031,7 +7034,7 @@ describe('city-creation-restructure: город → персонаж/локац�
     const aAfterSecond = afterSecond.body.find(l => l.title === 'Реструкт Элизиум А');
     const bAfterSecond = afterSecond.body.find(l => l.title === 'Реструкт Элизиум Б');
     assert.ok(!aAfterSecond.locStatus, 'у прежней локации «Статус» должен очиститься');
-    assert.equal(bAfterSecond.locStatus, '[Город] Элизиум', 'у новой локации должен проставиться «Статус»');
+    assert.equal(bAfterSecond.locStatus, 'Элизиум', 'у новой локации должен проставиться «Статус»');
   });
 });
 

@@ -475,6 +475,12 @@ async function countMdFiles(dir) {
   let n = 0;
   try {
     for (const item of await fs.readdir(dir, { withFileTypes: true })) {
+      // `_`-папки — soft-delete корзина (`_deleted/`, по тому же соглашению, что и обход
+      // getAllLocations/getAllCharacters ниже) — без этого исключения счётчик локаций на
+      // Панели/карточке города считал мягко удалённые карточки как живые (найдено
+      // 2026-08-06: «27 локаций» на Панели против реальных 25 на странице «Локации»,
+      // разница — ровно 2 файла в locations/_deleted/).
+      if (item.name.startsWith('.') || item.name.startsWith('_')) continue;
       if (item.isDirectory()) n += await countMdFiles(path.join(dir, item.name));
       else if (item.name.endsWith('.md') && item.name !== 'characters_index.md' && item.name !== DISTRICT_FILENAME) n++;
     }

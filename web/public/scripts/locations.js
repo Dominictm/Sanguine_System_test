@@ -5,13 +5,18 @@
 // Locations
 // ═══════════════════════════════════════════════════════════════
 
-const ZONE_CLASS_LABELS = {
-  elysium:    '🏛️ Элизиум',
-  nosferatu:  '🟣 Носферату',
-  neutral:    '🟡 Нейтральная',
-  danger:     '🔴 Опасная',
-  other:      '📍 Локация',
+// «Статус» (2026-08-06, техспека «Статус заменяет Зону») — заменяет прежнюю
+// «Зону контроля» в шапке детальной модалки. Значение теперь чистый тип из
+// CITY_LOCATION_TYPES (city.js) — без маркера/заметки, прямое сравнение по
+// словарю, а не подстрочный матчинг (тем и отличается от прежнего zoneClass()).
+const STATUS_BADGE_CLASS = {
+  'Элизиум':        'elysium',
+  'Приёмная князя': 'prince',
+  'Убежище':        'haven',
+  'Шериф':          'sheriff',
+  'Сенешаль':       'seneschal',
 };
+function _statusClass(status) { return STATUS_BADGE_CLASS[status] || 'other'; }
 
 // 🎭-иконка вместо цветного кружка — на карточке (см. _locCardHtml) она стоит
 // рядом с бейджем зоны/опасности, у которого свой кружок; без иконки-оси два
@@ -27,16 +32,6 @@ const DANGER_BADGE_LABELS = {
   medium:  '⚔️ Средний',
   high:    '⚔️ Высокий',
 };
-
-function zoneClass(zone) {
-  if (!zone) return 'other';
-  const z = zone.toLowerCase();
-  if (z.includes('элизиум'))                return 'elysium';
-  if (z.includes('носферату'))              return 'nosferatu';
-  if (z.includes('нейтральн'))              return 'neutral';
-  if (z.includes('опасн') || (z.includes('шабаш') && !z.includes('нейтральн'))) return 'danger';
-  return 'other';
-}
 
 // Уровень опасности — собственное поле «Опасность» (техспека §13.1), отдельное от
 // «Зоны» (та — про «чья зона контроля», это — про то, насколько там опасно; раньше
@@ -82,7 +77,7 @@ function populateDistrictFilter() {
 function renderLocations() {
   const { zone, masq, district, search } = STATE.locFilter;
   let list = STATE.locations;
-  if (zone     !== 'all') list = list.filter(l => zoneClass(l.zone) === zone);
+  if (zone     !== 'all') list = list.filter(l => l.locStatus === zone);
   if (masq     !== 'all') list = list.filter(l => l.masqueradeLevel === masq);
   if (district !== 'all') list = list.filter(l => l.district === district);
   if (search) {
@@ -113,7 +108,6 @@ function renderLocations() {
 // локаций И для «Связанных локаций» на странице модуля (см. _renderModuleLocPanel),
 // чтобы вторая не превращалась в отдельный обеднённый список-строку.
 function _locCardHtml(loc, { delay = '', overlayExtra = '' } = {}) {
-  const zc    = zoneClass(loc.zone);
   const dLvl  = zoneDangerLevel(loc.dangerLevel);
   const mLvl  = loc.masqueradeLevel || 'unknown';
   // Компактные бейджи (2026-08-06, план «карточка локации» §1-2): только иконка + цвет
@@ -149,7 +143,7 @@ function _locCardHtml(loc, { delay = '', overlayExtra = '' } = {}) {
     </div>`;
   }
   return `<div class="loc-card" data-slug="${escHtml(loc.slug)}" ${delay}>
-    <span class="loc-zone-icon">${ZONE_CLASS_LABELS[zc][0]}</span>
+    <span class="loc-zone-icon">📍</span>
     ${textBlock}
     ${delBtn}
     ${overlayExtra}
@@ -345,7 +339,6 @@ function openLocDetail(slug, keepTab) {
   if (!loc) return;
   _currentLocSlug = slug;
 
-  const zc   = zoneClass(loc.zone);
   const mLvl = loc.masqueradeLevel || 'unknown';
   const dLvl = zoneDangerLevel(loc.dangerLevel);
 
@@ -357,7 +350,7 @@ function openLocDetail(slug, keepTab) {
         <button class="locdet-carousel-btn next" id="locdet-carousel-next" title="Следующее">&#8250;</button>
         <div class="locdet-carousel-dots" id="locdet-carousel-dots"></div>
        </div>`
-    : `<div class="locdet-no-img">${ZONE_CLASS_LABELS[zc][0]}</div>`;
+    : `<div class="locdet-no-img">📍</div>`;
 
   // ── Panels content ────────────────────────────────────────────
 
@@ -428,7 +421,10 @@ function openLocDetail(slug, keepTab) {
   const vtmEditHtml = `<div class="locdet-edit-fields">
       <div class="locdet-field-row">
         <label class="locdet-field-lbl">Статус</label>
-        <input class="form-control locdet-field-inp" id="locdet-vtm-status" value="${escAttr(loc.locStatus || '')}" placeholder="Статус">
+        <select class="form-control locdet-field-inp" id="locdet-vtm-status">
+          <option value=""${!loc.locStatus ? ' selected' : ''}>—</option>
+          ${CITY_LOCATION_TYPES.map(t => `<option value="${escAttr(t)}"${t === loc.locStatus ? ' selected' : ''}>${escHtml(t)}</option>`).join('')}
+        </select>
       </div>
       <div class="locdet-field-row">
         <label class="locdet-field-lbl" id="locdet-vtm-faction-lbl">${factionLbl}</label>
@@ -548,8 +544,8 @@ function openLocDetail(slug, keepTab) {
         <button class="cdet-edit-btn locdet-delete-btn" id="locdet-delete-btn" data-slug="${escHtml(slug)}" style="margin-bottom:6px">🗑 Удалить</button>
         <div class="locdet-legend-row">
           <div class="locdet-legend-item">
-            <span class="locdet-legend-lbl">Зона контроля</span>
-            <span class="badge badge-loc-${zc}">${ZONE_CLASS_LABELS[zc]}</span>
+            <span class="locdet-legend-lbl">Статус</span>
+            <span class="badge badge-status-${_statusClass(loc.locStatus)}">${loc.locStatus ? escHtml(loc.locStatus.toUpperCase()) : '—'}</span>
           </div>
           ${dLvl !== 'unknown' ? `<div class="locdet-legend-item">
             <span class="locdet-legend-lbl">Уровень опасности</span>
@@ -1068,7 +1064,6 @@ function openLocEditModal(slug, prefilledDistrict) {
     const el = document.getElementById(`loc-edit-${id}`);
     if (el) el.value = '';
   });
-  document.getElementById('loc-edit-zone').value = '';
   document.getElementById('loc-edit-danger').value = '';
 
   const districtEl = document.getElementById('loc-edit-district');
@@ -1090,12 +1085,6 @@ function openLocEditModal(slug, prefilledDistrict) {
       document.getElementById('loc-edit-hooks').value       = (loc.hooks || []).join('\n');
       document.getElementById('loc-edit-image-prompt').value = loc.imagePrompt || '';
       document.getElementById('loc-edit-vtm-context').value = loc.vtmText || '';
-      // Zone: try to match emoji
-      const zv = loc.zone || '';
-      const zoneEl = document.getElementById('loc-edit-zone');
-      for (const opt of zoneEl.options) {
-        if (opt.value && zv.includes(opt.value)) { zoneEl.value = opt.value; break; }
-      }
       // Опасность — отдельное поле (техспека §13.1), значение — тот же цветной кружок,
       // что раньше жил внутри «Зоны».
       const dv = loc.dangerLevel || '';
@@ -1234,7 +1223,6 @@ async function saveLocEdit() {
         neighborhood:document.getElementById('loc-edit-neighborhood').value.trim(),
         address:     document.getElementById('loc-edit-address').value.trim(),
         control:     document.getElementById('loc-edit-control').value.trim(),
-        zone:        document.getElementById('loc-edit-zone').value,
         dangerLevel: document.getElementById('loc-edit-danger').value,
         // sensoryPalette здесь НЕ отправляется (§C2) — раздел убран из формы,
         // сенсорика правится только в детальной модалке (_locSavePanel('sens-N')).
@@ -1269,7 +1257,6 @@ async function saveLocEdit() {
         atmosphere:   document.getElementById('loc-edit-atmosphere').value.trim(),
         hooks:        document.getElementById('loc-edit-hooks').value.trim(),
         imagePrompt:  document.getElementById('loc-edit-image-prompt').value.trim(),
-        zone:         document.getElementById('loc-edit-zone').value,
         dangerLevel:  document.getElementById('loc-edit-danger').value,
         // sensoryPalette здесь тоже не заполняется (§C2) — сенсорика на этапе создания
         // недоступна намеренно, тем же принципом, что уже работает для «Ключевых

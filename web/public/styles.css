@@ -5847,6 +5847,40 @@ a:focus-visible {
   background: transparent;
 }
 
+/* «Статус» локации (2026-08-06, техспека «Статус заменяет Зону») — заменяет
+   бейдж «Зона контроля» в шапке детальной модалки. 5 типов из «Отмеченных
+   локаций» города, .badge-loc-* выше оставлены неиспользуемыми (безвредны). */
+.badge-status-elysium {
+  color: var(--gold2);
+  border-color: rgba(218, 165, 32, .35);
+  background: rgba(184, 134, 11, .08);
+}
+.badge-status-prince {
+  color: var(--c-info);
+  border-color: rgba(138, 180, 248, .35);
+  background: rgba(138, 180, 248, .08);
+}
+.badge-status-haven {
+  color: var(--c-violet);
+  border-color: rgba(167, 139, 202, .35);
+  background: rgba(80, 40, 100, .08);
+}
+.badge-status-sheriff {
+  color: var(--c-danger-text);
+  border-color: rgba(204, 34, 0, .35);
+  background: rgba(139, 0, 0, .08);
+}
+.badge-status-seneschal {
+  color: var(--c-success);
+  border-color: rgba(125, 206, 130, .35);
+  background: rgba(125, 206, 130, .06);
+}
+.badge-status-other {
+  color: var(--text3);
+  border-color: var(--border);
+  background: transparent;
+}
+
 /* Masquerade level badges */
 .badge-masq-low {
   color: var(--c-success);

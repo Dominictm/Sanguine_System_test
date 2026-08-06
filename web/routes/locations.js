@@ -13,9 +13,11 @@ const {
   getAllLocations, findLocMdPath,
 } = require('../lib/db');
 const { updateMdLinks, findMdLinks } = require('../lib/md_links');
-const { slugify, writePrompt, parseLocation, sanitizeInlineText, parseDistrictMd, DISTRICT_FILENAME } = require('../lib/parsers');
+const { slugify, writePrompt, parseLocation, sanitizeInlineText, parseDistrictMd, DISTRICT_FILENAME, parseCityMd } = require('../lib/parsers');
 const { buildCityConstraints } = require('../lib/context_builder');
 const { unlinkLocationFromAllModules } = require('./modules/shared');
+const { upsertCitySectionFromForm } = require('../lib/city_md_writer');
+const { splitLocationSection, serializeLocationSection, findRecordIndexForLocation } = require('../lib/significant_places');
 
 // ── Location card template (standalone) ──────────────────────────────────────
 function _locCardTemplate(name, district) {
@@ -55,6 +57,40 @@ function _locCardTemplate(name, district) {
 [промт]
 \`\`\`
 `;
+}
+
+// Обратная запись «Статус» локации → «Отмеченные локации» города (2026-08-06,
+// техспека «Статус заменяет Зону» §4). Симметрична syncSignificantPlaceStatus
+// (routes/cities.js, город → локация), но точечно правит ОДНУ запись, не весь
+// диф. newStatus === '' — попытка снять статус: блокируется, если у записи
+// есть заметка (решение пользователя — заметку из локации не трогаем и не
+// удаляем молча).
+async function syncLocationStatusToCity(city, locTitle, newStatus) {
+  const cityMdPath = path.join(cityDir(city), 'city.md');
+  const raw = await fs.readFile(cityMdPath, 'utf-8').catch(() => null);
+  if (raw === null) return { blocked: false }; // города нет/не читается — не блокируем локацию из-за этого
+
+  const sections = parseCityMd(raw).sections || {};
+  const { narrative, records } = splitLocationSection(sections.locations || '');
+  const idx = findRecordIndexForLocation(records, locTitle);
+
+  if (!newStatus) {
+    if (idx !== -1 && records[idx].note) {
+      return { blocked: true, note: records[idx].note };
+    }
+    if (idx === -1) return { blocked: false }; // нечего снимать — не трогаем city.md вовсе
+    records.splice(idx, 1);
+  } else if (idx !== -1) {
+    if (records[idx].type === newStatus) return { blocked: false }; // уже актуально, не трогаем файл
+    records[idx] = { ...records[idx], type: newStatus };
+  } else {
+    records.push({ type: newStatus, name: locTitle, note: '' });
+  }
+
+  const newSectionText = serializeLocationSection(narrative, records);
+  const { text: newCityMd } = upsertCitySectionFromForm(raw, 'Ключевые локации', newSectionText);
+  await writeFileAtomic(cityMdPath, newCityMd, 'utf-8');
+  return { blocked: false };
 }
 
 // Фабрика: server.js передаёт AI-хелперы при монтировании.
@@ -250,6 +286,22 @@ module.exports = function locationsRouter({ makeGenerationClient, genTextWithRet
               return `${hdr}${lines.join('\n')}${tail}`;
             }
           );
+          // Обратная запись «Статус» → «Отмеченные локации» города (2026-08-06,
+          // техспека «Статус заменяет Зону» §4). Проверяем ДО итогового
+          // writeFileAtomic ниже (не после) — тот же принцип, что уже есть у
+          // проверки обязательных каналов sensoryPalette выше в этом же роуте:
+          // при блокировке отклоняется весь PUT атомарно, ничего из этого
+          // запроса не пишется (включая остальные поля vtmTable) — так проще
+          // и предсказуемее частичного сохранения.
+          if ('locStatus' in tableFields) {
+            const locTitle = parseLocation(card, slug).title || slug;
+            const syncResult = await syncLocationStatusToCity(city, locTitle, tableFields.locStatus);
+            if (syncResult.blocked) {
+              return res.status(409).json({
+                error: `У локации «${locTitle}» в «Отмеченных локациях» города есть заметка «${syncResult.note}» — сними статус через вкладку «География» города, чтобы не потерять её`,
+              });
+            }
+          }
           continue;
         }
         if (key === 'privateDomain') {

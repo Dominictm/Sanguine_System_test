@@ -694,12 +694,12 @@
       <div class="filter-bar">
         <input class="filter-input" id="loc-search" placeholder="Поиск по названию...">
         <select class="filter-select" id="loc-filter-zone">
-          <option value="all">Все зоны</option>
-          <option value="elysium">🏛️ Элизиум</option>
-          <option value="nosferatu">🟣 Носферату</option>
-          <option value="neutral">🟡 Нейтральная</option>
-          <option value="danger">🔴 Опасная</option>
-          <option value="other">📍 Прочие</option>
+          <option value="all">Все статусы</option>
+          <option value="Элизиум">🏛️ Элизиум</option>
+          <option value="Приёмная князя">👑 Приёмная князя</option>
+          <option value="Убежище">🛌 Убежище</option>
+          <option value="Шериф">⚔️ Шериф</option>
+          <option value="Сенешаль">📜 Сенешаль</option>
         </select>
         <select class="filter-select" id="loc-filter-district">
           <option value="all">Все округа</option>
@@ -1273,17 +1273,7 @@
 
       <div class="loc-edit-row2">
         <div class="chr-form-group">
-          <label class="chr-form-label" for="loc-edit-zone">Зона<span class="field-tip" tabindex="0" data-tip="Категория территории — кто здесь хозяин по факту, независимо от уровня опасности. Влияет на то, какие сцены и персонажи здесь уместны.">ⓘ</span></label>
-          <select class="chr-form-input" id="loc-edit-zone">
-            <option value="">—</option>
-            <option value="🏛️ Элизиум">🏛️ Элизиум</option>
-            <option value="🟣 Носферату">🟣 Носферату</option>
-            <option value="🟡 Нейтральная">🟡 Нейтральная</option>
-            <option value="🔴 Опасная">🔴 Опасная</option>
-          </select>
-        </div>
-        <div class="chr-form-group">
-          <label class="chr-form-label" for="loc-edit-danger">Опасность<span class="field-tip" tabindex="0" data-tip="Насколько рискованно здесь находиться — независимо от того, чья это зона контроля.">ⓘ</span></label>
+          <label class="chr-form-label" for="loc-edit-danger">Опасность<span class="field-tip" tabindex="0" data-tip="Насколько рискованно здесь находиться — самостоятельная характеристика места, не связанная со «Статусом».">ⓘ</span></label>
           <select class="chr-form-input" id="loc-edit-danger">
             <option value="">—</option>
             <option value="🟢">🟢 Низкая</option>

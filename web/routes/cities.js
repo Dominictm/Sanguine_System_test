@@ -20,6 +20,7 @@ const {
 const {
   setCityTitle, setCityDescription, upsertCitySectionFromForm, upsertCitySection, replaceCitySectionBullets,
 } = require('../lib/city_md_writer');
+const { SIGNIFICANT_PLACE_TYPES, parseLocationLine } = require('../lib/significant_places');
 
 const router = express.Router();
 
@@ -235,30 +236,15 @@ async function syncPoliticalStateTable(slug, records, previousRoles = []) {
 // та же эвристика, что parsePoliticalRecords выше (зеркалит _isStructuredCityLine из
 // city.js), применённая к «Значимым местам» (docs/design/2026-08-02-city-creation-
 // restructure-techspec.md §5). Нужна на сервере для diff'а «кто выбыл из списка» перед
-// синком zone/control карточек локаций (§5.1-5.2) — без похода в клиентский код.
+// синком «Статуса» карточек локаций (§5.1-5.2) — без похода в клиентский код.
+// Обёртка над parseLocationLine из общего модуля (2026-08-06, техспека «Статус
+// заменяет Зону» §1.1) — сохраняет прежний контракт: фильтрует нарратив выбросом
+// (для этого диффа он не нужен, в отличие от splitLocationSection, которым
+// пользуется обратная запись в routes/locations.js).
 function parseLocationRecords(lines) {
   return (Array.isArray(lines) ? lines : String(lines || '').split('\n'))
     .map(l => String(l).replace(/^\s*-\s?/, '').trim()).filter(Boolean)
-    .map(line => {
-      const ci = line.indexOf(':');
-      let type = '', rest = line, note = '';
-      if (ci > 0 && ci <= 40) {
-        const label = line.slice(0, ci).trim();
-        let value = line.slice(ci + 1).trim();
-        // Заметка — третье поле (техспека §8.1), отделено « — »; отрезается ДО проверки
-        // valueOk ниже, иначе пунктуация в свободном тексте заметки ложно бракует строку
-        // как неструктурированную.
-        const dashIdx = value.search(/\s+—\s+/);
-        if (dashIdx !== -1) {
-          note = value.slice(dashIdx).replace(/^\s+—\s+/, '').trim();
-          value = value.slice(0, dashIdx).trim();
-        }
-        const labelOk = label && label.length <= 24 && label.split(/\s+/).length <= 2 && !label.includes(',');
-        const valueOk = value.length > 0 && value.length <= 48 && !/[.!?,;]/.test(value);
-        if (labelOk && valueOk) { type = label; rest = value; } else { note = ''; }
-      }
-      return { type, name: rest, note };
-    }).filter(r => r.type);
+    .map(parseLocationLine).filter(Boolean);
 }
 
 // Первое имя/имя2 → роль (для diff'а). Персонаж, занятый в двух ролях одновременно
@@ -318,34 +304,13 @@ async function syncPoliticalCharacterHierarchy(city, cityDisplay, records, prevR
   return warnings;
 }
 
-// Маркер-префикс в поле «Статус» (вкладка VtM) локации — отличает значения, которые
-// записала форма города (см. ниже), от текста, вписанного пользователем вручную
-// (техспека §5.3): сброс при снятии статуса срабатывает только по точному совпадению
-// с этим значением.
-const CITY_CONTROL_MARKER = '[Город]';
-// «Тип» из «Значимых мест» → куда его писать на карточке САМОЙ локации. 2026-08-06,
-// план «карточка локации» §7.1/§3.1: раньше «Элизиум» писал в «Зона» (метаданные,
-// значение как у ZONE_CLASS_LABELS.elysium), остальные 4 типа — в «Контроль», с
-// маркером-префиксом. Оба поля больше не трогаем («Зону» решили не менять вовсе) —
-// все 5 типов теперь пишут в ОДНО поле «Статус» вкладки VtM (writeLocationVtmTableField,
-// строка markdown-таблицы, не метаданные-бюллет) — единообразно, без частных случаев.
-const SIGNIFICANT_PLACE_TYPES = {
-  'Элизиум':        { field: 'locStatus', value: `${CITY_CONTROL_MARKER} Элизиум` },
-  'Приёмная князя':  { field: 'locStatus', value: `${CITY_CONTROL_MARKER} Приёмная князя` },
-  'Убежище':         { field: 'locStatus', value: `${CITY_CONTROL_MARKER} Убежище` },
-  'Шериф':           { field: 'locStatus', value: `${CITY_CONTROL_MARKER} Шериф` },
-  'Сенешаль':        { field: 'locStatus', value: `${CITY_CONTROL_MARKER} Сенешаль` },
-};
-
-// Заметка (техспека §8.2) допишется к маркированному тексту — единый получатель
-// («Статус»), значит и заметка теперь доступна всем 5 типам одинаково (раньше
-// «Зона»/Элизиум была исключением из-за короткого формата бейджа — этого поля
-// больше не касаемся, ограничение снято). Формат: «[Город] Статус — Заметка».
-function _significantPlaceValue(conf, note) {
-  const clean = note ? String(note).trim().replace(/—/g, '–') : '';
-  if (!clean) return conf.value;
-  return `${conf.value} — ${clean}`;
-}
+// «Тип» из «Значимых мест» → куда его писать на карточке САМОЙ локации.
+// SIGNIFICANT_PLACE_TYPES — теперь общий модуль (web/lib/significant_places.js,
+// см. импорт вверху файла), 2026-08-06 техспека «Статус заменяет Зону» §2:
+// значение поля — чистый тип («Элизиум»), без маркера «[Город]» и без заметки.
+// Заметка (третье поле строки city.md) больше НЕ попадает в поле локации вообще —
+// она видна и редактируется только в «Отмеченных локациях» самого города (п.2
+// исходной задачи — «в модалке локации только значение статуса»).
 
 // Симметрично syncPoliticalCharacterHierarchy, но для «Значимых мест» → «Статус»
 // (вкладка VtM) карточки локации (техспека §5.1-5.2, редирект-правка §7.1/§3.1). Diff
@@ -362,7 +327,21 @@ async function syncSignificantPlaceStatus(city, records, prevRecords) {
   let locs = [];
   try { locs = await getAllLocations(city); }
   catch (e) { warnings.push(`Не удалось прочитать локации города для синка «Значимых мест»: ${e.message}`); return warnings; }
-  const locByName = new Map(locs.map(l => [l.title, l]));
+  // Ключуем не только полным заголовком карточки (loc.title), но и его частью ДО
+  // первого «Имя — Заметка»-тире: у части карточек (напр. Парижа — «Опера Гарнье —
+  // Главный Элизиум, 9-й округ») заметка исторически вписана прямо в заголовок, а
+  // строка city.md после parseLocationRecords (выше в файле — режет по первому « — »
+  // на name/note) даёт КОРОТКОЕ имя без этого хвоста. Без второго ключа locByName.get(name)
+  // на короткое имя никогда не находил такую карточку — синк молча пропускал её на
+  // каждом сохранении (loc === undefined → continue), без единого warning
+  // (тот же класс бага, что был исправлен на клиенте в _locNameKnown, 2026-08-06).
+  const locByName = new Map();
+  for (const l of locs) {
+    if (!l.title) continue;
+    if (!locByName.has(l.title)) locByName.set(l.title, l);
+    const shortTitle = l.title.split(/\s+—\s+/)[0].trim();
+    if (shortTitle && !locByName.has(shortTitle)) locByName.set(shortTitle, l);
+  }
 
   for (const [name, rec] of prevByName) {
     if (currByName.has(name)) continue;
@@ -370,10 +349,10 @@ async function syncSignificantPlaceStatus(city, records, prevRecords) {
     const conf = SIGNIFICANT_PLACE_TYPES[rec.type];
     if (!loc || !conf) continue;
     const current = loc[conf.field] || '';
-    // §5.3 — маркер-префикс: заметка дописана ПОСЛЕ conf.value, поэтому «наш» текст
-    // проверяем по startsWith, не точным совпадением (иначе строка с заметкой никогда
-    // не считалась бы «нашей» и не сбрасывалась бы при снятии статуса).
-    if (!current.trim().startsWith(conf.value)) continue;
+    // Значение теперь чистый тип (без маркера/заметки, §2 техспеки) — сброс только
+    // по точному совпадению, не startsWith (та проверка была нужна ТОЛЬКО пока
+    // заметка дописывалась в то же поле).
+    if (current.trim() !== conf.value) continue;
     try { await writeLocationVtmTableField(city, loc.slug, conf.field, ''); }
     catch (e) { warnings.push(`Не удалось сбросить «Статус» у локации «${name}»: ${e.message}`); }
   }
@@ -382,7 +361,7 @@ async function syncSignificantPlaceStatus(city, records, prevRecords) {
     const conf = SIGNIFICANT_PLACE_TYPES[rec.type];
     if (!loc || !conf) continue;
     const current = loc[conf.field] || '';
-    const value = _significantPlaceValue(conf, rec.note);
+    const value = conf.value; // чистый тип — заметка (rec.note) в поле локации не пишется
     if (current.trim() === value) continue; // уже актуально
     try { await writeLocationVtmTableField(city, loc.slug, conf.field, value); }
     catch (e) { warnings.push(`Не удалось записать «Статус» локации «${name}»: ${e.message}`); }

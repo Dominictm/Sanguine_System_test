@@ -214,6 +214,21 @@ function _primogenRowHtml(clan = '', name = '', name2 = '', availableNames = _ci
     <datalist id="${dlId}">${dlOpts}</datalist>
   </div>`;
 }
+// Совпадение имени строки «Отмеченные локации» с уже существующей карточкой — не
+// только точным совпадением заголовка карточки (loc.title, из чего строится
+// _cityEditLocs), но и его частью ДО первого «Имя — Заметка»-тире: у части карточек
+// (напр. Парижа — «Опера Гарнье — Главный Элизиум, 9-й округ») заметка исторически
+// вписана прямо в заголовок, а структурная строка city.md после разбора
+// (_parseLocationLines, дальше в файле — режет по первому « — » на name/note) даёт
+// КОРОТКОЕ имя без этого хвоста. Прямое сравнение короткого имени с полным
+// заголовком тогда всегда ложно — уже существующая локация ошибочно считается
+// новой при каждом открытии страницы (найдено 2026-08-06 живой проверкой на
+// реальных данных Парижа).
+function _locNameKnown(name, locationNames = _cityEditLocs) {
+  if (!name) return false;
+  if (locationNames.includes(name)) return true;
+  return locationNames.some(title => title.split(/\s+—\s+/)[0].trim() === name);
+}
 // Строка «Ключевых локаций» ссылается на НАСТОЯЩУЮ карточку локации (по имени
 // из locationNames — уже существующих в городе). Если имя не совпало ни с одной
 // существующей — считаем запись новой локацией: показываем район+заметку и при
@@ -233,7 +248,7 @@ function _locRowHtml(type = '', name = '', note = '', locationNames = _cityEditL
     ...CITY_LOCATION_TYPES.map(o => `<option value="${escAttr(o)}"${o === selVal ? ' selected' : ''}>${escHtml(o)}</option>`),
     `<option value="other"${selVal === 'other' ? ' selected' : ''}>Другое…</option>`,
   ].join('');
-  const isNew = !!(name && !locationNames.includes(name));
+  const isNew = !!(name && !_locNameKnown(name, locationNames));
   return `<div class="cdet-loc-row-wrap">
     <div class="cdet-rel-row cdet-loc-row">
       <select class="form-control cdet-pol-role-sel cdet-loc-type-sel">${opts}</select>
@@ -711,7 +726,7 @@ function _collectLocationRows(root = document) {
     const type   = sel?.value === 'other' ? (custom?.value.trim() || '') : (sel?.value || '');
     const name   = row.querySelector('.cdet-loc-name-inp')?.value.trim() || '';
     const note   = row.querySelector('.cdet-loc-status-note-inp')?.value.trim() || '';
-    if (name && !_cityEditLocs.includes(name)) {
+    if (name && !_locNameKnown(name)) {
       newLocationRequests.push({
         name,
         district: wrap.querySelector('.cdet-loc-new-district')?.value.trim() || '',
@@ -1556,7 +1571,7 @@ document.addEventListener('input', e => {
   if (!nameInp) return;
   const wrap = nameInp.closest('.cdet-loc-row-wrap');
   const fields = wrap?.querySelector('.cdet-loc-new-fields');
-  if (fields) fields.hidden = !nameInp.value.trim() || _cityEditLocs.includes(nameInp.value.trim());
+  if (fields) fields.hidden = !nameInp.value.trim() || _locNameKnown(nameInp.value.trim());
 });
 
 // Переключение вкладки просмотра города в/из режима правки (Часть I,
