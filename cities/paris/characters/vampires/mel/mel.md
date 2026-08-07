@@ -43,7 +43,7 @@
 - **🚫 Негативный промт (Аня):**
   photorealistic photography, digital art, anime, cartoon, illustration, watermark, text overlay, blurry, low quality, artifacts, deformed anatomy, extra limbs, oversaturated colors, bright white background, 3D render, CGI.
 - **Поколение:** 9
-- **Иерархия в городе:** Без официальной должности — анцилла Камарильи
+- **Титул в городе:** Без официальной должности — анцилла Камарильи
 - **Принадлежность:** Персонаж мастера
 
 ---

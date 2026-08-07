@@ -350,7 +350,7 @@ const DISTRICT_TYPES = [
 ];
 let _districtCardSeq = 0;
 
-// Опции дропдауна «Влияние — Секта» — зеркалят ТЕКУЩИЙ выбор в разделе «Фракции»
+// Опции дропдауна «Влияние — Фракции» — зеркалят ТЕКУЩИЙ выбор в разделе «Фракции»
 // (чипы + «Другие фракции»), не отдельный статичный список: район не может держать
 // влияние фракции, которой в городе не заявлено. current сохраняется отдельной опцией,
 // если её убрали из «Фракции» уже ПОСЛЕ того, как её выбрали здесь — не роняем тихо
@@ -425,7 +425,7 @@ function _districtCardHtml(d = {}, factionNames = [], opts = {}) {
     </div>
     <div class="form-row">
       <div class="form-group">
-        <label class="form-label">Влияние — Секта<span class="field-tip" tabindex="0" data-tip="Список берётся из раздела «Фракции» выше — сначала выбери фракции там, потом привязывай их к району.">ⓘ</span></label>
+        <label class="form-label">Влияние — Фракции<span class="field-tip" tabindex="0" data-tip="Список берётся из раздела «Фракции» выше — сначала выбери фракции там, потом привязывай их к району.">ⓘ</span></label>
         <select class="form-control city-district-sect">${_districtSectOptionsHtml(factionNames, sect)}</select>
       </div>
       <div class="form-group">
@@ -441,26 +441,39 @@ function _districtCardHtml(d = {}, factionNames = [], opts = {}) {
   </div>`;
 }
 // Текущий выбор в разделе «Фракции» (chips + «Другие фракции») — источник опций
-// дропдауна «Влияние — Секта» карточки района. _cityFactionsCreateHost — тот же
+// дропдауна «Влияние — Фракции» карточки района. _cityFactionsCreateHost — тот же
 // глобал из scripts.js, что уже читает loadCitiesGrid() выше для ленивого инжекта.
 // root — как у _collectFactions: без него подобрал бы первую попавшуюся копию чипов
 // в document (форма создания и модалка редактирования держат каждая свою). Без root
 // (вызовы из формы создания, где живой DOM ещё не тот, что строим) — старое поведение
 // через _cityFactionsCreateHost.
+// «Фракции смертных»/«Государственные фракции» (C1) — общий пул опций дропдауна «Влияние —
+// Фракции» вместе с сектами/кланами/«Другие» (решение пользователя §0.3 техспеки).
 function _currentFactionNames(root) {
-  if (root) return _collectFactions(root).split('\n').map(s => s.trim()).filter(Boolean);
-  return _cityFactionsCreateHost
-    ? _collectFactions(_cityFactionsCreateHost).split('\n').map(s => s.trim()).filter(Boolean)
-    : [];
+  const own = root
+    ? _collectFactions(root).split('\n').map(s => s.trim()).filter(Boolean)
+    : (_cityFactionsCreateHost ? _collectFactions(_cityFactionsCreateHost).split('\n').map(s => s.trim()).filter(Boolean) : []);
+  const scope = root || document;
+  const mortal = (scope.querySelector('[data-city-field="factions-mortal-list"]')?.value || '').split('\n').map(s => s.trim()).filter(Boolean);
+  const state  = (scope.querySelector('[data-city-field="factions-state-list"]')?.value || '').split('\n').map(s => s.trim()).filter(Boolean);
+  return [...own, ...mortal, ...state];
 }
 // Faction names для СБОРКИ HTML района ДО вставки в DOM (initial render формы
 // редактирования) — читать чипы неоткуда, они ещё не существуют как элементы;
-// парсим тот же текст секции, что и _cityFactionsEditorHtml.
+// парсим тот же текст секции, что и _cityFactionsEditorHtml. Включает factionsMortal/
+// factionsState (C1) — без этого первый рендер дропдауна «Влияние — Фракции» отставал бы
+// от city.md до первой правки любого текстового поля «Фракции» (которая идёт уже через
+// DOM-путь _currentFactionNames, не через эту функцию).
 function _factionNamesFromSection(sec) {
-  return String((sec && sec.factions) || '').split('\n')
+  const own = String((sec && sec.factions) || '').split('\n')
     .map(l => l.replace(/^\s*-\s?/, '').trim()).filter(Boolean);
+  const mortal = String((sec && sec.factionsMortal) || '').split('\n')
+    .map(l => l.replace(/^\s*-\s?/, '').trim()).filter(Boolean);
+  const state = String((sec && sec.factionsState) || '').split('\n')
+    .map(l => l.replace(/^\s*-\s?/, '').trim()).filter(Boolean);
+  return [...own, ...mortal, ...state];
 }
-// Перечитывает опции «Влияние — Секта» во ВСЕХ отрисованных карточках района —
+// Перечитывает опции «Влияние — Фракции» во ВСЕХ отрисованных карточках района —
 // и в форме создания, и в форме редактирования (SPA держит обе в DOM одновременно,
 // не размонтирует страницы при навигации) — вызывается при любом изменении состава
 // «Фракции» (клик по чипу / правка «Другие фракции»), чтобы дропдаун не отставал.
@@ -659,15 +672,21 @@ function _cityFactionsEditorHtml(sec) {
   };
   return `
     <div class="form-group">
-      <label class="form-label">Фракции<span class="field-tip" tabindex="0" data-tip="Секты и независимые кланы, реально присутствующие в городе — источник списка для дропдауна «Влияние — Секта» в блоке «Район» ниже. Пример: отметь «Камарилья» и «Анархи», если обе секты представлены.">ⓘ</span></label>
+      <label class="form-label">Фракции<span class="field-tip" tabindex="0" data-tip="Секты и независимые кланы, реально присутствующие в городе — источник списка для дропдауна «Влияние — Фракции» в блоке «Район» ниже. Пример: отметь «Камарилья» и «Анархи», если обе секты представлены.">ⓘ</span></label>
       <div class="cdet-rels-hint">Секты и независимые кланы, присутствующие в городе. Можно выбрать несколько.</div>
       <div class="cdet-faction-group-label">Секты</div>
       <div class="cdet-faction-chips" data-faction-group="sects">${CITY_SECTS.map(chip).join('')}</div>
       <div class="cdet-faction-group-label">Независимые кланы</div>
       <div class="cdet-faction-chips" data-faction-group="clans">${CITY_INDEPENDENT_CLANS.map(chip).join('')}</div>
-      <div class="cdet-faction-group-label">Другие фракции</div>
+      <div class="cdet-faction-group-label">Другие фракции${fieldTip(CITY_FIELD_TIPS['Другие фракции'])}</div>
       <textarea class="form-control" data-city-field="factions-other" rows="2"
         placeholder="По строке на фракцию вне списка (напр. Инконню)…">${escHtml(other.join('\n'))}</textarea>
+      <div class="cdet-faction-group-label" style="margin-top:14px">Фракции смертных${fieldTip(CITY_FIELD_TIPS['Фракции смертных'])}</div>
+      <textarea class="form-control" data-city-field="factions-mortal-list" rows="2"
+        placeholder="По строке на фракцию (напр. Полиция, Городской совет)…">${escHtml(String(sec.factionsMortal || '').split('\n').map(l => l.replace(/^\s*-\s?/, '').trim()).filter(Boolean).join('\n'))}</textarea>
+      <div class="cdet-faction-group-label" style="margin-top:14px">Государственные фракции${fieldTip(CITY_FIELD_TIPS['Государственные фракции'])}</div>
+      <textarea class="form-control" data-city-field="factions-state-list" rows="2"
+        placeholder="По строке на фракцию (напр. DGSI, Интерпол)…">${escHtml(String(sec.factionsState || '').split('\n').map(l => l.replace(/^\s*-\s?/, '').trim()).filter(Boolean).join('\n'))}</textarea>
     </div>`;
 }
 // root ограничивает сбор одной формой — модалка редактирования и форма создания
@@ -677,6 +696,17 @@ function _collectFactions(root = document) {
   const other = (root.querySelector('[data-city-field="factions-other"]')?.value || '')
     .split('\n').map(l => l.trim()).filter(Boolean);
   return [...chips, ...other].join('\n');
+}
+// «Фракции смертных»/«Государственные фракции» (C1, 2026-08-07) — отдельные md-секции
+// (factionsMortal/factionsState), не часть composite-поля factions — иначе при перечитывании
+// со страницы они неотличимы от «Других фракций» (оба свободный текст без чип-маркеров).
+function _collectFactionsMortal(root = document) {
+  return (root.querySelector('[data-city-field="factions-mortal-list"]')?.value || '')
+    .split('\n').map(l => l.trim()).filter(Boolean).join('\n');
+}
+function _collectFactionsState(root = document) {
+  return (root.querySelector('[data-city-field="factions-state-list"]')?.value || '')
+    .split('\n').map(l => l.trim()).filter(Boolean).join('\n');
 }
 
 // root — тот же принцип, что уже установлен _collectFactions(root): форма создания
@@ -1041,6 +1071,8 @@ function _cityViewFactionsHtml(sec) {
   const sects = CITY_SECTS.filter(s => all.includes(s));
   const clans = CITY_INDEPENDENT_CLANS.filter(c => all.includes(c));
   const other = all.filter(l => !known.has(l));
+  const mortal = String(sec.factionsMortal || '').split('\n').map(l => l.replace(/^\s*-\s?/, '').trim()).filter(Boolean);
+  const state  = String(sec.factionsState  || '').split('\n').map(l => l.replace(/^\s*-\s?/, '').trim()).filter(Boolean);
   const chips = names => `<div class="cdet-faction-chips">${names.map(n => `<span class="cdet-faction-chip chip-view">${escHtml(n)}</span>`).join('')}</div>`;
   const group = (heading, names, emptyText) => `
     <div class="form-group">
@@ -1048,11 +1080,15 @@ function _cityViewFactionsHtml(sec) {
       ${names.length ? chips(names) : `<div class="cdet-empty">${escHtml(emptyText)}</div>`}
     </div>`;
   // Пустая группа секты/кланов скрывается целиком (не показывать заголовок над
-  // пустым местом — это не форма, где пустое поле нормально, designspec §3).
+  // пустым местом — это не форма, где пустое поле нормально, designspec §3). «Фракции
+  // смертных»/«Государственные» (C1) — НЕ скрываются при пустоте, как и «Другие фракции»,
+  // с которой они единообразны (свободный ввод, не справочник-мультиселект).
   return `
     ${sects.length ? group('Секты', sects) : ''}
     ${clans.length ? group('Независимые кланы', clans) : ''}
-    ${group('Другие фракции', other, 'Нет')}`;
+    ${group('Другие фракции', other, 'Нет')}
+    ${group('Фракции смертных', mortal, 'Нет')}
+    ${group('Государственные фракции', state, 'Нет')}`;
 }
 
 // «Значимые места» — таблица `| Название | Описание |` вместо буллет-листа
@@ -1311,6 +1347,11 @@ const CITY_FIELD_TIPS = {
   'Специфика ответа': 'Язык общения НПС, имена Князей и других ключевых фигур, местные обычаи и сленг.',
   'Чего избегать': 'Табу и нежелательные клише именно для этого домена.',
   'Источники': 'На какие книги или материалы опираться при сверке канона для этого домена.',
+  // Три текстовых поля вкладки «Фракции» (C2, 2026-08-07) — про формат ввода, не про смысл
+  // поля (тот текст — у родительского заголовка «Фракции», инлайн в _cityFactionsEditorHtml).
+  'Другие фракции':          'По строке на фракцию — каждое название начинается с новой строки.',
+  'Фракции смертных':        'По строке на фракцию — каждое название начинается с новой строки. Полиция, картели, корпорации, культы и т.п.',
+  'Государственные фракции': 'По строке на фракцию — каждое название начинается с новой строки. Спецслужбы, армия, официальные госструктуры.',
   // Секции «живого города» (D1, план 2026-07-15)
   'Районы': 'Формальные районы города — каждый со своей карточкой (тип/влияние/описание). Правится и создаётся своей кнопкой на карточке, не общей кнопкой формы.',
   'Значимые места': 'Знаковые точки города — то, что нельзя перепутать с другим городом. По строке на место.',
@@ -1332,10 +1373,12 @@ document.addEventListener('click', e => {
     _refreshDistrictSectOptions();
   }
 });
-// «Другие фракции» — свободный текст, тоже часть состава «Фракции» (см. _collectFactions),
-// дропдаун «Влияние — Секта» должен подхватывать и его правки, не только чипы.
+// «Другие фракции»/«Фракции смертных»/«Государственные фракции» — свободный текст, тоже
+// часть общего пула «Фракции» (см. _collectFactions/_currentFactionNames, C1 2026-08-07),
+// дропдаун «Влияние — Фракции» должен подхватывать и их правки, не только чипы.
 document.addEventListener('input', e => {
-  if (e.target.closest('[data-city-field="factions-other"]')) _refreshDistrictSectOptions();
+  if (e.target.closest('[data-city-field="factions-other"], [data-city-field="factions-mortal-list"], [data-city-field="factions-state-list"]'))
+    _refreshDistrictSectOptions();
 });
 
 // Строки политики/примогената/локаций (add/del) — ГЛОБАЛЬНАЯ делегация на document,
@@ -1616,7 +1659,11 @@ async function _saveCityTabEdit(tab) {
   } else if (tab === 'political') {
     payload = { fields: { political: _collectPoliticalRows(editRoot) } };
   } else if (tab === 'factions') {
-    payload = { fields: { factions: _collectFactions(editRoot) } };
+    payload = { fields: {
+      factions: _collectFactions(editRoot),
+      factionsMortal: _collectFactionsMortal(editRoot),
+      factionsState: _collectFactionsState(editRoot),
+    } };
   } else if (tab === 'geography') {
     payload = { fields: { locations: _collectLocationRows(editRoot), hunting: q('hunting') } };
   } else {

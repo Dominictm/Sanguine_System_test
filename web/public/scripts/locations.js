@@ -33,6 +33,25 @@ const DANGER_BADGE_LABELS = {
   high:    '⚔️ Высокий',
 };
 
+// B2 (2026-08-07): тултипов для полей локации не было вообще ни одного (grep
+// "field-tip|fieldTip|data-tip" по этому файлу — 0 совпадений). Ключи — по видимому тексту
+// лейбла, тем же принципом, что CHAR_FIELD_TIPS/CITY_FIELD_TIPS (scripts.js/city.js).
+const LOCATION_FIELD_TIPS = {
+  'Название':              'Тип локации в общем смысле — бар, склад, особняк и т.п. (не собственное имя, оно в заголовке карточки).',
+  'Район':                 'Район города, к которому привязана локация — определяет доступные datalist-подсказки и вложенность папок.',
+  'Дополнение к адресу':   'Уточнение к адресу — этаж, вход, ориентир на местности, не входящее в основной адрес.',
+  'Адрес':                 'Физический адрес локации в мире хроники — как его назвал бы персонаж.',
+  'Контроль':              'Кто фактически контролирует локацию — фракция, клан или персонаж, реально определяющий, что там происходит.',
+  'Статус':                'Тип значимого места — синхронизируется с «Отмеченными локациями» города: смени тип здесь или там, отразится в обоих местах. Если у записи в городе есть заметка — снять статус можно только через вкладку «География» города.',
+  'Фракция':               'Фракция, ассоциированная с локацией — не обязательно совпадает с «Контроль». Заменяется на «Хозяин», если включён «Частный домен».',
+  'Хозяин':                'Персонаж, которому принадлежит локация как частный домен — вместо фракции. Список подсказок берётся из персонажей, не из фракций.',
+  'Постоянные фигуры':     'Персонажи, регулярно присутствующие в этой локации — кого там встретить обычное дело.',
+  'Угрозы':                'Опасности, характерные для локации — не «Опасность» (цветной индикатор ниже), а текстовое описание конкретных угроз.',
+  'Маскарад':              'Уровень риска нарушения Маскарада в этой локации — насколько беспечно тут вести себя вампирам.',
+  'Опасность':             'Уровень опасности локации для персонажей — 🟢 низкий / 🟡 средний / 🔴 высокий, самостоятельная характеристика места, не связанная со «Статусом».',
+  'Частный домен':         'Локация принадлежит конкретному персонажу, а не фракции — переключает соседнее поле в «Хозяин» и список подсказок на персонажей вместо фракций.',
+};
+
 // Уровень опасности — собственное поле «Опасность» (техспека §13.1), отдельное от
 // «Зоны» (та — про «чья зона контроля», это — про то, насколько там опасно; раньше
 // оба смысла жили в одном поле «Зона», разведены по разным инлайн-метаданным).
@@ -363,7 +382,7 @@ function openLocDetail(slug, keepTab) {
   ];
   const metaViewHtml = `<div class="locdet-table">${
     metaFields.filter(([, , v]) => v).map(([, k, v]) =>
-      `<div class="locdet-row"><div class="locdet-key">${escHtml(k)}</div><div class="locdet-val">${escHtml(v)}</div></div>`).join('')
+      `<div class="locdet-row"><div class="locdet-key">${escHtml(k)}${fieldTip(LOCATION_FIELD_TIPS[k])}</div><div class="locdet-val">${escHtml(v)}</div></div>`).join('')
   }</div>`;
   // «Район» (district) — не обычное текстовое поле: выбор из уже существующих
   // районов (тот же #loc-district-list datalist, что и в модалке создания/
@@ -371,14 +390,14 @@ function openLocDetail(slug, keepTab) {
   // IV). Сохраняется отдельным путём от остальных полей meta — см. _locSavePanel.
   const metaEditHtml = `<div class="locdet-edit-fields">${metaFields.map(([key, label, val]) => key === 'district'
     ? `<div class="locdet-field-row">
-         <label class="locdet-field-lbl">${escHtml(label)}</label>
+         <label class="locdet-field-lbl">${escHtml(label)}${fieldTip(LOCATION_FIELD_TIPS[label])}</label>
          <div class="locdet-district-row">
            <input class="form-control locdet-field-inp" id="locdet-meta-district" value="${escHtml(val || '')}" placeholder="${escHtml(label)}" list="loc-district-list" autocomplete="off">
            <button type="button" class="chr-modal-btn danger" id="locdet-meta-district-clear" title="Открепить от района">✕</button>
          </div>
        </div>`
     : `<div class="locdet-field-row">
-       <label class="locdet-field-lbl">${escHtml(label)}</label>
+       <label class="locdet-field-lbl">${escHtml(label)}${fieldTip(LOCATION_FIELD_TIPS[label])}</label>
        <input class="form-control locdet-field-inp" id="locdet-meta-${key}" value="${escHtml(val || '')}" placeholder="${escHtml(label)}">
      </div>`).join('')}</div>`;
 
@@ -398,7 +417,7 @@ function openLocDetail(slug, keepTab) {
   const vtmParts = [];
   if (loc.vtmText) vtmParts.push(`<div class="locdet-atm">${escHtml(loc.vtmText)}</div>`);
   vtmSections.forEach(([k, v]) => vtmParts.push(
-    `<div class="vtm-section"><div class="vtm-lbl">${escHtml(k)}</div><div class="vtm-body">${escHtml(v)}</div></div>`
+    `<div class="vtm-section"><div class="vtm-lbl">${escHtml(k)}${fieldTip(LOCATION_FIELD_TIPS[k])}</div><div class="vtm-body">${escHtml(v)}</div></div>`
   ));
   const vtmViewHtml = vtmParts.length
     ? vtmParts.join('<div class="diary-divider"></div>')
@@ -420,37 +439,37 @@ function openLocDetail(slug, keepTab) {
   const factionList = loc.privateDomain ? 'locdet-owner-chars-list' : 'locdet-factions-list';
   const vtmEditHtml = `<div class="locdet-edit-fields">
       <div class="locdet-field-row">
-        <label class="locdet-field-lbl">Статус</label>
+        <label class="locdet-field-lbl">Статус${fieldTip(LOCATION_FIELD_TIPS['Статус'])}</label>
         <select class="form-control locdet-field-inp" id="locdet-vtm-status">
           <option value=""${!loc.locStatus ? ' selected' : ''}>—</option>
           ${CITY_LOCATION_TYPES.map(t => `<option value="${escAttr(t)}"${t === loc.locStatus ? ' selected' : ''}>${escHtml(t)}</option>`).join('')}
         </select>
       </div>
       <div class="locdet-field-row">
-        <label class="locdet-field-lbl" id="locdet-vtm-faction-lbl">${factionLbl}</label>
+        <label class="locdet-field-lbl" id="locdet-vtm-faction-lbl">${factionLbl}${fieldTip(LOCATION_FIELD_TIPS[factionLbl])}</label>
         <div class="locdet-faction-row">
           <input class="form-control locdet-field-inp" id="locdet-vtm-faction" list="${factionList}" value="${escAttr(loc.faction || '')}" placeholder="${factionLbl}" autocomplete="off">
-          <label class="locdet-checkbox-row"><input type="checkbox" id="locdet-vtm-private-domain"${loc.privateDomain ? ' checked' : ''}>Частный домен</label>
+          <label class="locdet-checkbox-row"><input type="checkbox" id="locdet-vtm-private-domain"${loc.privateDomain ? ' checked' : ''}>Частный домен${fieldTip(LOCATION_FIELD_TIPS['Частный домен'])}</label>
         </div>
         <datalist id="locdet-factions-list"></datalist>
         <datalist id="locdet-owner-chars-list"></datalist>
       </div>
       <div class="locdet-field-row">
-        <label class="locdet-field-lbl">Постоянные фигуры</label>
+        <label class="locdet-field-lbl">Постоянные фигуры${fieldTip(LOCATION_FIELD_TIPS['Постоянные фигуры'])}</label>
         <input class="form-control locdet-field-inp" id="locdet-vtm-figures" value="${escAttr(loc.figures || '')}" placeholder="Постоянные фигуры">
       </div>
       <div class="locdet-field-row">
-        <label class="locdet-field-lbl">Угрозы</label>
+        <label class="locdet-field-lbl">Угрозы${fieldTip(LOCATION_FIELD_TIPS['Угрозы'])}</label>
         <input class="form-control locdet-field-inp" id="locdet-vtm-threats" value="${escAttr(loc.threats || '')}" placeholder="Угрозы">
       </div>
       <div class="locdet-field-row">
-        <label class="locdet-field-lbl">Маскарад</label>
+        <label class="locdet-field-lbl">Маскарад${fieldTip(LOCATION_FIELD_TIPS['Маскарад'])}</label>
         <select class="form-control locdet-field-inp" id="locdet-vtm-masquerade">
           ${VTM_MASQ_OPTS.map(([v, label]) => `<option value="${v}"${v === maqSelVal ? ' selected' : ''}>${label}</option>`).join('')}
         </select>
       </div>
       <div class="locdet-field-row">
-        <label class="locdet-field-lbl">Опасность</label>
+        <label class="locdet-field-lbl">Опасность${fieldTip(LOCATION_FIELD_TIPS['Опасность'])}</label>
         <select class="form-control locdet-field-inp" id="locdet-vtm-danger">
           ${VTM_DANGER_OPTS.map(([v, label]) => `<option value="${v}"${v === dangerSelVal ? ' selected' : ''}>${label}</option>`).join('')}
         </select>

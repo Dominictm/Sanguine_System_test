@@ -45,7 +45,7 @@
 
 - **🚫 Негативный промт:**
   photorealistic photography, digital art, anime, cartoon, illustration, watermark, text overlay, blurry, low quality, artifacts, deformed anatomy, extra limbs, oversaturated colors, bright white background, 3D render, CGI.
-- **Иерархия в городе:** Без должности; неонат под покровительством Софи Жонсьер
+- **Титул в городе:** Без должности; неонат под покровительством Софи Жонсьер
 - **Принадлежность:** Персонаж игрока
 
 ---

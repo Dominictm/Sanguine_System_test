@@ -135,7 +135,7 @@ function parseCharacter(rawContent, folderName, lineage) {
     if (k === 'Амплуа')                         c.concept       = v;
     if (k === 'Дитя')                           c.childe        = v;
     if (k === 'Домен / Локация')                c.location      = v;
-    if (/иерархи/i.test(k))                     c.hierarchy     = v;   // «Иерархия в городе» / устар. варианты
+    if (/иерархи/i.test(k) || k === 'Титул в городе') c.hierarchy = v;   // «Титул в городе» (совр., A2 2026-08-07) / «Иерархия в городе» / «Парижская иерархия» (легаси, не пишется UI)
     if (k === 'Деранжементы / Особенности')     c.derangements  = v;
     if (k === 'Дисциплины')                     c.disciplines   = v;
     if (k === 'Профессия')                      c.profession    = v;

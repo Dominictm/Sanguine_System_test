@@ -45,7 +45,7 @@
   [Блок 3] Dark fantasy digital painting, visible painterly brushstrokes, textured oil-paint effect, cinematic composition, moody gothic atmosphere, Vampire the Masquerade aesthetic, concept art quality, painterly realism, artstation quality, masterpiece
 - **🚫 Негативный промт:**
   photorealistic photography, digital art, anime, cartoon, illustration, watermark, text overlay, blurry, low quality, artifacts, deformed anatomy, extra limbs, oversaturated colors, bright white background, 3D render, CGI, colored hair, dark hair, yellow hair, grey hair, brown eyes, green eyes, blue eyes, purple eyes, smile, warm skin tone, tan skin, pink skin, European facial features, Caucasian face, modern streetwear, fantasy armor, wings.
-- **Иерархия в городе:** Не занимает должности. Зарегистрирована в домене под поручительством Тома Бошена. Камарилья пользуется её услугами для деликатных расследований, не подходящих для официальных каналов
+- **Титул в городе:** Не занимает должности. Зарегистрирована в домене под поручительством Тома Бошена. Камарилья пользуется её услугами для деликатных расследований, не подходящих для официальных каналов
 - **Принадлежность:** Персонаж игрока
 
 ---

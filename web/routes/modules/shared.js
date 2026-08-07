@@ -242,7 +242,7 @@ function _charTimelineDigest(name, kind, card) {
   const field = re => (card.match(re)?.[1] || '').replace(/\r/g, '').trim();
   const status  = field(/\*\*Статус:\*\*\s*([^\n]+)/);
   const det     = field(/\*\*Детали статуса:\*\*\s*([^\n]+)/);
-  const hier    = field(/\*\*Парижская иерархия:\*\*\s*([^\n]+)/) || field(/\*\*Иерархия в городе:\*\*\s*([^\n]+)/);
+  const hier    = field(/\*\*Титул в городе:\*\*\s*([^\n]+)/) || field(/\*\*Парижская иерархия:\*\*\s*([^\n]+)/) || field(/\*\*Иерархия в городе:\*\*\s*([^\n]+)/);
   const role    = field(/\*\*Роль:\*\*\s*([^\n]+)/);
   const embrace = field(/\*\*Год обращения:\*\*\s*([^\n]+)/);
   const relM    = card.match(/\*\*Отношения:\*\*\s*\n([\s\S]*?)(?=\n-\s*\*\*|\n##\s|\n---)/);

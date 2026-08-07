@@ -8,7 +8,9 @@ const { slugify, escapeTableCell, unescapeTableCell, sanitizeInlineText } = requ
 // Single source of truth for the city.md section layout, shared by tools/new_city.js,
 // POST/PUT /api/cities and the edit form. Order = order rendered in the file.
 const CITY_SECTIONS = [
-  ['factions',   'Фракции'],
+  ['factions',       'Фракции'],
+  ['factionsMortal', 'Фракции смертных'],
+  ['factionsState',  'Государственные фракции'],
   ['political',  'Политический ландшафт'],
   ['districts',  'Районы'],
   ['landmarks',  'Значимые места'],

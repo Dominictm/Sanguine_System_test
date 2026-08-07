@@ -503,7 +503,8 @@ document.addEventListener('click', e => {
       b.classList.toggle('active', b.dataset.tab === tab));
     document.querySelectorAll(`#page-${page} .tab-panel`).forEach(p =>
       p.classList.toggle('active', p.id === `tab-${tab}`));
-    if (tab === 'ai-settings') loadAiSettings();
+    if (tab === 'ai-connect')  loadAiConnectTab();
+    if (tab === 'ai-features') loadAiFeaturesTab();
   }
 });
 
@@ -879,13 +880,63 @@ document.getElementById('filter-status').addEventListener('change', e => {
 // Tools
 // ═══════════════════════════════════════════════════════════════
 
+// Restart server — живёт в .page-header страницы «Инструменты» (П.6, 2026-08-07), видна при
+// любой открытой вкладке, поэтому обработчик навешивается один раз здесь, а не внутри
+// loadAiConnectTab()/loadAiFeaturesTab() (как было раньше — кнопка не реагировала, пока
+// вкладка AI ни разу не открыта).
+document.getElementById('ais-restart-btn').addEventListener('click', async () => {
+  const btn    = document.getElementById('ais-restart-btn');
+  const status = document.getElementById('ais-restart-status');
+  btn.disabled = true;
+  status.className = 'ais-status';
+  status.textContent = '⏳ Останавливаем сервер...';
+
+  try {
+    await fetch('/api/restart', { method: 'POST' }).catch(() => {}); // may fail if server dies mid-request
+
+    status.textContent = '⟳ Ждём перезапуска...';
+
+    // Poll until server responds again (max 20s)
+    const start = Date.now();
+    let up = false;
+    while (Date.now() - start < 20000) {
+      await new Promise(r => setTimeout(r, 800));
+      try {
+        const r = await fetch('/api/auth-status', { cache: 'no-store' });
+        if (r.ok) { up = true; break; }
+      } catch {}
+    }
+
+    if (up) {
+      status.textContent = '✓ Сервер запущен';
+      status.classList.add('ok');
+      _resetAiSettingsCache();
+      // Перезапуск мог случиться при любой открытой вкладке «Инструментов» — перечитываем
+      // ту из двух AI-вкладок, что сейчас видна; невидимая подхватит свежие данные лениво,
+      // при следующем открытии (флаг уже сброшен строкой выше).
+      setTimeout(() => {
+        if (document.getElementById('tab-ai-connect')?.classList.contains('active')) loadAiConnectTab();
+        if (document.getElementById('tab-ai-features')?.classList.contains('active')) loadAiFeaturesTab();
+      }, 300);
+    } else {
+      status.textContent = '✗ Сервер не отвечает — проверь консоль';
+      status.classList.add('err');
+    }
+  } catch (e) {
+    status.textContent = '✗ ' + e.message; status.classList.add('err');
+  } finally {
+    btn.disabled = false;
+  }
+});
+
 // Tab switching
 document.querySelectorAll('.tab-btn').forEach(btn => {
   btn.addEventListener('click', () => {
     const tab = btn.dataset.tab;
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
     document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.id === `tab-${tab}`));
-    if (tab === 'ai-settings')     loadAiSettings();
+    if (tab === 'ai-connect')      loadAiConnectTab();
+    if (tab === 'ai-features')     loadAiFeaturesTab();
     if (tab === 'lib-kindred')     loadKindred();
     if (tab === 'lib-disciplines') {
       document.querySelectorAll('.disciplines-subtab-btn').forEach(b => {
@@ -1097,7 +1148,16 @@ function _modelsForProvider(provider, orModels) {
   return orModels;
 }
 
-let _aiSettingsLoaded = false;
+let _aiConnectLoaded  = false;
+let _aiFeaturesLoaded = false;
+// Оба флага сбрасываются вместе — сохранение ключа/OAuth на «Подключение AI» меняет
+// orSettings, который также влияет на «Назначение генераций» (П.4, 2026-08-07: было
+// одним _aiSettingsLoaded на цельный loadAiSettings(), разбито на два независимых
+// загрузчика без общего кеша — см. техспеку 2026-08-07-tools-tab-restructure-techspec.md §4.2).
+function _resetAiSettingsCache() {
+  _aiConnectLoaded  = false;
+  _aiFeaturesLoaded = false;
+}
 let _orModelsRuntime  = null; // cached after first fetch
 
 function _renderFeatCard(feat, icon, label, desc, pref, orModels) {
@@ -1151,47 +1211,20 @@ function _getPref(prefs, key, defProv = 'openrouter') {
   return { provider: v.provider || defProv, model: v.model || null };
 }
 
-async function loadAiSettings() {
-  if (_aiSettingsLoaded) return;
-  _aiSettingsLoaded = true;
-  const el = document.getElementById('ai-settings-content');
+// П.4 (2026-08-07): разбито из единой loadAiSettings() на два независимых загрузчика —
+// «Подключение AI» (ключи/OAuth, orSettings) и «Назначение генераций» (feat-карточки,
+// orModels + localStorage). Независимые fetch, без общего кеша между ними — см. техспеку
+// 2026-08-07-tools-tab-restructure-техspec.md §4.2 для обоснования.
+async function loadAiConnectTab() {
+  if (_aiConnectLoaded) return;
+  _aiConnectLoaded = true;
+  const el = document.getElementById('ai-connect-content');
 
   let orSettings = { OPENROUTER_MODEL: '', hasKey: false, hasOpenAIKey: false, hasAnthropicKey: false, claudeOauth: null };
   try { orSettings = await fetch('/api/settings').then(r => r.json()); } catch {}
 
-  // Fetch live OR models list (fallback to hardcoded on failure)
-  let orModels = OR_FREE_MODELS_FALLBACK;
-  try {
-    const md = await fetch('/api/openrouter/models').then(r => r.json());
-    if (md.ok && md.models?.length) orModels = md.models;
-  } catch {}
-
-  // Per-feature curated lists (reconciled against live data)
-  const featOrModels = _buildFeatOrModels(orModels);
-
-  const featPrefs = JSON.parse(localStorage.getItem('ai-feature-prefs') || '{}');
-  const appearPref   = _getPref(featPrefs, 'appearance', 'openrouter');
-  const locPref      = _getPref(featPrefs, 'locations',  'openrouter');
-  const prosePref    = _getPref(featPrefs, 'prose',      'claude');
-  const dialoguePref = _getPref(featPrefs, 'dialogue',   'openrouter');
-  const promptPref   = _getPref(featPrefs, 'prompt',     'openrouter');
-  const personalityPref = _getPref(featPrefs, 'personality', 'openrouter');
-  const biographyPref   = _getPref(featPrefs, 'biography',   'openrouter');
-  const sheetPref    = _getPref(featPrefs, 'sheet',      'claude');
-
   el.innerHTML = `
-    <div class="ais-layout">
-
-    <!-- LEFT COLUMN -->
     <div class="ais-left">
-
-      <!-- Restart section -->
-      <div class="ais-section ais-restart-section">
-        <div class="ais-section-title">🔄 Управление сервером</div>
-        <div class="ais-section-hint">Перезапускает сервер без открытия нового окна браузера. Страница восстановит соединение автоматически.</div>
-        <button class="ais-restart-btn" id="ais-restart-btn">⟳ Перезапустить сервер</button>
-        <div class="ais-status" id="ais-restart-status"></div>
-      </div>
 
       <!-- OpenRouter section -->
       <div class="ais-section">
@@ -1329,72 +1362,7 @@ async function loadAiSettings() {
         <div class="ais-status" id="ais-anthropic-status"></div>
       </div>
 
-    </div><!-- /ais-left -->
-
-    <!-- RIGHT COLUMN: Features cards -->
-    <div class="ais-right">
-      <div class="ais-section ais-features-section">
-        <div class="ais-section-title">⚡ Назначение провайдеров</div>
-        <div class="ais-section-hint">Выбери провайдера и модель для каждой функции.</div>
-
-        <div class="ais-feat-cards" id="ais-feat-cards">
-          ${_renderFeatCard('appearance', '👁', 'Внешность по арту',    'Vision-анализ изображений персонажа', appearPref,   featOrModels.appearance)}
-          ${_renderFeatCard('locations',  '📍', 'Генерация локаций',    'Карточки мест при наполнении модуля', locPref,      featOrModels.locations)}
-          ${_renderFeatCard('prose',      '🪄', 'Генерация прозы',      'Дневники и финалы сессии',            prosePref,    featOrModels.prose)}
-          ${_renderFeatCard('dialogue',   '💬', 'Генерация фраз',       'Реплики НПС в характере',             dialoguePref, featOrModels.dialogue)}
-          ${_renderFeatCard('prompt',     '🎨', 'Генерация промта',     'Промт для изображения по внешности',  promptPref,   featOrModels.prompt)}
-          ${_renderFeatCard('personality', '🎭', 'Характер и голос',    'По внешности и биографии персонажа',  personalityPref, featOrModels.personality)}
-          ${_renderFeatCard('biography',  '📖', 'Генерация биографии',  'По информации и отношениям персонажа', biographyPref, featOrModels.biography)}
-          ${_renderFeatCard('sheet',      '📋', 'Генерация листа персонажа', 'Числовые данные V20-листа по карточке', sheetPref, featOrModels.sheet)}
-        </div>
-
-        <button class="ais-confirm-btn" id="ais-feat-save" style="margin-top:16px">✓ Применить</button>
-        <div class="ais-status" id="ais-feat-status"></div>
-      </div>
-    </div><!-- /ais-right -->
-
-    </div><!-- /ais-layout -->`;
-
-  // Restart server
-  document.getElementById('ais-restart-btn').addEventListener('click', async () => {
-    const btn    = document.getElementById('ais-restart-btn');
-    const status = document.getElementById('ais-restart-status');
-    btn.disabled = true;
-    status.className = 'ais-status';
-    status.textContent = '⏳ Останавливаем сервер...';
-
-    try {
-      await fetch('/api/restart', { method: 'POST' }).catch(() => {}); // may fail if server dies mid-request
-
-      status.textContent = '⟳ Ждём перезапуска...';
-
-      // Poll until server responds again (max 20s)
-      const start = Date.now();
-      let up = false;
-      while (Date.now() - start < 20000) {
-        await new Promise(r => setTimeout(r, 800));
-        try {
-          const r = await fetch('/api/auth-status', { cache: 'no-store' });
-          if (r.ok) { up = true; break; }
-        } catch {}
-      }
-
-      if (up) {
-        status.textContent = '✓ Сервер запущен';
-        status.classList.add('ok');
-        _aiSettingsLoaded = false;
-        // Reload settings to reflect fresh .env
-        setTimeout(loadAiSettings, 300);
-      } else {
-        status.textContent = '✗ Сервер не отвечает — проверь консоль';
-        status.classList.add('err');
-      }
-    } catch (e) {
-      status.textContent = '✗ ' + e.message; status.classList.add('err');
-    } finally {
-      btn.disabled = false;
-    }
-  });
+    </div><!-- /ais-left -->`;
 
   // Save an API key to .env (shared by OpenRouter / OpenAI / Claude sections)
   const _saveKey = async (btnId, statusId, inputId, field, btnLabel) => {
@@ -1411,8 +1379,8 @@ async function loadAiSettings() {
       if (!d.ok) throw new Error(d.error);
       status.textContent = d.needsRestart ? '✓ Сохранено — сервер перезапускается...' : '✓ Сохранено';
       status.classList.add('ok');
-      _aiSettingsLoaded = false;
-      if (d.needsRestart) setTimeout(() => { _aiSettingsLoaded = false; loadAiSettings(); }, 2500);
+      _resetAiSettingsCache();
+      if (d.needsRestart) setTimeout(() => { _resetAiSettingsCache(); loadAiConnectTab(); }, 2500);
     } catch (e) {
       status.textContent = '✗ Ошибка: ' + e.message; status.classList.add('err');
     } finally { btn.disabled = false; btn.textContent = btnLabel; }
@@ -1460,8 +1428,8 @@ async function loadAiSettings() {
       if (!d.ok) throw new Error(d.error);
       status.textContent = d.needsRestart ? '✓ Сохранено — сервер перезапускается...' : '✓ Сохранено';
       status.classList.add('ok');
-      _aiSettingsLoaded = false;
-      if (d.needsRestart) setTimeout(() => { _aiSettingsLoaded = false; loadAiSettings(); }, 2500);
+      _resetAiSettingsCache();
+      if (d.needsRestart) setTimeout(() => { _resetAiSettingsCache(); loadAiConnectTab(); }, 2500);
     } catch (e) {
       status.textContent = '✗ Ошибка: ' + e.message; status.classList.add('err');
     } finally { btn.disabled = false; btn.textContent = '✓ Подтвердить Gemini'; }
@@ -1499,13 +1467,13 @@ async function loadAiSettings() {
       if (!d.ok) throw new Error(d.error);
       claudeOauthStatus.textContent = `✓ Вход выполнен (подписка: ${d.claudeOauth?.subscription || '—'}). Обновляю…`;
       claudeOauthStatus.classList.add('ok');
-      _aiSettingsLoaded = false; setTimeout(loadAiSettings, 900);
+      _resetAiSettingsCache(); setTimeout(loadAiConnectTab, 900);
     } catch (e) { claudeOauthStatus.textContent = '✗ ' + e.message; claudeOauthStatus.classList.add('err'); }
     finally { btn.disabled = false; btn.textContent = '✓ Подтвердить код'; }
   });
   document.getElementById('ais-claude-status')?.addEventListener('click', async () => {
     claudeOauthStatus.className = 'ais-status'; claudeOauthStatus.textContent = '⏳ Обновляю статус…';
-    try { await fetch('/api/claude/status').then(r => r.json()); _aiSettingsLoaded = false; loadAiSettings(); }
+    try { await fetch('/api/claude/status').then(r => r.json()); _resetAiSettingsCache(); loadAiConnectTab(); }
     catch (e) { claudeOauthStatus.textContent = '✗ ' + e.message; claudeOauthStatus.classList.add('err'); }
   });
   document.getElementById('ais-claude-refresh')?.addEventListener('click', async () => {
@@ -1516,11 +1484,61 @@ async function loadAiSettings() {
       const d = await fetch('/api/claude/oauth/refresh', { method: 'POST' }).then(r => r.json());
       if (!d.ok) throw new Error(d.error);
       claudeOauthStatus.textContent = '✓ Токен обновлён. Обновляю…'; claudeOauthStatus.classList.add('ok');
-      _aiSettingsLoaded = false; setTimeout(loadAiSettings, 700);
+      _resetAiSettingsCache(); setTimeout(loadAiConnectTab, 700);
     } catch (e) { claudeOauthStatus.textContent = '✗ ' + e.message; claudeOauthStatus.classList.add('err'); btn.disabled = false; btn.textContent = '♻️ Обновить токен'; }
   });
+}
 
-  // Features table: save provider preferences
+// «Назначение генераций» (П.4/П.5, 2026-08-07) — не читает /api/settings: _renderFeatCard
+// не использует orSettings нигде (проверено — только featOrModels/featPrefs), поэтому,
+// в отличие от «Подключение AI», здесь только один fetch (модели OpenRouter).
+async function loadAiFeaturesTab() {
+  if (_aiFeaturesLoaded) return;
+  _aiFeaturesLoaded = true;
+  const el = document.getElementById('ai-features-content');
+
+  // Fetch live OR models list (fallback to hardcoded on failure)
+  let orModels = OR_FREE_MODELS_FALLBACK;
+  try {
+    const md = await fetch('/api/openrouter/models').then(r => r.json());
+    if (md.ok && md.models?.length) orModels = md.models;
+  } catch {}
+
+  // Per-feature curated lists (reconciled against live data)
+  const featOrModels = _buildFeatOrModels(orModels);
+
+  const featPrefs = JSON.parse(localStorage.getItem('ai-feature-prefs') || '{}');
+  const appearPref   = _getPref(featPrefs, 'appearance', 'openrouter');
+  const locPref      = _getPref(featPrefs, 'locations',  'openrouter');
+  const prosePref    = _getPref(featPrefs, 'prose',      'claude');
+  const dialoguePref = _getPref(featPrefs, 'dialogue',   'openrouter');
+  const promptPref   = _getPref(featPrefs, 'prompt',     'openrouter');
+  const personalityPref = _getPref(featPrefs, 'personality', 'openrouter');
+  const biographyPref   = _getPref(featPrefs, 'biography',   'openrouter');
+  const sheetPref    = _getPref(featPrefs, 'sheet',      'claude');
+
+  el.innerHTML = `
+    <div class="ais-right">
+      <div class="ais-section ais-features-section">
+        <div class="ais-section-title">⚡ Назначение провайдеров</div>
+        <div class="ais-section-hint">Выбери провайдера и модель для каждой функции.</div>
+
+        <div class="ais-feat-cards" id="ais-feat-cards">
+          ${_renderFeatCard('appearance', '👁', 'Внешность по арту',    'Vision-анализ изображений персонажа', appearPref,   featOrModels.appearance)}
+          ${_renderFeatCard('locations',  '📍', 'Генерация локаций',    'Карточки мест при наполнении модуля', locPref,      featOrModels.locations)}
+          ${_renderFeatCard('prose',      '🪄', 'Генерация прозы',      'Дневники и финалы сессии',            prosePref,    featOrModels.prose)}
+          ${_renderFeatCard('dialogue',   '💬', 'Генерация фраз',       'Реплики НПС в характере',             dialoguePref, featOrModels.dialogue)}
+          ${_renderFeatCard('prompt',     '🎨', 'Генерация промта',     'Промт для изображения по внешности',  promptPref,   featOrModels.prompt)}
+          ${_renderFeatCard('personality', '🎭', 'Характер и голос',    'По внешности и биографии персонажа',  personalityPref, featOrModels.personality)}
+          ${_renderFeatCard('biography',  '📖', 'Генерация биографии',  'По информации и отношениям персонажа', biographyPref, featOrModels.biography)}
+          ${_renderFeatCard('sheet',      '📋', 'Генерация листа персонажа', 'Числовые данные V20-листа по карточке', sheetPref, featOrModels.sheet)}
+        </div>
+
+        <button class="ais-confirm-btn" id="ais-feat-save" style="margin-top:16px">✓ Применить</button>
+        <div class="ais-status" id="ais-feat-status"></div>
+      </div>
+    </div><!-- /ais-right -->`;
+
   // Wire radio changes to swap model dropdown options
   el.querySelectorAll('.ais-feat-card').forEach(card => {
     const feat = card.dataset.feat;
@@ -1550,7 +1568,6 @@ async function loadAiSettings() {
     status.className = 'ais-status ok';
     setTimeout(() => { status.textContent = ''; status.className = 'ais-status'; }, 2000);
   });
-
 }
 
 async function runTool(tool, params, outId, btn) {
@@ -1785,6 +1802,8 @@ document.getElementById('btn-new-city').addEventListener('click', async () => {
     description: document.getElementById('city-description').value.trim(),
     political:  _cityPoliticalCreateHost ? _collectPoliticalRows(_cityPoliticalCreateHost) : '',
     factions:   _cityFactionsCreateHost ? _collectFactions(_cityFactionsCreateHost) : '',
+    factionsMortal: _cityFactionsCreateHost ? _collectFactionsMortal(_cityFactionsCreateHost) : '',
+    factionsState:  _cityFactionsCreateHost ? _collectFactionsState(_cityFactionsCreateHost) : '',
     locations:  _cityLocationsCreateHost ? _collectLocationRows(_cityLocationsCreateHost) : '',
     leitmotif:  document.getElementById('city-leitmotif').value.trim(),
     specifics:  document.getElementById('city-specifics').value.trim(),
@@ -1816,10 +1835,6 @@ document.getElementById('btn-new-city').addEventListener('click', async () => {
   } finally {
     btn.disabled = false; btn.textContent = 'Создать домен';
   }
-});
-
-document.getElementById('btn-create-module-tools').addEventListener('click', () => {
-  openModCreateModal(true);
 });
 
 document.getElementById('btn-validate').addEventListener('click', () => {
@@ -1998,6 +2013,7 @@ const INFO_FIELDS_BY_LINEAGE = {
   vampire: [
     ['status',       'Статус'],
     ['statusDetails','Детали статуса'],
+    ['gender',       'Пол'],
     ['clan',         'Клан'],
     ['sect',         'Секта'],
     ['generation',   'Поколение'],
@@ -2006,7 +2022,7 @@ const INFO_FIELDS_BY_LINEAGE = {
     ['sire',         'Сир'],
     ['childe',       'Дитя'],
     ['location',     'Домен / Локация'],
-    ['hierarchy',    'Иерархия'],
+    ['hierarchy',    'Титул'],
     ['disciplines',  'Дисциплины'],
     ['derangements', 'Деранжементы'],
     ['profession',   'Профессия'],
@@ -2022,6 +2038,7 @@ const INFO_FIELDS_BY_LINEAGE = {
   fairy: [
     ['status',     'Статус'],
     ['statusDetails','Детали статуса'],
+    ['gender',     'Пол'],
     ['race',       'Раса'],
     ['kith',       'Род'],
     ['court',      'Двор'],
@@ -2041,12 +2058,13 @@ const INFO_FIELDS_BY_LINEAGE = {
   mortal: [
     ['status',     'Статус'],
     ['statusDetails','Детали статуса'],
+    ['gender',     'Пол'],
     ['profession', 'Профессия'],
     ['birthYear',  'Год рождения'],
     ['location',   'Домен / Локация'],
     ['relatives',  'Родственники'],
     ['attitude',   'Отношение к сверхъестественному'],
-    ['hierarchy',  'Иерархия'],
+    ['hierarchy',  'Титул'],
     ['role',       'Роль'],
     ['nature',     'Натура'],
     ['demeanor',   'Маска'],
@@ -2060,11 +2078,12 @@ const INFO_FIELDS_BY_LINEAGE = {
 const INFO_FIELDS_GENERIC = [
   ['status',    'Статус'],
   ['statusDetails', 'Детали статуса'],
+  ['gender',    'Пол'],
   ['race',      'Раса / Тип'],
   ['sect',      'Фракция'],
   ['birthYear', 'Год рождения'],
   ['location',  'Домен / Локация'],
-  ['hierarchy', 'Иерархия'],
+  ['hierarchy', 'Титул'],
   ['role',      'Роль'],
   ['belonging', 'Принадлежность'],
     ['want',       'Хочет'],
@@ -2492,7 +2511,10 @@ const CHAR_FIELD_TIPS = {
   'Детали статуса': 'Уточнение статуса — обстоятельства, причина или срок (например, «в торпоре с 1990-х»).',
   'Дитя': 'Персонаж-вампир, которого этот герой обратил (Объял), — его потомок по крови.',
   'Домен / Локация': 'Территория или место, закреплённое за персонажем, — где он обитает или властвует.',
-  'Иерархия': 'Место персонажа во внутренней иерархии его фракции или организации.',
+  // A2 (2026-08-07): ключ 'Иерархия' убран — лейбл в UI больше не существует ни для одной
+  // линейки (вампиры/смертные/generic теперь показывают «Титул», см. ключ ниже; феи
+  // по-прежнему «Иерархия», но отдельного тултипа под этот случай не заводилось и раньше —
+  // при желании завести отдельно можно, задачей не требовалось).
   'Дисциплины': 'Вампирские Дисциплины персонажа и их уровни — определяют его сверхъестественные способности.',
   'Деранжементы': 'Психические расстройства персонажа (Безумия) — накопленные травмы от Зверя и веков существования.',
   'Профессия': 'Род занятий персонажа — определяет его связи, ресурсы и образ жизни среди смертных.',
@@ -2500,9 +2522,16 @@ const CHAR_FIELD_TIPS = {
   'Маска': 'Публичный образ персонажа — то лицо, которое он показывает окружающим.',
   'Амплуа': 'Краткая формулировка роли персонажа в истории — кто он по сути, одной фразой.',
   'Принадлежность': 'К какой хронике, городу или сюжетной линии относится персонаж — постоянный (мастера/игрока), эпизодический или фамильяр.',
+  // B1 (2026-08-07): три поля есть во всех линейках (vampire/fairy/mortal/generic), тултипов
+  // не было ни у одного.
+  'Хочет':  'Актуальная цель персонажа в текущих обстоятельствах — то, к чему он стремится прямо сейчас.',
+  'Боится': 'Что персонаж старается предотвратить или скрыть — рычаг давления на него в сценах.',
+  'Рычаг':  'Чем можно надавить на персонажа или что он использует как рычаг на других.',
   'Раса': 'Природа персонажа внутри линейки, если требуется уточнение (например, вид феи).',
   'Род': 'Разновидность феи (Кит) — накладывает свои особенности и склонности.',
-  'Титул': 'Формальный титул феи при Дворе — определяет её ранг и привилегии.',
+  // B1/A2 (2026-08-07): один текст на оба смысла (Двор фей vs. фракция остальных линеек) —
+  // словарь плоский по всему проекту, вводить вложенность ради одного поля непропорционально.
+  'Титул': 'Формальный титул персонажа — при Дворе (у фей) или во фракции: Князь, Шериф, Приск и т.п. (у остальных).',
   'Фригольд / Локация': 'Территория или Фригольд, закреплённые за феей.',
   'Особенности / Способности': 'Уникальные черты или врождённые способности персонажа помимо стандартных механик.',
   'Родственники': 'Живые родственники персонажа среди смертных — потенциальные связи или уязвимости.',

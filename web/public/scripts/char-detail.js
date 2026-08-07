@@ -1110,6 +1110,60 @@ function _enterInfoEdit(charSlug) {
         if (curNum && opt.startsWith(curNum + '-')) o.selected = true;
         input.appendChild(o);
       });
+    } else if (key === 'clan' || key === 'sect') {
+      // A3 (2026-08-07): автодополнение из библиотеки — только <datalist>, без чип-пикера
+      // (решение пользователя §0.2 техспеки char-loc-city-fields). Ручной ввод не блокируется.
+      input = document.createElement('input');
+      input.className = 'cdet-field-input';
+      input.dataset.field = key;
+      input.value = current;
+      input.placeholder = 'Неизвестно';
+      input.setAttribute('list', key === 'clan' ? 'cdet-clans-list' : 'cdet-sects-list');
+      input.setAttribute('autocomplete', 'off');
+    } else if (key === 'disciplines') {
+      input = document.createElement('input');
+      input.className = 'cdet-field-input';
+      input.dataset.field = key;
+      input.value = current;
+      input.placeholder = 'Неизвестно';
+      input.setAttribute('list', 'cdet-disciplines-list');
+      input.setAttribute('autocomplete', 'off');
+    } else if (key === 'hierarchy' && _lineageOf(_editCharSlug) !== 'fairy') {
+      // A2.8 (2026-08-07): пикер «из библиотеки Титулов» — только не-феи (у фей «Иерархия»
+      // осталась отдельным полем, не «Титул», решение пользователя §0.1 техспеки). Ручной
+      // ввод не блокируется — кнопка лишь подставляет значение в то же поле.
+      const wrap = document.createElement('div');
+      wrap.className = 'cdet-field-with-pick';
+      const inp = document.createElement('input');
+      inp.className = 'cdet-field-input';
+      inp.dataset.field = key;
+      inp.value = current;
+      inp.placeholder = 'Неизвестно';
+      wrap.appendChild(inp);
+      const pickBtn = document.createElement('button');
+      pickBtn.type = 'button';
+      pickBtn.className = 'cdet-lib-pick-btn';
+      pickBtn.dataset.pickTitle = '1';
+      pickBtn.title = 'Выбрать титул из библиотеки';
+      pickBtn.setAttribute('aria-label', 'Выбрать титул из библиотеки');
+      pickBtn.textContent = '📚';
+      wrap.appendChild(pickBtn);
+
+      const outer = document.createElement('div');
+      outer.appendChild(wrap);
+      outer.insertAdjacentHTML('beforeend', `
+        <div class="v20-lib-picker cdet-title-picker" id="cdet-title-picker" hidden>
+          <input type="text" class="v20-lib-search" placeholder="Поиск по названию…" id="cdet-title-search">
+          <div class="cdet-title-picker-group" data-group="priority">
+            <div class="cdet-title-picker-group-label">По вашей секте/клану</div>
+            <div class="v20-lib-list" id="cdet-title-list-priority"></div>
+          </div>
+          <div class="cdet-title-picker-group" data-group="all">
+            <div class="cdet-title-picker-group-label">Все титулы</div>
+            <div class="v20-lib-list" id="cdet-title-list-all"></div>
+          </div>
+        </div>`);
+      input = outer;
     } else {
       input = document.createElement('input');
       input.className = 'cdet-field-input';
@@ -1120,6 +1174,8 @@ function _enterInfoEdit(charSlug) {
     cell.replaceWith(input);
   });
 
+  _ensureCdetLibDatalists();
+
   btn.classList.add('active');
   btn.textContent = '✏ Режим редактирования';
   bar.classList.add('show');
@@ -1127,6 +1183,131 @@ function _enterInfoEdit(charSlug) {
   // Focus name input
   document.getElementById('cdet-name-input')?.focus();
 }
+
+// A3 (2026-08-07): три <datalist> для автодополнения Клан/Секта/Дисциплины во вкладке
+// «Информация» — заполняются один раз при входе в режим редактирования (не на каждое
+// открытие карточки), библиотеки кешируются самими ensureClans/ensureSects/ensureDisciplines
+// (v20-sheet.js) — общий кеш с V20-листом, повторный вызов не бьёт по сети.
+async function _ensureCdetLibDatalists() {
+  if (!document.getElementById('cdet-clans-list')) {
+    const dl = document.createElement('datalist'); dl.id = 'cdet-clans-list';
+    document.body.appendChild(dl);
+  }
+  if (!document.getElementById('cdet-sects-list')) {
+    const dl = document.createElement('datalist'); dl.id = 'cdet-sects-list';
+    document.body.appendChild(dl);
+  }
+  if (!document.getElementById('cdet-disciplines-list')) {
+    const dl = document.createElement('datalist'); dl.id = 'cdet-disciplines-list';
+    document.body.appendChild(dl);
+  }
+  await Promise.all([ensureClans(), ensureSects(), ensureDisciplines()]);
+  const clansEl = document.getElementById('cdet-clans-list');
+  const sectsEl = document.getElementById('cdet-sects-list');
+  if (clansEl) clansEl.innerHTML = (_clansCache || []).map(c => `<option value="${escAttr(c.name)}">`).join('');
+  if (sectsEl) sectsEl.innerHTML = (_sectsCache || []).map(s => `<option value="${escAttr(s.name)}">`).join('');
+  const discInput = document.querySelector('.cdet-field-input[data-field="disciplines"]');
+  const clanInput = document.querySelector('.cdet-field-input[data-field="clan"]');
+  _refreshCdetDisciplinesDatalist(discInput?.value || '', clanInput?.value.trim() || '');
+}
+
+// Нативный <datalist> фильтрует по совпадению ВСЕГО значения инпута, не последнего токена
+// после запятой — без этой пересборки подсказки для второй дисциплины переставали бы
+// появляться, как только в поле уже есть текст. Подставляем в <option value> уже набранный
+// текст (до последней запятой) + предлагаемое имя, чтобы браузер продолжал матчить полное
+// значение, а подстановка добавляла дисциплину к списку, а не заменяла его.
+function _cdetDisciplinesDatalistOptions(currentValue, clanName) {
+  const prefix = currentValue.replace(/[^,]*$/, '').replace(/,\s*$/, '');
+  const already = new Set(currentValue.split(',').map(s => s.trim().toLowerCase()).filter(Boolean));
+  const info = clanName ? v20ClanInfo(clanName) : null;
+  const clanDiscs = new Set((info?.disciplines || []).map(d => d.toLowerCase()));
+  const names = (_disciplinesCache || []).map(d => d.name)
+    .filter(n => !already.has(n.toLowerCase()))
+    .sort((a, b) => (clanDiscs.has(b.toLowerCase()) ? 1 : 0) - (clanDiscs.has(a.toLowerCase()) ? 1 : 0) || a.localeCompare(b, 'ru'));
+  return names.map(n => `<option value="${escAttr((prefix ? prefix + ', ' : '') + n)}">`).join('');
+}
+function _refreshCdetDisciplinesDatalist(currentValue, clanName) {
+  const dl = document.getElementById('cdet-disciplines-list');
+  if (dl) dl.innerHTML = _cdetDisciplinesDatalistOptions(currentValue, clanName);
+}
+// Пересборка при вводе в «Дисциплины» (следующий токен) И при смене «Клан» (клановые —
+// первыми, п.3 анализа) — оба поля видны одновременно только на вкладке «Информация»
+// персонажа-вампира в режиме редактирования, делегат безопасен и для остальных линеек
+// (просто не находит .cdet-field-input[data-field="disciplines"] и выходит).
+document.addEventListener('input', e => {
+  const discInput = e.target.matches('.cdet-field-input[data-field="disciplines"]')
+    ? e.target : (e.target.matches('.cdet-field-input[data-field="clan"]')
+      ? document.querySelector('.cdet-field-input[data-field="disciplines"]') : null);
+  if (!discInput) return;
+  const clanVal = document.querySelector('.cdet-field-input[data-field="clan"]')?.value.trim() || '';
+  _refreshCdetDisciplinesDatalist(discInput.value, clanVal);
+});
+
+// A2.8 (2026-08-07): пикер «из библиотеки Титулов» для вкладки «Информация» — раскрывающаяся
+// встроенная панель (не модалка поверх модалки, design.md §1.2), переиспользует классы
+// .v20-lib-picker/.v20-lib-list/.v20-lib-item/.v20-lib-hint из V20-листа, но со своей
+// логикой открытия/поиска/выбора (тот файл завязан на #cdet-sheet-panel, другой контекст).
+function _titleAffMatches(aff, needle) {
+  return !!needle && String(aff || '').toLowerCase().includes(String(needle).toLowerCase());
+}
+function _titleItemHtml(t) {
+  const hint = escHtml(t.affiliation || '');
+  const name = (t.negative ? '⚠️ ' : '') + t.name;
+  return `<button type="button" class="v20-lib-item" data-cdet-title="${escAttr(t.name)}"><span>${escHtml(name)}</span><span class="v20-lib-hint">${hint}</span></button>`;
+}
+async function _renderTitlePickerLists(query) {
+  await ensureTitles();
+  const all = _titlesCache || [];
+  const sectInput = document.querySelector('.cdet-field-input[data-field="sect"]');
+  const clanInput = document.querySelector('.cdet-field-input[data-field="clan"]');
+  const sect = sectInput?.value.trim() || '';
+  const clan = clanInput?.value.trim() || '';
+  const q = (query || '').toLowerCase();
+  const matchesQuery = t => !q || t.name.toLowerCase().includes(q);
+  const priority = all.filter(t => matchesQuery(t) && (_titleAffMatches(t.affiliation, sect) || _titleAffMatches(t.affiliation, clan)));
+  const prioritySlugs = new Set(priority.map(t => t.slug));
+  const rest = all.filter(t => matchesQuery(t) && !prioritySlugs.has(t.slug));
+
+  const priorityGroup = document.querySelector('.cdet-title-picker-group[data-group="priority"]');
+  const priorityList  = document.getElementById('cdet-title-list-priority');
+  const allList       = document.getElementById('cdet-title-list-all');
+  if (priorityGroup) priorityGroup.style.display = priority.length ? '' : 'none';
+  if (priorityList) priorityList.innerHTML = priority.map(_titleItemHtml).join('');
+  if (allList) {
+    allList.innerHTML = rest.length ? rest.map(_titleItemHtml).join('')
+      : (all.length
+          ? '<div class="cdet-empty">Ничего не найдено — можно ввести название вручную.</div>'
+          : '<div class="cdet-empty">Библиотека титулов пуста — можно ввести название вручную.</div>');
+  }
+}
+document.addEventListener('click', async e => {
+  const pickBtn = e.target.closest('.cdet-lib-pick-btn[data-pick-title]');
+  if (pickBtn) {
+    const picker = document.getElementById('cdet-title-picker');
+    if (!picker) return;
+    if (picker.hidden) {
+      picker.hidden = false;
+      await _renderTitlePickerLists('');
+    } else {
+      picker.hidden = true;
+    }
+    return;
+  }
+  const item = e.target.closest('#cdet-title-picker .v20-lib-item');
+  if (item) {
+    const titleInput = document.querySelector('.cdet-field-input[data-field="hierarchy"]');
+    if (titleInput) {
+      titleInput.value = item.dataset.cdetTitle || '';
+      titleInput.focus();
+    }
+    const picker = document.getElementById('cdet-title-picker');
+    if (picker) picker.hidden = true;
+    return;
+  }
+});
+document.addEventListener('input', e => {
+  if (e.target.id === 'cdet-title-search') _renderTitlePickerLists(e.target.value);
+});
 
 function _exitInfoEdit(saved) {
   const grid = document.getElementById('cdet-info-fields');
@@ -1148,7 +1329,13 @@ function _exitInfoEdit(saved) {
   const _lineage   = _lineageOf(_editCharSlug);
   const _reqFields = requiredInfoFor(_lineage);
   const _fieldSet  = infoFieldsFor(_lineage);
-  grid.querySelectorAll('.cdet-field-input').forEach(input => {
+  // «.cdet-key + *» — не «.cdet-field-input» напрямую: поле «Титул» (A2.8) заменяет
+  // .cdet-val не голым <input>, а обёрткой (input + кнопка пикера + сама панель пикера) —
+  // топ-уровневый элемент, реально стоящий рядом с .cdet-key, нужно заменить целиком,
+  // иначе панель пикера осиротеет в DOM вместо чистого восстановления .cdet-val.
+  grid.querySelectorAll('.cdet-key + *').forEach(topEl => {
+    const input = topEl.matches('.cdet-field-input') ? topEl : topEl.querySelector('.cdet-field-input');
+    if (!input) return;
     const key      = input.dataset.field;
     const value    = saved ? input.value.trim() : (_editOrigValues[key] || '');
     const empty    = !value;
@@ -1158,15 +1345,15 @@ function _exitInfoEdit(saved) {
     div.className = 'cdet-val' + (empty ? ' unknown' : '') + (hide ? ' cdet-opt-empty' : '');
     div.dataset.field = key;
     div.textContent   = empty ? 'Неизвестно' : value;
-    // sync the preceding label cell (hide class + required «!» flag)
-    const keyCell = input.previousElementSibling;
+    // sync the preceding label cell (hide class + required «!» флаг)
+    const keyCell = topEl.previousElementSibling;
     if (keyCell && keyCell.classList.contains('cdet-key')) {
       const lbl = (_fieldSet.find(([fk]) => fk === key) || [null, key])[1];
       keyCell.innerHTML = (empty && required)
         ? `${lbl} <span class="cdet-req-flag" title="Обязательное поле">!</span>` : lbl;
       keyCell.classList.toggle('cdet-opt-empty', hide);
     }
-    input.replaceWith(div);
+    topEl.replaceWith(div);
   });
   grid.classList.remove('editing');
 

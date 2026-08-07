@@ -130,6 +130,7 @@ router.post('/api/cities', express.json(), async (req, res) => {
     const { files, keepDirs } = cityScaffold({
       display, year,
       description: b.description, factions: b.factions,
+      factionsMortal: b.factionsMortal, factionsState: b.factionsState,
       political: b.political, locations: b.locations, leitmotif: b.leitmotif,
       specifics: b.specifics, avoid: b.avoid, sources: b.sources,
       districts: b.districts,
@@ -278,7 +279,7 @@ async function syncPoliticalCharacterHierarchy(city, cityDisplay, records, prevR
 
   let chars = [];
   try { chars = await getAllCharacters(city); }
-  catch (e) { warnings.push(`Не удалось прочитать персонажей города для синка «Иерархии»: ${e.message}`); return warnings; }
+  catch (e) { warnings.push(`Не удалось прочитать персонажей города для синка «Титула»: ${e.message}`); return warnings; }
   const charByName = new Map(chars.map(c => [c.name, c]));
   const hierarchyMdKey = EDITABLE_FIELD_MAP.hierarchy;
 
@@ -290,7 +291,7 @@ async function syncPoliticalCharacterHierarchy(city, cityDisplay, records, prevR
     const expected = `${role} города ${cityDisplay}`;
     if ((char.hierarchy || '').trim() !== expected) continue; // §4.4 — ручная правка, не трогаем
     try { await writeCharacterCardField(city, char, hierarchyMdKey, ''); }
-    catch (e) { warnings.push(`Не удалось очистить «Иерархию» у «${name}»: ${e.message}`); }
+    catch (e) { warnings.push(`Не удалось очистить «Титул» у «${name}»: ${e.message}`); }
   }
   // Новые/сохранившие роль: проставляем текущую должность.
   for (const [name, role] of currByName) {
@@ -299,7 +300,7 @@ async function syncPoliticalCharacterHierarchy(city, cityDisplay, records, prevR
     const value = `${role} города ${cityDisplay}`;
     if ((char.hierarchy || '').trim() === value) continue; // уже актуально
     try { await writeCharacterCardField(city, char, hierarchyMdKey, value); }
-    catch (e) { warnings.push(`Не удалось записать «Иерархию» «${name}» (${role}): ${e.message}`); }
+    catch (e) { warnings.push(`Не удалось записать «Титул» «${name}» (${role}): ${e.message}`); }
   }
   return warnings;
 }

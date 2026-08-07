@@ -31,7 +31,7 @@
   [Блок 3] Hyperrealistic cinematic portrait photography, fashion-editorial color grading, sharp fine detail on skin texture and fabric, natural human skin, subtle gothic noir atmosphere, Vampire the Masquerade aesthetic, high-end editorial photography quality, masterpiece, 1023x1537
 - **🚫 Негативный промт:**
   photorealistic photo, hyperrealistic photograph, anime, cartoon, flat illustration, plastic skin, 3D render, CGI, blurry, low quality, deformed, cracked skin, marble skin, stone texture skin, nebula background, galaxy background, cosmic energy background, swirling portal background, blood, gore, wounds, injuries, violence
-- **Иерархия в городе:** Примоген (Вентру)
+- **Титул в городе:** Примоген (Вентру)
 - **Принадлежность:** Персонаж мастера
 - **Биография:** Ален Дюбуа родился в кровавый век, когда старая Франция ещё барахтался в монархии. В 1658 году Жан де Вален признал в нём достойного сосуда и даровал ему вечность — дисциплину денег и власти, наследство первых поколений. Три столетия спустя Ален остаётся якорем Вентру в городе, примогеном, чьё слово весит столько же, сколько древний титул. Мишель Виардо — его дитя, каналом которого текут те же кровавые инстинкты порядка и контроля. Под его безупречным пальто и золотыми кольцами скрывается не человек, а система — система, что не ошибается, не сомневается и не забывает.
 - **Поколение:** 8

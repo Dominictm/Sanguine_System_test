@@ -28,7 +28,7 @@
   ⏳ Заполнить по system/rules/portret.md (3 блока)
 - **🚫 Негативный промт:**
   photorealistic photography, anime, cartoon, watermark, text, blurry, deformed anatomy, extra limbs, bright white background, 3D render, CGI.
-- **Иерархия в городе:** пропр
+- **Титул в городе:** пропр
 
 ---
 

@@ -516,6 +516,7 @@ function tableCell(content, label) {
 const EDITABLE_FIELD_MAP = {
   status:        'Статус',
   statusDetails: 'Детали статуса',
+  gender:       'Пол',
   clan:         'Клан',
   sect:         'Секта',
   generation:   'Поколение',
@@ -524,7 +525,7 @@ const EDITABLE_FIELD_MAP = {
   sire:         'Сир',
   childe:       'Дитя',
   location:     'Домен / Локация',
-  hierarchy:    'Иерархия в городе',
+  hierarchy:    'Титул в городе',
   derangements: 'Деранжементы / Особенности',
   disciplines:  'Дисциплины',
   profession:   'Профессия',

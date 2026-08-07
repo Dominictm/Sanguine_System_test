@@ -65,7 +65,7 @@
 
 - **🚫 Негативный промт:**
   photorealistic photography, digital art, anime, cartoon, illustration, watermark, text overlay, blurry, low quality, artifacts, deformed anatomy, extra limbs, oversaturated colors, bright white background, 3D render, CGI.
-- **Иерархия в городе:** Н/П — в Париже 2010 года не присутствует
+- **Титул в городе:** Н/П — в Париже 2010 года не присутствует
 - **Принадлежность:** Персонаж игрока
 
 ---

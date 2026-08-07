@@ -226,6 +226,8 @@ describe('Parsers — unit', () => {
         description: 'Тёмный индустриальный город под вечным дождём.',
         political: 'Камарилья держит центр\nКнязь: Маркус',
         factions: 'Камарилья\nДжованни',
+        factionsMortal: 'Полиция\nГородской совет',
+        factionsState: 'DGSI',
         districts: '12 районов\nЦентр — Камарилья',
         landmarks: 'Собор\nСтарый вокзал',
         locations: 'Небоскрёб в центре\nЭлизиум: Опера',
@@ -278,12 +280,19 @@ describe('Parsers — unit', () => {
         assert.ok(!/^-+$/m.test(value), `секция ${key} содержит остаток линейки: ${JSON.stringify(value)}`);
     });
 
-    it('факции-секция канонична (сразу перед political, до locations)', () => {
+    it('факции-блок канонична (factions/factionsMortal/factionsState подряд, до political и locations)', () => {
       const keys = CITY_SECTIONS.map(([k]) => k);
       assert.ok(keys.includes('factions'), 'есть ключ factions');
-      assert.equal(keys.indexOf('factions'), keys.indexOf('political') - 1,
-        'Фракции — первая секция, перед Политическим ландшафтом (Властители/Примогенат уже внутри него)');
-      assert.ok(keys.indexOf('factions') < keys.indexOf('locations'));
+      assert.equal(keys.indexOf('factions'), 0, 'Фракции — первая секция');
+      // C1 (2026-08-07): «Фракции смертных»/«Государственные фракции» — тот же фракционный
+      // блок, сразу после «Фракции», единым куском перед Политическим ландшафтом.
+      assert.equal(keys.indexOf('factionsMortal'), keys.indexOf('factions') + 1,
+        'factionsMortal сразу после factions');
+      assert.equal(keys.indexOf('factionsState'), keys.indexOf('factionsMortal') + 1,
+        'factionsState сразу после factionsMortal');
+      assert.equal(keys.indexOf('factionsState'), keys.indexOf('political') - 1,
+        'фракционный блок — сразу перед Политическим ландшафтом (Властители/Примогенат уже внутри него)');
+      assert.ok(keys.indexOf('factionsState') < keys.indexOf('locations'));
     });
 
     it('секции «живого города» присутствуют (D1, план 2026-07-15)', () => {
@@ -7556,6 +7565,7 @@ describe('city-creation-restructure §15-16: Опасность/сенсорик
         locations: 'Элизиум: Где-то', leitmotif: 'Лейтмотив', specifics: 'Специфика',
         avoid: 'Избегать', sources: 'Источники',
         districts: 'Первый Ку, Второй Ку',
+        factionsMortal: 'Полиция', factionsState: 'DGSI',
       };
       for (const k of RULE_KEYS) fields[k] = `значение-${k}`;
       const r = await apiJson('/api/cities', { method: 'POST', body: JSON.stringify(fields) });

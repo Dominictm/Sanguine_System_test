@@ -1532,11 +1532,14 @@ function _libTitleCardsHtml() {
       ? `<img class="lib-card-art" loading="lazy" decoding="async" src="/img/system/library/titles/${escAttr(t.slug)}.png" alt="">`
       : '';
     const badge = t.custom ? '<span class="lib-card-custom-badge">✏️ Авторское</span>' : '';
+    // Бейдж «Негативный» — прямой ребёнок .lib-card (не внутри .lib-card-overlay), чтобы
+    // абсолютное позиционирование в правый верхний угол считалось от самой карточки, а не
+    // от нижней плашки-градиента арта (у неё свой positioning context).
     const negBadge = t.negative ? '<span class="lib-card-negative-badge">⚠️ Негативный</span>' : '';
     const aff = t.affiliation ? `<div class="lib-card-sect">${escHtml(t.affiliation)}</div>` : '';
-    const inner = `<div class="lib-card-name">${escHtml(t.name)}</div>${aff}${negBadge}${badge}`;
+    const inner = `<div class="lib-card-name">${escHtml(t.name)}</div>${aff}${badge}`;
     return `<button type="button" class="lib-card${t.hasArt ? ' has-art' : ''}" data-title-slug="${escAttr(t.slug)}">
-      ${art}${t.hasArt ? `<div class="lib-card-overlay">${inner}</div>` : inner}
+      ${art}${negBadge}${t.hasArt ? `<div class="lib-card-overlay">${inner}</div>` : inner}
     </button>`;
   }).join('')}</div>`;
 }

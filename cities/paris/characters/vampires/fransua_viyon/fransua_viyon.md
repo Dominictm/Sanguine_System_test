@@ -34,7 +34,7 @@
 - **🚫 Негативный промт:**
   photorealistic photography, digital art, anime, cartoon, illustration, watermark, text overlay, blurry, low quality, artifacts, deformed anatomy, extra limbs, oversaturated colors, bright white background, 3D render, CGI.
 - **Домен / Локация:** Остров Сан-Луи
-- **Иерархия в городе:** Князь Парижа
+- **Титул в городе:** Князь Парижа
 - **Принадлежность:** Персонаж мастера
 
 ---

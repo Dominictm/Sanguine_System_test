@@ -282,7 +282,7 @@ async function lsSetupProseZone(stubs) {
     <div class="ls-prose-note">${useApi
       ? `${isOpenAI ? 'GPT' : 'OpenRouter'} читает правила дневников, карточки персонажей и события хроники автоматически. Модель — из «Назначение провайдеров».`
       : claudeNote
-    } Настроить: <a class="dash-ai-link" data-nav="tools" data-tab="ai-settings">Модели AI ↗</a></div>
+    } Настроить: <a class="dash-ai-link" data-nav="tools" data-tab="ai-connect">Модели AI ↗</a></div>
     <div class="ls-prose-result" id="ls-prose-result"></div>`;
   document.getElementById('ls-genprose').addEventListener('click', () => lsGenProse(stubs, proseSrc));
 }
@@ -336,6 +336,4 @@ async function lsGenProse(stubs, source = 'claude') {
     <div class="ls-note">Проверьте <b>git diff</b> перед коммитом.</div>`;
 }
 
-// Lazy-init the Log Session form when its tab is first opened
-document.querySelector('.tab-btn[data-tab="log-session"]').addEventListener('click', lsInit);
 

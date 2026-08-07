@@ -38,7 +38,7 @@
 - **🚫 Негативный промт:**
   photorealistic photography, 3D render, CGI, anime, cartoon, watercolor, sketch, blurry, low quality, deformed faces, mutated features, blood, gore, wounds, injuries, cuts, violence, bruises, Asian features, male, smiling, cheerful, bright colors, sunlit, exposed fangs, gaunt skeletal appearance, poorly drawn, distorted proportions
 - **Поколение:** 8
-- **Иерархия в городе:** Без официальной должности — анцилла, сестра Примогена
+- **Титул в городе:** Без официальной должности — анцилла, сестра Примогена
 - **Принадлежность:** Персонаж мастера
 
 ---

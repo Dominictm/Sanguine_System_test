@@ -34,7 +34,7 @@
   [Блок 3] Hyperrealistic cinematic portrait photography, dark fantasy concept art, Vampire the Masquerade aesthetic, painterly brushstrokes with visible oil-paint texture, moody gothic atmospheric rendering, fine detailed skin texture emphasizing age and pallor, luxurious heavy fabric detail, masterpiece quality artstation painting, highly detailed, 1023x1537
 - **🚫 Негативный промт:**
   digital painting illustration, anime, cartoon, flat lighting, blurry, low quality, deformed anatomy, extra limbs, modern elements, bright colors, oversaturated, 3D plastic render, CGI, watermark, text overlay, blood, wounds, gore, violence, cracked stone skin, marble texture skin, nebula background, galaxy background, cosmic portal, swirling energy vortex, photorealistic photography style, young face, smiling expression, contemporary suit, clean-shaven
-- **Иерархия в городе:** Примоген (Малкавиан)
+- **Титул в городе:** Примоген (Малкавиан)
 - **Принадлежность:** Персонаж мастера
 
 ---
