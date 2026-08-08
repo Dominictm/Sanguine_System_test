@@ -24,7 +24,7 @@ async function loadCitiesGrid() {
   // Ленивый инжект структурных редакторов в форму создания (один раз) — тот же приём,
   // что уже применялся к «Фракциям»: единый компонент между созданием и редактированием.
   if (_cityFactionsCreateHost && !_cityFactionsCreateHost.dataset.ready) {
-    _cityFactionsCreateHost.innerHTML = _cityFactionsEditorHtml({ factions: '' });
+    _cityFactionsCreateHost.innerHTML = await _cityFactionsEditorHtml({ factions: '' });
     _cityFactionsCreateHost.dataset.ready = '1';
   }
   if (_cityDistrictsCreateHost && !_cityDistrictsCreateHost.dataset.ready) {
@@ -68,11 +68,6 @@ document.getElementById('cities-grid')?.addEventListener('click', e => {
 // City Detail Modal
 // ═══════════════════════════════════════════════════════════════
 
-// Секты и независимые кланы V20 (system/rules/reference_wod.md) — варианты для
-// мультиселекта секции «Фракции». Независимые — канонические 4 клана V20
-// (Каппадокийцы — вымерший/Dark Ages клан, в набор не входят).
-const CITY_SECTS = ['Камарилья', 'Анархи', 'Шабаш'];
-const CITY_INDEPENDENT_CLANS = ['Ассамиты', 'Следующие Луны', 'Джованни', 'Равнос'];
 let _cityDetail = null;  // { slug, cityMd, parsed, characters, modules, locations, active }
 
 // ── Структурные редакторы секций «Политический ландшафт» / «Ключевые локации» ──
@@ -661,42 +656,248 @@ function _cityRulesEditorHtml(mode = 'create', sec = {}) {
   }).join('');
 }
 
-function _cityFactionsEditorHtml(sec) {
+// Добавление из библиотеки (2026-08-08) — вместо фиксированного тумблера опций: чипы
+// рендерятся только для УЖЕ добавленных (по совпадению строки с /api/library/sects и
+// /api/library/clans, отфильтрованных sect === 'Независимые'), опции для выбора — в
+// раскрывающихся панелях-пикерах. Требует библиотеки заранее (см. вызовы await ниже) —
+// функция асинхронна, оба вызывающих места (loadCitiesGrid/_renderCityView) уже async.
+async function _cityFactionsEditorHtml(sec) {
+  await ensureSects();
+  await ensureClans();
+  const sectNames = new Set((_sectsCache || []).map(s => s.name));
+  // Библиотека кланов хранит «Русское (English)» (как дисциплины/титулы), но у существующих
+  // городов factions уже содержит голое русское имя («Ассамиты», не «Ассамиты (Assamite)») —
+  // та же проблема формата, что уже чинил Часть 1 для дисциплин, тот же хелпер
+  // _disciplineBareName (не специфичен дисциплинам по сути, несмотря на имя). Секты — уже
+  // голые в самой библиотеке (kamarilya.md: «# Камарилья», без English), доп.нормализация не
+  // нужна.
+  const indepClans = (_clansCache || []).filter(c => c.sect === 'Независимые');
+  const indepClanFullNames = new Set(indepClans.map(c => c.name));
+  const indepClanBareNames = new Set(indepClans.map(c => _disciplineBareName(c.name)));
+  const isIndepClanLine = l => indepClanFullNames.has(l) || indepClanBareNames.has(l);
+
   const all = String(sec.factions || '').split('\n').map(l => l.replace(/^\s*-\s?/, '').trim()).filter(Boolean);
-  const known = new Set([...CITY_SECTS, ...CITY_INDEPENDENT_CLANS]);
-  const selected = new Set(all.filter(l => known.has(l)));
-  const other = all.filter(l => !known.has(l));
-  const chip = name => {
-    const on = selected.has(name);
-    return `<button type="button" class="cdet-faction-chip" aria-pressed="${on}" data-faction="${escAttr(name)}">${escHtml(name)}</button>`;
-  };
+  const sectsSelected = all.filter(l => sectNames.has(l));
+  const clansSelected = all.filter(isIndepClanLine);
+  const other = all.filter(l => !sectNames.has(l) && !isIndepClanLine(l));
+
+  // Чип — уже добавленный элемент, не тумблер опции (клик всегда убирает целиком) —
+  // aria-label вместо aria-pressed (дизайн-ревью п.3): aria-pressed заявлял бы состояние
+  // «может быть не нажато», которого у этой модели больше нет.
+  const chip = name => `<button type="button" class="cdet-faction-chip" aria-label="Убрать «${escAttr(name)}» из фракций" data-faction="${escAttr(name)}">${escHtml(name)} <span class="cdet-faction-chip-remove" aria-hidden="true">✕</span></button>`;
+
   return `
     <div class="form-group">
-      <label class="form-label">Фракции<span class="field-tip" tabindex="0" data-tip="Секты и независимые кланы, реально присутствующие в городе — источник списка для дропдауна «Влияние — Фракции» в блоке «Район» ниже. Пример: отметь «Камарилья» и «Анархи», если обе секты представлены.">ⓘ</span></label>
-      <div class="cdet-rels-hint">Секты и независимые кланы, присутствующие в городе. Можно выбрать несколько.</div>
-      <div class="cdet-faction-group-label">Секты</div>
-      <div class="cdet-faction-chips" data-faction-group="sects">${CITY_SECTS.map(chip).join('')}</div>
-      <div class="cdet-faction-group-label">Независимые кланы</div>
-      <div class="cdet-faction-chips" data-faction-group="clans">${CITY_INDEPENDENT_CLANS.map(chip).join('')}</div>
-      <div class="cdet-faction-group-label">Другие фракции${fieldTip(CITY_FIELD_TIPS['Другие фракции'])}</div>
+      <label class="form-label">Фракции<span class="field-tip" tabindex="0" data-tip="Секты и независимые кланы, реально присутствующие в городе — источник списка для дропдауна «Влияние — Фракции» в блоке «Район» ниже.">ⓘ</span></label>
+      <div class="cdet-rels-hint">Секты и независимые кланы, присутствующие в городе — добавляй из библиотеки.</div>
+
+      <div class="cdet-faction-group-label">Секты
+        <button type="button" class="cdet-lib-pick-btn" data-pick-faction="sects" title="Добавить секту из библиотеки">📚</button>
+      </div>
+      <div class="cdet-faction-chips" data-faction-group="sects">${sectsSelected.map(chip).join('')}</div>
+      <div class="v20-lib-picker cdet-lib-picker-panel" id="cdet-faction-sects-picker" hidden>
+        <input type="text" class="v20-lib-search" placeholder="Поиск по названию…" id="cdet-faction-sects-search">
+        <div class="v20-lib-list" id="cdet-faction-sects-list"></div>
+      </div>
+
+      <div class="cdet-faction-group-label" style="margin-top:14px">Независимые кланы
+        <button type="button" class="cdet-lib-pick-btn" data-pick-faction="clans" title="Добавить клан из библиотеки">📚</button>
+      </div>
+      <div class="cdet-faction-chips" data-faction-group="clans">${clansSelected.map(chip).join('')}</div>
+      <div class="v20-lib-picker cdet-lib-picker-panel" id="cdet-faction-clans-picker" hidden>
+        <input type="text" class="v20-lib-search" placeholder="Поиск по названию…" id="cdet-faction-clans-search">
+        <div class="v20-lib-list" id="cdet-faction-clans-list"></div>
+      </div>
+
+      <div class="cdet-faction-group-label" style="margin-top:14px">Другие фракции${fieldTip(CITY_FIELD_TIPS['Другие фракции'])}</div>
       <textarea class="form-control" data-city-field="factions-other" rows="2"
         placeholder="По строке на фракцию вне списка (напр. Инконню)…">${escHtml(other.join('\n'))}</textarea>
-      <div class="cdet-faction-group-label" style="margin-top:14px">Фракции смертных${fieldTip(CITY_FIELD_TIPS['Фракции смертных'])}</div>
+
+      <div class="cdet-faction-group-label" style="margin-top:14px">Фракции смертных${fieldTip(CITY_FIELD_TIPS['Фракции смертных'])}
+        <button type="button" class="cdet-lib-pick-btn" data-pick-faction="mortal" title="Добавить из библиотеки «Смертные»">📚</button>
+      </div>
       <textarea class="form-control" data-city-field="factions-mortal-list" rows="2"
         placeholder="По строке на фракцию (напр. Полиция, Городской совет)…">${escHtml(String(sec.factionsMortal || '').split('\n').map(l => l.replace(/^\s*-\s?/, '').trim()).filter(Boolean).join('\n'))}</textarea>
-      <div class="cdet-faction-group-label" style="margin-top:14px">Государственные фракции${fieldTip(CITY_FIELD_TIPS['Государственные фракции'])}</div>
+      <div class="v20-lib-picker cdet-lib-picker-panel" id="cdet-faction-mortal-picker" hidden>
+        <input type="text" class="v20-lib-search" placeholder="Поиск по названию…" id="cdet-faction-mortal-search">
+        <div class="cdet-lib-picker-group" data-group="religious"><div class="cdet-lib-picker-group-label">Религиозные организации</div><div class="v20-lib-list" id="cdet-faction-mortal-list-religious"></div></div>
+        <div class="cdet-lib-picker-group" data-group="crime"><div class="cdet-lib-picker-group-label">Криминал</div><div class="v20-lib-list" id="cdet-faction-mortal-list-crime"></div></div>
+        <div class="cdet-lib-picker-group" data-group="civic"><div class="cdet-lib-picker-group-label">Гражданские организации</div><div class="v20-lib-list" id="cdet-faction-mortal-list-civic"></div></div>
+      </div>
+
+      <div class="cdet-faction-group-label" style="margin-top:14px">Государственные фракции${fieldTip(CITY_FIELD_TIPS['Государственные фракции'])}
+        <button type="button" class="cdet-lib-pick-btn" data-pick-faction="state" title="Добавить из библиотеки «Правительственные службы»">📚</button>
+      </div>
       <textarea class="form-control" data-city-field="factions-state-list" rows="2"
         placeholder="По строке на фракцию (напр. DGSI, Интерпол)…">${escHtml(String(sec.factionsState || '').split('\n').map(l => l.replace(/^\s*-\s?/, '').trim()).filter(Boolean).join('\n'))}</textarea>
+      <div class="v20-lib-picker cdet-lib-picker-panel" id="cdet-faction-state-picker" hidden>
+        <input type="text" class="v20-lib-search" placeholder="Поиск по названию…" id="cdet-faction-state-search">
+        <div class="v20-lib-list" id="cdet-faction-state-list"></div>
+      </div>
     </div>`;
 }
 // root ограничивает сбор одной формой — модалка редактирования и форма создания
-// держат свои наборы чипов одновременно, без пересечения селекторов.
+// держат свои наборы чипов одновременно, без пересечения селекторов. Каждый чип в DOM —
+// уже добавленная фракция (не тумблер) — собираем все без фильтра по состоянию.
 function _collectFactions(root = document) {
-  const chips = Array.from(root.querySelectorAll('.cdet-faction-chip[aria-pressed="true"]')).map(b => b.dataset.faction);
+  const chips = Array.from(root.querySelectorAll('.cdet-faction-chip')).map(b => b.dataset.faction);
   const other = (root.querySelector('[data-city-field="factions-other"]')?.value || '')
     .split('\n').map(l => l.trim()).filter(Boolean);
   return [...chips, ...other].join('\n');
 }
+
+// Скоуп-фикс (2026-08-08, дефект №1 QA-отчёта 2026-08-08-qa-report-faction-dedup-multi-title.md):
+// _cityFactionsEditorHtml рендерится в ДВУХ независимых, одновременно живущих в DOM местах —
+// #city-factions-editor (форма создания города, index.html:971) и #city-factions-edit (вкладка
+// «Фракции» текущего города, _cityTabPanelHtml → id="city-${tab}-edit") — с одинаковыми id
+// панелей-пикеров внутри. Без скоупинга document.getElementById/querySelector всегда попадали
+// бы в первый по DOM-порядку экземпляр, не в тот, что реально видит пользователь — тот же класс
+// проблемы, что уже решён для _collectFactions(root)/_currentFactionNames(root) в этом файле,
+// просто пикер при добавлении не унаследовал эту конвенцию. Фолбэк на document — для
+// единообразия с этими двумя функциями и на случай, если el вообще не внутри одного из двух
+// хостов (в норме не должно происходить, но не должно и падать).
+function _factionPickerRoot(el) {
+  return el.closest('#city-factions-edit, #city-factions-editor') || document;
+}
+// Множество уже добавленных имён для конкретного раздела пикера (2026-08-08, Часть 7) —
+// источник совпадает с тем, что читают _collectFactions*/_collectFactionsMortal/
+// _collectFactionsState на сохранении, но здесь нужен именно Set имён, для фильтрации списка
+// пикера (не показывать то, что уже добавлено), а не сериализованная строка.
+function _factionAlreadyAdded(which, root) {
+  const scope = root || document;
+  if (which === 'sects' || which === 'clans') {
+    return new Set(Array.from(
+      scope.querySelectorAll(`.cdet-faction-chips[data-faction-group="${which}"] .cdet-faction-chip`)
+    ).map(b => b.dataset.faction));
+  }
+  const field = which === 'mortal' ? 'factions-mortal-list' : 'factions-state-list';
+  const ta = scope.querySelector(`[data-city-field="${field}"]`);
+  return new Set((ta?.value || '').split('\n').map(l => l.trim()).filter(Boolean));
+}
+// Текст пустого списка — различает «пул кандидатов пуст без учёта поиска» (всё уже добавлено,
+// устойчивое состояние) от «поиск ничего не нашёл» (временное, пропадёт при очистке поля) —
+// дизайн-ревью 2026-08-08 п.1, иначе «Ничего не найдено» ошибочно читалось бы как пустая/
+// сломанная библиотека там, где на деле раздел просто полностью укомплектован.
+function _factionEmptyHtml(poolWithoutQuery) {
+  if (!poolWithoutQuery.length) return '<div class="cdet-empty">Все доступные записи уже добавлены.</div>';
+  return '<div class="cdet-empty">Ничего не найдено.</div>';
+}
+// Рендер списка одной панели-пикера фракций — переиспользуется всеми четырьмя (sects/clans/
+// mortal/state). Пустая группа (не по фильтру поиска, а вообще — категория библиотеки без
+// записей) скрывается целиком (дизайн-ревью п.4) — иначе «Ничего не найдено» висело бы
+// постоянно, не временно, как у пикера Дисциплин. Уже добавленные записи (Часть 7,
+// 2026-08-08) исключаются из списка целиком — не просто помечаются, как «Дисциплины».
+async function _renderFactionPickerList(which, query, root) {
+  const scope = root || document;
+  const q = (query || '').toLowerCase();
+  const added = _factionAlreadyAdded(which, scope);
+  const itemHtml = r => `<button type="button" class="v20-lib-item" data-name="${escAttr(r.name)}"><span>${escHtml(r.name)}</span></button>`;
+  if (which === 'sects') {
+    await ensureSects();
+    const pool = (_sectsCache || []).filter(s => !added.has(s.name));
+    const list = pool.filter(s => !q || s.name.toLowerCase().includes(q));
+    scope.querySelector('#cdet-faction-sects-list').innerHTML = list.map(itemHtml).join('') || _factionEmptyHtml(pool);
+  } else if (which === 'clans') {
+    await ensureClans();
+    const pool = (_clansCache || []).filter(c => c.sect === 'Независимые' && !added.has(c.name));
+    const list = pool.filter(c => !q || c.name.toLowerCase().includes(q));
+    scope.querySelector('#cdet-faction-clans-list').innerHTML = list.map(itemHtml).join('') || _factionEmptyHtml(pool);
+  } else if (which === 'mortal') {
+    const groups = ['religious', 'crime', 'civic'];
+    await Promise.all(groups.map(ensureMortLib));
+    for (const g of groups) {
+      const full = _mortLibCache.get(g) || [];
+      const pool = full.filter(r => !added.has(r.name));
+      const list = pool.filter(r => !q || r.name.toLowerCase().includes(q));
+      const groupEl = scope.querySelector(`#cdet-faction-mortal-picker .cdet-lib-picker-group[data-group="${g}"]`);
+      if (groupEl) groupEl.style.display = full.length ? '' : 'none';
+      const listEl = scope.querySelector(`#cdet-faction-mortal-list-${g}`);
+      if (listEl) listEl.innerHTML = list.map(itemHtml).join('') || _factionEmptyHtml(pool);
+    }
+  } else if (which === 'state') {
+    await ensureMortLib('government');
+    const pool = (_mortLibCache.get('government') || []).filter(r => !added.has(r.name));
+    const list = pool.filter(r => !q || r.name.toLowerCase().includes(q));
+    scope.querySelector('#cdet-faction-state-list').innerHTML = list.map(itemHtml).join('') || _factionEmptyHtml(pool);
+  }
+}
+document.addEventListener('click', async e => {
+  const pickBtn = e.target.closest('[data-pick-faction]');
+  if (pickBtn) {
+    const which = pickBtn.dataset.pickFaction; // 'sects' | 'clans' | 'mortal' | 'state'
+    const root = _factionPickerRoot(pickBtn);
+    const picker = root.querySelector(`#cdet-faction-${which}-picker`);
+    if (!picker) return;
+    if (picker.hidden) { picker.hidden = false; await _renderFactionPickerList(which, '', root); }
+    else picker.hidden = true;
+    return;
+  }
+  const item = e.target.closest('.v20-lib-picker[id^="cdet-faction-"] .v20-lib-item');
+  if (item) {
+    const picker = item.closest('.v20-lib-picker');
+    const which = picker.id.replace('cdet-faction-', '').replace('-picker', '');
+    const name = item.dataset.name;
+    const root = _factionPickerRoot(item);
+    if (which === 'sects' || which === 'clans') {
+      // Чип: toggle add/remove по имени (как «Дисциплины») — здесь может быть несколько
+      // фракций одновременно, в отличие от одиночных пикеров карточки персонажа.
+      const group = root.querySelector(`.cdet-faction-chips[data-faction-group="${which}"]`);
+      const existing = group?.querySelector(`.cdet-faction-chip[data-faction="${CSS.escape(name)}"]`);
+      if (existing) existing.remove();
+      else group?.insertAdjacentHTML('beforeend', `<button type="button" class="cdet-faction-chip" aria-label="Убрать «${escAttr(name)}» из фракций" data-faction="${escAttr(name)}">${escHtml(name)} <span class="cdet-faction-chip-remove" aria-hidden="true">✕</span></button>`);
+    } else {
+      // Фракции смертных/Государственные — построчный toggle в textarea.
+      const field = which === 'mortal' ? 'factions-mortal-list' : 'factions-state-list';
+      const ta = root.querySelector(`[data-city-field="${field}"]`);
+      if (ta) {
+        const lines = ta.value.split('\n').map(l => l.trim()).filter(Boolean);
+        const idx = lines.indexOf(name);
+        if (idx !== -1) lines.splice(idx, 1); else lines.push(name);
+        ta.value = lines.join('\n');
+      }
+    }
+    // Только что добавленная/убранная запись должна сразу пропасть/вернуться в списке пикера
+    // (Часть 7, 2026-08-08) — без этого дедупликация видна только при следующем открытии панели.
+    const searchInput = root.querySelector(`#cdet-faction-${which}-search`);
+    await _renderFactionPickerList(which, searchInput?.value || '', root);
+    return;
+  }
+  // Клик по самому чипу (в т.ч. по крестику внутри) — убирает фракцию целиком.
+  const chip = e.target.closest('.cdet-faction-chip');
+  if (chip) {
+    // Определить группу и root ДО удаления чипа — после удаления closest() из чипа уже
+    // ничего не найдёт, а _factionAlreadyAdded не увидит убранное имя среди чипов.
+    const which = chip.closest('.cdet-faction-chips')?.dataset.factionGroup;
+    const root = _factionPickerRoot(chip);
+    chip.remove();
+    if (which) {
+      const picker = root.querySelector(`#cdet-faction-${which}-picker`);
+      if (picker && !picker.hidden) {
+        const searchInput = root.querySelector(`#cdet-faction-${which}-search`);
+        await _renderFactionPickerList(which, searchInput?.value || '', root);
+      }
+    }
+    return;
+  }
+});
+document.addEventListener('input', e => {
+  const m = /^cdet-faction-(sects|clans|mortal|state)-search$/.exec(e.target.id || '');
+  if (m) _renderFactionPickerList(m[1], e.target.value, _factionPickerRoot(e.target));
+
+  // Ручная правка textarea (mortal/state — единственные два раздела без чипов) держит открытый
+  // пикер в синхроне (Часть 7, 2026-08-08) — иначе вписанная вручную запись продолжит маячить
+  // в списке выбора до следующего открытия/поиска панели.
+  if (e.target.matches('[data-city-field="factions-mortal-list"]')) {
+    const root = _factionPickerRoot(e.target);
+    const picker = root.querySelector('#cdet-faction-mortal-picker');
+    if (picker && !picker.hidden) _renderFactionPickerList('mortal', root.querySelector('#cdet-faction-mortal-search')?.value || '', root);
+  }
+  if (e.target.matches('[data-city-field="factions-state-list"]')) {
+    const root = _factionPickerRoot(e.target);
+    const picker = root.querySelector('#cdet-faction-state-picker');
+    if (picker && !picker.hidden) _renderFactionPickerList('state', root.querySelector('#cdet-faction-state-search')?.value || '', root);
+  }
+});
 // «Фракции смертных»/«Государственные фракции» (C1, 2026-08-07) — отдельные md-секции
 // (factionsMortal/factionsState), не часть composite-поля factions — иначе при перечитывании
 // со страницы они неотличимы от «Других фракций» (оба свободный текст без чип-маркеров).
@@ -799,7 +1000,7 @@ async function loadCityPage() {
     locations: Array.isArray(locs) ? locs : [],
     districts: Array.isArray(districts) ? districts : [],
   };
-  _renderCityView();
+  await _renderCityView();
 }
 
 // «Районы» — спойлер, содержащий спойлеры (техспека 2026-08-05, Часть II).
@@ -1064,12 +1265,21 @@ function _cityViewLocationsHtml(sec) {
 // Статичные чипы (<span>, не <button>) — переиспользуют разбор из
 // _cityFactionsEditorHtml, но не переключаются: .chip-view (styles.css) гасит
 // cursor/hover/active того же класса, чтобы не выглядеть кликабельным там, где
-// клик ничего не делает (designspec §3).
+// клик ничего не делает (designspec §3). Источник — /api/library/sects и /api/library/clans
+// (не хардкод, 2026-08-08) — _sectsCache/_clansCache уже тёплые к моменту вызова: единственный
+// вызывающий код (_renderCityView) сначала await _cityFactionsEditorHtml(sec), которая сама
+// прогревает оба кэша, и лишь потом строит основной шаблон с этой функцией внутри.
 function _cityViewFactionsHtml(sec) {
+  const sectNames = (_sectsCache || []).map(s => s.name);
+  const indepClans = (_clansCache || []).filter(c => c.sect === 'Независимые');
+  // Та же нормализация «голое имя vs с English», что _cityFactionsEditorHtml — иначе
+  // существующие города («Ассамиты», без «(Assamite)») теряют группу «Независимые кланы».
+  const indepClanBareByFull = new Map(indepClans.map(c => [_disciplineBareName(c.name), c.name]));
   const all = String(sec.factions || '').split('\n').map(l => l.replace(/^\s*-\s?/, '').trim()).filter(Boolean);
-  const known = new Set([...CITY_SECTS, ...CITY_INDEPENDENT_CLANS]);
-  const sects = CITY_SECTS.filter(s => all.includes(s));
-  const clans = CITY_INDEPENDENT_CLANS.filter(c => all.includes(c));
+  const isIndepClanLine = l => indepClans.some(c => c.name === l) || indepClanBareByFull.has(l);
+  const known = new Set([...sectNames, ...all.filter(isIndepClanLine)]);
+  const sects = sectNames.filter(s => all.includes(s));
+  const clans = all.filter(isIndepClanLine);
   const other = all.filter(l => !known.has(l));
   const mortal = String(sec.factionsMortal || '').split('\n').map(l => l.replace(/^\s*-\s?/, '').trim()).filter(Boolean);
   const state  = String(sec.factionsState  || '').split('\n').map(l => l.replace(/^\s*-\s?/, '').trim()).filter(Boolean);
@@ -1234,11 +1444,14 @@ function _cityViewGeographyHtml(sec) {
       _cityGeoRemainingEditHtml(sec))}`;
 }
 
-function _renderCityView() {
+async function _renderCityView() {
   const d = _cityDetail;
   const content = document.getElementById('city-detail-content');
   const display = (d.parsed && d.parsed.display) || d.slug;
   const sec = (d.parsed && d.parsed.sections) || {};
+  // Пикер фракций из библиотеки (2026-08-08) требует ensureSects/ensureClans до отрисовки —
+  // считаем ЗАРАНЕЕ, до сборки основного шаблона (await внутри template literal невозможен).
+  const factionsEditHtml = await _cityFactionsEditorHtml(sec);
 
   const meta = [
     d.parsed && d.parsed.year ? `<span class="chp-meta-item">📅 ${escHtml(d.parsed.year)}</span>` : '',
@@ -1273,7 +1486,7 @@ function _renderCityView() {
     <div class="city-page-body">
       <div class="city-view-panel active" data-city-view-pane="general">${_cityTabPanelHtml('general', _cityViewGeneralHtml(sec, d), _cityGeneralEditHtml(sec, d))}</div>
       <div class="city-view-panel" data-city-view-pane="political">${_cityTabPanelHtml('political', _cityViewPoliticalHtml(sec), _cityPolEditorHtml(sec))}</div>
-      <div class="city-view-panel" data-city-view-pane="factions">${_cityTabPanelHtml('factions', _cityViewFactionsHtml(sec), _cityFactionsEditorHtml(sec))}</div>
+      <div class="city-view-panel" data-city-view-pane="factions">${_cityTabPanelHtml('factions', _cityViewFactionsHtml(sec), factionsEditHtml)}</div>
       <div class="city-view-panel" data-city-view-pane="geography">${_cityViewGeographyHtml(sec)}</div>
     </div>`;
 }

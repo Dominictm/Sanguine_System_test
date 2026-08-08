@@ -271,6 +271,13 @@ function _placesByName(records) {
 // когда имя в строке совпало с существующим персонажем города — вручную вписанное имя
 // не создаёт запись (нет карточки, которую можно было бы найти). Ни разу не бросает —
 // одна неудавшаяся запись собирается в warnings и не должна срывать сохранение города.
+//
+// «Титул» — CSV-список (2026-08-08, Часть 8 — мульти-выбор титулов из библиотеки на карточке
+// персонажа, та же модель, что фронт уже применяет к «Дисциплинам»/«Титулу»,
+// char-detail.js:_cdetDisciplineTokens): синк трогает ТОЛЬКО свой собственный токен
+// "${role} города ${cityDisplay}", остальные вручную добавленные титулы не задевает. Раньше
+// поле перезаписывалось/сравнивалось целиком — с мульти-выбором это стирало бы вручную
+// добавленные титулы при каждом сохранении города.
 async function syncPoliticalCharacterHierarchy(city, cityDisplay, records, prevRecords) {
   const warnings = [];
   const currByName = _rolesByName(records);
@@ -282,6 +289,7 @@ async function syncPoliticalCharacterHierarchy(city, cityDisplay, records, prevR
   catch (e) { warnings.push(`Не удалось прочитать персонажей города для синка «Титула»: ${e.message}`); return warnings; }
   const charByName = new Map(chars.map(c => [c.name, c]));
   const hierarchyMdKey = EDITABLE_FIELD_MAP.hierarchy;
+  const tokensOf = v => String(v || '').split(',').map(s => s.trim()).filter(Boolean);
 
   // Выбывшие: держали роль ДО сохранения, сейчас ни на одной роли не числятся по имени.
   for (const [name, role] of prevByName) {
@@ -289,17 +297,24 @@ async function syncPoliticalCharacterHierarchy(city, cityDisplay, records, prevR
     const char = charByName.get(name);
     if (!char) continue; // персонаж переименован/удалён между сохранениями — нечего чистить
     const expected = `${role} города ${cityDisplay}`;
-    if ((char.hierarchy || '').trim() !== expected) continue; // §4.4 — ручная правка, не трогаем
-    try { await writeCharacterCardField(city, char, hierarchyMdKey, ''); }
+    const tokens = tokensOf(char.hierarchy);
+    const idx = tokens.indexOf(expected);
+    if (idx === -1) continue; // токена нет — снят вручную или не был проставлен, не трогаем
+    tokens.splice(idx, 1);
+    try { await writeCharacterCardField(city, char, hierarchyMdKey, tokens.join(', ')); }
     catch (e) { warnings.push(`Не удалось очистить «Титул» у «${name}»: ${e.message}`); }
   }
-  // Новые/сохранившие роль: проставляем текущую должность.
+  // Новые/сохранившие роль: добавляем текущую должность в начало списка (если её ещё нет) —
+  // именно первым токеном, а не в конец: политический титул — самый статусно значимый,
+  // не должен теряться в хвосте у персонажа с несколькими вручную добавленными титулами.
   for (const [name, role] of currByName) {
     const char = charByName.get(name);
     if (!char) continue; // ручной ввод текста, не выбор существующего персонажа — не пишем
     const value = `${role} города ${cityDisplay}`;
-    if ((char.hierarchy || '').trim() === value) continue; // уже актуально
-    try { await writeCharacterCardField(city, char, hierarchyMdKey, value); }
+    const tokens = tokensOf(char.hierarchy);
+    if (tokens.includes(value)) continue; // уже проставлено
+    tokens.unshift(value);
+    try { await writeCharacterCardField(city, char, hierarchyMdKey, tokens.join(', ')); }
     catch (e) { warnings.push(`Не удалось записать «Титул» «${name}» (${role}): ${e.message}`); }
   }
   return warnings;

@@ -159,6 +159,9 @@ function parseCharacter(rawContent, folderName, lineage) {
     if (k === 'Особенности / Способности')      c.features      = v;
     if (k === 'Родственники')                   c.relatives     = v;   // смертные
     if (k === 'Отношение к сверхъестественному') c.attitude     = v;   // смертные
+    if (k === 'Роль в секте')                   c.sectRole      = v;   // смертные/охотники
+    if (k === 'Организация')                    c.organization  = v;   // смертные/охотники
+    if (k === 'Должность')                      c.position      = v;   // смертные/охотники
   }
 
   // Diary links: - **📖 Дневники:** [Title](path.md)

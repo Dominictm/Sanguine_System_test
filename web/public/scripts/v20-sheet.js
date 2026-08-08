@@ -898,17 +898,31 @@ let _v20CurrentLibView = null; // { kind, slug, category, custom } | null
 let _v20LibEditMode = false;
 let _v20LibEditDirty = false;
 
-function _v20DetailActionsHtml() {
+// custom — какой набор кнопок рисовать (2026-08-08: у канона теперь тоже есть шапка — форк +
+// загрузка арта, не пустая, как раньше). «Изображение» — второстепенное действие относительно
+// Правки/Форка (дизайн-ревью п.5), визуально приглушена классом cdet-secondary-btn, идёт
+// последней в обеих ветках.
+function _v20DetailActionsHtml(custom) {
+  // 🧬 — не 📋 (дизайн-ревью п.1): 📋 читается как «скопировать в буфер», конфликтует с
+  // реальным действием (открывает форму с предзаполненными полями, не копирует текст).
+  const artBtn = `<button type="button" class="cdet-edit-btn cdet-secondary-btn" id="v20-disc-art-btn">🖼 Изображение</button>`;
+  if (!custom) {
+    return `<div class="v20-disc-detail-actions">
+      <button type="button" class="cdet-edit-btn" id="v20-disc-fork-btn">🧬 Создать свою копию</button>
+      ${artBtn}
+    </div>`;
+  }
   return `<div class="v20-disc-detail-actions">
     <button type="button" class="cdet-edit-btn" id="v20-disc-edit-btn">✏ Редактировать</button>
     <button type="button" class="cdet-delete-btn" id="v20-disc-delete-btn" title="Удалить">🗑</button>
+    ${artBtn}
   </div>`;
 }
 
 // Общая точка входа для всех «просмотр записи» рендереров (дисциплина/
-// психика/merit/flaw/background/клан/секта) — устанавливает body.innerHTML,
-// запоминает текущий view и, если запись авторская, дорисовывает Edit/Delete
-// в шапку (.v20-disc-detail-head, если она есть в разметке детейла).
+// психика/merit/flaw/background/клан/секта/«Смертные») — устанавливает body.innerHTML,
+// запоминает текущий view и дорисовывает действия в шапку (.v20-disc-detail-head, если она
+// есть в разметке детейла) — набор кнопок зависит от custom (см. _v20DetailActionsHtml).
 // view = null — для Path/Combo-детейлов (нет CRUD, кнопки не нужны).
 function _v20SetLibDetailBody(html, view) {
   const body = document.getElementById('v20-disc-modal-body');
@@ -917,9 +931,9 @@ function _v20SetLibDetailBody(html, view) {
   _v20CurrentLibView = view;
   _v20LibEditMode = false;
   _v20LibEditDirty = false;
-  if (view && view.custom) {
+  if (view) {
     const head = body.querySelector('.v20-disc-detail-head');
-    if (head) head.insertAdjacentHTML('beforeend', _v20DetailActionsHtml());
+    if (head) head.insertAdjacentHTML('beforeend', _v20DetailActionsHtml(!!view.custom));
   }
 }
 
@@ -932,8 +946,9 @@ async function _v20EnterLibEdit() {
   if (!body) return;
   _v20LibEditMode = true;
   _v20LibEditDirty = false;
+  // custom всегда true здесь — функция уже вышла выше, если !v.custom (см. guard в начале).
   body.innerHTML = `
-    <div class="v20-disc-edit-topbar">${_v20DetailActionsHtml()}</div>
+    <div class="v20-disc-edit-topbar">${_v20DetailActionsHtml(true)}</div>
     <div id="v20-disc-edit-fields"></div>
     <div id="v20-disc-edit-error" class="chr-form-error" style="display:none"></div>`;
   body.querySelector('#v20-disc-edit-btn').textContent = '✓ Сохранить';
@@ -990,6 +1005,7 @@ function _v20ReopenLibDetail(kind, slug, category) {
   else if (kind === 'clans') _v20RenderClanDetail(slug);
   else if (kind === 'sects') _v20RenderSectDetail(slug);
   else if (kind === 'titles') _v20RenderTitleDetail(slug);
+  else if (kind.startsWith('mortal-')) _v20RenderMortDetail(kind.slice('mortal-'.length), slug);
 }
 
 async function _v20DeleteCurrentLibRecord() {
@@ -1008,6 +1024,67 @@ async function _v20DeleteCurrentLibRecord() {
   _v20LibEditMode = false; _v20LibEditDirty = false;
   await cfg.reload(v.category);
   _v20CloseDisciplineModal();
+}
+
+// Форк канона (2026-08-08) — открывает уже существующую форму создания
+// (library-authoring.js), предзаполненную текущей канонической записью. Сохранение идёт по
+// уже существующему POST — независимая новая авторская запись, канон не трогается (Вариант C,
+// 2026-08-08-library-canonical-edit-analysis.md §3).
+function _v20ForkCurrentLibRecord() {
+  const v = _v20CurrentLibView;
+  if (!v || v.custom) return; // форк — только у канона; у авторских уже есть «Редактировать»
+  const rec = _libFindRecord(v.kind, v.slug, v.category);
+  if (!rec) return;
+  _libOpenCreateModal(v.kind, v.category, rec);
+}
+
+// Загрузка/замена изображения записи (2026-08-08) — доступна и канону, и авторским записям
+// (Часть I §3.4 анализа: тот же риск отката на update.bat, что и у правки текста, но мягче
+// по цене — арт не авторский текст).
+function _v20UploadCurrentLibArt() {
+  const v = _v20CurrentLibView;
+  if (!v) return;
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = 'image/*';
+  input.addEventListener('change', async () => {
+    const file = input.files[0];
+    if (!file) return;
+    try {
+      const png64 = await _libImageToPngBase64(file);
+      const r = await fetch(`/api/library/${v.kind}/${encodeURIComponent(v.slug)}/image`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ base64: png64 }),
+      }).then(x => x.json());
+      if (!r.ok) { showToast(r.error || 'Не удалось загрузить изображение', 'error'); return; }
+      const cfg = _LIB_KIND_CONFIG[v.kind];
+      await cfg.reload(v.category);
+      _v20ReopenLibDetail(v.kind, v.slug, v.category);
+      showToast('Изображение обновлено', 'success');
+    } catch (e) { showToast(e.message, 'error'); }
+  });
+  input.click();
+}
+
+// Конвертация в PNG через <canvas> — стандартный API, без новых зависимостей (вся читающая
+// сторона библиотеки жёстко предполагает .png). Возвращает чистый base64 (без
+// "data:image/png;base64," префикса — сервер ждёт голый base64, тот же контракт, что
+// upload-image персонажа).
+function _libImageToPngBase64(file) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.naturalWidth; canvas.height = img.naturalHeight;
+      canvas.getContext('2d').drawImage(img, 0, 0);
+      URL.revokeObjectURL(url);
+      const dataUrl = canvas.toDataURL('image/png');
+      resolve(dataUrl.slice(dataUrl.indexOf(',') + 1));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Не удалось прочитать файл как изображение')); };
+    img.src = url;
+  });
 }
 
 async function _v20CloseDisciplineModal() {
@@ -1073,8 +1150,18 @@ function _v20EnsureLibModal() {
     if (editBtn) { if (_v20LibEditMode) _v20SaveLibEdit(); else _v20EnterLibEdit(); return; }
     const delBtn = e.target.closest('#v20-disc-delete-btn');
     if (delBtn) { _v20DeleteCurrentLibRecord(); return; }
+    const forkBtn = e.target.closest('#v20-disc-fork-btn');
+    if (forkBtn) { _v20ForkCurrentLibRecord(); return; }
+    const artBtn = e.target.closest('#v20-disc-art-btn');
+    if (artBtn) { _v20UploadCurrentLibArt(); return; }
   });
-  document.addEventListener('keydown', e => { if (e.key === 'Escape') _v20CloseDisciplineModal(); });
+  document.addEventListener('keydown', e => {
+    if (e.key !== 'Escape') return;
+    // Форк (2026-08-08): пока форма создания открыта поверх, Escape закрывает её —
+    // не пропускаем событие в закрытие детейл-модалки библиотеки под ней.
+    if (document.getElementById('lib-edit-modal')?.classList.contains('open')) return;
+    _v20CloseDisciplineModal();
+  });
   // Лёгкая ловушка фокуса: Tab циклится внутри открытой модалки.
   modal.addEventListener('keydown', e => {
     if (e.key !== 'Tab' || !modal.classList.contains('open')) return;
@@ -1590,6 +1677,81 @@ async function loadKindred(which) {
     _libRenderTitleList();
   }
 }
+
+// ── «Смертные» (2026-08-08) — 5 категорий с идентичной схемой (имя/источник/примечание/
+// описание), один параметризуемый набор функций вместо пяти копий. group — один из
+// 'government'/'religious'/'crime'/'civic'/'positions'.
+const _mortLibCache = new Map(); // group -> list
+
+async function ensureMortLib(group) {
+  if (_mortLibCache.has(group)) return _mortLibCache.get(group);
+  let list = [];
+  try { list = await fetch(`/api/library/mortal-${group}`).then(r => r.json()); } catch { /* пусто */ }
+  if (!Array.isArray(list)) list = [];
+  _mortLibCache.set(group, list);
+  return list;
+}
+function _mortBySlug(group, slug) { return (_mortLibCache.get(group) || []).find(x => x.slug === slug) || null; }
+
+function _libMortCardsHtml(group) {
+  const list = _mortLibCache.get(group) || [];
+  return `<div class="lib-cards">${list.map(r => {
+    const art = r.hasArt
+      ? `<img class="lib-card-art" loading="lazy" decoding="async" src="/img/system/library/mortal-${group}/${escAttr(r.slug)}.png" alt="">`
+      : '';
+    const badge = r.custom ? '<span class="lib-card-custom-badge">✏️ Авторское</span>' : '';
+    const inner = `<div class="lib-card-name">${escHtml(r.name)}</div>${badge}`;
+    // data-mort-card-group (не data-mort-group) — намеренно другое имя атрибута: karточки
+    // тоже нуждались в маркере категории для клик-делегата ниже, но data-mort-group уже занят
+    // кнопками переключения подвкладок (scripts.js) — клик по карточке подхватывался ИХ
+    // делегатом через closest('[data-mort-group]'), тот не находил .disciplines-subtab-bar
+    // у карточки и падал на null.querySelectorAll (найдено 2026-08-08, живая проверка).
+    return `<button type="button" class="lib-card${r.hasArt ? ' has-art' : ''}" data-mort-slug="${escAttr(r.slug)}" data-mort-card-group="${group}">
+      ${art}${r.hasArt ? `<div class="lib-card-overlay">${inner}</div>` : inner}
+    </button>`;
+  }).join('')}</div>`;
+}
+
+function _libMortDetailHtml(r) {
+  if (!r) return '<div class="v20-disc-empty">Запись не найдена.</div>';
+  const badge = r.custom ? '<span class="lib-card-custom-badge">✏️ Авторское</span>' : '';
+  return `<div class="v20-disc-detail-head"><h3>${escHtml(r.name)}</h3>${badge}</div>
+    ${r.source ? `<div class="v20-disc-note">Источник: ${escHtml(r.source)}</div>` : ''}
+    ${r.note ? `<div class="v20-disc-note">${escHtml(r.note)}</div>` : ''}
+    <p class="lib-power-text">${escHtml(r.description || '')}</p>`;
+}
+
+async function _libRenderMortList(group) {
+  const body = document.getElementById(`lib-mortal-${group}-body`);
+  if (body) body.innerHTML = _libMortCardsHtml(group);
+}
+
+function _v20RenderMortDetail(group, slug) {
+  const r = _mortBySlug(group, slug);
+  _v20SetLibDetailBody(_libMortDetailHtml(r), r ? { kind: `mortal-${group}`, slug, category: null, custom: !!r.custom } : null);
+}
+async function _v20OpenMortModal(group, slug) {
+  _v20OpenLibModalShell();
+  await ensureMortLib(group);
+  _v20RenderMortDetail(group, slug);
+}
+
+// Точка входа вкладки «Смертные» — зеркалит loadKindred выше, но циклом по группам вместо
+// трёх ручных if — все пять категорий используют одну схему карточки/детейла.
+const MORT_GROUPS = ['government', 'religious', 'crime', 'civic', 'positions'];
+async function loadMortalLib(which) {
+  for (const group of MORT_GROUPS) {
+    if (which && which !== group) continue;
+    const body = document.getElementById(`lib-mortal-${group}-body`);
+    if (body && !_mortLibCache.has(group)) body.innerHTML = '<div class="loading-state"><div class="spinner"></div>Загрузка...</div>';
+    await ensureMortLib(group);
+    await _libRenderMortList(group);
+  }
+}
+document.addEventListener('click', e => {
+  const card = e.target.closest('[data-mort-slug]');
+  if (card) { _v20OpenMortModal(card.dataset.mortCardGroup, card.dataset.mortSlug); return; }
+});
 
 // ── Mortal sheet: «Психические способности» row reference (зеркало v20DisciplineKey/
 // _v20OpenDisciplineModal выше, но источник — _psychicsCache/ensurePsychics(), не дисциплины).

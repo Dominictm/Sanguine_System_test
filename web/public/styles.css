@@ -2309,6 +2309,16 @@ body {
   display: block;
 }
 
+/* «Смертные» (2026-08-08) — та же show/hide-механика, что «Сородичи» выше, свой класс, чтобы
+   не путать делегаты data-mort-group/data-kin-group. */
+.mortal-subpanel {
+  display: none;
+}
+
+.mortal-subpanel.active {
+  display: block;
+}
+
 /* Библиотека — вкладки унифицированы со стилем модального окна персонажа
    (.cdet-tab-bar/.cdet-tab): равноширокие вкладки, тонированная плашка,
    градиент на активной. Scoped to #page-library — .tab-bar/.tab-btn is
@@ -3611,6 +3621,19 @@ a:focus-visible {
   color: var(--text3);
 }
 
+/* Второстепенное действие относительно Правки/Форка (дизайн-ревью 2026-08-08 п.5) — «🖼
+   Изображение» в шапке детейла библиотеки: без рамки, приглушённый цвет, чтобы не спорить
+   визуальным весом с первичным действием ряда. */
+.cdet-secondary-btn {
+  border-color: transparent;
+  color: var(--text3);
+  opacity: .75;
+}
+.cdet-secondary-btn:hover {
+  opacity: 1;
+  border-color: var(--border);
+}
+
 /* A2.8 (2026-08-07): кнопка-пикер титула рядом с полем «Титул» вкладки «Информация». */
 .cdet-field-with-pick { display: flex; gap: 6px; align-items: center; }
 .cdet-field-with-pick .cdet-field-input { flex: 1; min-width: 0; }
@@ -3628,15 +3651,28 @@ a:focus-visible {
 .cdet-lib-pick-btn:hover { border-color: var(--gold); color: var(--gold); }
 @media (pointer: coarse) { .cdet-lib-pick-btn { width: 44px; height: 44px; } }
 
-.cdet-title-picker { margin-top: 8px; }
-.cdet-title-picker-group + .cdet-title-picker-group { margin-top: 10px; }
-.cdet-title-picker-group-label {
+.cdet-lib-picker-panel { margin-top: 8px; }
+.cdet-lib-picker-group + .cdet-lib-picker-group { margin-top: 10px; }
+.cdet-lib-picker-group-label {
   font-family: var(--f-heading);
   font-size: var(--fs-2xs);
   letter-spacing: .1em;
   text-transform: uppercase;
   color: var(--text3);
   margin-bottom: 4px;
+}
+
+/* Пикер дисциплин (2026-08-08) — элемент уже добавлен в поле. Двойное кодирование состояния
+   (не только цвет) — префикс «✓ » в _disciplineItemHtml дублирует эту рамку/фон текстом. */
+.cdet-lib-item-selected {
+  background: rgba(125, 206, 130, .1);
+  border-color: rgba(125, 206, 130, .35);
+}
+
+/* Условная видимость «Роль в секте»/«Должность» (2026-08-08) — строка всегда в DOM, скрывается
+   классом (тот же принцип, что уже прячет пустые поля в просмотре, cdet-opt-empty). */
+.cdet-cond-hidden {
+  display: none;
 }
 
 /* Delete-character button in the detail sticky header (left of the ✕ close).
@@ -4056,10 +4092,20 @@ a:focus-visible {
   transform: scale(.96);
 }
 
-.cdet-faction-chip[aria-pressed="true"] {
+/* Каждый чип в форме редактирования (не .chip-view) — уже добавленная фракция, не тумблер
+   с двумя состояниями (2026-08-08, было .cdet-faction-chip[aria-pressed="true"]) — акцентный
+   вид применяется ко всем таким чипам безусловно. */
+.cdet-faction-chip:not(.chip-view) {
   background: color-mix(in srgb, var(--accent) 22%, transparent);
   border-color: var(--accent);
   color: var(--text);
+}
+.cdet-faction-chip-remove {
+  opacity: .65;
+  margin-left: 2px;
+}
+.cdet-faction-chip:hover .cdet-faction-chip-remove {
+  opacity: 1;
 }
 
 /* Статичный чип (вкладка «Фракции» просмотра города, city-view-tabs §V4/§3) —
@@ -5389,6 +5435,16 @@ a:focus-visible {
   visibility: visible;
   opacity: 1;
   pointer-events: auto;
+}
+
+/* Форк канона (2026-08-08) — #lib-edit-modal может открыться поверх уже открытой
+   .v20-disc-modal-backdrop (кнопка «Создать свою копию» в шапке детейла канона). У обеих
+   одинаковый z-index (var(--z-confirm)), а .v20-disc-modal-backdrop добавляется в body позже
+   (JS, при первом открытии библиотеки за сессию) — при равном z-index именно она перекрыла бы
+   форму. Точечный override только для этого id: .chr-modal-backdrop как общий класс не
+   трогаем — у его остальных потребителей такого стека нет и не будет. */
+#lib-edit-modal.open {
+  z-index: calc(var(--z-confirm) + 50);
 }
 
 .chr-modal {

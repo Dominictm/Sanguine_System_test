@@ -938,6 +938,7 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     if (tab === 'ai-connect')      loadAiConnectTab();
     if (tab === 'ai-features')     loadAiFeaturesTab();
     if (tab === 'lib-kindred')     loadKindred();
+    if (tab === 'lib-mortal')      loadMortalLib();
     if (tab === 'lib-disciplines') {
       document.querySelectorAll('.disciplines-subtab-btn').forEach(b => {
         const isAll = b.dataset.discGroup === 'all';
@@ -1024,6 +1025,21 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     document.querySelectorAll('.kindred-subpanel').forEach(p =>
       p.classList.toggle('active', p.id === `kin-sub-${group}`));
     loadKindred(group);
+  });
+
+  // «Смертные» (2026-08-08) — тот же паттерн, что «Сородичи» выше, свой data-атрибут/класс.
+  document.addEventListener('click', e => {
+    const btn = e.target.closest('[data-mort-group]');
+    if (!btn) return;
+    const group = btn.dataset.mortGroup;
+    const bar = btn.closest('.disciplines-subtab-bar');
+    bar.querySelectorAll('[data-mort-group]').forEach(b => {
+      b.classList.remove('active'); b.setAttribute('aria-pressed', 'false');
+    });
+    btn.classList.add('active'); btn.setAttribute('aria-pressed', 'true');
+    document.querySelectorAll('.mortal-subpanel').forEach(p =>
+      p.classList.toggle('active', p.id === `mort-sub-${group}`));
+    loadMortalLib(group);
   });
 });
 
@@ -2056,19 +2072,49 @@ const INFO_FIELDS_BY_LINEAGE = {
     ['leverage',   'Рычаг'],
   ],
   mortal: [
-    ['status',     'Статус'],
+    ['status',       'Статус'],
     ['statusDetails','Детали статуса'],
-    ['gender',     'Пол'],
-    ['profession', 'Профессия'],
-    ['birthYear',  'Год рождения'],
-    ['location',   'Домен / Локация'],
-    ['relatives',  'Родственники'],
-    ['attitude',   'Отношение к сверхъестественному'],
-    ['hierarchy',  'Титул'],
-    ['role',       'Роль'],
-    ['nature',     'Натура'],
-    ['demeanor',   'Маска'],
-    ['belonging',  'Принадлежность'],
+    ['gender',       'Пол'],
+    ['sect',         'Секта'],
+    ['sectRole',     'Роль в секте'],
+    ['organization', 'Организация'],
+    ['position',     'Должность'],
+    ['profession',   'Профессия'],
+    ['birthYear',    'Год рождения'],
+    ['location',     'Домен / Локация'],
+    ['relatives',    'Родственники'],
+    ['attitude',     'Отношение к сверхъестественному'],
+    ['hierarchy',    'Титул'],
+    ['role',         'Роль'],
+    ['nature',       'Натура'],
+    ['demeanor',     'Маска'],
+    ['belonging',    'Принадлежность'],
+    ['want',       'Хочет'],
+    ['fear',       'Боится'],
+    ['leverage',   'Рычаг'],
+  ],
+  // Охотник — отдельный литерал, не алиас mortal (осознанное решение: сегодня совпадают, но
+  // не обязаны — у охотника в V20 есть Numina/практики, которых нет у рядового смертного).
+  // V20-лист уже относится к охотнику как к смертному (_resolveSheetLineage, server.js) —
+  // вкладка «Информация» раньше отставала (падала в INFO_FIELDS_GENERIC), теперь синхронна.
+  hunter: [
+    ['status',       'Статус'],
+    ['statusDetails','Детали статуса'],
+    ['gender',       'Пол'],
+    ['sect',         'Секта'],
+    ['sectRole',     'Роль в секте'],
+    ['organization', 'Организация'],
+    ['position',     'Должность'],
+    ['profession',   'Профессия'],
+    ['birthYear',    'Год рождения'],
+    ['location',     'Домен / Локация'],
+    ['relatives',    'Родственники'],
+    ['attitude',     'Отношение к сверхъестественному'],
+    ['hierarchy',    'Титул'],
+    ['role',         'Роль'],
+    ['nature',       'Натура'],
+    ['demeanor',     'Маска'],
+    ['belonging',    'Принадлежность'],
     ['want',       'Хочет'],
     ['fear',       'Боится'],
     ['leverage',   'Рычаг'],
@@ -2095,7 +2141,7 @@ function infoFieldsFor(lineage) {
 }
 
 // Обязательное (всегда видимое) поле — своё для линейки. Показывается даже пустым с флагом «!».
-const REQUIRED_INFO_KEY = { vampire: 'clan', fairy: 'race', mortal: 'profession' };
+const REQUIRED_INFO_KEY = { vampire: 'clan', fairy: 'race', mortal: 'profession', hunter: 'profession' };
 function requiredInfoFor(lineage) {
   const k = REQUIRED_INFO_KEY[lineage];
   return new Set(k ? [k] : []);

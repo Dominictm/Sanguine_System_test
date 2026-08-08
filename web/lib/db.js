@@ -549,6 +549,9 @@ const EDITABLE_FIELD_MAP = {
   features:     'Особенности / Способности',
   relatives:    'Родственники',
   attitude:     'Отношение к сверхъестественному',
+  sectRole:     'Роль в секте',
+  organization: 'Организация',
+  position:     'Должность',
 };
 
 // Card fields that are mirrored in the V20 sheet's «🧩 Шапка» header table — kept in

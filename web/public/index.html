@@ -729,6 +729,7 @@
 
       <div class="tab-bar">
         <button class="tab-btn active" data-tab="lib-kindred">Сородичи</button>
+        <button class="tab-btn" data-tab="lib-mortal">Смертные</button>
         <button class="tab-btn" data-tab="lib-disciplines">Дисциплины</button>
         <button class="tab-btn" data-tab="lib-psychics">Психические способности</button>
         <button class="tab-btn" data-tab="lib-merits">✦ Достоинства</button>
@@ -766,6 +767,50 @@
         <div class="kindred-subpanel" id="kin-sub-titles">
           <div class="lib-add-row"><button type="button" class="mod-fill-add-btn" data-lib-add="titles">+ Добавить титул</button></div>
           <div class="lib-panel" id="lib-titles-body">
+            <div class="loading-state"><div class="spinner"></div>Загрузка...</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Смертные (2026-08-08) — зеркалит структуру «Сородичи» выше, 5 подкатегорий вместо 3,
+           общий контейнер .mortal-subpanel (не .kindred-subpanel — свой data-mort-group делегат,
+           не путается с data-kin-group). -->
+      <div class="tab-panel" id="tab-lib-mortal">
+        <div class="disciplines-subtab-bar">
+          <button class="disciplines-subtab-btn active" data-mort-group="government" aria-pressed="true">Правительственные службы</button>
+          <button class="disciplines-subtab-btn" data-mort-group="religious" aria-pressed="false">Религиозные организации</button>
+          <button class="disciplines-subtab-btn" data-mort-group="crime" aria-pressed="false">Криминал</button>
+          <button class="disciplines-subtab-btn" data-mort-group="civic" aria-pressed="false">Гражданские организации</button>
+          <button class="disciplines-subtab-btn" data-mort-group="positions" aria-pressed="false">Должности</button>
+        </div>
+
+        <div class="mortal-subpanel active" id="mort-sub-government">
+          <div class="lib-add-row"><button type="button" class="mod-fill-add-btn" data-lib-add="mortal-government">+ Добавить службу</button></div>
+          <div class="lib-panel" id="lib-mortal-government-body">
+            <div class="loading-state"><div class="spinner"></div>Загрузка...</div>
+          </div>
+        </div>
+        <div class="mortal-subpanel" id="mort-sub-religious">
+          <div class="lib-add-row"><button type="button" class="mod-fill-add-btn" data-lib-add="mortal-religious">+ Добавить организацию</button></div>
+          <div class="lib-panel" id="lib-mortal-religious-body">
+            <div class="loading-state"><div class="spinner"></div>Загрузка...</div>
+          </div>
+        </div>
+        <div class="mortal-subpanel" id="mort-sub-crime">
+          <div class="lib-add-row"><button type="button" class="mod-fill-add-btn" data-lib-add="mortal-crime">+ Добавить группировку</button></div>
+          <div class="lib-panel" id="lib-mortal-crime-body">
+            <div class="loading-state"><div class="spinner"></div>Загрузка...</div>
+          </div>
+        </div>
+        <div class="mortal-subpanel" id="mort-sub-civic">
+          <div class="lib-add-row"><button type="button" class="mod-fill-add-btn" data-lib-add="mortal-civic">+ Добавить организацию</button></div>
+          <div class="lib-panel" id="lib-mortal-civic-body">
+            <div class="loading-state"><div class="spinner"></div>Загрузка...</div>
+          </div>
+        </div>
+        <div class="mortal-subpanel" id="mort-sub-positions">
+          <div class="lib-add-row"><button type="button" class="mod-fill-add-btn" data-lib-add="mortal-positions">+ Добавить должность</button></div>
+          <div class="lib-panel" id="lib-mortal-positions-body">
             <div class="loading-state"><div class="spinner"></div>Загрузка...</div>
           </div>
         </div>

@@ -7011,6 +7011,44 @@ describe('city-creation-restructure: город → персонаж/локац�
       'у нового персонажа должна проставиться «Иерархия»');
   });
 
+  // 2026-08-08, Часть 8 (мульти-выбор титулов) — regression на находку дизайн-анализа: с тех
+  // пор как «Титул» стал CSV-списком (мульти-пикер из библиотеки на карточке персонажа), синк
+  // с картой фракций города должен трогать ТОЛЬКО свой собственный политический токен, не
+  // затирать и не терять вручную добавленные титулы целиком (см. docs/design/
+  // 2026-08-08-faction-picker-dedup-and-multi-title-analysis.md §2.2).
+  it('Властители города: назначение/снятие политроли трогает только свой токен, ручной титул сохраняется', async () => {
+    const charC = await apiJson(`/api/characters${qs()}`, { method: 'POST', body: JSON.stringify({
+      name: 'Реструкт Мульти-Титул', lineage: 'vampire', gender: 'Мужской', clan: 'Бруха', sect: 'Камарилья',
+    }) });
+    assert.equal(charC.status, 200, charC.body.error);
+
+    // Персонаж уже носит титул, не связанный с картой фракций (выбран вручную/через мульти-пикер).
+    const putField = await apiJson(`/api/characters/${encodeURIComponent(charC.body.slug)}/fields${qs()}`, {
+      method: 'PUT', body: JSON.stringify({ fields: { hierarchy: 'Шериф' } }),
+    });
+    assert.equal(putField.status, 200);
+
+    const putPol1 = await apiJson(`/api/cities/${citySlug}`, { method: 'PUT', body: JSON.stringify({
+      fields: { display: 'Restructure Hierarchy Testcity', year: '2010', political: 'Князь: Реструкт Мульти-Титул' },
+    }) });
+    assert.equal(putPol1.status, 200);
+
+    const after1 = await apiJson(`/api/characters${qs()}`);
+    const cAfter1 = after1.body.find(c => c.name === 'Реструкт Мульти-Титул');
+    assert.equal(cAfter1.hierarchy, 'Князь города Restructure Hierarchy Testcity, Шериф',
+      'политический токен должен встать первым (дизайн-ревью п.2), ручной титул — сохраниться следом');
+
+    // Снятие политроли — ручной титул должен остаться, политический токен уйти.
+    const putPol2 = await apiJson(`/api/cities/${citySlug}`, { method: 'PUT', body: JSON.stringify({
+      fields: { display: 'Restructure Hierarchy Testcity', year: '2010', political: '' },
+    }) });
+    assert.equal(putPol2.status, 200);
+
+    const after2 = await apiJson(`/api/characters${qs()}`);
+    const cAfter2 = after2.body.find(c => c.name === 'Реструкт Мульти-Титул');
+    assert.equal(cAfter2.hierarchy, 'Шериф', 'после снятия политроли должен остаться только вручную добавленный титул');
+  });
+
   it('Значимые места: смена локации со статусом «Элизиум» переносит «Статус» (VtM)', async () => {
     // 2026-08-06, план «карточка локации» §7.1/§3.1: раньше «Элизиум» синкался в
     // «Зону» карточки локации (метаданные) — теперь все 5 типов «Значимых мест»

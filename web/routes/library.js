@@ -7,7 +7,7 @@
 const express = require('express');
 const path    = require('path');
 const fs      = require('fs').promises;
-const { serverError } = require('../lib/http');
+const { serverError, validateImageUpload } = require('../lib/http');
 const { ROOT, writeFileAtomic } = require('../lib/db');
 const { slugify, sanitizeInlineText } = require('../lib/parsers');
 const { parseDisciplineMd, pathArtSlug } = require('../lib/disciplines');
@@ -594,6 +594,144 @@ router.delete('/api/library/titles/:slug', async (req, res) => {
     res.json({ ok: true });
   } catch (e) { serverError(res, e); }
 });
+
+// ── Библиотека: загрузка/замена изображения записи (2026-08-08) ─────────────
+// Один слот на запись (не как у персонажа — там несколько портретов). Заменяет существующий
+// файл тем же путём — writeFileAtomic делает саму перезапись идемпотентной, отдельной ветки
+// «файла ещё нет» не требуется. Доступно для ЛЮБОЙ записи, включая каноническую — правка
+// канона по духу (не по механике: файл заменяется целиком, не патчится) рискует тем же
+// откатом на update.bat, что и правка текста, но цена мягче (не потеря авторского текста).
+// Имя kind совпадает с именем каталога и в system/library/<kind>/, и в
+// web/public/img/system/library/<kind>/ — везде без исключений, поэтому таблица
+// kind → каталог не нужна, путь строится прямо из :kind (проверенного по белому списку).
+const LIB_IMAGE_KINDS = new Set([
+  'disciplines', 'psychics', 'clans', 'sects', 'titles', 'merits', 'flaws', 'backgrounds',
+  'mortal-government', 'mortal-religious', 'mortal-crime', 'mortal-civic', 'mortal-positions',
+]);
+
+router.post('/api/library/:kind/:slug/image', express.json({ limit: '20mb' }), async (req, res) => {
+  try {
+    const kind = req.params.kind;
+    if (!LIB_IMAGE_KINDS.has(kind)) return res.status(400).json({ error: 'Неизвестная категория библиотеки' });
+    const slug = slugify(req.params.slug);   // FIX-17 pattern — see disciplines PUT above
+    if (!slug) return res.status(400).json({ error: 'Недопустимый slug' });
+
+    // Только PNG — вся читающая сторона библиотеки жёстко предполагает .png. Фронтенд обязан
+    // прислать уже сконвертированный PNG (<canvas>-конвертация, v20-sheet.js).
+    const validated = validateImageUpload(req.body.base64, 'png');
+    if (!validated.ok) return res.status(400).json({ error: validated.error });
+
+    const imgDir = path.join(__dirname, '..', 'public', 'img', 'system', 'library', kind);
+    await fs.mkdir(imgDir, { recursive: true });
+    await writeFileAtomic(path.join(imgDir, `${slug}.png`), validated.buffer);
+    // Ни один *Cache-объект не хранит сам факт hasArt отдельно от чтения каталога на каждый
+    // запрос (_artFileSet) — инвалидировать нечего, следующий GET увидит новый файл сразу.
+    res.json({ ok: true, url: `/img/system/library/${kind}/${slug}.png` });
+  } catch (e) { serverError(res, e); }
+});
+
+// ── Обобщённый MD-track CRUD (2026-08-08) — то же обобщение, что _jsonLibRoutes уже сделала
+// для JSON-track при добавлении третьей JSON-категории (см. ниже). Кланы/Секты/Титулы НЕ
+// переводятся на этот хелпер — своя разметка, есть причина для отдельного кода (у Клана есть
+// «Дисциплины»/«Слабость», у Титула — «Принадлежность»/«Негативный») — только 5 новых категорий
+// «Смертные», у которых схема идентична друг другу и «Секте» (имя/источник/примечание/описание,
+// без специфичных полей).
+function _mdLibRoutes({ apiName, dir, noun }) {
+  const DIR = path.join(ROOT, 'system', 'library', dir);
+  let cache = null; // { sig, list }
+
+  async function load() {
+    const files = (await fs.readdir(DIR).catch(() => null));
+    if (!files) return [];
+    const mds = files.filter(f => f.endsWith('.md') && f.toLowerCase() !== 'readme.md').sort();
+    const stats = await Promise.all(mds.map(f => fs.stat(path.join(DIR, f)).catch(() => null)));
+    const sig = mds.map((f, i) => `${f}:${stats[i] ? stats[i].mtimeMs : 0}`).join('|');
+    if (cache && cache.sig === sig) return cache.list;
+    const list = [];
+    for (const f of mds) {
+      const slug = f.replace(/\.md$/, '');
+      const md = await fs.readFile(path.join(DIR, f), 'utf-8').catch(() => '');
+      if (md) list.push(parseSectMd(md, slug)); // формат идентичен «Секте» — тот же парсер
+    }
+    cache = { sig, list };
+    return list;
+  }
+
+  router.get(`/api/library/${apiName}`, async (_req, res) => {
+    try { res.json(_withArt(await load(), await _artFileSet(apiName))); }
+    catch (e) { serverError(res, e); }
+  });
+
+  function template({ name, source, note, description }) {
+    const lines = [`# ${name}`];
+    if (source) lines.push(`- **Источник:** ${sanitizeInlineText(source)}`);
+    lines.push('- **Авторское:** да');
+    if (note) { lines.push(''); for (const l of note.split('\n')) lines.push(`> ${sanitizeInlineText(l)}`); }
+    lines.push('', '## Описание', '', sanitizeInlineText(description || ''), '');
+    return lines.join('\n');
+  }
+
+  router.post(`/api/library/${apiName}`, express.json(), async (req, res) => {
+    try {
+      const { name, source, note, description } = req.body || {};
+      if (!name?.trim()) return res.status(400).json({ error: 'Название обязательно' });
+      const slug = slugify(name);
+      if (!slug) return res.status(400).json({ error: 'Не удалось построить slug из названия' });
+      const file = path.join(DIR, `${slug}.md`);
+      if (await fs.stat(file).catch(() => null))
+        return res.status(409).json({ error: `${noun} с таким названием уже существует`, slug });
+      // В отличие от Кланов/Секты/Титулов, у этих пяти категорий каталог не гарантированно
+      // существует заранее (новая библиотека без канонических записей на старте) — mkdir
+      // идемпотентен, не мешает уже существующим каталогам с готовым контентом.
+      await fs.mkdir(DIR, { recursive: true });
+      await writeFileAtomic(file, template({ name: name.trim(), source, note, description }), 'utf-8');
+      cache = null;
+      res.json({ ok: true, slug });
+    } catch (e) { serverError(res, e); }
+  });
+
+  router.put(`/api/library/${apiName}/:slug`, express.json(), async (req, res) => {
+    try {
+      const slug = slugify(req.params.slug);   // FIX-17 pattern — see disciplines PUT above
+      if (!slug) return res.status(400).json({ error: 'Недопустимый slug' });
+      const file = path.join(DIR, `${slug}.md`);
+      const existing = await fs.readFile(file, 'utf-8').catch(() => null);
+      if (existing == null) return res.status(404).json({ error: `${noun} не найден(а)` });
+      if (!parseSectMd(existing, slug).custom)
+        return res.status(403).json({ error: `Редактирование доступно только для авторских записей` });
+      const { name, source, note, description } = req.body || {};
+      if (!name?.trim()) return res.status(400).json({ error: 'Название обязательно' });
+      await writeFileAtomic(file, template({ name: name.trim(), source, note, description }), 'utf-8');
+      cache = null;
+      res.json({ ok: true, slug });
+    } catch (e) { serverError(res, e); }
+  });
+
+  router.delete(`/api/library/${apiName}/:slug`, async (req, res) => {
+    try {
+      const slug = slugify(req.params.slug);   // FIX-17 pattern — see disciplines PUT above
+      if (!slug) return res.status(400).json({ error: 'Недопустимый slug' });
+      const file = path.join(DIR, `${slug}.md`);
+      const existing = await fs.readFile(file, 'utf-8').catch(() => null);
+      if (existing == null) return res.status(404).json({ error: `${noun} не найден(а)` });
+      if (!parseSectMd(existing, slug).custom)
+        return res.status(403).json({ error: `Удаление доступно только для авторских записей` });
+      const trashDir = path.join(DIR, '_deleted');
+      await fs.mkdir(trashDir, { recursive: true });
+      await fs.rename(file, path.join(trashDir, `${slug}_${Date.now()}.md`));
+      cache = null;
+      res.json({ ok: true });
+    } catch (e) { serverError(res, e); }
+  });
+
+  return { load };
+}
+
+_mdLibRoutes({ apiName: 'mortal-government', dir: 'mortal-government', noun: 'Служба' });
+_mdLibRoutes({ apiName: 'mortal-religious',  dir: 'mortal-religious',  noun: 'Организация' });
+_mdLibRoutes({ apiName: 'mortal-crime',      dir: 'mortal-crime',      noun: 'Группировка' });
+_mdLibRoutes({ apiName: 'mortal-civic',      dir: 'mortal-civic',      noun: 'Организация' });
+_mdLibRoutes({ apiName: 'mortal-positions',  dir: 'mortal-positions',  noun: 'Должность' });
 
 // ── JSON-track (достоинства/недостатки/факты биографии) ─────────────────────
 const MERIT_CATEGORIES      = ['physical', 'social', 'mental', 'supernatural'];

@@ -99,6 +99,12 @@ const _LIB_KIND_CONFIG = {
     title: 'титул', fields: ['affiliation', 'checkbox-negative', 'source', 'note', 'description'],
     reload: () => { _titlesCache = null; return loadKindred('titles'); },
   },
+  // «Смертные» (2026-08-08) — 5 категорий, схема идентична «Секте» выше (см. B.1 техспеки).
+  'mortal-government': { title: 'службу', fields: ['source', 'note', 'description'], reload: () => { _mortLibCache.delete('government'); return loadMortalLib('government'); } },
+  'mortal-religious':  { title: 'организацию', fields: ['source', 'note', 'description'], reload: () => { _mortLibCache.delete('religious'); return loadMortalLib('religious'); } },
+  'mortal-crime':      { title: 'группировку', fields: ['source', 'note', 'description'], reload: () => { _mortLibCache.delete('crime'); return loadMortalLib('crime'); } },
+  'mortal-civic':      { title: 'организацию', fields: ['source', 'note', 'description'], reload: () => { _mortLibCache.delete('civic'); return loadMortalLib('civic'); } },
+  'mortal-positions':  { title: 'должность', fields: ['source', 'note', 'description'], reload: () => { _mortLibCache.delete('positions'); return loadMortalLib('positions'); } },
 };
 
 function _libLevelRowHtml(lvl = {}) {
@@ -239,20 +245,36 @@ function _libFindRecord(kind, slug, category) {
   if (kind === 'clans') return _clanBySlug(slug);
   if (kind === 'sects') return _sectBySlug(slug);
   if (kind === 'titles') return _titleBySlug(slug);
+  if (kind.startsWith('mortal-')) return _mortBySlug(kind.slice('mortal-'.length), slug);
   return null;
 }
 
 // ── Форма создания (#lib-edit-modal) — без правки, только POST ──────────────
 let _libCreateKind = null;
+let _libCreateIsFork = false; // для toast-подтверждения в _libSaveCreate ниже
 
-async function _libOpenCreateModal(kind, category) {
+// Форк канона (2026-08-08) — «(копия)» — не защита от коллизии имени (её обеспечивает
+// существующая проверка slug на сервере, POST /api/library/<kind> вернёт 409), а подсказка,
+// чтобы форма не открывалась с именем, дословно совпадающим с каноном.
+function _libForkedName(name) {
+  return `${name} (копия)`;
+}
+
+// Третий параметр sourceRec — опциональный, для форка канона (вызовы без него, с кнопок
+// «+ Добавить», ведут себя как прежде, byte-for-byte). Поля формы уже называются один в один
+// с полями, которые парсеры (parseClanMd/parseDisciplineMd/…) возвращают в записи — та же
+// логика, что уже предзаполняет форму правки авторских записей, работает и здесь без
+// адаптеров: канон и авторские записи отдаёт один и тот же парсер, различается только custom.
+async function _libOpenCreateModal(kind, category, sourceRec) {
   const cfg = _LIB_KIND_CONFIG[kind];
   if (!cfg) return;
   _libCreateKind = kind;
-  document.getElementById('lib-edit-title').textContent = `Новое: ${cfg.title}`;
+  _libCreateIsFork = !!sourceRec;
+  document.getElementById('lib-edit-title').textContent = sourceRec ? `Копия: ${cfg.title}` : `Новое: ${cfg.title}`;
   const fieldsBox = document.getElementById('lib-edit-fields');
   document.getElementById('lib-edit-error').style.display = 'none';
-  const rec = cfg.categoryRecordKey ? {} : { category };
+  const rec = sourceRec ? { ...sourceRec, name: _libForkedName(sourceRec.name) }
+                         : (cfg.categoryRecordKey ? {} : { category });
   await _libRenderForm(fieldsBox, kind, rec);
   openModal('lib-edit-modal', '[data-lib-field="name"] input');
 }
@@ -275,6 +297,7 @@ async function _libSaveCreate() {
     }).then(x => x.json());
     if (!r.ok) { errEl.textContent = r.error || 'Ошибка сохранения'; errEl.style.display = ''; return; }
     closeModal('lib-edit-modal');
+    if (_libCreateIsFork) showToast(`Копия «${body.name}» создана`, 'success');
     await cfg.reload(body.category);
   } catch (e) {
     errEl.textContent = e.message;
