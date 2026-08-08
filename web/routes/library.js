@@ -18,6 +18,7 @@ const { parseTitleMd } = require('../lib/titles');
 const { getMerits, getAllMerits, invalidateMerits } = require('../lib/merits-loader');
 const { getFlaws, getAllFlaws, invalidateFlaws } = require('../lib/flaws-loader');
 const { getBackgrounds, getAllBackgrounds, invalidateBackgrounds } = require('../lib/backgrounds-loader');
+const { FILE: RELATION_TYPES_FILE, getRelationTypes, randomRelColor } = require('../lib/relation-types');
 
 const router = express.Router();
 
@@ -811,6 +812,58 @@ _jsonLibRoutes({
 _jsonLibRoutes({
   apiName: 'backgrounds', dir: 'backgrounds', categories: BACKGROUND_CATEGORIES, invalidate: invalidateBackgrounds,
   extraFields: b => ({ description: b.description || '', system: b.system || '' }),
+});
+
+// ── Постоянные связи (2026-08-08, Фаза 1 «Связи и отношения») — плоский список, без
+// категорий (в отличие от достоинств/недостатков), поэтому не через _jsonLibRoutes.
+router.get('/api/library/relation-types', async (_req, res) => {
+  try { res.json(await getRelationTypes()); }
+  catch (e) { serverError(res, e); }
+});
+
+router.post('/api/library/relation-types', express.json(), async (req, res) => {
+  try {
+    const { name } = req.body || {};
+    if (!name?.trim()) return res.status(400).json({ error: 'Название обязательно' });
+    const slug = slugify(name);
+    if (!slug) return res.status(400).json({ error: 'Не удалось построить slug из названия' });
+    const list = await getRelationTypes();
+    if (list.some(x => x.slug === slug))
+      return res.status(409).json({ error: 'Связь с таким названием уже есть', slug });
+    // Цвет — ВСЕГДА генерируется сервером (п.9, «случайным образом»), клиент его не передаёт.
+    const entry = { slug, name: name.trim(), color: randomRelColor(), custom: true };
+    list.push(entry);
+    await writeFileAtomic(RELATION_TYPES_FILE, JSON.stringify(list, null, 2) + '\n', 'utf-8');
+    res.json({ ok: true, slug, color: entry.color });
+  } catch (e) { serverError(res, e); }
+});
+
+router.put('/api/library/relation-types/:slug', express.json(), async (req, res) => {
+  try {
+    const { slug } = req.params;
+    const list = await getRelationTypes();
+    const idx = list.findIndex(x => x.slug === slug);
+    if (idx === -1) return res.status(404).json({ error: 'Связь не найдена' });
+    if (!list[idx].custom) return res.status(403).json({ error: 'Редактирование доступно только для авторских связей' });
+    const { name } = req.body || {};
+    if (!name?.trim()) return res.status(400).json({ error: 'Название обязательно' });
+    list[idx] = { ...list[idx], name: name.trim() }; // цвет правкой имени не меняется
+    await writeFileAtomic(RELATION_TYPES_FILE, JSON.stringify(list, null, 2) + '\n', 'utf-8');
+    res.json({ ok: true });
+  } catch (e) { serverError(res, e); }
+});
+
+router.delete('/api/library/relation-types/:slug', async (req, res) => {
+  try {
+    const { slug } = req.params;
+    const list = await getRelationTypes();
+    const idx = list.findIndex(x => x.slug === slug);
+    if (idx === -1) return res.status(404).json({ error: 'Связь не найдена' });
+    if (!list[idx].custom) return res.status(403).json({ error: 'Удаление доступно только для авторских связей' });
+    list.splice(idx, 1);
+    await writeFileAtomic(RELATION_TYPES_FILE, JSON.stringify(list, null, 2) + '\n', 'utf-8');
+    res.json({ ok: true });
+  } catch (e) { serverError(res, e); }
 });
 
 module.exports = { router, loadDisciplines, loadPsychics };

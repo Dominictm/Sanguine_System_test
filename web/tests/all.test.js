@@ -1066,11 +1066,13 @@ describe('Parsers — unit', () => {
   });
 
   describe('«Фамильяр» — стандартный вид связи (frontend)', () => {
-    it('source-guard: scripts.js — REL_TYPE_OPTIONS содержит «Фамильяр»', () => {
-      const js = require('fs').readFileSync(path.join(__dirname, '../public/scripts/scripts.js'), 'utf-8');
-      const m = js.match(/const REL_TYPE_OPTIONS = \[([^\]]*)\]/);
-      assert.ok(m, 'не найдена константа REL_TYPE_OPTIONS');
-      assert.ok(m[1].includes("'Фамильяр'"), 'REL_TYPE_OPTIONS не содержит «Фамильяр»');
+    // 2026-08-08, Фаза 2: REL_TYPE_OPTIONS (жёстко заданный datalist) заменён пикером из
+    // библиотеки «Постоянные связи» (system/library/relation-types.json, Фаза 1) — тот же guard,
+    // перенесённый на новый источник истины.
+    it('source-guard: system/library/relation-types.json содержит «Фамильяр»', () => {
+      const list = JSON.parse(require('fs').readFileSync(
+        path.join(__dirname, '../../system/library/relation-types.json'), 'utf-8'));
+      assert.ok(list.some(t => t.name === 'Фамильяр'), 'relation-types.json не содержит «Фамильяр»');
     });
     it('source-guard: graph.js — familiar есть и в REL_COLORS, и в REL_LABELS (иначе граф покажет связь без цвета/подписи)', () => {
       const js = require('fs').readFileSync(path.join(__dirname, '../public/scripts/graph.js'), 'utf-8');
@@ -1093,18 +1095,42 @@ describe('Parsers — unit', () => {
     // больше не нужна — цвет берётся из того же REL_COLORS[k], что и
     // чекбоксы (Object.keys(REL_LABELS).filter(present)), рассинхрон
     // структурно невозможен.
-    it('source-guard: graph.js — buildRelTypeFilter() рисует цветовой маркер (.reltype-swatch) из REL_COLORS у каждого чипа', () => {
+    it('source-guard: graph.js — buildRelTypeFilter() рисует цветовой маркер (.reltype-swatch) с фоллбэком на REL_COLORS у каждого чипа', () => {
       const js = require('fs').readFileSync(path.join(__dirname, '../public/scripts/graph.js'), 'utf-8');
       assert.ok(!js.includes('function buildLegend'), 'buildLegend() всё ещё существует — должна быть убрана как дублирующая .reltype-swatch в чипах фильтра');
       assert.ok(!js.includes("getElementById('graph-legend')"), 'graph.js всё ещё ссылается на убранный #graph-legend');
       const fnMatch = js.match(/function buildRelTypeFilter\(\) \{[\s\S]*?\n\}/);
       assert.ok(fnMatch, 'не найдена функция buildRelTypeFilter');
-      assert.ok(/class="reltype-swatch" style="background:\$\{REL_COLORS\[k\]\}"/.test(fnMatch[0]),
-        'buildRelTypeFilter() не рисует .reltype-swatch с цветом из REL_COLORS[k] для каждого чипа');
+      // 2026-08-08, хвост Фазы 1 — цвет сначала из самого ребра («Постоянная связь», не входящая
+      // в хардкодный REL_COLORS), фоллбэк на REL_COLORS[k] остаётся для легаси-типов без
+      // совпадения с библиотекой (см. docs/design/2026-08-08-relations-graph-legend-techspec.md).
+      assert.ok(/class="reltype-swatch" style="background:\$\{m\.color\}"/.test(fnMatch[0]),
+        'buildRelTypeFilter() не рисует .reltype-swatch с цветом из m.color для каждого чипа');
+      assert.ok(fnMatch[0].includes('REL_COLORS[k] || REL_COLORS.neutral'),
+        'buildRelTypeFilter() потерял фоллбэк на REL_COLORS для легаси-типов без совпадения с библиотекой');
     });
     it('source-guard: index.html — #graph-legend убран из разметки тулбара графа', () => {
       const html = require('fs').readFileSync(path.join(__dirname, '../public/index.html'), 'utf-8');
       assert.ok(!html.includes('id="graph-legend"'), '#graph-legend всё ещё в разметке — дублирует .reltype-swatch в чипах фильтра');
+    });
+    // QA-отчёт 2026-08-08 (docs/design/2026-08-08-qa-report-relations-full-series.md, Дефект
+    // №1): _authoredDescriptions() писалась в Фазе 1, до разделения поля на relType/description
+    // (Фаза 2) — без проверки уже типизированные связи ложно предлагались «Сделать постоянной»
+    // по своему description (необязательному ПОЯСНЕНИЮ к уже выбранному типу, не кандидату в
+    // тип). Первая версия фикса пропускала ВСЮ связь при непустом relType — оверфикс, найденный
+    // пользователем на живых данных 2026-08-08: свой (не из библиотеки) relType, например
+    // «авпвапав», переставал попадать в «Авторские связи» вообще. Кандидат теперь — relType,
+    // если он заполнен, иначе description; description при уже заполненном relType в кандидаты
+    // не идёт. Нет DOM-окружения в тестах для прогона самой функции — source-guard на факт
+    // правки, тем же паттерном, что уже используют другие проверки этого describe-блока.
+    it('source-guard: relations-manage.js — _authoredDescriptions() берёт relType как кандидат, description — только когда relType пуст', () => {
+      const js = require('fs').readFileSync(path.join(__dirname, '../public/scripts/relations-manage.js'), 'utf-8');
+      const fnMatch = js.match(/async function _authoredDescriptions\(\) \{[\s\S]*?\n\}/);
+      assert.ok(fnMatch, 'не найдена функция _authoredDescriptions');
+      assert.ok(/\(r\.relType\s*\|\|\s*r\.description\s*\|\|\s*['"]{2}\)\.trim\(\)/.test(fnMatch[0]),
+        '_authoredDescriptions() не берёт relType как приоритетный кандидат — свои (не из библиотеки) типы не попадут в «Авторские связи»');
+      assert.ok(!/if\s*\(\s*r\.relType\s*\)\s*continue;/.test(fnMatch[0]),
+        '_authoredDescriptions() всё ещё пропускает всю связь при непустом relType — регресс к оверфикс-версии');
     });
   });
 
@@ -1131,8 +1157,33 @@ describe('Parsers — unit', () => {
     it('relationships parsed with categorisation, link text resolved', () => {
       const c = parseCharacter(CARD, 'gerson', 'vampires');
       assert.equal(c.relationships.length, 2);
-      assert.deepEqual(c.relationships[0], { target: 'Мел', description: 'союзник', type: 'ally' });
+      assert.deepEqual(c.relationships[0], { target: 'Мел', description: 'союзник', relType: '', mutual: false, type: 'ally' });
       assert.equal(c.relationships[1].type, 'enemy');
+    });
+    // 2026-08-08, Фаза 2 «Связи и отношения» — необязательный префикс «[Тип] Описание».
+    it('relationships: structured [Тип] prefix splits into relType/description', () => {
+      const card = '# X\n- **Отношения:**\n  - Джуди — [Союзник] доверенное лицо\n';
+      const c = parseCharacter(card, 'x', 'vampires');
+      assert.deepEqual(c.relationships[0], { target: 'Джуди', description: 'доверенное лицо', relType: 'Союзник', mutual: false, type: 'ally' });
+    });
+    it('relationships: legacy line without [Тип] prefix keeps relType empty', () => {
+      const card = '# X\n- **Отношения:**\n  - Джуди — давний должник, тайно предан ей\n';
+      const c = parseCharacter(card, 'x', 'vampires');
+      assert.equal(c.relationships[0].relType, '');
+      assert.equal(c.relationships[0].description, 'давний должник, тайно предан ей');
+      assert.equal(c.relationships[0].mutual, false);
+    });
+    // 2026-08-08, Фаза 3 «Связи и отношения» — необязательный маркер ↔ (взаимность),
+    // независим от [Тип], всегда идёт первым.
+    it('relationships: ↔ marker sets mutual=true, combines with [Тип]', () => {
+      const card = '# X\n- **Отношения:**\n  - Джуди — ↔ [Сир] обратила меня\n';
+      const c = parseCharacter(card, 'x', 'vampires');
+      assert.deepEqual(c.relationships[0], { target: 'Джуди', description: 'обратила меня', relType: 'Сир', mutual: true, type: 'sire' });
+    });
+    it('relationships: ↔ marker without [Тип]', () => {
+      const card = '# X\n- **Отношения:**\n  - Джуди — ↔ давний должник\n';
+      const c = parseCharacter(card, 'x', 'vampires');
+      assert.deepEqual(c.relationships[0], { target: 'Джуди', description: 'давний должник', relType: '', mutual: true, type: 'neutral' });
     });
     it('infers lineage from label when not given', () =>
       assert.equal(parseCharacter(CARD, 'gerson', null).lineage, 'vampire'));
@@ -6948,6 +6999,98 @@ describe('FIX-16: санитизация свободного текста — �
     const cells = row.trim().replace(/^\|/, '').replace(/\|$/, '').split('|');
     assert.equal(cells.length, 4, `ожидалось 4 колонки, "|" в значении сдвинул их: ${row}`);
     await fs.rm(path.join(__dirname, '../../cities', citySlug), { recursive: true, force: true });
+  });
+});
+
+// docs/design/2026-08-08-relations-mutual-autopairs-techspec.md — Фаза 3 «Связи и отношения»:
+// чекбокс «Взаимно» на карточке персонажа A зеркалит связь на карточку персонажа Б, с авто-парой
+// типа (Сир↔Чайлд, Домитор↔Гуль, Брат/Сестра по полу цели); повторное сохранение без «Взаимно»
+// снимает зеркальную запись у Б, не трогая остальные его связи.
+describe('relations-mutual-autopairs: «Взаимно» синхронизирует карточку цели (Фаза 3)', () => {
+  let citySlug, cityDir;
+  const qs = () => `?city=${citySlug}`;
+
+  before(async () => {
+    await startServer();
+    const create = await apiJson('/api/cities', { method: 'POST', body: JSON.stringify({
+      name: 'Mutual Relations Testcity', year: '2010',
+    }) });
+    assert.equal(create.status, 200, 'не удалось создать тестовый город');
+    citySlug = create.body.slug;
+    cityDir  = path.join(__dirname, '../../cities', citySlug);
+  });
+  after(async () => {
+    await stopServer();
+    await fs.rm(cityDir, { recursive: true, force: true });
+  });
+
+  it('Сир↔Чайлд: взаимная связь создаёт зеркальную запись у цели, снятие — убирает', async () => {
+    const sire = await apiJson(`/api/characters${qs()}`, { method: 'POST', body: JSON.stringify({
+      name: 'Мутуал Сир', lineage: 'vampire', gender: 'Мужской', clan: 'Тремер', sect: 'Камарилья',
+    }) });
+    assert.equal(sire.status, 200, sire.body.error);
+    const childe = await apiJson(`/api/characters${qs()}`, { method: 'POST', body: JSON.stringify({
+      name: 'Мутуал Чайлд', lineage: 'vampire', gender: 'Женский', clan: 'Тремер', sect: 'Камарилья',
+    }) });
+    assert.equal(childe.status, 200, childe.body.error);
+
+    const put1 = await apiJson(`/api/characters/${childe.body.slug}/relations${qs()}`, { method: 'PUT', body: JSON.stringify({
+      lines: ['Мутуал Сир — ↔ [Чайлд] обратил меня'],
+    }) });
+    assert.equal(put1.status, 200);
+    assert.deepEqual(put1.body.warnings, []);
+
+    const afterFirst = await apiJson(`/api/characters${qs()}`);
+    const sireAfter = afterFirst.body.find(c => c.name === 'Мутуал Сир');
+    assert.equal(sireAfter.relationships.length, 1);
+    assert.equal(sireAfter.relationships[0].target, 'Мутуал Чайлд');
+    assert.equal(sireAfter.relationships[0].relType, 'Сир', 'авто-пара: Чайлд у одной стороны → Сир у другой');
+    assert.equal(sireAfter.relationships[0].mutual, true);
+
+    // Снятие взаимности у Чайлда — зеркальная запись у Сира должна исчезнуть.
+    const put2 = await apiJson(`/api/characters/${childe.body.slug}/relations${qs()}`, { method: 'PUT', body: JSON.stringify({
+      lines: ['Мутуал Сир — [Чайлд] обратил меня'],
+    }) });
+    assert.equal(put2.status, 200);
+
+    const afterSecond = await apiJson(`/api/characters${qs()}`);
+    const sireAfter2 = afterSecond.body.find(c => c.name === 'Мутуал Сир');
+    assert.equal(sireAfter2.relationships.length, 0, 'зеркальная запись должна исчезнуть после снятия «Взаимно»');
+  });
+
+  it('Брат/Сестра: зеркальный тип зависит от пола цели', async () => {
+    const person = await apiJson(`/api/characters${qs()}`, { method: 'POST', body: JSON.stringify({
+      name: 'Мутуал Персона', lineage: 'vampire', gender: 'Мужской', clan: 'Тореадор', sect: 'Камарилья',
+    }) });
+    assert.equal(person.status, 200, person.body.error);
+    const sister = await apiJson(`/api/characters${qs()}`, { method: 'POST', body: JSON.stringify({
+      name: 'Мутуал Сестра Цель', lineage: 'vampire', gender: 'Женский', clan: 'Тореадор', sect: 'Камарилья',
+    }) });
+    assert.equal(sister.status, 200, sister.body.error);
+
+    const put = await apiJson(`/api/characters/${person.body.slug}/relations${qs()}`, { method: 'PUT', body: JSON.stringify({
+      lines: ['Мутуал Сестра Цель — ↔ [Брат] хороший друг детства'],
+    }) });
+    assert.equal(put.status, 200);
+
+    const after = await apiJson(`/api/characters${qs()}`);
+    const target = after.body.find(c => c.name === 'Мутуал Сестра Цель');
+    assert.equal(target.relationships[0].relType, 'Сестра', 'цель — женского пола, зеркальный тип — «Сестра», не «Брат»');
+    assert.equal(target.relationships[0].description, '', 'описание не копируется зеркально (§4.4 техспеки)');
+  });
+
+  it('Взаимно на несуществующего персонажа — предупреждение, не ошибка сохранения', async () => {
+    const solo = await apiJson(`/api/characters${qs()}`, { method: 'POST', body: JSON.stringify({
+      name: 'Мутуал Одиночка', lineage: 'vampire', gender: 'Мужской', clan: 'Вентру', sect: 'Камарилья',
+    }) });
+    assert.equal(solo.status, 200, solo.body.error);
+
+    const put = await apiJson(`/api/characters/${solo.body.slug}/relations${qs()}`, { method: 'PUT', body: JSON.stringify({
+      lines: ['Несуществующий Персонаж — ↔ [Союзник] выдуманная связь'],
+    }) });
+    assert.equal(put.status, 200);
+    assert.equal(put.body.warnings.length, 1);
+    assert.match(put.body.warnings[0], /не найден/);
   });
 });
 

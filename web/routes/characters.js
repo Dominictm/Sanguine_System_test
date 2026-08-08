@@ -289,39 +289,147 @@ module.exports = function charactersRouter({
 
   // ── Update relations block ─────────────────────────────────────────────────────
 
+  // Авто-парные типы связей (2026-08-08, Фаза 3, п.5-7 запроса) — при взаимной синхронизации
+  // зеркальная сторона получает НЕ тот же тип, а парный (Сир↔Чайлд, Домитор↔Гуль); Брат/Сестра —
+  // в зависимости от пола ЦЕЛИ (кому пишем зеркальную строку). Остальные типы (включая «Семья»,
+  // «Союзник» и любой авторский) зеркалятся тем же именем — симметричны по умолчанию. Копия той
+  // же логики есть в char-detail.js (REL_AUTO_PAIR_TYPES, для авто-чекбокса формы) — держать в
+  // синхроне при правках.
+  const REL_AUTO_PAIRS = { 'сир': 'Чайлд', 'чайлд': 'Сир', 'домитор': 'Гуль', 'гуль': 'Домитор' };
+  const REL_GENDER_PAIR_KEYS = new Set(['брат', 'сестра']);
+  function _relMirrorType(relType, targetGender) {
+    const key = (relType || '').trim().toLowerCase();
+    if (!key) return '';
+    if (REL_GENDER_PAIR_KEYS.has(key)) {
+      if (targetGender === 'Мужской') return 'Брат';
+      if (targetGender === 'Женский') return 'Сестра';
+      return relType; // пол цели неизвестен (легаси-карточка без «Пол») — зеркалим тем же словом
+    }
+    return REL_AUTO_PAIRS[key] || relType;
+  }
+
+  function _serializeRelationLine(target, relType, description, mutual) {
+    let body = relType ? `[${relType}] ${description || ''}`.trim() : (description || '').trim();
+    if (mutual) body = `↔ ${body}`.trim();
+    return body ? `${target} — ${body}` : target;
+  }
+
+  // Перезаписывает секцию «Отношения» уже загруженного персонажа целиком новым набором строк.
+  // Используется и для основного персонажа при обычном сохранении, и для цели при зеркальной
+  // записи «Взаимно» (2026-08-08, Фаза 3) — во втором случае трогает ТОЛЬКО эту секцию,
+  // остальные поля карточки цели не читает и не пишет.
+  async function _writeRelationsBlock(city, char, lines) {
+    const cardPath = path.join(charsDir(city), char.lineageFolder, char.slug, `${char.slug}.md`);
+    let card = await fs.readFile(cardPath, 'utf-8');
+    // РЕАЛЬНЫЙ БАГ (найден пользователем на живых данных, 2026-08-08): parseCharacter
+    // (web/lib/parsers/character.js) нормализует \r\n/\r → \n ПЕРЕД разбором — если карточка на
+    // диске хранит секцию «Отношения» с CRLF (частый случай на Windows), regex ниже (ищет
+    // литеральный \n сразу после «**») её не находил, код уходил в ветку «вставить новый блок» и
+    // плодил ВТОРОЙ «- **Отношения:**» вместо замены первого. Парсер после такой записи по-прежнему
+    // матчит ПЕРВЫЙ (уже CRLF→LF-нормализованный) блок и не видит второй — новые данные тихо
+    // становились недостижимы через API/UI. Нормализация здесь синхронизирует то, что видит
+    // write-путь, с тем, что видит read-путь (parseCharacter) — оба должны договариваться об одном
+    // и том же «текущем» блоке.
+    card = card.replace(/^﻿/, '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+    // sanitizeInlineText collapses embedded newlines — otherwise the tail of a line
+    // becomes an orphaned bullet outside «Отношения:», surviving even a full clear
+    // (FIX-2, docs/audit/2026-07-28-fix-plan.md).
+    const bullets = lines.map(sanitizeInlineText).filter(Boolean).map(l => `  - ${l}`).join('\n');
+    const newBlock = `- **Отношения:**\n${bullets || '  - —'}`;
+    const relRe = /- \*\*Отношения:\*\*\n((?:[ \t]+- .+\n?)+)/;
+    if (relRe.test(card)) {
+      card = card.replace(relRe, newBlock + '\n');
+    } else {
+      // Append before the prompt section or at end of fields
+      const insertBefore = card.indexOf('- **🎨');
+      if (insertBefore !== -1) {
+        card = card.slice(0, insertBefore) + newBlock + '\n' + card.slice(insertBefore);
+      }
+    }
+    await writeFileAtomic(cardPath, card, 'utf-8');
+  }
+
+  // Взаимная синхронизация (2026-08-08, Фаза 3, п.4-7) — сравнивает СТАРЫЕ и НОВЫЕ relationships
+  // персонажа A, помеченные mutual===true, и обновляет карточки целей: убирает зеркальную строку
+  // у целей, которых больше нет среди взаимных (сняли «Взаимно», сменили цель/тип, удалили
+  // строку), и добавляет/обновляет зеркальную строку у актуальных целей. НЕ рекурсивна — запись
+  // в карточку цели не запускает эту же синхронизацию повторно для цели (иначе бесконечный
+  // каскад A↔B↔A) — это точечная правка ТОЛЬКО секции «Отношения» цели через
+  // _writeRelationsBlock, в обход основного роута. Сопоставление персонажа-цели по имени —
+  // ТОЧНОЕ (Map по c.name), не нечёткое, в отличие от резолвера графа (dashboard.js) — там
+  // неточный матч влияет только на отображение ребра, здесь — на то, В КАКОЙ ФАЙЛ будет
+  // произведена запись; ошибка недопустима.
+  async function _syncMutualRelations(city, chars, aName, oldRels, newRels) {
+    const warnings = [];
+    const byName = new Map(chars.map(c => [c.name, c]));
+
+    const oldMutual = new Map(oldRels.filter(r => r.mutual).map(r => [r.target, r]));
+    const newMutual = new Map(newRels.filter(r => r.mutual).map(r => [r.target, r]));
+
+    // Выбывшие: были взаимными до этого сохранения, сейчас — нет.
+    for (const [targetName] of oldMutual) {
+      if (newMutual.has(targetName)) continue;
+      const target = byName.get(targetName);
+      if (!target) continue; // персонаж-цель удалён/переименован между сохранениями — нечего чистить
+      try {
+        const fresh = await getAllCharacters(city);
+        const tChar = fresh.find(c => c.slug === target.slug);
+        if (!tChar) continue;
+        const kept = (tChar.relationships || []).filter(r => !(r.mutual && r.target === aName));
+        await _writeRelationsBlock(city, tChar, kept.map(r => _serializeRelationLine(r.target, r.relType, r.description, r.mutual)));
+        invalidateChars(city);
+      } catch (e) {
+        warnings.push(`Не удалось снять взаимную связь у «${targetName}»: ${e.message}`);
+      }
+    }
+
+    // Новые/изменившиеся: добавить или обновить зеркальную строку у цели.
+    for (const [targetName, rel] of newMutual) {
+      if (targetName === aName) { warnings.push('Связь «Взаимно» на самого себя проигнорирована'); continue; }
+      const target = byName.get(targetName);
+      if (!target) { warnings.push(`«${targetName}» не найден(а) среди персонажей — взаимная связь не создана`); continue; }
+      try {
+        const fresh = await getAllCharacters(city);
+        const tChar = fresh.find(c => c.slug === target.slug);
+        if (!tChar) continue;
+        const mirrorType = _relMirrorType(rel.relType, tChar.gender);
+        const nextRels = [...(tChar.relationships || [])];
+        const idx = nextRels.findIndex(r => r.mutual && r.target === aName);
+        // Описание НЕ копируется зеркально — текст с точки зрения A часто грамматически не
+        // подходит от лица B («она мне доверяет» не читается как «я доверяю ей»); тип несёт
+        // основной смысл связи, описание со стороны B персонаж/Рассказчик дописывает сам.
+        const mirrorEntry = { target: aName, relType: mirrorType, description: '', mutual: true };
+        if (idx === -1) nextRels.push(mirrorEntry); else nextRels[idx] = mirrorEntry;
+        await _writeRelationsBlock(city, tChar, nextRels.map(r => _serializeRelationLine(r.target, r.relType, r.description, r.mutual)));
+        invalidateChars(city);
+      } catch (e) {
+        warnings.push(`Не удалось создать взаимную связь с «${targetName}»: ${e.message}`);
+      }
+    }
+    return warnings;
+  }
+
   router.put('/api/characters/:slug/relations', express.json(), async (req, res) => {
     try {
       const slug   = decodeURIComponent(req.params.slug);
       const city   = reqCity(req);
-      const lines  = req.body.lines || []; // array of strings "Имя — описание"
+      const lines  = req.body.lines || []; // array of strings "Имя — [↔][Тип] описание"
 
       const chars = await getAllCharacters(city);
       const char  = chars.find(c => c.slug === slug);
       if (!char) return res.status(404).json({ error: 'Персонаж не найден' });
+      const oldRels = char.relationships || [];
 
-      const cardPath = path.join(charsDir(city), char.lineageFolder, char.slug, `${char.slug}.md`);
-      let card = await fs.readFile(cardPath, 'utf-8');
-
-      // sanitizeInlineText collapses embedded newlines — otherwise the tail of a line
-      // becomes an orphaned bullet outside «Отношения:», surviving even a full clear
-      // (FIX-2, docs/audit/2026-07-28-fix-plan.md).
-      const bullets = lines.map(sanitizeInlineText).filter(Boolean).map(l => `  - ${l}`).join('\n');
-      const newBlock = `- **Отношения:**\n${bullets || '  - —'}`;
-
-      const relRe = /- \*\*Отношения:\*\*\n((?:[ \t]+- .+\n?)+)/;
-      if (relRe.test(card)) {
-        card = card.replace(relRe, newBlock + '\n');
-      } else {
-        // Append before the prompt section or at end of fields
-        const insertBefore = card.indexOf('- **🎨');
-        if (insertBefore !== -1) {
-          card = card.slice(0, insertBefore) + newBlock + '\n' + card.slice(insertBefore);
-        }
-      }
-
-      await writeFileAtomic(cardPath, card, 'utf-8');
+      await _writeRelationsBlock(city, char, lines);
       invalidateChars(city);
-      res.json({ ok: true });
+
+      // Взаимная синхронизация (2026-08-08, Фаза 3, п.4-7) — сравнить СТАРОЕ/НОВОЕ состояние
+      // relationships этого персонажа (по признаку mutual), разойтись по карточкам целей.
+      const freshChars = await getAllCharacters(city);
+      const freshChar  = freshChars.find(c => c.slug === slug);
+      const warnings = await _syncMutualRelations(city, freshChars, char.name, oldRels, freshChar?.relationships || []);
+
+      res.json({ ok: true, warnings });
     } catch (e) {
       serverError(res, e);
     }

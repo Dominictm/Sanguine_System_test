@@ -15,6 +15,7 @@ const {
   aggregateEvents, makeNameResolver, getDiaryIndex, eventMonthKey,
   getBrokenLinks, getChronicleDisplay,
 } = require('../lib/db');
+const { getRelationTypes } = require('../lib/relation-types');
 
 const router = express.Router();
 
@@ -77,6 +78,24 @@ router.get('/api/graph', async (req, res) => {
 
     const idSet = new Set(nodes.map(n => n.id));
 
+    // Постоянные связи (2026-08-08, Фаза 1 «Связи и отношения») — подстрочное сопоставление
+    // description с именем библиотечной записи даёт цвет ребра графа (п.9 запроса). Сортировка
+    // по убыванию длины имени — детерминированный порядок совпадения, длинные/специфичные
+    // названия матчатся раньше коротких.
+    const relTypes = await getRelationTypes();
+    const sortedRelTypes = [...relTypes].sort((a, b) => b.name.length - a.name.length);
+    // relType (2026-08-08, Фаза 2) — точное совпадение по структурному полю надёжнее
+    // подстрочного разбора description; для легаси-связей без relType — прежний фоллбэк.
+    function matchRelType(relType, desc) {
+      if (relType) {
+        const rt = relType.toLowerCase();
+        const exact = sortedRelTypes.find(t => t.name.toLowerCase() === rt);
+        if (exact) return exact;
+      }
+      const d = (desc || '').toLowerCase();
+      return sortedRelTypes.find(t => d.includes(t.name.toLowerCase())) || null;
+    }
+
     // FIX-12 (docs/audit/2026-07-28-fix-plan.md): an exact match always wins outright.
     // Otherwise this used to return the FIRST fuzzy candidate it found, silently —
     // with two "Иван ..." characters in the city, a relation just typed as "Иван"
@@ -108,18 +127,25 @@ router.get('/api/graph', async (req, res) => {
         const tgt = resolveTarget(r.target);
         if (!tgt || tgt === c.name) continue;
         const key = [c.name, tgt].sort().join('\x00');
-        const label = r.description.split(';')[0].slice(0, 55);
+        const label = r.relType || r.description.split(';')[0].slice(0, 55);
+        const matched = matchRelType(r.relType, r.description);
+        // Слаг «Постоянной связи» вместо категории по ключевым словам, когда есть точное/
+        // подстрочное совпадение — легенда/фильтр/маркеры графа (graph.js) теперь опираются
+        // на него напрямую, не только цвет ребра (2026-08-08, хвост Фазы 1).
+        const resolvedType = matched ? matched.slug : r.type;
         const existing = byKey.get(key);
         if (!existing) {
-          const link = { source: c.name, target: tgt, type: r.type,
-                         label, fromChar: c.name, description: r.description };
+          const link = { source: c.name, target: tgt, type: resolvedType,
+                         label, fromChar: c.name, description: r.description,
+                         ...(matched ? { color: matched.color, typeLabel: matched.name } : {}) };
           byKey.set(key, link);
           links.push(link);
         } else if (!existing.fromChar2 && existing.fromChar !== c.name) {
           existing.fromChar2    = c.name;
-          existing.type2        = r.type;
+          existing.type2        = resolvedType;
           existing.label2       = label;
           existing.description2 = r.description;
+          if (matched) { existing.color2 = matched.color; existing.typeLabel2 = matched.name; }
         }
       }
     }

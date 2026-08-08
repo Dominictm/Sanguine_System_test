@@ -3748,10 +3748,28 @@ a:focus-visible {
   gap: 8px;
 }
 
+/* Строка стала двухуровневой (2026-08-08, Фаза 2 — тип/описание разделены): рамка группирует
+   шапку+описание в один визуальный блок — без неё граница между «конец описания связи N» и
+   «начало шапки связи N+1» неочевидна на глаз (раньше при однострочных полях это было не нужно,
+   дизайн-ревью п.2). Цвет — тот же оттенок, что уже даёт .cdet-rel в режиме просмотра. */
 .cdet-rel-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid rgba(139, 0, 0, .15);
+  border-radius: var(--r-sm);
+}
+
+.cdet-rel-row-top {
   display: flex;
   gap: 8px;
   align-items: center;
+}
+
+.cdet-rel-row-top .cdet-field-with-pick {
+  flex: 1;
+  min-width: 0;
 }
 
 /* Новая строка («+ Добавить запись») въезжает, удалённая — уезжает: подтверждает клик
@@ -3799,11 +3817,30 @@ a:focus-visible {
 }
 
 .cdet-rel-name-inp {
-  flex: 0 0 38%;
+  flex: 0 0 32%;
 }
 
 .cdet-rel-type-inp {
   flex: 1;
+  min-width: 0;
+}
+
+.cdet-rel-desc-inp {
+  width: 100%;
+  box-sizing: border-box;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 8px 10px;
+  font-family: var(--f-body);
+  font-size: var(--fs-sm);
+  resize: vertical;
+}
+
+.cdet-rel-desc-inp:focus {
+  border-color: var(--gold);
+  box-shadow: 0 0 6px var(--glow);
 }
 
 /* Структурные редакторы города: ряды политики/примогената/локаций поверх .cdet-rel-row,
@@ -4234,6 +4271,48 @@ a:focus-visible {
   color: var(--text2);
   font-style: italic;
   line-height: 1.4;
+}
+
+/* Не курсив — .cdet-rel-desc ниже уже курсивная; тип роднится типографикой с .cdet-rel-name
+   (структурный ярлык), не с прозой описания (2026-08-08, Фаза 2, дизайн-ревью п.3). */
+.cdet-rel-type {
+  font-family: var(--f-heading);
+  font-size: var(--fs-sm);
+  letter-spacing: .05em;
+  color: var(--gold);
+  margin-bottom: 3px;
+}
+
+.cdet-rel-mutual-badge {
+  color: var(--gold);
+  font-size: var(--fs-sm);
+}
+
+/* Пустое описание у взаимной связи — не баг, зеркальная запись сознательно не копирует текст
+   (2026-08-08, Фаза 3, §4.4 техспеки) — приглушённый стиль как у .cdet-val.unknown отличает
+   «это ожидаемо пусто» от «забыли заполнить» (дизайн-ревью Фазы 3, п.4). Курсив наследуется от
+   .cdet-rel-desc выше, переопределять не нужно. */
+.cdet-rel-desc-auto {
+  color: var(--text3);
+  opacity: .55;
+}
+
+/* Чекбокс «Взаимно» — под шапкой строки, над описанием (2026-08-08, Фаза 3). align-self:
+   flex-start — без него растягивается на всю ширину строки (родитель .cdet-rel-row — flex-
+   column, align-items:stretch по умолчанию), оставляя пустую полосу справа от короткой надписи
+   (дизайн-ревью Фазы 3, п.2). Touch-target на pointer:coarse — по прецеденту .graph-filter-chip,
+   тот же паттерн label+чекбокс (дизайн-ревью Фазы 3, п.1). */
+.cdet-rel-mutual {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--fs-sm);
+  color: var(--text2);
+  cursor: pointer;
+  align-self: flex-start;
+}
+@media (pointer: coarse) {
+  .cdet-rel-mutual { min-height: 44px; }
 }
 
 /* Вкладка «Фамильяр» (5.8) — компактная карточка-превью связанного персонажа */
@@ -5506,6 +5585,42 @@ a:focus-visible {
   color: var(--text-dim);
   font-size: var(--fs-2xs);
 }
+
+/* ── Управление связями (2026-08-08, Фаза 1 «Связи и отношения») ────────────── */
+.relmgr-modal { width: min(760px, 92vw); }
+.relmgr-columns { display: flex; gap: 24px; }
+.relmgr-col { flex: 1; min-width: 0; }
+.relmgr-col-title {
+  font-family: 'Cinzel', serif; letter-spacing: .04em; color: var(--gold);
+  font-size: var(--fs-lg); margin-bottom: 4px;
+}
+.relmgr-hint { color: var(--text3); font-size: var(--fs-sm); margin-bottom: 10px; }
+.relmgr-list { display: flex; flex-direction: column; gap: 4px; max-height: 340px; overflow-y: auto; margin-bottom: 10px; }
+.relmgr-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 8px; border-radius: var(--r-sm);
+  background: var(--bg3);
+}
+.relmgr-item-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.relmgr-item-name-input {
+  flex: 1; min-width: 0;
+  background: var(--bg); border: 1px solid var(--border2); color: var(--text);
+  padding: 2px 8px; font-family: var(--f-body); font-size: var(--fs-xl);
+  border-radius: var(--r-sm); outline: none; transition: border-color .15s;
+}
+.relmgr-item-name-input:focus { border-color: var(--gold); box-shadow: 0 0 6px var(--glow); }
+.relmgr-item-actions { display: flex; gap: 4px; flex-shrink: 0; }
+.relmgr-item-edit, .relmgr-item-del, .relmgr-item-promote {
+  background: none; border: none; cursor: pointer; color: var(--text3);
+  padding: 4px 6px; border-radius: var(--r-sm); font-size: var(--fs-sm);
+}
+@media (pointer: coarse) {
+  .relmgr-item-edit, .relmgr-item-del, .relmgr-item-promote { min-height: 44px; }
+}
+.relmgr-item-edit:hover, .relmgr-item-promote:hover { color: var(--text); background: rgba(255,255,255,.06); }
+.relmgr-item-del:hover { color: var(--crimson); background: rgba(220,20,60,.1); }
+.relmgr-add-row { display: flex; gap: 8px; }
+.relmgr-add-row .chr-form-input { flex: 1; }
 
 .chr-modal-actions {
   display: flex;

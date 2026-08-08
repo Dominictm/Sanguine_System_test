@@ -1,0 +1,68 @@
+[
+  {
+    "slug": "sir",
+    "name": "Сир",
+    "color": "#DC143C",
+    "custom": false
+  },
+  {
+    "slug": "chayld",
+    "name": "Чайлд",
+    "color": "#C4821E",
+    "custom": false
+  },
+  {
+    "slug": "brat",
+    "name": "Брат",
+    "color": "#4472C4",
+    "custom": false
+  },
+  {
+    "slug": "sestra",
+    "name": "Сестра",
+    "color": "#C94AA0",
+    "custom": false
+  },
+  {
+    "slug": "gul",
+    "name": "Гуль",
+    "color": "#6B8E23",
+    "custom": false
+  },
+  {
+    "slug": "domitor",
+    "name": "Домитор",
+    "color": "#8B5A2B",
+    "custom": false
+  },
+  {
+    "slug": "familyar",
+    "name": "Фамильяр",
+    "color": "#5B9A5B",
+    "custom": false
+  },
+  {
+    "slug": "soyuznik",
+    "name": "Союзник",
+    "color": "#4A8FD9",
+    "custom": false
+  },
+  {
+    "slug": "vrag",
+    "name": "Враг",
+    "color": "#E06000",
+    "custom": false
+  },
+  {
+    "slug": "semya",
+    "name": "Семья",
+    "color": "#C94040",
+    "custom": false
+  },
+  {
+    "slug": "taynaya_svyaz",
+    "name": "Тайная связь",
+    "color": "#8A4FB0",
+    "custom": false
+  }
+]

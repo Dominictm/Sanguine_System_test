@@ -186,6 +186,7 @@
         <div class="graph-toolbar-row">
           <span class="graph-title">🕸 Граф отношений</span>
           <button class="btn-icon" id="btn-reset" title="Сбросить масштаб и фильтры" aria-label="Сбросить масштаб и фильтры">↺</button>
+          <button class="btn-icon" id="btn-manage-relations" title="Управление связями" aria-label="Управление связями">+</button>
           <div class="graph-lineage-filter" id="graph-lineage-filter"></div>
         </div>
         <div class="graph-toolbar-row">
@@ -237,6 +238,37 @@
         <div class="chr-modal-actions">
           <button id="chr-create-cancel" class="chr-modal-btn cancel">Отмена</button>
           <button id="chr-create-submit" class="chr-modal-btn create">Создать</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Relations management modal (2026-08-08, Фаза 1 «Связи и отношения») -->
+    <div id="relations-manage-modal" class="chr-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="relmgr-title">
+      <div class="chr-modal relmgr-modal">
+        <div class="chr-modal-title" id="relmgr-title">🔗 Управление связями</div>
+        <div class="chr-modal-body relmgr-columns">
+          <div class="relmgr-col">
+            <div class="relmgr-col-title">Постоянные связи</div>
+            <div class="relmgr-hint">Отображаются в выпадающем меню «Вид отношений». Базовый набор
+              защищён от изменений; свои связи можно редактировать и удалять.</div>
+            <input type="text" id="relmgr-permanent-search" class="v20-lib-search" placeholder="Поиск по названию…" autocomplete="off">
+            <div id="relmgr-permanent-list" class="relmgr-list"></div>
+            <div class="relmgr-add-row">
+              <input type="text" id="relmgr-new-name" class="chr-form-input" placeholder="Новая связь…" autocomplete="off">
+              <button type="button" id="relmgr-add-btn" class="chr-modal-btn create">+ Добавить</button>
+            </div>
+            <div id="relmgr-add-error" class="chr-form-error" style="display:none"></div>
+          </div>
+          <div class="relmgr-col">
+            <div class="relmgr-col-title">Авторские связи</div>
+            <div class="relmgr-hint">Формулировки, которые встречаются в карточках персонажей и не
+              совпадают ни с одной постоянной связью.</div>
+            <input type="text" id="relmgr-authored-search" class="v20-lib-search" placeholder="Поиск…" autocomplete="off">
+            <div id="relmgr-authored-list" class="relmgr-list"></div>
+          </div>
+        </div>
+        <div class="chr-modal-actions">
+          <button id="relmgr-close" class="chr-modal-btn cancel">Закрыть</button>
         </div>
       </div>
     </div>
@@ -1390,6 +1422,7 @@
 <script src="scripts/rules-v20.js"></script>
 <script src="scripts/utils.js"></script>
 <script src="scripts/graph.js"></script>
+<script src="scripts/relations-manage.js"></script>
 <script src="scripts/locations.js"></script>
 <script src="scripts/v20-sheet.js"></script>
 <script src="scripts/library-authoring.js"></script>

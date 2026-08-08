@@ -27,6 +27,27 @@ function _familiarCardHtml(fc) {
     </div>`;
 }
 
+// Одна запись вкладки «Отношения» в режиме просмотра (2026-08-08, Фаза 3 — общий хелпер, чтобы
+// не дублировать разметку между начальным рендером карточки и обновлением после сохранения).
+// Пустое описание у взаимной связи (§4.4 техспеки Фазы 3 — зеркальная запись сознательно не
+// копирует текст с точки зрения другого персонажа) — не баг, но неотличимо от «забыли
+// заполнить»; auto-hint (дизайн-ревью Фазы 3, п.4) поясняет это чисто визуально, не как
+// сохранённый текст — тем же приглушённым стилем, что .cdet-val.unknown у прочих пустых полей.
+function _relViewItemHtml(r) {
+  const typeRow = (r.relType || r.mutual)
+    ? `<div class="cdet-rel-type">${r.mutual ? '<span class="cdet-rel-mutual-badge" title="Взаимная связь">↔</span> ' : ''}${escHtml(r.relType)}</div>`
+    : '';
+  const descHtml = (r.mutual && !r.description)
+    ? '<div class="cdet-rel-desc cdet-rel-desc-auto">Добавлено автоматически по взаимной связи — можно уточнить описание</div>'
+    : `<div class="cdet-rel-desc">${escHtml(r.description)}</div>`;
+  return `
+    <div class="cdet-rel">
+      <div class="cdet-rel-name">${escHtml(r.target)}</div>
+      ${typeRow}
+      ${descHtml}
+    </div>`;
+}
+
 // FIX-4b (docs/audit/2026-07-28-fix-plan.md): резолвим по slug, не по name —
 // два персонажа с одинаковым именем (переименование сейчас блокируется FIX-4a,
 // но в старых данных коллизия могла остаться) раньше всегда открывали ПЕРВОГО
@@ -61,16 +82,15 @@ function openCharDetail(slug) {
     })
     .join('');
 
-  const relsHtml = (c.relationships || []).map(r => `
-    <div class="cdet-rel">
-      <div class="cdet-rel-name">${escHtml(r.target)}</div>
-      <div class="cdet-rel-desc">${escHtml(r.description)}</div>
-    </div>`).join('');
+  const relsHtml = (c.relationships || []).map(r => _relViewItemHtml(r)).join('');
 
   // Вкладка «Фамильяр» (5.8) — признак и линк берутся из «Отношения» (тот же массив, что рендерит
   // вкладку «Отношения»), НЕ из sheet-модели: связь с description, матчащим /фамильяр/i, — источник
   // истины. resolveCharByName — общий фаззи-резолвер имени в реестре персонажей (archive.js).
-  const familiarRel = (c.relationships || []).find(r => /фамильяр/i.test(r.description || ''));
+  // relType (2026-08-08, Фаза 2) — новые связи хранят «Фамильяр» в структурном поле типа, не в
+  // description; старые продолжают находиться по description, как раньше.
+  const familiarRel = (c.relationships || []).find(r =>
+    /фамильяр/i.test(r.relType || '') || /фамильяр/i.test(r.description || ''));
   const familiarChar = familiarRel ? resolveCharByName(familiarRel.target) : null;
   // Если target связи-«фамильяра» по ошибке резолвится в самого владельца карточки
   // (опечатка/неверные данные) — это не осмысленная фича, а аномалия данных: без
@@ -179,11 +199,14 @@ function openCharDetail(slug) {
             ${relsHtml ? `<div class="cdet-rels-list">${relsHtml}</div>` : '<div class="cdet-empty">Нет известных связей</div>'}
           </div>
           <div id="cdet-rels-edit" style="display:none">
-            <div class="cdet-rels-hint">Имя — выбери из списка или впиши своё. Вид отношений — из списка или свой.</div>
-            <div id="cdet-rels-rows">${(c.relationships||[]).map(r => _relRowHtml(r.target, r.description)).join('')}</div>
+            <div class="cdet-rels-hint">Имя — выбери из списка или впиши своё. Вид отношений — из библиотеки или свой.</div>
+            <div id="cdet-rels-rows">${(c.relationships||[]).map(r => _relRowHtml(r.target, r.relType, r.description, r.mutual)).join('')}</div>
             <button class="cdet-rel-add-btn" id="cdet-rel-add-btn" type="button">+ Добавить связь</button>
+            <div id="cdet-rel-type-picker" class="v20-lib-picker cdet-lib-picker-panel" hidden>
+              <input type="text" class="v20-lib-search" placeholder="Поиск по названию…" id="cdet-rel-type-search">
+              <div class="v20-lib-list" id="cdet-rel-type-list"></div>
+            </div>
             <datalist id="cdet-rel-names">${(STATE.characters||[]).filter(x => x.slug !== c.slug).map(x => `<option value="${escAttr(x.name)}">`).join('')}</datalist>
-            <datalist id="cdet-rel-types">${REL_TYPE_OPTIONS.map(t => `<option value="${escAttr(t)}">`).join('')}</datalist>
           </div>
           <div class="cdet-edit-bar" id="cdet-rels-bar">
             <button class="cdet-save-btn" data-savepanel="rels" data-char="${escHtml(c.slug)}">Сохранить</button>
@@ -480,7 +503,7 @@ function _togglePanelEdit(panel, on) {
       const charSlug = document.querySelector('[data-editpanel="rels"][data-char]')?.dataset.char;
       const ch  = STATE.characters.find(c => c.slug === charSlug);
       const rows = document.getElementById('cdet-rels-rows');
-      if (ch && rows) rows.innerHTML = (ch.relationships || []).map(r => _relRowHtml(r.target, r.description)).join('');
+      if (ch && rows) rows.innerHTML = (ch.relationships || []).map(r => _relRowHtml(r.target, r.relType, r.description, r.mutual)).join('');
       rows?.querySelector('.cdet-rel-name-inp')?.focus();
     } else {
       edit.querySelector('textarea')?.focus();
@@ -516,10 +539,14 @@ async function _savePanelEdit(panel, charSlug) {
       }
     } else if (panel === 'rels') {
       const lines = Array.from(document.querySelectorAll('#cdet-rels-rows .cdet-rel-row')).map(row => {
-        const target = row.querySelector('.cdet-rel-name-inp')?.value.trim() || '';
-        const desc   = row.querySelector('.cdet-rel-type-inp')?.value.trim() || '';
+        const target  = row.querySelector('.cdet-rel-name-inp')?.value.trim() || '';
+        const relType = row.querySelector('.cdet-rel-type-inp')?.value.trim() || '';
+        const desc    = row.querySelector('.cdet-rel-desc-inp')?.value.trim() || '';
+        const mutual  = row.querySelector('.cdet-rel-mutual-cb')?.checked || false;
         if (!target) return null;
-        return desc ? `${target} — ${desc}` : target;
+        let body = relType ? `[${relType}] ${desc}`.trim() : desc;
+        if (mutual) body = `↔ ${body}`.trim();
+        return body ? `${target} — ${body}` : target;
       }).filter(Boolean);
       const r = await fetch(`/api/characters/${encodeURIComponent(charSlug)}/relations${qs}`,
         { method: 'PUT', headers: { 'Content-Type': 'application/json' },
@@ -527,20 +554,55 @@ async function _savePanelEdit(panel, charSlug) {
       const d = await r.json();
       ok = d.ok;
       if (ok) {
-        // Refresh relations view (handles "Имя — описание" and name-only)
+        // Граф кеширует данные между заходами (STATE.graph.inited, graph.js) — тот же класс
+        // устаревания, что уже находили для STATE.characters (Фаза 3). Сохранение связей меняет
+        // рёбра/цвета графа — сбрасываем флаг тем же паттерном, что уже используется в проекте
+        // (log-session.js, scripts.js) после других действий, влияющих на граф (2026-08-08,
+        // хвост Фазы 1, дизайн-ревью п.2).
+        STATE.graph.inited = false;
+        // Предупреждения синхронизации «Взаимно» (2026-08-08, Фаза 3) — отдельным toast'ом на
+        // каждое, не одной строкой через «; » (дизайн-ревью п.3): несколько сразу нечитаемы в
+        // компактном, недолго висящем toast.
+        (d.warnings || []).forEach(w => showToast(w, 'warning'));
+        // Refresh relations view — тот же разбор «↔[Тип] Описание», что и на сервере
+        // (web/lib/parsers/character.js), продублирован здесь для мгновенного обновления
+        // без повторного запроса персонажа (2026-08-08, Фаза 2-3).
         const rels = lines.map(l => {
           const idx = l.indexOf(' — ');
-          return idx >= 0
-            ? { target: l.slice(0, idx).trim(), description: l.slice(idx + 3).trim() }
-            : { target: l.trim(), description: '' };
+          if (idx === -1) return { target: l.trim(), relType: '', description: '', mutual: false };
+          const target = l.slice(0, idx).trim();
+          let rest = l.slice(idx + 3).trim();
+          let mutual = false;
+          if (rest.startsWith('↔')) { mutual = true; rest = rest.slice(1).trim(); }
+          const m = rest.match(/^\[([^\]]+)\]\s*(.*)$/);
+          return m ? { target, relType: m[1].trim(), description: m[2].trim(), mutual } : { target, relType: '', description: rest, mutual };
         });
         const ch = STATE.characters.find(c => c.slug === charSlug);
+        // Взаимная синхронизация (Фаза 3) правит ЧУЖУЮ карточку на сервере — если тут были
+        // (до или после сохранения) взаимные связи, STATE.characters для ДРУГИХ персонажей мог
+        // устареть. loadCharacters() пропускает повторный fetch, если STATE.characters уже
+        // непуст (scripts.js:604-609) — без обновления открывший карточку цели сразу после
+        // этого сохранения увидел бы старые данные до полной перезагрузки страницы.
+        const hadMutual = (ch?.relationships || []).some(x => x.mutual);
+        const hasMutualNow = rels.some(x => x.mutual);
         if (ch) ch.relationships = rels;
-        const relsHtml = rels.map(r => `
-          <div class="cdet-rel">
-            <div class="cdet-rel-name">${escHtml(r.target)}</div>
-            <div class="cdet-rel-desc">${escHtml(r.description)}</div>
-          </div>`).join('');
+        if (hadMutual || hasMutualNow) {
+          // РЕАЛЬНЫЙ БАГ (найден пользователем на живых данных, 2026-08-08): предыдущая версия
+          // делала `STATE.characters = []` и останавливалась на этом — массив пустел, но уже
+          // отрисованные .char-card в сетке оставались кликабельными и указывали на слаги,
+          // которых в пустом массиве больше нет. openCharDetail(slug) ищет персонажа через
+          // STATE.characters.find(...) и молча возвращается, если не нашёл (без ошибки, без
+          // подсказки) — клик по ЛЮБОЙ карточке переставал что-либо делать, пока пользователь
+          // не перезагружал страницу целиком. Правильный паттерн — тот же, что уже используется
+          // в проекте после удаления/создания персонажа (scripts.js) — сразу перечитать список
+          // и перерисовать сетку, если она сейчас на экране, не оставлять окно с пустым
+          // массивом при живых карточках в DOM.
+          fetch(`/api/characters${qs}`).then(r => r.json()).then(data => {
+            STATE.characters = Array.isArray(data) ? data : [];
+            if (STATE.page === 'characters') renderChars();
+          }).catch(() => {});
+        }
+        const relsHtml = rels.map(r => _relViewItemHtml(r)).join('');
         document.getElementById('cdet-rels-view').innerHTML =
           relsHtml ? `<div class="cdet-rels-list">${relsHtml}</div>` : '<div class="cdet-empty">Нет известных связей</div>';
       }
@@ -1688,6 +1750,28 @@ document.addEventListener('click', async e => {
     posInput?.focus();
     return;
   }
+
+  // Вид отношений (2026-08-08, Фаза 2) — ЕДИНСТВЕННАЯ панель на все строки «Отношения» (строк
+  // может быть много, они динамически добавляются/удаляются — фиксированный id на КАЖДУЮ строку
+  // дал бы дублирующиеся id, тот же класс бага, что уже чинили для пикеров фракций города).
+  // Панель физически переезжает к активной строке через insertAdjacentElement, не клонируется.
+  const relTypePickBtn = e.target.closest('.cdet-lib-pick-btn[data-pick-rel-type]');
+  if (relTypePickBtn) {
+    const row = relTypePickBtn.closest('.cdet-rel-row');
+    _activeRelTypeInput = row.querySelector('.cdet-rel-type-inp');
+    const picker = document.getElementById('cdet-rel-type-picker');
+    row.querySelector('.cdet-rel-row-top').insertAdjacentElement('afterend', picker);
+    if (picker.hidden) { picker.hidden = false; await _renderRelTypePickerList(''); } else { picker.hidden = true; }
+    return;
+  }
+  const relTypeItem = e.target.closest('#cdet-rel-type-picker .v20-lib-item');
+  if (relTypeItem) {
+    if (_activeRelTypeInput) _activeRelTypeInput.value = relTypeItem.dataset.name || '';
+    document.getElementById('cdet-rel-type-picker').hidden = true;
+    _relSyncAutoMutual(_activeRelTypeInput?.closest('.cdet-rel-row'));
+    _activeRelTypeInput?.focus();
+    return;
+  }
 });
 document.addEventListener('input', e => {
   if (e.target.id === 'cdet-title-search') _renderTitlePickerLists(e.target.value);
@@ -1695,7 +1779,34 @@ document.addEventListener('input', e => {
   if (e.target.id === 'cdet-sect-search') _renderSectPickerList(e.target.value);
   if (e.target.id === 'cdet-organization-search') _renderOrganizationPickerList(e.target.value);
   if (e.target.id === 'cdet-position-search') _renderPositionPickerList(e.target.value);
+  if (e.target.id === 'cdet-rel-type-search') _renderRelTypePickerList(e.target.value);
+  if (e.target.matches('.cdet-rel-type-inp')) _relSyncAutoMutual(e.target.closest('.cdet-rel-row'));
 });
+
+// Авто-парные типы связей (2026-08-08, Фаза 3, п.5-7 запроса) — выбор одного из них включает
+// «Взаимно» автоматически. Копия той же логики на сервере (web/routes/characters.js,
+// REL_AUTO_PAIRS) — держать в синхроне при правках; здесь нужен только факт «это авто-парный
+// тип», не сама пара (сервер сам считает зеркальный тип при сохранении).
+const REL_AUTO_PAIR_TYPES = new Set(['сир', 'чайлд', 'брат', 'сестра', 'гуль', 'домитор']);
+function _relSyncAutoMutual(row) {
+  const typeInp = row?.querySelector('.cdet-rel-type-inp');
+  const mutualCb = row?.querySelector('.cdet-rel-mutual-cb');
+  if (!typeInp || !mutualCb) return;
+  if (REL_AUTO_PAIR_TYPES.has(typeInp.value.trim().toLowerCase())) mutualCb.checked = true;
+}
+
+// Вид отношений — рендер списка панели-пикера (§2.3 техспеки Фазы 2). ensureRelTypes() —
+// общий кеш из relations-manage.js (Фаза 1), повторный fetch не нужен.
+let _activeRelTypeInput = null;
+async function _renderRelTypePickerList(query) {
+  const types = await ensureRelTypes();
+  const q = (query || '').toLowerCase();
+  const list = types.filter(t => !q || t.name.toLowerCase().includes(q));
+  const box = document.getElementById('cdet-rel-type-list');
+  if (box) box.innerHTML = list.length
+    ? list.map(t => `<button type="button" class="v20-lib-item" data-name="${escAttr(t.name)}"><span>${escHtml(t.name)}</span></button>`).join('')
+    : '<div class="cdet-empty">Ничего не найдено — можно ввести название вручную.</div>';
+}
 
 function _exitInfoEdit(saved) {
   const grid = document.getElementById('cdet-info-fields');

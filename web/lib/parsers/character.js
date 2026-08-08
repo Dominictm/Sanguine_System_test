@@ -89,7 +89,7 @@ function categorizeRel(desc) {
  * @param {string} folderName — имя папки персонажа (fallback для `name`, если нет H1)
  * @param {string} [lineage] — линейка WoD, если уже известна (иначе выводится из «Линейка WoD»)
  * @returns {{name: string, lineage: string, lineageLabel?: string, statusType: string,
- *   relationships: {target: string, description: string, type: string}[], diaries: {title: string, file: string}[],
+ *   relationships: {target: string, description: string, relType: string, mutual: boolean, type: string}[], diaries: {title: string, file: string}[],
  *   imagePrompt?: string, negativePrompt?: string, [field: string]: *}}
  *   остальные поля (clan, sect, biography, appearance, …) — по маппингу русских лейблов карточки, см. тело функции
  */
@@ -194,9 +194,21 @@ function parseCharacter(rawContent, folderName, lineage) {
       const targets = clean.slice(0, dash).split(',')
         .map(t => t.trim().replace(/\[([^\]]+)\]\([^)]*\)/g, '$1').trim())
         .filter(Boolean);
-      const desc = clean.slice(dash + 3).trim();
+      const rest0 = clean.slice(dash + 3).trim();
+      // Взаимность (2026-08-08, Фаза 3) — необязательный маркер ↔ перед всем остальным,
+      // независим от [Тип]. Порядок разбора: сначала ↔, потом [Тип] — маркер взаимности
+      // всегда идёт первым в самой строке.
+      let mutual = false;
+      let rest = rest0;
+      if (rest.startsWith('↔')) { mutual = true; rest = rest.slice(1).trim(); }
+      // Структурный тип (2026-08-08, Фаза 2) — необязательный префикс «[Тип] Описание».
+      // Легаси-записи (без префикса) остаются с relType='' — categorizeRel(desc) по-прежнему
+      // определяет type (слаг для графа) по всему тексту, как раньше.
+      const typeMatch = rest.match(/^\[([^\]]+)\]\s*(.*)$/);
+      const relType = typeMatch ? typeMatch[1].trim() : '';
+      const desc    = typeMatch ? typeMatch[2].trim() : rest;
       for (const tgt of targets) {
-        c.relationships.push({ target: tgt, description: desc, type: categorizeRel(desc) });
+        c.relationships.push({ target: tgt, description: desc, relType, mutual, type: categorizeRel(relType || desc) });
       }
     }
   }

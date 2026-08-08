@@ -138,15 +138,38 @@ function buildLineageFilter() {
 // себе легенда, отдельная строка-легенда под фильтрами (buildLegend, была
 // ниже) стала бы чистым дублированием и убрана.
 function buildRelTypeFilter() {
-  const present = new Set((STATE.graph.data?.links || []).map(l => l.type).filter(Boolean));
-  const keys = Object.keys(REL_LABELS).filter(k => present.has(k));
+  const links = STATE.graph.data?.links || [];
+  const present = new Set(links.map(l => l.type).filter(Boolean));
+  // Подпись/цвет — сначала из самого ребра (typeLabel/color — «Постоянная связь», не входящая
+  // в хардкодный REL_LABELS/REL_COLORS), иначе фоллбэк на старый хардкодный набор (легаси-связи
+  // без совпадения с библиотекой — классификатор categorizeRel). 2026-08-08, хвост Фазы 1.
+  const meta = new Map(); // type → { label, color }
+  for (const l of links) {
+    if (!l.type || meta.has(l.type)) continue;
+    meta.set(l.type, {
+      label: l.typeLabel || REL_LABELS[l.type] || l.type,
+      color: l.color || REL_COLORS[l.type] || REL_COLORS.neutral,
+    });
+  }
+  // По алфавиту лейбла — единственный порядок, стабильный для растущего, пополняемого
+  // пользователем набора типов (дизайн-ревью: «старые типы первыми» не работает на практике —
+  // slugify() библиотеки не совпадает буквально ни с одним старым ключом REL_LABELS, почти
+  // любая связь из библиотеки уже сегодня попадает в «новую» часть списка).
+  const keys = [...present].sort((a, b) => {
+    const la = meta.get(a)?.label || REL_LABELS[a] || a;
+    const lb = meta.get(b)?.label || REL_LABELS[b] || b;
+    return la.localeCompare(lb, 'ru');
+  });
   STATE.graph.relTypeFilter = new Set(keys);
-  document.getElementById('graph-reltype-filter').innerHTML = keys.map(k => `
+  document.getElementById('graph-reltype-filter').innerHTML = keys.map(k => {
+    const m = meta.get(k) || { label: REL_LABELS[k] || k, color: REL_COLORS[k] || REL_COLORS.neutral };
+    return `
     <label class="graph-filter-chip">
       <input type="checkbox" data-reltype-filter="${k}" checked>
-      ${REL_LABELS[k]}
-      <span class="reltype-swatch" style="background:${REL_COLORS[k]}"></span>
-    </label>`).join('');
+      ${m.label}
+      <span class="reltype-swatch" style="background:${m.color}"></span>
+    </label>`;
+  }).join('');
 }
 
 // Единый хелпер видимости: ребро видимо только если видимы ОБА конца (иначе связь
@@ -202,8 +225,13 @@ function renderGraph(data) {
   fm.append('feMergeNode').attr('in', 'blur');
   fm.append('feMergeNode').attr('in', 'SourceGraphic');
 
-  // Arrow markers
-  Object.entries(REL_COLORS).forEach(([type, color]) => {
+  // Arrow markers — по факту присутствующим типам в ТЕКУЩИХ данных, не только по хардкодному
+  // REL_COLORS: «Постоянные связи» (библиотека, растёт со временем) дают слаги, которых в
+  // фиксированном наборе нет — без этого у таких рёбер отсутствовал бы наконечник стрелки
+  // (marker-end ссылался бы на несуществующий <marker>). 2026-08-08, хвост Фазы 1.
+  const markerColors = new Map(Object.entries(REL_COLORS));
+  data.links.forEach(l => { if (l.type && !markerColors.has(l.type)) markerColors.set(l.type, l.color || REL_COLORS.neutral); });
+  markerColors.forEach((color, type) => {
     defs.append('marker')
       .attr('id', `arr-${type}`)
       .attr('viewBox', '0 -4 8 8')
@@ -273,7 +301,7 @@ function renderGraph(data) {
   const link = g.append('g').attr('class', 'links')
     .selectAll('line').data(links).join('line')
     .attr('class', 'graph-link')
-    .attr('stroke', d => REL_COLORS[d.type] || REL_COLORS.neutral)
+    .attr('stroke', d => d.color || REL_COLORS[d.type] || REL_COLORS.neutral)
     .attr('stroke-width', 1.5)
     .attr('stroke-opacity', .55)
     .attr('marker-end', d => `url(#arr-${d.type})`);
@@ -404,7 +432,7 @@ function resetHighlight(link, nodeG) {
 function showInfoPanel(d, links, nodes) {
   const outLinks = links.filter(l => l.source.id === d.id || l.target.id === d.id);
 
-  const relsByType = {};
+  const relsByType = {}; // type → { color, items: [] }
   for (const l of outLinks) {
     const isSource = l.source.id === d.id;
     const other    = isSource ? l.target.id : l.source.id;
@@ -412,18 +440,21 @@ function showInfoPanel(d, links, nodes) {
     // одного и «должник» у другого), показываем СВОИ слова того персонажа, чью
     // карточку сейчас смотрим (fromChar/fromChar2), а не молча текст соседа со
     // стрелкой — раньше вторая версия вообще терялась при построении графа.
-    const own  = d.id === l.fromChar2;
-    const desc = own ? l.description2 : (d.id === l.fromChar ? l.description : `← ${l.description}`);
-    const type = own ? (l.type2 || l.type) : l.type;
-    if (!relsByType[type]) relsByType[type] = [];
-    relsByType[type].push({ other, desc });
+    const own   = d.id === l.fromChar2;
+    const desc  = own ? l.description2 : (d.id === l.fromChar ? l.description : `← ${l.description}`);
+    const type  = own ? (l.type2 || l.type) : l.type;
+    // 2026-08-08, хвост Фазы 1 — цвет из самого ребра («Постоянная связь»), не только из
+    // хардкодного REL_COLORS (который для новых/авторских типов ничего не знает).
+    const color = own ? (l.color2 || l.color) : l.color;
+    if (!relsByType[type]) relsByType[type] = { color: color || REL_COLORS[type] || 'var(--text3)', items: [] };
+    relsByType[type].items.push({ other, desc });
   }
 
-  const relsHtml = Object.entries(relsByType).map(([type, items]) =>
+  const relsHtml = Object.values(relsByType).map(({ color, items }) =>
     items.map(({ other, desc }) => `
       <div class="rel-item">
         <div class="rel-target">
-          <div class="rel-type-dot" style="background:${REL_COLORS[type] || 'var(--text3)'}"></div>
+          <div class="rel-type-dot" style="background:${color}"></div>
           ${escHtml(other)}
         </div>
         <div class="rel-desc">${escHtml(desc)}</div>

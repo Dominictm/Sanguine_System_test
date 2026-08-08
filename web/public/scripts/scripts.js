@@ -183,9 +183,8 @@ const CLAN_COLORS = {
 };
 
 // REL_COLORS/REL_LABELS/NODE_COLORS/MOCK_GRAPH moved to public/graph.js (E2.2).
-
-// Standard relation types offered in the «Отношения» editor (datalist)
-const REL_TYPE_OPTIONS = ['Семья', 'Сир/Чайлд', 'Фамильяр', 'Союзник', 'Враг', 'Преданность', 'Нейтральный', 'Знакомый', 'Тайная связь'];
+// REL_TYPE_OPTIONS (datalist) removed 2026-08-08, Фаза 2 — заменено пикером из библиотеки
+// «Постоянные связи» (relations-manage.js, ensureRelTypes()), см. char-detail.js.
 
 // V20 generation range (3rd = eldest/Methuselah-tier down to 14th = thin-blooded), offered
 // as a dropdown wherever generation is entered/edited — keeps the value numeric and in-canon.
@@ -1643,12 +1642,23 @@ function _charSlug(name) {
   return STATE.characters.find(c => c.name === name)?.slug || name;
 }
 
-// One editable relationship row (name + type/description + delete) for the «Отношения» tab
-function _relRowHtml(target = '', description = '') {
+// One editable relationship row (name + type-picker + mutual checkbox + description + delete)
+// for the «Отношения» tab (2026-08-08, Фаза 3 — добавлен чекбокс «Взаимно», Фаза 2 — тип и
+// описание разделены, было одно поле).
+function _relRowHtml(target = '', relType = '', description = '', mutual = false) {
   return `<div class="cdet-rel-row">
-    <input class="cdet-rel-name-inp" list="cdet-rel-names" placeholder="Имя персонажа" value="${escAttr(target)}">
-    <input class="cdet-rel-type-inp" list="cdet-rel-types" placeholder="Вид отношений / описание" value="${escAttr(description)}">
-    <button class="cdet-rel-del-btn" type="button" title="Удалить связь">✕</button>
+    <div class="cdet-rel-row-top">
+      <input class="cdet-rel-name-inp" list="cdet-rel-names" placeholder="Имя персонажа" value="${escAttr(target)}">
+      <div class="cdet-field-with-pick">
+        <input class="cdet-rel-type-inp" placeholder="Вид отношений" value="${escAttr(relType)}">
+        <button type="button" class="cdet-lib-pick-btn" data-pick-rel-type="1" title="Выбрать из библиотеки" aria-label="Выбрать вид отношений из библиотеки">📚</button>
+      </div>
+      <button class="cdet-rel-del-btn" type="button" title="Удалить связь">✕</button>
+    </div>
+    <label class="cdet-rel-mutual">
+      <input type="checkbox" class="cdet-rel-mutual-cb"${mutual ? ' checked' : ''}> Взаимно
+    </label>
+    <textarea class="cdet-rel-desc-inp" placeholder="Развёрнутое описание (необязательно)" rows="2">${escHtml(description)}</textarea>
   </div>`;
 }
 

@@ -22,6 +22,7 @@
 - **Голос:** Низкий, с легкой хрипотцой, речь рубленая и медленная — каждое слово взвешено, будто она расставляет фигуры на доске. Любит паузы, заставляющие собеседника заполнять их своими страхами. Интонация ровная, без лишних эмоций, но в глазах — ирония, острия ножа.
 - **Отношения:**
   - Граф Жубака — Союзник
+  - Игер пипон — ↔ [Домитор]
 - **🎨 Промт для генерации изображения:**
   [Блок 1] Cinematic hyperrealistic portrait, mortal woman, three-quarter view, dark carelessly tousled hair framing the face, predatory curve of lips, deep restrained gaze, porcelain-like pale skin with sharp contrast from heavy shadows under cheekbones, bizarre intertwining of tattoos across shoulders and arms, strict black blouse and narrow belted waist, depraved grace and calm demeanor of someone who plays with fire in the thickest darkness
   [Блок 2] Flickering candlelight illumination casting warm amber rim light on the face, deep shadows under cheekbones and along the jawline, abstract flat color-wash background, soft smoke-like gradient, deep crimson-red and black as dominant hues, subtle gothic noir atmosphere with dangerous allure
