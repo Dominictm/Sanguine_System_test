@@ -192,7 +192,7 @@ module.exports = function generationRouter({
       const imgContents = imageBuffers.map(({ buf, mime }) => ({
         type: 'image', source: { type: 'base64', media_type: mime, data: buf.toString('base64') },
       }));
-      const claudeModel = validModels().includes(req.body?.model) ? req.body.model : 'claude-opus-4-8';
+      const claudeModel = validModels().includes(req.body?.model) ? req.body.model : 'claude-opus-5';
       const callClaudeVision = client => callAnthropicWithRetry(client, {
         model: claudeModel, max_tokens: 300, system: systemPrompt,
         messages: [{ role: 'user', content: [...imgContents, { type: 'text', text: userPrompt }] }],

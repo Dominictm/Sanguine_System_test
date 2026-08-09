@@ -59,6 +59,29 @@ function _locCardTemplate(name, district) {
 `;
 }
 
+// Секционные поля («keyPoints», «hooks» и т.п.) предполагают, что нужная секция
+// («## 🗺️ Ключевые точки», «## 🪝 Сценарные крючки») УЖЕ есть в карточке — обычный
+// случай, раз шаблон _locCardTemplate её сеет. Но у карточек, заведённых ДО появления
+// секции (напр. «Ключевые точки» — добавлена 2026-08-06, все локации Парижа старше
+// этой даты), replace-регексп ничего не находит и МОЛЧА не пишет — PUT отвечает 200,
+// но правка теряется (баг, найден пользователем на живых данных 2026-08-09: «записи
+// не отображаются» после добавления ключевой точки — карточка «Жилой квартал /
+// торговая зона» и почти все остальные локации Парижа не имели этой секции вовсе).
+// Вставляет секцию перед первым найденным якорем (следующая секция по шаблону) либо
+// в конец карточки, если ни один якорь не найден — самолечение при первом же
+// сохранении поля на старой карточке, без отдельной миграции данных.
+function _upsertLocSection(card, sectionRe, heading, body, anchorRes = []) {
+  if (sectionRe.test(card)) {
+    return card.replace(sectionRe, (_, hdr, _old, tail) => `${hdr}${body}\n${tail}`);
+  }
+  const block = `## ${heading}\n${body}\n\n`;
+  for (const anchorRe of anchorRes) {
+    const m = card.match(anchorRe);
+    if (m) return card.slice(0, m.index) + block + card.slice(m.index);
+  }
+  return card.trimEnd() + '\n\n' + block;
+}
+
 // Обратная запись «Статус» локации → «Отмеченные локации» города (2026-08-06,
 // техспека «Статус заменяет Зону» §4). Симметрична syncSignificantPlaceStatus
 // (routes/cities.js, город → локация), но точечно правит ОДНУ запись, не весь
@@ -211,9 +234,11 @@ module.exports = function locationsRouter({ makeGenerationClient, genTextWithRet
         if (key === 'hooks') {
           const lines = value.split('\n').filter(l => l.trim());
           const numbered = lines.map((l, i) => `${i + 1}. ${l.replace(/^\d+\.\s*/, '')}`).join('\n');
-          card = card.replace(
+          card = _upsertLocSection(
+            card,
             /(## (?:🪝\s+)?(?:Сценарные крючки|Крючки)[^\n]*\n+)([\s\S]+?)(\n## |\n---|$)/i,
-            (_, hdr, _old, tail) => `${hdr}${numbered}\n${tail}`
+            '🪝 Сценарные крючки', numbered,
+            [/## (?:🖼️\s+)?Изображения/i]
           );
           continue;
         }
@@ -231,9 +256,11 @@ module.exports = function locationsRouter({ makeGenerationClient, genTextWithRet
           continue;
         }
         if (key === 'keyPoints') {
-          card = card.replace(
+          card = _upsertLocSection(
+            card,
             /(## (?:🗺️\s+)?Ключевые точки[^\n]*\n+)([\s\S]+?)(\n## |\n---|$)/i,
-            (_, hdr, _old, tail) => `${hdr}${value}\n${tail}`
+            '🗺️ Ключевые точки', value,
+            [/## (?:🪝\s+)?(?:Сценарные крючки|Крючки)/i, /## (?:🖼️\s+)?Изображения/i]
           );
           continue;
         }

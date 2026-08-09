@@ -652,7 +652,7 @@ async function _generateAppearance(charSlug) {
   if (btn) { btn.disabled = true; btn.textContent = '⏳ Анализ арта...'; }
 
   try {
-    const claudeModel  = localStorage.getItem('ai-model') || 'claude-opus-4-8';
+    const claudeModel  = localStorage.getItem('ai-model') || 'claude-opus-5';
     const featPrefs    = JSON.parse(localStorage.getItem('ai-feature-prefs') || '{}');
     const _appPref     = _getPref(featPrefs, 'appearance', 'openrouter');
     const preferSource = _appPref.provider;

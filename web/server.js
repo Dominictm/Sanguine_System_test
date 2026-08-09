@@ -398,7 +398,7 @@ const CLAUDE_CREDS_PATH = path.join(
   process.env.HOME || process.env.USERPROFILE || '',
   '.claude', '.credentials.json'
 );
-const VALID_MODELS = ['claude-opus-4-8', 'claude-sonnet-4-6', 'claude-haiku-4-5-20251001'];
+const VALID_MODELS = ['claude-opus-5', 'claude-sonnet-5', 'claude-haiku-4-5-20251001'];
 
 // preferSource: 'openrouter' | 'openai' | 'claude' | null (auto)
 // ── Test mock provider ────────────────────────────────────────────────────────
@@ -482,7 +482,7 @@ async function makeGenerationClient(preferSource = null, modelOverride = null) {
   const geModel = () => modelOverride || process.env.GEMINI_MODEL || 'gemini-2.5-flash';
   const orModel = () => modelOverride || process.env.OPENROUTER_MODEL || 'openrouter/free';
   const oaModel = () => modelOverride || process.env.OPENAI_MODEL || 'gpt-4o-mini';
-  const clModel = () => modelOverride || 'claude-opus-4-8';
+  const clModel = () => modelOverride || 'claude-opus-5';
 
   // ── Google Gemini (explicit only) ─────────────────────────────
   if (wantGemini && _geminiAvailable()) {

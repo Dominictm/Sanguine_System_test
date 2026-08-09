@@ -17,7 +17,7 @@
 - `rules/` — правила, специфичные для города (если есть).
 - `archive/` — `political_state.md` (карта фракций), `events.md` (события города — агрегат из хроник), `timeline.md`, `rumors_elysium.md` / `rumors_dreaming.md` (слухи d20), `characters_index.md` (сводник персонажей), `visitors.md` (персонажи-гости из других городов).
 - `characters/<линейка>/<slug>/` — персонажи. Линейки: `vampires`, `fairies`, `mortals`, `werewolves`, `mages`, `hunters`. В папке персонажа: `<slug>.md` (карточка), `<slug>-sheet.md` (V20-лист), `art/` (изображения), `journal/` (дневники `ГГГГ-ММ.md` + `retrospective.md`).
-- `locations/district_NN/<район>/<локация>/` — локации (глубина гибкая).
+- `locations/<район>/<локация>/` — локации (плоско, без обёртки `district_NN/`; район — формальная сущность с собственной `district.md`, создаётся отдельно от локации, см. `POST /api/cities/:slug/districts`).
 - `chronicles/<хроника>/` — `chronicle.md` (спина + финал), `events.md`, `open_threads.md`, `modules/<модуль>/`.
 
 **Глобальное** (одно на все города) — `system/`:

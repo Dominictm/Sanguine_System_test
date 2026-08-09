@@ -240,7 +240,7 @@ module.exports = function lifecycleRouter({ makeGenerationClient, genTextWithRet
 
       const runGen = async (system, user, maxTokens) => {
         try {
-          const out = await genTextWithRetry(gen, { system, user, maxTokens, model: _claudeOnlyModel(gen, 'claude-opus-4-8') });
+          const out = await genTextWithRetry(gen, { system, user, maxTokens, model: _claudeOnlyModel(gen, 'claude-opus-5') });
           return out.text.trim();
         } catch (e) {
           _logAiFail(`close/${chr}/${mod}`, e, gen);

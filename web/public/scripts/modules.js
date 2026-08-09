@@ -115,6 +115,15 @@ async function openChrDetail(slug, display, tab) {
     } catch {
       body.innerHTML = '<div class="loading-state" style="color:var(--accent3)">⚠ Не удалось загрузить</div>';
     }
+  } else if (_chrDetailTab === 'description') {
+    try {
+      const fields = await fetch(`/api/chronicles/${encodeURIComponent(slug)}/fields${qs}`).then(r => r.json());
+      STATE._chrFields = STATE._chrFields || {};
+      STATE._chrFields[slug] = fields;
+      body.innerHTML = _chrDescPanelHtml(fields);
+    } catch {
+      body.innerHTML = '<div class="loading-state" style="color:var(--accent3)">⚠ Не удалось загрузить</div>';
+    }
   } else {
     // Events tab — load once, cache on STATE
     try {
@@ -130,6 +139,77 @@ async function openChrDetail(slug, display, tab) {
     } catch {
       body.innerHTML = '<div class="loading-state" style="color:var(--accent3)">⚠ Не удалось загрузить события</div>';
     }
+  }
+}
+
+// ── Вкладка «📝 Описание» — Настроение + свободный текст, читается/пишется из
+// chronicle.md (writeChronicleFields, routes/chronicles.js). Тот же view/edit-паттерн
+// (cdet-edit-btn/cdet-edit-bar/cdet-save-btn), что уже используют вкладки карточки
+// персонажа и локации — переиспользуем готовые классы, не изобретаем свои.
+function _chrDescViewInnerHtml(fields) {
+  return `
+    <div class="vtm-section"><div class="vtm-lbl">Настроение</div><div class="vtm-body">${fields.mood ? escHtml(fields.mood) : '—'}</div></div>
+    <div class="vtm-section" style="margin-top:16px"><div class="vtm-lbl">Описание</div><div class="vtm-body">${fields.description ? escHtml(fields.description).replace(/\n/g, '<br>') : '—'}</div></div>`;
+}
+function _chrDescPanelHtml(fields) {
+  return `
+    <div class="chr-desc-panel">
+      <div class="cdet-info-header">
+        <button class="cdet-edit-btn" id="chr-desc-edit-btn">✏ Редактировать</button>
+      </div>
+      <div id="chr-desc-view">${_chrDescViewInnerHtml(fields)}</div>
+      <div id="chr-desc-edit" style="display:none">
+        <div class="chr-form-group">
+          <label class="chr-form-label" for="chr-desc-mood-inp">Настроение</label>
+          <input class="chr-form-input" id="chr-desc-mood-inp" value="${escAttr(fields.mood || '')}" placeholder="Готический нуар, паранойя, надежда…">
+        </div>
+        <div class="chr-form-group" style="margin-top:12px">
+          <label class="chr-form-label" for="chr-desc-text-ta">Описание</label>
+          <textarea class="cdet-edit-textarea" id="chr-desc-text-ta" rows="8" placeholder="О чём эта хроника…">${escHtml(fields.description || '')}</textarea>
+        </div>
+      </div>
+      <div class="cdet-edit-bar" id="chr-desc-bar" style="display:none">
+        <button class="cdet-save-btn" id="chr-desc-save-btn">Сохранить</button>
+        <button class="cdet-cancel-btn" id="chr-desc-cancel-btn">Отмена</button>
+        <span class="cdet-save-msg" id="chr-desc-msg" style="display:none">✓ Сохранено</span>
+      </div>
+    </div>`;
+}
+function _chrDescToggleEdit(enter) {
+  const viewEl = document.getElementById('chr-desc-view');
+  const editEl = document.getElementById('chr-desc-edit');
+  const barEl  = document.getElementById('chr-desc-bar');
+  const msgEl  = document.getElementById('chr-desc-msg');
+  if (!viewEl || !editEl) return;
+  viewEl.style.display = enter ? 'none' : '';
+  editEl.style.display = enter ? '' : 'none';
+  if (barEl) barEl.style.display = enter ? 'flex' : 'none';
+  if (msgEl) msgEl.style.display = 'none';
+}
+async function _chrDescSave() {
+  const slug = _chrDetailSlug;
+  if (!slug) return;
+  const mood        = document.getElementById('chr-desc-mood-inp')?.value ?? '';
+  const description = document.getElementById('chr-desc-text-ta')?.value ?? '';
+  const btn = document.getElementById('chr-desc-save-btn');
+  if (btn) btn.disabled = true;
+  try {
+    const r = await fetch(`/api/chronicles/${encodeURIComponent(slug)}/fields${window.location.search}`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mood, description }),
+    });
+    const fields = await r.json();
+    if (!r.ok) { showToast(fields.error || 'Не удалось сохранить', 'error'); return; }
+    STATE._chrFields = STATE._chrFields || {};
+    STATE._chrFields[slug] = fields;
+    document.getElementById('chr-desc-view').innerHTML = _chrDescViewInnerHtml(fields);
+    _chrDescToggleEdit(false);
+    const msgEl = document.getElementById('chr-desc-msg');
+    if (msgEl) { msgEl.style.display = ''; setTimeout(() => { msgEl.style.display = 'none'; }, 2000); }
+  } catch (e) {
+    showToast('Не удалось сохранить: ' + e.message, 'error');
+  } finally {
+    if (btn) btn.disabled = false;
   }
 }
 
@@ -221,6 +301,9 @@ document.addEventListener('click', e => {
 
 // Click on module card inside chronicle modal → open module detail
 document.getElementById('chr-detail-body').addEventListener('click', e => {
+  if (e.target.closest('#chr-desc-edit-btn'))   { _chrDescToggleEdit(true); return; }
+  if (e.target.closest('#chr-desc-cancel-btn')) { _chrDescToggleEdit(false); return; }
+  if (e.target.closest('#chr-desc-save-btn'))   { _chrDescSave(); return; }
   if (e.target.closest('.chd-mod-del-btn'))  return;
   if (e.target.closest('.chd-mod-fill-btn')) return;
   const finaleBadge = e.target.closest('[data-open-finale]');
@@ -1425,23 +1508,15 @@ function _scenarioTooltipHtml(heading) {
   return fieldTip(_scenarioTooltipFor(heading));
 }
 
-// Минимальный редактируемый каркас сценария (GM-справка / Пролог / Сцена 1 /
-// Финал) — для ручного заполнения без ИИ-генерации. Формат/breadcrumb —
-// как у AI-генерации (routes/modules.js POST .../fill), чтобы каркас потом
+// Минимальный редактируемый каркас сценария (Пролог / Сцена 1 / Финал) —
+// для ручного заполнения без ИИ-генерации. Формат/breadcrumb — как у
+// AI-генерации (routes/modules/fill.js POST .../fill), чтобы каркас потом
 // парсился теми же блоками, что и сгенерированный сценарий.
 function _buildScenarioSkeleton(title, modSlug) {
   return [
     `# Сценарий — ${title}`,
     '',
     `> 🔗 [Модуль](${modSlug}.md) | [Хроника](../../events.md) | [НПС](npc.md)`,
-    '',
-    '---',
-    '',
-    '## 🔒 GM-справка — закрытая информация',
-    '> Читать перед игрой. Не раскрывать игроку напрямую.',
-    '',
-    '### Что произошло до начала сессии',
-    '⚠️ Заполни.',
     '',
     '---',
     '',
@@ -1928,7 +2003,7 @@ document.getElementById('modp-panel-scenario').addEventListener('click', e => {
     const mod = d?.name      || STATE.currentModule?.name;
     if (!chr || !mod) return;
     (async () => {
-      const ok = await showConfirm('Создать пустой каркас сценария (GM-справка / Пролог / Сцена 1 / Финал) для ручного заполнения?', { confirmText: 'Создать' });
+      const ok = await showConfirm('Создать пустой каркас сценария (Пролог / Сцена 1 / Финал) для ручного заполнения?', { confirmText: 'Создать' });
       if (!ok) return;
       manualBtn.disabled = true;
       const origLabel = manualBtn.textContent;

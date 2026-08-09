@@ -17,7 +17,7 @@ const {
   aggregateEvents, eventDateScore, findMdFiles, rmdir,
   renderChronicleEventsSkeleton, renderOpenThreadsSkeleton,
 } = require('../lib/db');
-const { slugify, parseChronicle, parseChronicleParticipants, parseEvent } = require('../lib/parsers');
+const { slugify, parseChronicle, parseChronicleParticipants, parseEvent, sanitizeInlineText } = require('../lib/parsers');
 const { parseEventsText, compressChronicleEvents } = require('../lib/context_builder');
 
 // City chronicle file = cities/<city>/archive/events.md (World State + aggregate index).
@@ -44,6 +44,57 @@ function renderChronicleMd(display, slug, city, mood, moduleLinks) {
     `> Закрыть хронику: \`node tools/close_chronicle.js ${city} ${slug} "финал"\``,
     modsSection,
   ].filter(l => l !== null).join('\n');
+}
+
+// ── Chronicle fields (Настроение/Описание) — вкладка «📝 Описание» модалки ─────
+function parseChronicleFields(raw) {
+  const content = raw.replace(/^﻿/, '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  const moodM = content.match(/^-\s*\*\*Настроение:\*\*\s*(.*)$/m);
+  const descM = content.match(/## (?:📝\s+)?Описание[^\n]*\n+([\s\S]+?)(?=\n## |\n---|$)/i);
+  return {
+    mood: moodM ? moodM[1].trim() : '',
+    description: descM ? descM[1].trim() : '',
+  };
+}
+
+// Та же проблема класса, что чинилась у локаций (2026-08-09, «Ключевые точки»
+// молча не сохранялись на карточках без секции) — замена ищет существующую секцию
+// и, если карточка её не имеет (все хроники, заведённые до появления «Описания»),
+// ничего не находит и молча не пишет. Вставляем секцию перед первым найденным
+// якорем, иначе — в конец карточки.
+function _upsertChronicleSection(card, sectionRe, heading, body, anchorRes = []) {
+  if (sectionRe.test(card)) {
+    return card.replace(sectionRe, (_, hdr, _old, tail) => `${hdr}${body}\n${tail}`);
+  }
+  const block = `## ${heading}\n\n${body}\n`;
+  for (const anchorRe of anchorRes) {
+    const m = card.match(anchorRe);
+    if (m) return card.slice(0, m.index) + block + '\n' + card.slice(m.index);
+  }
+  return card.trimEnd() + '\n\n' + block;
+}
+
+function writeChronicleFields(card, { mood, description }) {
+  if (mood !== undefined) {
+    const moodVal = sanitizeInlineText(String(mood).trim());
+    if (/^-\s*\*\*Настроение:\*\*/m.test(card)) {
+      card = moodVal
+        ? card.replace(/^-\s*\*\*Настроение:\*\*.*$/m, `- **Настроение:** ${moodVal}`)
+        : card.replace(/^-\s*\*\*Настроение:\*\*.*\n?/m, '');
+    } else if (moodVal) {
+      card = card.replace(/(^-\s*\*\*Статус:\*\*.*$)/m, `$1\n- **Настроение:** ${moodVal}`);
+    }
+  }
+  if (description !== undefined) {
+    const descVal = String(description).trim();
+    card = _upsertChronicleSection(
+      card,
+      /(## (?:📝\s+)?Описание[^\n]*\n+)([\s\S]+?)(\n## |\n---|$)/i,
+      '📝 Описание', descVal || '—',
+      [/## (?:🔗\s+)?Модули/i]
+    );
+  }
+  return card;
 }
 
 // ── Chronicle delete helpers ──────────────────────────────────────────────────
@@ -196,6 +247,34 @@ module.exports = function chroniclesRouter({
       console.error('[create-chronicle]', e.message);
       serverError(res, e);
     }
+  });
+
+  // ── Настроение/Описание хроники (вкладка «📝 Описание» модалки) ────────────────
+
+  router.get('/api/chronicles/:slug/fields', async (req, res) => {
+    try {
+      const city = reqCity(req);
+      const slug = req.params.slug;
+      const mdPath = path.join(chroniclesDir(city), slug, 'chronicle.md');
+      const raw = await fs.readFile(mdPath, 'utf-8').catch(() => null);
+      if (raw === null) return res.status(404).json({ error: 'Хроника не найдена' });
+      res.json(parseChronicleFields(raw));
+    } catch (e) { serverError(res, e); }
+  });
+
+  router.put('/api/chronicles/:slug/fields', express.json(), async (req, res) => {
+    try {
+      const city = reqCity(req);
+      const slug = req.params.slug;
+      const { mood, description } = req.body || {};
+      const mdPath = path.join(chroniclesDir(city), slug, 'chronicle.md');
+      const raw = await fs.readFile(mdPath, 'utf-8').catch(() => null);
+      if (raw === null) return res.status(404).json({ error: 'Хроника не найдена' });
+
+      const card = writeChronicleFields(raw, { mood, description });
+      await writeFileAtomic(mdPath, card, 'utf-8');
+      res.json(parseChronicleFields(card));
+    } catch (e) { serverError(res, e); }
   });
 
   // ── Chronicle delete preview ──────────────────────────────────────────────────

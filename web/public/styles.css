@@ -1984,7 +1984,7 @@ body {
   flex-direction: column;
   gap: 10px;
   padding: 12px 20px;
-  background: var(--bg2);
+  background: repeating-linear-gradient(-45deg, transparent, transparent 8px, rgba(139, 0, 0, 0.03) 8px, rgba(139, 0, 0, 0.03) 16px);
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
 }
@@ -4935,23 +4935,28 @@ a:focus-visible {
 
 .chr-detail-header {
   display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.chr-detail-titlebar {
+  display: flex;
   justify-content: space-between;
   align-items: flex-start;
   gap: 12px;
-  margin-bottom: 16px;
 }
 
 .chr-detail-header-btns {
   display: flex;
   gap: 10px;
   align-items: center;
-  flex-shrink: 0;
+  flex-wrap: wrap;
 }
 
 .chr-detail-meta {
   font-size: var(--fs-body);
   color: var(--text-dim);
-  margin-top: 4px;
 }
 
 .chr-detail-close {
@@ -12951,6 +12956,17 @@ tr.rumor-told:hover .rumor-cb-cell {
 
 .modp-char-cards .char-card.modp-npc-card-static::before {
   display: none;
+}
+
+/* Баг, найден пользователем на живых данных 2026-08-09: клик по ✕ открывал карточку
+   персонажа вместо удаления из модуля. Причина — .char-card-overlay (z-index: 2,
+   нужен для контраста градиента поверх .char-card-dim) визуально перекрывал всю
+   карточку целиком, включая угол, где стоит ✕ (position: absolute; z-index: 1,
+   унаследованный из общего правила с .loc-card-del-btn/.modp-loc-card-unlink — у тех
+   оверлей без явного z-index, там 1 достаточно). Поднимаем кнопку удаления именно в
+   этом контексте выше .char-card-overlay, не трогая общее правило. */
+.modp-char-cards .modp-npc-card-del {
+  z-index: 3;
 }
 
 .modp-loc-card-unlink,

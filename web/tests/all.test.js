@@ -2030,33 +2030,33 @@ describe('Parsers — unit', () => {
   });
 
   describe('checkScenarioStructure', () => {
-    it('эталонная плоская структура (GM-справка/Пролог/Сцена N/Финал/Открытые вопросы/Колорит) → missing пуст', () => {
+    // Упрощение шаблона (2026-08-09, system/rules/module_rules.md): ровно три
+    // типа блоков верхнего уровня — Пролог/Сцена N/Финал, без отдельной
+    // GM-справки (секреты вплетены прозой в Пролог) и без «Открытые вопросы
+    // после модуля» — SCENARIO_REQUIRED_TOPICS теперь проверяет 4 темы, не 5.
+    it('эталонная плоская структура (Пролог/Сцена N/Финал/Колорит) → missing пуст', () => {
       const full = [
-        '## 🔒 GM-справка — закрытая информация', 'x', '---',
         '## Пролог — Начало', 'x', '---',
-        '## Сцена 1 — Бар', 'x', '---',
-        '## Финал — Развязка', 'x', '---',
-        '## Открытые вопросы после модуля', 'x', '---',
-        '## Колорит — три обязательные детали', 'x',
+        '## Сцена 1 — Бар', 'x', '### Колорит', 'y', '---',
+        '## Финал — Развязка', 'x',
       ].join('\n');
       const { missing } = checkScenarioStructure(full);
       assert.deepEqual(missing, []);
     });
 
-    it('минимальная структура (Пролог/Сцена N/Финал) без вопросов/колорита → 2 недостающие темы', () => {
+    it('минимальная структура (Пролог/Сцена N/Финал) без колорита → 1 недостающая тема', () => {
       const flat = ['## Пролог', 'x', '---', '## Сцена 1 — Бар', 'x', '---', '## Финал', 'x'].join('\n');
       const { missing } = checkScenarioStructure(flat);
       assert.ok(!missing.some(m => m.key === 'setup'));
       assert.ok(!missing.some(m => m.key === 'scenes'));
       assert.ok(!missing.some(m => m.key === 'finale'));
-      assert.ok(missing.some(m => m.key === 'threads'));
       assert.ok(missing.some(m => m.key === 'flavor'));
-      assert.equal(missing.length, 2);
+      assert.equal(missing.length, 1);
     });
 
-    it('пустой сценарий → все 5 тем отсутствуют', () => {
+    it('пустой сценарий → все 4 темы отсутствуют', () => {
       const { missing } = checkScenarioStructure('Просто текст без заголовков.');
-      assert.equal(missing.length, 5);
+      assert.equal(missing.length, 4);
     });
   });
 
@@ -7002,6 +7002,74 @@ describe('FIX-16: санитизация свободного текста — �
   });
 });
 
+// Вкладка «📝 Описание» модалки хроники (2026-08-09) — GET/PUT /api/chronicles/:slug/fields
+// читают/пишут «Настроение» (инлайн-буллет) и «Описание» (## Описание, вставляется, если
+// секции ещё нет — та же self-heal логика, что у локаций, см. writeChronicleFields).
+describe('GET/PUT /api/chronicles/:slug/fields — Настроение/Описание (вкладка «Описание»)', () => {
+  let citySlug, cityDir, chrSlug;
+  const qs = () => `?city=${citySlug}`;
+
+  before(async () => {
+    await startServer();
+    const cityCreate = await apiJson('/api/cities', { method: 'POST', body: JSON.stringify({ name: 'Chr Fields Testcity', year: '2010' }) });
+    assert.equal(cityCreate.status, 200, cityCreate.body.error);
+    citySlug = cityCreate.body.slug;
+    cityDir  = path.join(__dirname, '../../cities', citySlug);
+
+    const chrCreate = await apiJson(`/api/chronicles${qs()}`, { method: 'POST', body: JSON.stringify({ name: 'Хроника Полей' }) });
+    assert.equal(chrCreate.status, 200, chrCreate.body.error);
+    chrSlug = chrCreate.body.slug;
+  });
+  after(async () => { await stopServer(); await fs.rm(cityDir, { recursive: true, force: true }); });
+
+  it('свежесозданная хроника — оба поля пустые', async () => {
+    const r = await apiJson(`/api/chronicles/${chrSlug}/fields${qs()}`);
+    assert.equal(r.status, 200);
+    assert.deepEqual(r.body, { mood: '', description: '' });
+  });
+
+  it('PUT записывает оба поля; секция «Описание» вставляется (её не было в шаблоне создания)', async () => {
+    const put = await apiJson(`/api/chronicles/${chrSlug}/fields${qs()}`, { method: 'PUT', body: JSON.stringify({
+      mood: 'Готический нуар, паранойя', description: 'Первая строка.\nВторая строка.',
+    }) });
+    assert.equal(put.status, 200);
+    assert.equal(put.body.mood, 'Готический нуар, паранойя');
+    assert.equal(put.body.description, 'Первая строка.\nВторая строка.');
+
+    const get = await apiJson(`/api/chronicles/${chrSlug}/fields${qs()}`);
+    assert.deepEqual(get.body, put.body, 'GET после PUT должен отдавать то же самое');
+  });
+
+  it('повторный PUT обновляет секцию на месте, не дублирует «## Описание»', async () => {
+    await apiJson(`/api/chronicles/${chrSlug}/fields${qs()}`, { method: 'PUT', body: JSON.stringify({
+      mood: 'Надежда сквозь пепел', description: 'Заменённое описание.',
+    }) });
+    const card = await fs.readFile(path.join(cityDir, 'chronicles', chrSlug, 'chronicle.md'), 'utf-8');
+    const descCount = (card.match(/## (?:📝\s+)?Описание/gi) || []).length;
+    const moodCount = (card.match(/\*\*Настроение:\*\*/gi) || []).length;
+    assert.equal(descCount, 1, 'секция «Описание» задвоилась при повторном PUT');
+    assert.equal(moodCount, 1, 'строка «Настроение» задвоилась при повторном PUT');
+    assert.match(card, /Заменённое описание\./);
+  });
+
+  it('очистка «Настроение» (пустая строка) убирает буллет из карточки', async () => {
+    const put = await apiJson(`/api/chronicles/${chrSlug}/fields${qs()}`, { method: 'PUT', body: JSON.stringify({
+      mood: '', description: 'Описание осталось.',
+    }) });
+    assert.equal(put.status, 200);
+    assert.equal(put.body.mood, '');
+    const card = await fs.readFile(path.join(cityDir, 'chronicles', chrSlug, 'chronicle.md'), 'utf-8');
+    assert.ok(!/\*\*Настроение:\*\*/.test(card), 'строка «Настроение» должна была исчезнуть из файла');
+  });
+
+  it('несуществующая хроника → 404 и на GET, и на PUT', async () => {
+    const get = await apiJson(`/api/chronicles/net_takoy_hroniki/fields${qs()}`);
+    assert.equal(get.status, 404);
+    const put = await apiJson(`/api/chronicles/net_takoy_hroniki/fields${qs()}`, { method: 'PUT', body: JSON.stringify({ mood: 'x' }) });
+    assert.equal(put.status, 404);
+  });
+});
+
 // docs/design/2026-08-08-relations-mutual-autopairs-techspec.md — Фаза 3 «Связи и отношения»:
 // чекбокс «Взаимно» на карточке персонажа A зеркалит связь на карточку персонажа Б, с авто-парой
 // типа (Сир↔Чайлд, Домитор↔Гуль, Брат/Сестра по полу цели); повторное сохранение без «Взаимно»
@@ -7363,6 +7431,60 @@ describe('city-creation-restructure §15-16: Опасность/сенсорик
       assert.ok(!loc.faction, 'Фракция должна очиститься');
       assert.equal(loc.locStatus, 'Открыто', 'Статус — не в этом PUT, должен остаться прежним');
       assert.equal(loc.threats, 'Шпионы', 'Угрозы — не в этом PUT, должны остаться прежними');
+    });
+
+    // Баг, найден пользователем на живых данных 2026-08-09: почти все локации Парижа
+    // заведены до появления секции «## Ключевые точки» (2026-08-06) — PUT .../fields с
+    // keyPoints у них молча ничего не писал (replace-регексп не находил заголовок,
+    // возвращал карточку без изменений, но отвечал 200) — «записи не отображаются»
+    // после добавления ключевой точки. Тот же баг был и у «hooks» на нескольких
+    // карточках. Фикс — _upsertLocSection (routes/locations.js): вставляет отсутствующую
+    // секцию перед следующим якорем по шаблону, вместо молчаливого no-op.
+    it('keyPoints/hooks — PUT на карточке БЕЗ секции создаёт её (self-heal легаси-карточек), не no-op\'ится молча', async () => {
+      const legacyCard = [
+        '# Легаси Локация Без Секций', '',
+        '> **Название:** Легаси Локация Без Секций | **Район:** Тест',
+        '---',
+        '## 🎭 Атмосфера', 'Тестовая атмосфера.',
+        '## 🖼️ Изображения',
+        '- ⏳ Изображение не предоставлено', '',
+      ].join('\n');
+      const legacySlug = 'legacy_no_sections_test';
+      const legacyDir = path.join(cityDir, 'locations', 'legacy_test_rayon', legacySlug);
+      await fs.mkdir(legacyDir, { recursive: true });
+      await fs.writeFile(path.join(legacyDir, `${legacySlug}.md`), legacyCard, 'utf-8');
+
+      try {
+        const putKeys = await apiJson(`/api/locations/${legacySlug}/fields${qs()}`, { method: 'PUT', body: JSON.stringify({
+          fields: { keyPoints: '| Место | Описание |\n|---|---|\n| Точка А | Описание А |' },
+        }) });
+        assert.equal(putKeys.status, 200, putKeys.body.error);
+
+        const putHooks = await apiJson(`/api/locations/${legacySlug}/fields${qs()}`, { method: 'PUT', body: JSON.stringify({
+          fields: { hooks: 'Крючок номер один' },
+        }) });
+        assert.equal(putHooks.status, 200, putHooks.body.error);
+
+        const locs = await apiJson(`/api/locations${qs()}`);
+        const loc = locs.body.find(l => l.slug === legacySlug);
+        assert.deepEqual(loc.keyPoints, [{ place: 'Точка А', desc: 'Описание А' }],
+          'ключевая точка должна была реально записаться, не потеряться молча');
+        assert.deepEqual(loc.hooks, ['Крючок номер один'], 'крючок должен был реально записаться');
+
+        // Повторный PUT — секция должна ОБНОВЛЯТЬСЯ, не дублироваться.
+        const putKeys2 = await apiJson(`/api/locations/${legacySlug}/fields${qs()}`, { method: 'PUT', body: JSON.stringify({
+          fields: { keyPoints: '| Место | Описание |\n|---|---|\n| Точка А | Описание А |\n| Точка Б | Описание Б |' },
+        }) });
+        assert.equal(putKeys2.status, 200);
+        const cardAfter = await fs.readFile(path.join(legacyDir, `${legacySlug}.md`), 'utf-8');
+        const sectionCount = (cardAfter.match(/## (?:🗺️\s+)?Ключевые точки/gi) || []).length;
+        assert.equal(sectionCount, 1, 'секция «Ключевые точки» не должна дублироваться при повторном PUT');
+        const locs2 = await apiJson(`/api/locations${qs()}`);
+        const loc2 = locs2.body.find(l => l.slug === legacySlug);
+        assert.equal(loc2.keyPoints.length, 2, 'вторая точка должна добавиться в ТУ ЖЕ секцию');
+      } finally {
+        await fs.rm(path.join(cityDir, 'locations', 'legacy_test_rayon'), { recursive: true, force: true });
+      }
     });
   });
 
@@ -8047,6 +8169,166 @@ describe('city-creation-restructure §15-16: Опасность/сенсорик
   });
 });
 
+// ══════════════════════════════════════════════════════════════════════════════
+// UI-workflow: создание города (все поля формы) → район → локация → привязка к
+// району → удаление. QA-аудит 2026-08-08: заполнение ВСЕХ полей города и районы/
+// локации/привязка по отдельности уже были плотно покрыты (см. describe-блоки выше
+// «POST /api/cities — все 16 секций», «Районы (District)», «PUT .../district»), но
+// ни один тест не доводил историю до конца тем же путём, что реально ведёт
+// пользователь через UI (создал город → добавил район → создал в нём локацию →
+// удалил ненужную) — и, что важнее, `DELETE /api/locations/:slug` (реальный роут
+// под кнопкой 🗑 на карточке локации, routes/locations.js) не был покрыт НИ ОДНИМ
+// тестом вообще.
+// ══════════════════════════════════════════════════════════════════════════════
+describe('UI-workflow: город (все поля) → район → локация → привязка → удаление', () => {
+  // Ровно те поля, что реально собирает и шлёт форма «+ Создать новый домен»
+  // (document.getElementById('btn-new-city') → payload, scripts.js) — НЕ «все поля
+  // API вообще»: например, districts в этот payload не входит (см. ниже), а
+  // CITY_RULE_SECTIONS_CREATE = CITY_RULE_SECTIONS.filter(k => k !== 'landmarks')
+  // (city.js) — «Значимые места» тоже не часть формы создания, только правки уже
+  // созданного города. Список синхронизирован вручную с city.js — если форма
+  // обрастёт новым полем правил, этот тест не узнает сам, придётся обновить.
+  const FORM_RULE_KEYS = ['hunting', 'edicts', 'mortals', 'calendar', 'tech', 'limits', 'naming'];
+  let citySlug, cityDir;
+  const qs = () => `?city=${citySlug}`;
+
+  before(async () => { await startServer(); });
+  after(async () => { await stopServer(); await fs.rm(cityDir, { recursive: true, force: true }); });
+
+  it('Шаг 1 — создание города формой со всеми полями: каждое поле долетает до city.md и до GET /api/cities/:slug/detail', async () => {
+    const fields = {
+      name: 'UI Workflow Testcity', year: '2011',
+      description: 'Тестовый готический город.', factions: 'Камарилья\nАнархи',
+      political: 'Князь: Тестовый Князь', locations: 'Элизиум: Тестовый Элизиум',
+      leitmotif: 'Дождь и неон', specifics: 'Отвечать сухо, по делу',
+      avoid: 'Избегать анахронизмов', sources: 'Corebook V20',
+      factionsMortal: 'Городская полиция', factionsState: 'Интерпол',
+    };
+    for (const k of FORM_RULE_KEYS) fields[k] = `значение-${k}`;
+
+    const create = await apiJson('/api/cities', { method: 'POST', body: JSON.stringify(fields) });
+    assert.equal(create.status, 200, create.body.error);
+    citySlug = create.body.slug;
+    cityDir  = path.join(__dirname, '../../cities', citySlug);
+
+    // Каждое поле должно быть читаемо обратно ровно тем же значением — то, что
+    // реально видит форма редактирования при повторном открытии карточки города.
+    const detail = await apiJson(`/api/cities/${citySlug}/detail`);
+    assert.equal(detail.status, 200, detail.body.error);
+    assert.equal(detail.body.parsed.display, 'UI Workflow Testcity');
+    assert.equal(detail.body.parsed.year, '2011');
+    for (const k of FORM_RULE_KEYS)
+      assert.equal(detail.body.parsed.sections[k], `значение-${k}`, `поле «${k}» не долетело до GET-детали`);
+  });
+
+  it('Шаг 1 (продолжение) — свободнотекстовые поля (описание/лейтмотив/специфика/избегать/источники/фракции смертных и государственные) не потеряны', async () => {
+    const detail = await apiJson(`/api/cities/${citySlug}/detail`);
+    assert.equal(detail.body.parsed.description, 'Тестовый готический город.',
+      'description — верхнеуровневое поле parsed, не sections.description');
+    assert.equal(detail.body.parsed.sections.leitmotif, 'Дождь и неон');
+    assert.equal(detail.body.parsed.sections.specifics, 'Отвечать сухо, по делу');
+    assert.equal(detail.body.parsed.sections.avoid, 'Избегать анахронизмов');
+    assert.equal(detail.body.parsed.sections.sources, 'Corebook V20');
+    assert.match(detail.body.parsed.sections.factions, /Камарилья/);
+    assert.match(detail.body.parsed.sections.factions, /Анархи/);
+    assert.match(detail.body.parsed.sections.factionsMortal, /Городская полиция/);
+    assert.match(detail.body.parsed.sections.factionsState, /Интерпол/);
+  });
+
+  // 2026-08-04 (T2): районы убраны из формы создания города — заводятся ПОСТФАКТУМ,
+  // отдельной формой «+ Добавить район» на уже созданной карточке города (docs/design/
+  // 2026-08-04-city-create-form-restructure-techspec.md). POST /api/cities всё ещё
+  // технически принимает поле districts (CSV → плоские locations/<slug>/ БЕЗ district.md,
+  // см. lib/parsers/city.js cityScaffold) — но реальная форма его больше не шлёт, поэтому
+  // сюда, в тест «формы со всеми полями», оно намеренно не включено (было ошибкой первой
+  // версии этого теста — проверял CSV-districts как если бы форма их ещё отправляла).
+  it('Шаг 2 — создание района на уже созданном городе (форма «+ Добавить район», не CSV при создании)', async () => {
+    const create = await apiJson(`/api/cities/${citySlug}/districts`, { method: 'POST', body: JSON.stringify({
+      name: 'Портовый Квартал', type: 'Промзона', sect: 'Анархи', description: 'Доки и склады у воды.',
+    }) });
+    assert.equal(create.status, 200, create.body.error);
+    assert.ok(await fs.stat(path.join(cityDir, 'locations', create.body.slug, 'district.md')).catch(() => null));
+
+    const list = await apiJson(`/api/cities/${citySlug}/districts`);
+    const found = list.body.find(d => d.slug === create.body.slug);
+    assert.equal(found.name, 'Портовый Квартал');
+    assert.equal(found.type, 'Промзона');
+    assert.equal(found.sect, 'Анархи');
+    assert.equal(found.description, 'Доки и склады у воды.');
+  });
+
+  it('Шаг 3 — создание локации без района, затем привязка к «Портовому Кварталу» (PUT /district)', async () => {
+    const create = await apiJson(`/api/locations${qs()}`, { method: 'POST', body: JSON.stringify({ name: 'Заброшенный Склад' }) });
+    assert.equal(create.status, 200, create.body.error);
+    const locSlug = create.body.slug;
+
+    const attach = await apiJson(`/api/locations/${locSlug}/district${qs()}`, {
+      method: 'PUT', body: JSON.stringify({ district: 'Портовый Квартал' }),
+    });
+    assert.equal(attach.status, 200, attach.body.error);
+
+    const after = await apiJson(`/api/locations${qs()}`);
+    const loc = after.body.find(l => l.slug === locSlug);
+    assert.equal(loc.district, 'Портовый Квартал', 'локация должна отображать district-именем формальной сущности');
+    assert.ok(await fs.stat(path.join(cityDir, 'locations', 'portovyy_kvartal', locSlug)).catch(() => null),
+      'папка локации должна физически переехать под район');
+  });
+
+  it('Шаг 4 — удаление локации (DELETE /api/locations/:slug): мягкое удаление, пропадает из GET, отвязывается от модулей', async () => {
+    const create = await apiJson(`/api/locations${qs()}`, { method: 'POST', body: JSON.stringify({
+      name: 'Локация На Удаление', district: 'Портовый Квартал',
+    }) });
+    assert.equal(create.status, 200, create.body.error);
+    const locSlug = create.body.slug;
+
+    // Модуль, ссылающийся на локацию через «## 📍 Связанные локации» — проверяем,
+    // что DELETE не просто убирает карточку, но и убирает висячую ссылку из модуля
+    // (unlinkLocationFromAllModules, routes/modules/shared.js).
+    const modDir = path.join(cityDir, 'chronicles', 'del_test_chr', 'modules', 'del_test_mod');
+    await fs.mkdir(modDir, { recursive: true });
+    const modFile = path.join(modDir, 'del_test_mod.md');
+    await fs.writeFile(modFile, [
+      '# Тестовый модуль', '',
+      '## 📍 Связанные локации',
+      `- ${locSlug}`,
+      '- kakaya-to-drugaya-lokaciya',
+      '',
+    ].join('\n'), 'utf-8');
+
+    const del = await apiJson(`/api/locations/${locSlug}${qs()}`, { method: 'DELETE' });
+    assert.equal(del.status, 200, del.body.error);
+    assert.match(del.body.movedTo, /locations\/_deleted\//, 'ответ должен называть путь в корзине');
+    assert.deepEqual(del.body.unlinkedFrom, ['del_test_chr/del_test_mod'], 'должен отчитаться, из какого модуля отвязал локацию');
+
+    const after = await apiJson(`/api/locations${qs()}`);
+    assert.ok(!after.body.find(l => l.slug === locSlug), 'удалённая локация не должна отдаваться в списке');
+
+    assert.ok(!(await fs.stat(path.join(cityDir, 'locations', 'portovyy_kvartal', locSlug)).catch(() => null)),
+      'папка локации не должна остаться на прежнем месте');
+    const trash = await fs.readdir(path.join(cityDir, 'locations', '_deleted')).catch(() => []);
+    assert.ok(trash.some(e => e.startsWith(`${locSlug}_`)), 'локация должна уехать в _deleted/<slug>_<timestamp>');
+
+    const modAfter = await fs.readFile(modFile, 'utf-8');
+    assert.ok(!modAfter.includes(locSlug), 'ссылка на удалённую локацию должна пропасть из модуля');
+    assert.ok(modAfter.includes('kakaya-to-drugaya-lokaciya'), 'ссылка на ДРУГУЮ локацию в том же модуле не должна пострадать');
+
+    await fs.rm(path.join(cityDir, 'chronicles', 'del_test_chr'), { recursive: true, force: true });
+  });
+
+  it('Шаг 4 (продолжение) — повторное удаление того же слага (или несуществующей локации) → 404, корзина не растёт лишним элементом', async () => {
+    const del = await apiJson(`/api/locations/net-takoy-lokacii-voobsche${qs()}`, { method: 'DELETE' });
+    assert.equal(del.status, 404);
+  });
+
+  it('Шаг 4 (продолжение) — удаление локации не задевает район и город: район остаётся в списке, city.md не тронут', async () => {
+    const before = await fs.readFile(path.join(cityDir, 'city.md'), 'utf-8');
+    const list = await apiJson(`/api/cities/${citySlug}/districts`);
+    assert.ok(list.body.some(d => d.name === 'Портовый Квартал'), 'район не должен был исчезнуть из-за удаления локации внутри него');
+    const after = await fs.readFile(path.join(cityDir, 'city.md'), 'utf-8');
+    assert.equal(after, before, 'удаление локации не должно писать в city.md вообще');
+  });
+});
+
 test('source-guard: web/routes/threads.js и lib/parsers/threads.js — санитизация/де-экранирование полей нити', () => {
   const routeJs = require('fs').readFileSync(path.join(__dirname, '../routes/threads.js'), 'utf-8');
   assert.match(routeJs, /escapeTableCell\(sanitizeInlineText\(title\)\)/);
@@ -8318,4 +8600,142 @@ test('source-guard: routes/characters.js — GET all-images ключует сл�
   const routeMatch = js.match(/router\.get\('\/api\/characters\/all-images'[\s\S]*?\n  \}\);/);
   assert.ok(routeMatch, 'не найден маршрут all-images');
   assert.match(routeMatch[0], /result\[char\.slug\]\s*=\s*images/, 'ключ словаря должен быть char.slug, не char.name');
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// UNIT — source-guard: регрессионное покрытие недели 2026-08-02…08-08 (реструктуризация
+// «Инструментов», Статус/Опасность/Сенсорика локаций, библиотеки «Смертные»/«Титулы»,
+// фракции города чипами, пикеры карточки персонажа) — до этого набора ни одна из этих
+// UI-фич не имела source-guard теста: функциональность проверялась на уровне API/парсеров
+// (см. соседние describe-блоки city-creation-restructure и др.), но случайный откат разметки
+// index.html/*.js прошёл бы весь npm test незамеченным. QA-аудит 2026-08-08.
+// ══════════════════════════════════════════════════════════════════════════════
+
+test('source-guard: index.html — вкладка «Инструменты» реструктурирована до 4 вкладок (Учёт данных / Подключение AI / Назначение генераций / Инструкции), «Новый НПС»/«Модуль»/«Сессия» удалены', () => {
+  const html = require('fs').readFileSync(path.join(__dirname, '../public/index.html'), 'utf-8');
+  const toolsSection = html.match(/<section id="page-tools"[\s\S]*?\n {4}<\/section>/);
+  assert.ok(toolsSection, 'не найдена секция #page-tools');
+  const body = toolsSection[0];
+  assert.match(body, /data-tab="validate">Учёт данных</, 'нет вкладки «Учёт данных» (бывшая «Проверка»)');
+  assert.match(body, /data-tab="ai-connect">🔌 Подключение AI</, 'нет вкладки «🔌 Подключение AI»');
+  assert.match(body, /data-tab="ai-features">⚡ Назначение генераций</, 'нет вкладки «⚡ Назначение генераций»');
+  assert.match(body, /data-tab="guide">📖 Инструкции</, 'нет вкладки «📖 Инструкции»');
+  assert.ok(!/data-tab="new-module"/.test(body), 'вкладка «Модуль» должна быть удалена из Инструментов (дубль кнопки «+ Модуль» в хронике)');
+  assert.ok(!/data-tab="log-session"/.test(body), 'вкладка «📓 Сессия» должна быть удалена из Инструментов');
+  assert.ok(!/data-tab="more"/.test(body), 'вкладка «🛠 Ещё» должна быть удалена — содержимое перенесено в «Учёт данных»');
+});
+
+test('source-guard: index.html — «Учёт данных» содержит перенесённые из «Ещё» инструменты (Кросс-город/Закрыть хронику/Индекс событий/Реестр персонажей)', () => {
+  const html = require('fs').readFileSync(path.join(__dirname, '../public/index.html'), 'utf-8');
+  const panel = html.match(/<div class="tab-panel active" id="tab-validate">[\s\S]*?\n {6}<\/div>\s*\n\s*<!--/);
+  assert.ok(panel, 'не найдена панель #tab-validate');
+  const body = panel[0];
+  assert.match(body, /btn-migrate/, 'нет кнопки «Зафиксировать присутствие» (Кросс-город)');
+  assert.match(body, /btn-close-chr/, 'нет кнопки «Закрыть хронику»');
+  assert.match(body, /btn-rebuild-idx/, 'нет кнопки «Пересобрать индекс города»');
+  assert.match(body, /btn-sync-index/, 'нет кнопки «Синхронизировать реестр»');
+});
+
+test('source-guard: log-session.js click-listener на удалённую кнопку data-tab="log-session" не навешивается (иначе TypeError при загрузке страницы «Инструменты»)', () => {
+  const js = require('fs').readFileSync(path.join(__dirname, '../public/scripts/log-session.js'), 'utf-8');
+  assert.ok(!/querySelector\(['"]\.tab-btn\[data-tab="log-session"\]['"]\)\.addEventListener/.test(js),
+    'log-session.js всё ещё вешает addEventListener прямо на querySelector(...) без null-проверки — упадёт, раз кнопки больше нет в DOM');
+});
+
+test('source-guard: index.html — фильтр локаций «Статус» (#loc-filter-zone) содержит актуальные 5 значений, старые значения «Зоны» убраны', () => {
+  const html = require('fs').readFileSync(path.join(__dirname, '../public/index.html'), 'utf-8');
+  const sel = html.match(/<select class="filter-select" id="loc-filter-zone">[\s\S]*?<\/select>/);
+  assert.ok(sel, 'не найден select #loc-filter-zone');
+  const body = sel[0];
+  for (const v of ['Элизиум', 'Приёмная князя', 'Убежище', 'Шериф', 'Сенешаль']) {
+    assert.ok(body.includes(`value="${v}"`), `отсутствует статус «${v}»`);
+  }
+  assert.ok(!/Носферату|Нейтральная|Опасная"/.test(body), 'в select остались значения старой модели «Зона» — статус и опасность теперь разные поля');
+});
+
+test('source-guard: locations.js — CITY_LOCATION_TYPES (city.js) задаёт те же 5 статусов, что и фильтр в index.html', () => {
+  const js = require('fs').readFileSync(path.join(__dirname, '../public/scripts/city.js'), 'utf-8');
+  assert.match(js, /CITY_LOCATION_TYPES\s*=\s*\['Элизиум', 'Приёмная князя', 'Убежище', 'Шериф', 'Сенешаль'\]/,
+    'CITY_LOCATION_TYPES разошёлся с фильтром локаций — статус на вкладке VtM карточки локации не совпадёт со списком фильтра');
+});
+
+test('source-guard: locations.js — «Опасность» (dangerLevel/badge-danger) — независимое поле, не читается из «Статуса»', () => {
+  const js = require('fs').readFileSync(path.join(__dirname, '../public/scripts/locations.js'), 'utf-8');
+  assert.match(js, /DANGER_BADGE_LABELS\s*=\s*\{/, 'нет DANGER_BADGE_LABELS');
+  assert.match(js, /MASQ_BADGE_LABELS\s*=\s*\{/, 'нет MASQ_BADGE_LABELS (Маскарад — тоже отдельный бейдж)');
+  const cardFn = js.match(/function _locCardHtml\([\s\S]*?\n\}/);
+  assert.ok(cardFn, 'не найдена _locCardHtml');
+  assert.match(cardFn[0], /badge-danger-\$\{dLvl\}/, 'карточка локации в сетке не показывает бейдж опасности');
+  assert.ok(!/\$\{zoneBadge\}/.test(cardFn[0]), '_locCardHtml всё ещё вставляет ${zoneBadge} в разметку — «Зона контроля» на карточке сетки должна быть убрана (осталась только в детальной модалке)');
+});
+
+test('source-guard: locations.js — вкладка «Сенсорика» отделена от «Атмосферы», обязательные каналы Свет/Звук/Запах помечают вкладку ⚠️ при незаполненности', () => {
+  const js = require('fs').readFileSync(path.join(__dirname, '../public/scripts/locations.js'), 'utf-8');
+  assert.match(js, /MANDATORY_SENS_CHANNELS\s*=\s*\['Свет', 'Звук', 'Запах'\]/, 'нет MANDATORY_SENS_CHANNELS с ожидаемыми тремя каналами');
+  assert.match(js, /data-tab="sens">Сенсорика/, 'нет кнопки вкладки «Сенсорика» с data-tab="sens"');
+  assert.match(js, /sensHasEmpty\s*\?\s*['"] ⚠️['"]/, 'вкладка «Сенсорика» не показывает ⚠️ при незаполненном обязательном канале');
+});
+
+test('source-guard: index.html — вкладка «Библиотека» содержит «Смертные» (5 категорий организаций) и «Титулы» под «Сородичи»', () => {
+  const html = require('fs').readFileSync(path.join(__dirname, '../public/index.html'), 'utf-8');
+  assert.match(html, /data-tab="lib-mortal">Смертные</, 'нет главной вкладки библиотеки «Смертные»');
+  for (const g of ['government', 'religious', 'crime', 'civic', 'positions']) {
+    assert.ok(html.includes(`data-mort-group="${g}"`), `нет подкатегории «Смертные»: data-mort-group="${g}"`);
+  }
+  assert.match(html, /data-kin-group="titles"[^>]*>Титулы</, 'нет подвкладки «Титулы» под «Сородичи»');
+});
+
+test('source-guard: index.html — вкладки «✦ Достоинства» и «✦ Недостатки» — раздельные, каждая со своими 4 категориями', () => {
+  const html = require('fs').readFileSync(path.join(__dirname, '../public/index.html'), 'utf-8');
+  assert.match(html, /data-tab="lib-merits">✦ Достоинства</, 'нет отдельной вкладки «✦ Достоинства»');
+  assert.match(html, /data-tab="lib-flaws">✦ Недостатки</, 'нет отдельной вкладки «✦ Недостатки»');
+  assert.match(html, /data-merit-cat="physical"/, 'вкладка «Достоинства» не разбита на категории (data-merit-cat)');
+  assert.match(html, /data-flaw-cat="физические"/, 'вкладка «Недостатки» не разбита на категории (data-flaw-cat)');
+});
+
+test('source-guard: city.js — _cityFactionsEditorHtml собирает пять групп фракций (Секты/Кланы чипами из библиотеки, Другие/Смертные/Государственные — свободный текст)', () => {
+  const js = require('fs').readFileSync(path.join(__dirname, '../public/scripts/city.js'), 'utf-8');
+  const fn = js.match(/async function _cityFactionsEditorHtml\(sec\) \{[\s\S]*?\n\}/);
+  assert.ok(fn, 'не найдена _cityFactionsEditorHtml');
+  const body = fn[0];
+  for (const g of ['sects', 'clans', 'mortal', 'state']) {
+    assert.ok(body.includes(`data-pick-faction="${g}"`), `нет кнопки библиотечного подбора для группы фракций «${g}»`);
+  }
+  assert.match(body, /data-city-field="factions-other"/, 'нет свободного списка «Другие фракции»');
+  assert.match(body, /data-city-field="factions-mortal-list"/, 'нет свободного списка «Фракции смертных»');
+  assert.match(body, /data-city-field="factions-state-list"/, 'нет свободного списка «Государственные фракции»');
+});
+
+test('source-guard: char-detail.js — вкладка «Информация»: пикеры «Титул» (не для фей), «Дисциплины», и для смертных/охотников «Организация»/«Должность»', () => {
+  const js = require('fs').readFileSync(path.join(__dirname, '../public/scripts/char-detail.js'), 'utf-8');
+  assert.match(js, /key === 'hierarchy' && _lineageOf\(_editCharSlug\) !== 'fairy'/,
+    'пикер «Титул» должен подключаться для поля hierarchy у всех линеек кроме fairy (у фей это «Иерархия» — простое поле)');
+  assert.match(js, /dataset\.pickTitle\s*=\s*'1'/, 'нет кнопки-пикера «Титул» (data-pick-title)');
+  assert.match(js, /key === 'disciplines'/, 'нет ветки рендера пикера для поля disciplines');
+  assert.match(js, /dataset\.pickDiscipline\s*=\s*'1'/, 'нет кнопки-пикера «Дисциплины» (data-pick-discipline)');
+  assert.match(js, /key === 'organization' && \['mortal', 'hunter'\]\.includes\(_lineageOf\(_editCharSlug\)\)/,
+    'пикер «Организация» должен быть гейтирован линейками mortal/hunter');
+  assert.match(js, /key === 'position' && \['mortal', 'hunter'\]\.includes\(_lineageOf\(_editCharSlug\)\)/,
+    'пикер «Должность» должен быть гейтирован линейками mortal/hunter');
+});
+
+// Баг, найден пользователем на живых данных 2026-08-09: клик по ✕ на карточке НПС
+// вкладки «НПС» модуля открывал карточку персонажа вместо удаления из модуля.
+// Причина — .char-card-overlay (z-index: 2) визуально перекрывает всю карточку,
+// включая угол с кнопкой удаления (.modp-npc-card-del, z-index: 1 из общего правила
+// с .loc-card-del-btn/.modp-loc-card-unlink — у тех оверлей без явного z-index, 1
+// достаточно). Скоуп-правило .modp-char-cards .modp-npc-card-del { z-index: 3 }
+// поднимает кнопку именно в этом контексте выше оверлея, не трогая общее правило.
+test('source-guard: styles.css — .modp-npc-card-del стоит выше .char-card-overlay по z-index внутри .modp-char-cards (иначе клик по ✕ ловит оверлей, открывающий карточку персонажа)', () => {
+  const css = require('fs').readFileSync(path.join(__dirname, '../public/styles.css'), 'utf-8');
+  const overlayM = css.match(/\.char-card-overlay\s*\{[^}]*\}/);
+  assert.ok(overlayM, 'не найдено правило .char-card-overlay');
+  const overlayZ = parseInt((overlayM[0].match(/z-index:\s*(\d+)/) || [])[1] || '0', 10);
+
+  const scopedM = css.match(/\.modp-char-cards\s+\.modp-npc-card-del\s*\{[^}]*\}/);
+  assert.ok(scopedM, '.modp-char-cards .modp-npc-card-del — регрессия: нет скоуп-переопределения z-index для кнопки удаления НПС');
+  const scopedZ = parseInt((scopedM[0].match(/z-index:\s*(\d+)/) || [])[1] || '0', 10);
+
+  assert.ok(scopedZ > overlayZ,
+    `z-index кнопки удаления (${scopedZ}) должен быть больше z-index .char-card-overlay (${overlayZ}) в контексте .modp-char-cards`);
 });

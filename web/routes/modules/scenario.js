@@ -168,7 +168,7 @@ ${target.body}
       let newBody;
       try {
         newBody = (await genTextWithRetry(gen, {
-          system: systemPrompt, user: userPrompt, maxTokens: 2500, model: _claudeOnlyModel(gen, 'claude-opus-4-8'),
+          system: systemPrompt, user: userPrompt, maxTokens: 2500, model: _claudeOnlyModel(gen, 'claude-opus-5'),
         })).text.trim();
       } catch (e) {
         _logAiFail(`scenario/${chr}/${mod}: раздел «${heading}»`, e, gen);
@@ -269,7 +269,7 @@ ${currentBlockMd}
       let newBlockText;
       try {
         newBlockText = (await genTextWithRetry(gen, {
-          system: systemPrompt, user: userPrompt, maxTokens: 3000, model: _claudeOnlyModel(gen, 'claude-opus-4-8'),
+          system: systemPrompt, user: userPrompt, maxTokens: 3000, model: _claudeOnlyModel(gen, 'claude-opus-5'),
         })).text.trim();
       } catch (e) {
         _logAiFail(`scenario/${chr}/${mod}: блок «${heading}»`, e, gen);

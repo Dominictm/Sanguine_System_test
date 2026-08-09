@@ -10,7 +10,7 @@
 | **Тип** | Игровая сессия |
 | **Формат** | Соло-модуль |
 | **Время** | Начало декабря 2010, несколько ночей |
-| **Локации** | [Цирк, Заповедник Венсен](../../../../locations/vensen/tsirk_vensen/tsirk_vensen.md) → [Опера Гарнье](../../../../locations/opera/opera_garne/opera_garne.md) → [Фобур-Сент-Антуан, 11-й](../../../../locations/bastiliya/fobur_sent_antuan/fobur_sent_antuan.md) → [Порт-де-ла-Шапель, 18-й](../../../../locations/monmartr/port_de_la_shapel/port_de_la_shapel.md) → [Аэропорт Орли Юг](../../../../locations/orli_yug/aeroport_orli_yug/aeroport_orli_yug.md) → Заповедник Венсен |
+| **Локации** | [Цирк, Заповедник Венсен](../../../../locations/vensen/tsirk_vensen/tsirk_vensen.md) → [Опера Гарнье](../../../../locations/opera/opera_garne/opera_garne.md) → [Фобур-Сент-Антуан, 11-й](../../../../locations/bastiliya/fobur_sent_antuan/fobur_sent_antuan.md) → [Порт-де-ла-Шапель, 18-й](../../../../locations/18_monmart/port_de_la_shapel/port_de_la_shapel.md) → [Аэропорт Орли Юг](../../../../locations/orli_yug/aeroport_orli_yug/aeroport_orli_yug.md) → Заповедник Венсен |
 | **Персонаж игрока** | [Ви](../../../../characters/vampires/vi/vi.md) — Малкавиан, гимнастка, 14 лет вечно |
 | **Тон** | Охота / Проверка / Раскрытие |
 
