@@ -288,16 +288,21 @@
     <!-- Module Detail Page -->
     <section id="page-module" class="page">
       <div class="modp-header">
-        <div class="modp-header-btns">
-          <button class="modp-back-btn" id="modp-back-btn">← Модули</button>
-          <button class="modp-gen-btn" id="modp-gen-btn">🪄 Сгенерировать</button>
-          <button class="modp-edit-btn" id="modp-header-edit-btn">✏ Редактировать</button>
-          <button class="modp-close-btn" id="modp-close-btn">🔒 Закрыть модуль</button>
-          <button class="modp-del-btn" id="modp-del-btn">🗑 Удалить модуль</button>
-        </div>
         <div class="modp-header-main">
-          <h1 class="modp-title" id="modp-title">Загрузка...</h1>
+          <div class="modp-title-row">
+            <button type="button" class="modp-header-collapse-btn tour-replay-btn" id="modp-header-collapse-btn"
+                    aria-expanded="true" title="Свернуть шапку модуля" aria-label="Свернуть шапку модуля">▴</button>
+            <h1 class="modp-title" id="modp-title">Загрузка...</h1>
+          </div>
           <div class="modp-badges" id="modp-badges"></div>
+
+          <div class="modp-header-btns">
+            <button class="modp-back-btn" id="modp-back-btn">← Модули</button>
+            <button class="modp-gen-btn" id="modp-gen-btn">🪄 Сгенерировать</button>
+            <button class="modp-edit-btn" id="modp-header-edit-btn">✏ Редактировать</button>
+            <button class="modp-close-btn" id="modp-close-btn">🔒 Закрыть модуль</button>
+            <button class="modp-del-btn" id="modp-del-btn">🗑 Удалить модуль</button>
+          </div>
 
           <div class="modp-header-edit" id="modp-header-edit" style="display:none">
             <div class="chr-form-group">

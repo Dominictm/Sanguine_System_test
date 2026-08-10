@@ -2576,6 +2576,43 @@ async function _onModuleSheetBtn(btn) {
 // Back button
 document.getElementById('modp-back-btn').addEventListener('click', () => navigate('modules'));
 
+// ── Сворачивание шапки модуля (кнопка «▴» рядом с заголовком) — тот же паттерн,
+// что и сворачивание сайдбара (scripts.js, KEY='sanguine-sidebar-collapsed'),
+// свой ключ localStorage, глобальный (не per-модуль). ──────────────────────────
+(function () {
+  const KEY = 'sanguine-module-header-collapsed';
+  const btn = document.getElementById('modp-header-collapse-btn');
+  const header = document.querySelector('.modp-header');
+  if (!btn || !header) return;
+
+  function apply(collapsed) {
+    header.classList.toggle('collapsed', collapsed);
+    btn.setAttribute('aria-expanded', String(!collapsed));
+    const label = collapsed ? 'Развернуть шапку модуля' : 'Свернуть шапку модуля';
+    btn.title = label;
+    btn.setAttribute('aria-label', label);
+    // Сворачивание закрывает открытую форму правки заголовка — иначе она остаётся
+    // в DOM развёрнутой под max-height:0. #modp-header-edit-btn НЕ тумблер (только
+    // открывает форму) — закрывает её #modp-hedit-cancel.
+    if (collapsed) {
+      const editBlock = document.getElementById('modp-header-edit');
+      if (editBlock && editBlock.style.display !== 'none') {
+        document.getElementById('modp-hedit-cancel')?.click();
+      }
+    }
+  }
+
+  let collapsed = false;
+  try { collapsed = localStorage.getItem(KEY) === '1'; } catch {}
+  apply(collapsed);
+
+  btn.addEventListener('click', () => {
+    collapsed = !collapsed;
+    apply(collapsed);
+    try { localStorage.setItem(KEY, collapsed ? '1' : '0'); } catch {}
+  });
+})();
+
 // ── Header quick-edit: название/тип/дата/тон/хроника ──────────────────────────
 document.getElementById('modp-header-edit-btn').addEventListener('click', async () => {
   const data = STATE.currentModuleData || {};

@@ -309,9 +309,11 @@ body {
    display:none, чтобы значок плавно доезжал до центра колонки. */
 .nav-item span:last-child {
   max-width: 160px;
+  min-width: 0;
   opacity: 1;
   overflow: hidden;
   white-space: nowrap;
+  text-overflow: ellipsis;
   transition: max-width var(--dur-base) var(--ease), opacity var(--dur-fast) var(--ease);
 }
 
@@ -330,6 +332,7 @@ body {
 .nav-icon {
   font-size: var(--fs-lg);
   opacity: .8;
+  flex-shrink: 0;
 }
 
 /* ── Main content ── */
@@ -2721,6 +2724,19 @@ select.form-control {
 }
 
 /* ── Responsive ── */
+/* Брейкпоинты: три именованных tier'а (techspec 2026-08-10-responsive-
+   adaptive-layout-techspec.md, R5). Существующие точки ниже (699/700/720/
+   820/900/960/1099) — content-driven, calibrated под конкретный компонент;
+   не переносить/не унифицировать без причины, это не одна и та же схема,
+   а набор точек, которые все укладываются в диапазоны tier'ов:
+     phone   (≤ 700px)    — сайдбар в icon-rail (см. ниже), grid → 1 колонка,
+                             таблицы/плотные сетки → карточки.
+     tablet  (701-1023px) — 2-колоночные гибриды; существующие 720/820/900/960
+                             живут внутри этой полосы под свой компонент.
+     desktop (≥ 1024px)   — полные сетки, сайдбар развёрнут.
+   Новый компонент сверяется с парой 700/1023 как базовой; отклонение —
+   только если контент реально ломается в другой точке (тоже content-driven,
+   просто задокументированное комментарием у самого правила). */
 /* Tablet / small-laptop: tighten gutters, let multi-column forms and module
    header buttons wrap instead of squeezing. */
 @media (max-width: 960px) {
@@ -2738,17 +2754,6 @@ select.form-control {
 
   .mod-create-row {
     flex-wrap: wrap;
-  }
-
-  .modp-header {
-    flex-direction: column;
-    gap: 14px;
-  }
-
-  .modp-header-btns {
-    flex-direction: row;
-    flex-wrap: wrap;
-    margin-top: 0;
   }
 
   .filter-bar {
@@ -3008,6 +3013,14 @@ a:focus-visible {
   transform: translateY(0) scale(1);
 }
 
+/* Только базовая .modal-box (формы/подтверждения) — именованные детальные
+   модалки (.modal-detail и т.п.) уже переопределяют padding:0 и правят
+   внутренние регионы сами (techspec R4). На 320-375px 95vw минус 44px×2
+   паддинга оставляет ~220px на контент — заметно теснее нормы. */
+@media (max-width: 480px) {
+  .modal-box { padding: 24px 20px; }
+}
+
 .modal-close {
   position: absolute;
   top: 16px;
@@ -3047,6 +3060,13 @@ a:focus-visible {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 12px;
+}
+
+/* Живёт внутри .modal-box (капается 95vw) — tablet-диапазона не касается,
+   только узкий телефон, где 95vw уже жмёт саму модалку (techspec R2). 6
+   пунктов LINEAGES → 2 колонки дают ровно 3 полных ряда, без «сироты». */
+@media (max-width: 700px) {
+  .lineage-picker { grid-template-columns: repeat(2, 1fr); }
 }
 
 .lineage-pick-btn {
@@ -3853,6 +3873,8 @@ a:focus-visible {
 }
 
 .cdet-pol-row, .cdet-prim-row, .cdet-loc-row {
+  flex-direction: row;
+  align-items: center;
   flex-wrap: wrap;
 }
 
@@ -3879,6 +3901,24 @@ a:focus-visible {
 
 .cdet-pol-name-inp, .cdet-loc-name-inp, .cdet-prim-name-inp {
   flex: 1 1 200px;
+}
+
+/* На tablet-tier (≤1023px, именованная схема responsive-техспеки, R5) сумма
+   flex-basis трёх редакторов (150+200+200+кнопка+gaps ≈ 610px) не помещается в
+   доступную ширину панели (~500-590px, измерено на 768px viewport) — сжимаем поля,
+   не меняя направление ряда. Затрагивает все три редактора разом — общие классы.
+   ВАЖНО: должно идти ПОСЛЕ безусловных правил flex-basis выше — при одинаковой
+   специфичности более поздний по исходнику селектор побеждает независимо от
+   media query, поставленный до них override молча перекрывался бы ими. */
+@media (max-width: 1023px) {
+  .cdet-pol-role-sel, .cdet-prim-clan-sel,
+  .cdet-pol-role-custom, .cdet-loc-type-custom, .cdet-prim-clan-custom {
+    flex-basis: 100px;
+  }
+
+  .cdet-pol-name-inp, .cdet-loc-name-inp, .cdet-prim-name-inp {
+    flex-basis: 150px;
+  }
 }
 
 /* Заметка — третье, необязательное поле строки «Отмеченных локаций» (техспека §8) —
@@ -8625,9 +8665,85 @@ a.md-link-loc:hover {
 
 .modp-header-btns {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  flex-wrap: wrap;      /* страховка на случай переполнения на очень узких экранах */
   gap: 8px;
-  margin-top: 6px;
+  margin-top: 14px;      /* отступ от бейджей, не от края шапки (было 6px, левая колонка) */
+  max-height: 400px;     /* явное число, не auto/none — иначе transition к 0 при
+                             сворачивании (M2) не интерполируется, а дёргается рывком.
+                             С запасом: на pointer:coarse (styles.css:2916-2927) все 5
+                             кнопок получают min-height:44px и на узком экране могут
+                             перенестись хоть по одной в ряд (5×44px+gaps ≈ 250px) —
+                             тесный потолок обрезал бы кнопки уже в развёрнутом виде. */
+  overflow: hidden;
+  transition: max-height var(--dur-base) var(--ease), opacity var(--dur-fast) var(--ease),
+    margin var(--dur-base) var(--ease);
+}
+
+/* Единственная из пяти кнопок шапки, не входящая в общий кластер "compact action
+   button" (styles.css:2036+, .modp-back-btn/.modp-gen-btn/.modp-close-btn/.modp-del-btn) —
+   .modp-edit-btn переиспользуется ещё в 13 местах по всей странице модуля (блоки
+   сценария/НПС/фракции, modules.js/archive.js) со своим намеренным стилем (crimson,
+   не Cinzel), поэтому красится не глобально, а только для инстанса внутри шапки. */
+.modp-header-btns .modp-edit-btn {
+  font-family: var(--f-heading);
+  font-size: var(--fs-2xs);
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  padding: 6px 12px;
+  border-radius: var(--r-sm);
+  margin-bottom: 0;
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--gold);
+}
+
+.modp-header-btns .modp-edit-btn:hover {
+  border-color: var(--gold);
+  background: rgba(184, 134, 11, 0.08);
+}
+
+/* Обёртка тумблер+заголовок — своя flex-строка (по образцу .sidebar-logo), а не
+   display:flex на всём .modp-header-main: тот остаётся block-flow для вертикального
+   стека title→badges→btns→edit-form, иначе все они легли бы в один ряд. */
+.modp-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* Тумблер сворачивания шапки модуля (по образцу #btn-sidebar-collapse) — бокс-модель/
+   цвет/hover уже даёт переиспользуемый класс .tour-replay-btn (styles.css:12599+).
+   transition для transform объявлен только у .sidebar-collapse-btn, не в общем блоке —
+   при реюзе .tour-replay-btn дублируем его здесь явно, иначе поворот будет рывком. */
+.modp-header-collapse-btn {
+  flex-shrink: 0;
+  transition: transform var(--dur-base) var(--ease), color var(--dur-fast) var(--ease),
+    border-color var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease);
+}
+
+.modp-header-collapse-btn[aria-expanded="false"] {
+  transform: rotate(180deg);
+}
+
+.modp-header.collapsed {
+  padding-bottom: 10px;   /* было 20px — компактнее, раз бейджи/кнопки скрыты */
+}
+
+/* Только целевые значения — transition/overflow уже на базовых правилах
+   .modp-badges/.modp-header-btns/.modp-header-edit (см. ниже), по образцу
+   .logo-text (styles.css:217-226): так анимация работает в обе стороны. */
+.modp-header.collapsed .modp-badges,
+.modp-header.collapsed .modp-header-btns,
+.modp-header.collapsed .modp-header-edit {
+  max-height: 0;
+  opacity: 0;
+  margin: 0;
+  pointer-events: none;
+}
+
+.modp-header.collapsed .modp-title {
+  margin-bottom: 0;
 }
 
 .modp-back-btn {
@@ -8719,11 +8835,21 @@ a.md-link-loc:hover {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
+  max-height: 300px;    /* явное число, с запасом — см. комментарий у .modp-header-btns */
+  overflow: hidden;
+  opacity: 1;
+  transition: max-height var(--dur-base) var(--ease), opacity var(--dur-fast) var(--ease),
+    margin var(--dur-base) var(--ease);
 }
 
 .modp-header-edit {
   margin-top: 14px;
   max-width: 560px;
+  max-height: 900px;    /* явное число, с запасом — форма растёт на pointer:coarse */
+  overflow: hidden;
+  opacity: 1;
+  transition: max-height var(--dur-base) var(--ease), opacity var(--dur-fast) var(--ease),
+    margin var(--dur-base) var(--ease);
 }
 
 .modp-header-edit .chr-form-group {
@@ -10614,6 +10740,16 @@ a.md-link-loc:hover {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 24px;
   align-items: start;
+}
+
+/* Полноширинная страница (не модалка с капом ширины) — 3 колонки реально
+   сжимаются уже на планшете, не только на телефоне (techspec R1, 2026-08-10). */
+@media (max-width: 700px) {
+  .audio-lib-columns { grid-template-columns: 1fr; }
+}
+
+@media (min-width: 701px) and (max-width: 1023px) {
+  .audio-lib-columns { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 .audio-lib-column-title {
