@@ -2922,7 +2922,7 @@ select.form-control {
   .tour-replay-btn, .city-switch-add, .chd-dir-btn, button.chron-chip,
   .chron-toggle, .sess-scene-btn, .modp-session-edit, .modp-session-delete,
   .cdet-rel-add-btn, .cdet-rel-del-btn, .city-districts-add-btn, .city-district-del-btn,
-  .city-district-add-loc-btn {
+  .city-district-add-loc-btn, .btn-submit {
     min-height: 44px;
   }
 
