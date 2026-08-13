@@ -11414,7 +11414,13 @@ a.md-link-loc:hover {
 
 .v20-combat-row {
   display: grid;
-  grid-template-columns: 2fr 1fr 1fr 1fr 1fr 1fr 1fr;
+  /* minmax(0, Nfr), не голый Nfr: с F3 (2026-08-11) прямым grid-потомком стал
+     <label class="v20-combat-cell"> вместо <input> напрямую — «auto»-минимум
+     трека у голого Nfr считается по max-content обёртки, из-за чего все 7
+     колонок схлопывались в равную ширину (проверено изолированным тестом:
+     bare input → 163/82×6px по 2:1, label-обёртка без minmax(0,…) → 143px×7).
+     minmax(0,…) убирает content-based минимум трека, отдаёт всю ширину fr-долям. */
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr);
   gap: 8px;
   align-items: center;
   min-width: 540px;
@@ -11422,6 +11428,23 @@ a.md-link-loc:hover {
 
 .v20-combat-row .v20-line-input {
   font-size: var(--fs-sm);
+}
+
+/* Ячейка-обёртка <label> вокруг поля (добавлена вместе с карточным режимом на
+   телефоне — ей нужен data-label для ::before). До этого <input> был прямым
+   грид-потомком и растягивался по треку сам; внутри обёртки он вернулся к своей
+   intrinsic-ширине (~143px) и на десктопе вылезал за колонку в 78px — 6 полей
+   из 7 (измерено 2026-08-12). Правила ниже безусловные, не внутри @media:
+   переполнение было именно на широком экране. */
+.v20-combat-cell {
+  display: block;
+  min-width: 0;
+}
+
+.v20-combat-cell .v20-line-input {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 .v20-combat-head {
@@ -11432,6 +11455,52 @@ a.md-link-loc:hover {
   color: var(--text3);
   padding-bottom: 2px;
   border-bottom: 1px solid rgba(184, 134, 11, 0.2);
+}
+
+/* Кодревью 2026-08-11 (F3, responsive-adaptive-layout-plan.md §2.1, P0): «таблица →
+   карточки» вместо горизонтального скролла на боевом листе V20 — самом плотном и
+   часто используемом экране во время игры. phone-tier (≤700px, именованная схема
+   responsive-adaptive-layout-techspec.md R5). .v20-combat (родитель, overflow-x:
+   auto) не трогаем — на ≥701px поведение не меняется, скроллить здесь просто
+   больше нечего, т.к. min-width снят. */
+@media (max-width: 700px) {
+  .v20-combat-row {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+    padding: 10px;
+    border: 1px solid var(--border);
+    border-radius: var(--r-sm);
+    margin-bottom: 8px;
+  }
+
+  /* Составной селектор (2 класса), не просто .v20-combat-head — head-строка несёт
+     ОБА класса «v20-combat-row v20-combat-head» на одном элементе; отдельное правило
+     .v20-combat-head{display:none} той же специфичности проигрывало бы .v20-combat-row
+     выше по каскаду (более поздний в исходнике побеждает при равной специфичности,
+     то же правило проекта, что и у .cdet-pol-role-sel/tablet-tier — выше по этому же
+     файлу). Составной селектор специфичнее — порядок больше не имеет значения. */
+  .v20-combat-row.v20-combat-head {
+    display: none;
+  }
+
+  .v20-combat-cell {
+    display: grid;
+    grid-template-columns: 90px 1fr;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .v20-combat-cell::before {
+    content: attr(data-label);
+    font-size: var(--fs-2xs);
+    color: var(--text3);
+    text-transform: uppercase;
+    letter-spacing: .04em;
+  }
+  /* width:100% для .v20-line-input здесь больше не дублируется — оно переехало
+     в безусловное правило выше (нужно на обеих ширинах, не только на телефоне). */
 }
 
 @media (pointer: coarse) {

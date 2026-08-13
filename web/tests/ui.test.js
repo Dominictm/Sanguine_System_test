@@ -284,12 +284,14 @@ describe('UI — Selenium (Chrome)', () => {
     });
 
     it('кнопка «Пересобрать индекс» отрабатывает', async () => {
-      // Предыдущий тест теперь создаёт локацию через модалку на странице
-      // «Локации» (не через вкладку «Ещё»), поэтому здесь больше нельзя
-      // полагаться на то, что браузер уже стоит на #page-tools/#tab-more —
-      // переходим явно.
+      // Предыдущий тест создаёт локацию через модалку на странице «Локации»,
+      // поэтому переходим на страницу инструментов явно.
+      // Вкладка «Ещё» (data-tab="more") удалена 2026-08-07 — её содержимое
+      // объединено с «Учёт данных» (data-tab="validate", index.html:1062).
+      // Сама кнопка и область вывода не переименовывались: #btn-rebuild-idx и
+      // #out-more живут теперь внутри #tab-validate (index.html:1099, 1108).
       await navTo('tools');
-      await openTab('more');
+      await openTab('validate');
       await clickEl(await id_('btn-rebuild-idx'));
       await waitOut('out-more', /обновл|событ/i);
     });
@@ -389,7 +391,10 @@ describe('UI — Selenium (Chrome)', () => {
       await clickEl(await css('#loc-detail-content .cdet-panel[data-panel="vtm"] .cdet-edit-btn[data-editloc="vtm"]'));
       await driver.wait(until.elementIsVisible(await id_('locdet-vtm-status')), 5000, 'форма VtM не раскрылась');
 
-      await typeIn('locdet-vtm-status',  'Открыто для своих');
+      // «Статус» стал <select> с фиксированным списком (locations.js:443,
+      // значения — CITY_LOCATION_TYPES в city.js:78), а не свободным текстом:
+      // typeIn() здесь падал с InvalidElementStateError на .clear().
+      await new Select(await id_('locdet-vtm-status')).selectByValue('Убежище');
       await typeIn('locdet-vtm-faction', 'Носферату');
       await typeIn('locdet-vtm-figures', 'Слепой Бармен');
       await typeIn('locdet-vtm-threats', 'Охотники на пороге');
@@ -404,14 +409,14 @@ describe('UI — Selenium (Chrome)', () => {
         try {
           const bodies = await driver.findElements(By.css('#loc-detail-content .cdet-panel[data-panel="vtm"] .vtm-body'));
           const texts = await Promise.all(bodies.map(e => e.getText()));
-          return texts.some(t => t.includes('Открыто для своих')) && texts.some(t => t.includes('Носферату'));
+          return texts.some(t => t.includes('Убежище')) && texts.some(t => t.includes('Носферату'));
         } catch {
           return false; // DOM перерисовался между findElements() и getText() — попробуем на следующем тике
         }
       }, 8000, 'изменения вкладки VtM не отрендерились после сохранения');
 
       const raw = fs.readFileSync(cardPath(), 'utf-8');
-      assert.match(raw, /\|\s*\*\*Статус\*\*\s*\|\s*Открыто для своих\s*\|/);
+      assert.match(raw, /\|\s*\*\*Статус\*\*\s*\|\s*Убежище\s*\|/);
       assert.match(raw, /\|\s*\*\*Фракция\*\*\s*\|\s*Носферату\s*\|/);
       assert.match(raw, /\|\s*\*\*Постоянные фигуры\*\*\s*\|\s*Слепой Бармен\s*\|/);
       assert.match(raw, /\|\s*\*\*Угрозы\*\*\s*\|\s*Охотники на пороге\s*\|/);
@@ -435,6 +440,22 @@ describe('UI — Selenium (Chrome)', () => {
       assert.equal(locRes.status, 200, JSON.stringify(locRes.json));
     });
 
+    // Раскрывает район на странице просмотра города: вкладка «География» →
+    // спойлер «Районы» → спойлер конкретного района. Повторяет ровно ту
+    // последовательность, которой пользуется само приложение
+    // (_restoreDistrictSpoilerState, city.js:1079-1087). Без этого
+    // .city-district-card* лежит внутри двух закрытых <details>, и Selenium
+    // возвращает для него пустой getText() — карточка есть в DOM, но не видна.
+    const revealDistrict = async () => {
+      await driver.executeScript(`
+        document.querySelector('[data-city-view-tab="geography"]')?.click();
+        const outer = document.getElementById('city-districts-outer-spoiler');
+        if (outer) outer.open = true;
+        const item = document.querySelector('.city-landmark-item[data-district-slug="' + arguments[0] + '"]');
+        if (item) item.open = true;
+      `, districtSlug);
+    };
+
     it('страница просмотра города рендерит карточку района', async () => {
       await driver.get(`${BASE}?city=${UI_CITY}`);
       await navTo('city-new');
@@ -446,6 +467,7 @@ describe('UI — Selenium (Chrome)', () => {
       let titles = [];
       await driver.wait(async () => {
         try {
+          await revealDistrict(); // вкладка/спойлеры могли перерисоваться — раскрываем на каждой итерации
           const els = await driver.findElements(By.css('.city-district-card-title'));
           titles = await Promise.all(els.map(e => e.getText()));
           return titles.some(t => t.includes(districtName));
@@ -455,20 +477,24 @@ describe('UI — Selenium (Chrome)', () => {
     });
 
     it('привязка «бесхозной» локации к району переносит папку физически (PUT /district + showConfirm)', async () => {
-      const districtCard = await driver.wait(async () => {
+      // Ищем контейнер района (.city-landmark-item), а НЕ .city-district-card:
+      // форма привязки (.city-view-district-attach-sel + [data-attach-loc-btn])
+      // лежит рядом с карточкой внутри .city-landmark-body, а не внутри самой
+      // карточки (city.js:1049-1058) — поиск по карточке их не находит.
+      const districtItem = await driver.wait(async () => {
         try {
-          const cards = await driver.findElements(By.css('.city-district-card'));
-          for (const c of cards) {
-            const title = await c.findElement(By.css('.city-district-card-title')).getText();
-            if (title.includes(districtName)) return c;
+          await revealDistrict(); // см. комментарий у revealDistrict выше — иначе содержимое скрыто в <details>
+          const items = await driver.findElements(By.css(`.city-landmark-item[data-district-slug="${districtSlug}"]`));
+          for (const it of items) {
+            if (await it.findElement(By.css('.city-district-card-title')).getText().then(t => t.includes(districtName), () => false)) return it;
           }
           return null;
         } catch { return null; }
       }, 10000, `не нашли карточку района «${districtName}»`);
 
-      const sel = new Select(await districtCard.findElement(By.css('.city-view-district-attach-sel')));
+      const sel = new Select(await districtItem.findElement(By.css('.city-view-district-attach-sel')));
       await sel.selectByValue(strayLocSlug);
-      await clickEl(await districtCard.findElement(By.css('[data-attach-loc-btn]')));
+      await clickEl(await districtItem.findElement(By.css('[data-attach-loc-btn]')));
 
       // showConfirm — кастомный диалог (#confirm-overlay), не window.confirm.
       await css('#confirm-overlay');
@@ -890,12 +916,15 @@ describe('UI — Selenium (Chrome)', () => {
     });
   });
 
-  // ── Настройки ИИ (вкладка «Модели AI») ───────────────────────────────────────
+  // ── Назначение генераций (вкладка «⚡ Назначение генераций») ──────────────────
 
-  describe('Назначение провайдеров (вкладка «Модели AI»)', () => {
+  describe('Назначение провайдеров (вкладка «⚡ Назначение генераций»)', () => {
     it('рендерит карточки фич с переключателями провайдера', async () => {
+      // Вкладка «Модели AI» (data-tab="ai-settings") разделена 2026-08-07 на
+      // «🔌 Подключение AI» (ai-connect — ключи/OAuth) и «⚡ Назначение генераций»
+      // (ai-features — то, что рендерит .ais-feat-card, см. scripts.js:506).
       await navTo('tools');
-      await openTab('ai-settings');
+      await openTab('ai-features');
       await css('.ais-feat-card', 20000);
       assert.ok(await count('.ais-feat-card')     >= 1, 'нет карточек назначения провайдеров');
       assert.ok(await count('.ais-feat-prov-btn') >= 1, 'нет переключателей провайдера');

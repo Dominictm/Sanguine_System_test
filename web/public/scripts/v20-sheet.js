@@ -2210,10 +2210,17 @@ function _v20RenderSheet(panel, charName) {
     const badge = _v20AutoBadge(m.description[k], apparentAgeComputed, 'description.apparentAge', 'text');
     return `<label class="v20-field"><span class="v20-field-lbl">${escHtml(l)}${badge}</span><input class="v20-field-input" data-tpath="description.${k}" value="${escAttr(m.description[k] || '')}" title="${isComputed ? 'Рассчитано: Год обращения − Год рождения' : ''}"></label>`;
   }).join('');
+  // Кодревью 2026-08-11 (F3): подписи полей вынесены в отдельный массив и
+  // продублированы на каждую ячейку через data-label — на ≤700px .v20-combat-row
+  // становится карточкой («таблица → карточки», responsive-adaptive-layout-plan.md
+  // §2.1), где head-строка скрывается, а подпись каждого поля рисуется рядом с ним
+  // через ::before на обёртке (у <input> генерируемый контент не рендерится).
   const V20_COMBAT_COLS = ['weapon', 'diff', 'damage', 'range', 'rate', 'clip', 'size'];
-  const combatHead = `<div class="v20-combat-row v20-combat-head"><span>Оружие/атака</span><span>Сложн.</span><span>Урон</span><span>Дальн.</span><span>Скор.</span><span>Магазин</span><span>Размер</span></div>`;
+  const V20_COMBAT_LABELS = ['Оружие/атака', 'Сложн.', 'Урон', 'Дальн.', 'Скор.', 'Магазин', 'Размер'];
+  const combatHead = `<div class="v20-combat-row v20-combat-head">${V20_COMBAT_LABELS.map(l => `<span>${l}</span>`).join('')}</div>`;
   const combatRows = m.combat.map((c, i) =>
-    `<div class="v20-combat-row">${V20_COMBAT_COLS.map(k => `<input class="v20-line-input" data-tpath="combat.${i}.${k}" value="${escAttr(c[k])}">`).join('')}</div>`).join('');
+    `<div class="v20-combat-row">${V20_COMBAT_COLS.map((k, ci) =>
+      `<label class="v20-combat-cell" data-label="${escAttr(V20_COMBAT_LABELS[ci])}"><input class="v20-line-input" data-tpath="combat.${i}.${k}" value="${escAttr(c[k])}"></label>`).join('')}</div>`).join('');
 
   const page2 = `
     <div class="v20-band">Специализации · параметры${(isVamp || isMortal) ? ' · ритуалы' : ''}</div>

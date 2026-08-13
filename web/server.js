@@ -59,6 +59,12 @@ try {
 
 const app  = express();
 const PORT = process.env.PORT ? parseInt(process.env.PORT) : 4295;
+// Анализ 2026-08-11 (A1): app.listen(PORT) без хоста биндится на 0.0.0.0 + [::],
+// т.е. весь API (196 роутов, 20 DELETE включая удаление города, платные AI-вызовы,
+// запуск PowerShell через /api/run-tool) доступен любому в той же сети — без
+// пароля, CORS и проверки Host. Дефолт — loopback; сетевой доступ (планшет за
+// игровым столом) включается явным HOST=0.0.0.0, с предупреждением при старте.
+const HOST = process.env.HOST || '127.0.0.1';
 const ROOT = path.join(__dirname, '..');
 
 
@@ -1099,10 +1105,16 @@ function runMigrationsOnStartup() {
   }
 }
 
-app.listen(PORT, () => {
+app.listen(PORT, HOST, () => {
   console.log(`\n  \u{1FA78} Sanguine System`);
   console.log(`  ─────────────────`);
+  // Строку ниже НЕ менять на http://${HOST}:${PORT} — web/tests/helpers.js ловит
+  // старт сервера по подстроке `localhost:<порт>` в этом выводе; при HOST=127.0.0.1
+  // подстрока исчезнет и все интеграционные тесты упадут по таймауту старта.
   console.log(`  http://localhost:${PORT}\n`);
+  if (HOST !== '127.0.0.1' && HOST !== 'localhost' && HOST !== '::1') {
+    console.log(`  ${C.yellow}⚠ Открыт для сети (HOST=${HOST}) — доступен без пароля всем в этой сети${C.reset}\n`);
+  }
   // Подхватить изменения формата карточек после обновления (см. web/lib/migrations.js)
   runMigrationsOnStartup();
   // Run initial validation on startup

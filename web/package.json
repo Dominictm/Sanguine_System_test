@@ -17,13 +17,13 @@
     "test:ci": "node --test --test-reporter=spec tests/all.test.js tests/e2e.test.js"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.102.0",
-    "@google/genai": "^2.10.0",
+    "@anthropic-ai/sdk": "^0.116.0",
+    "@google/genai": "^2.16.0",
     "compression": "^1.8.1",
     "express": "^4.18.2",
-    "undici": "^8.5.0"
+    "undici": "^8.10.0"
   },
   "devDependencies": {
-    "selenium-webdriver": "^4.44.0"
+    "selenium-webdriver": "^4.47.0"
   }
 }

@@ -47,7 +47,14 @@ async function syncChronicleModuleLinks(city, chr) {
   let updated;
   if (/^## 🔗 Модули/m.test(raw)) {
     // Replace existing section
-    updated = raw.replace(/\n## 🔗 Модули[\s\S]*?(?=\n## |\n---|\s*$)/, modsSection);
+    // Two alternatives, not one lookahead with \s*$: a lazy [\s\S]*? stops as soon as
+    // the lookahead can match, and \s*$ matches zero-width right after the section's
+    // own content (before its trailing \n) just as readily as at the true end of
+    // string — so the trailing \n is never consumed and is left behind on every call,
+    // growing by one blank line per sync (FIX: code review 2026-08-11). When another
+    // section follows, cut lazily right before it (unchanged); when the module section
+    // is the last thing in the file, consume greedily to the true end instead.
+    updated = raw.replace(/\n## 🔗 Модули[\s\S]*?(?=\n## |\n---)|\n## 🔗 Модули[\s\S]*$/, modsSection);
   } else {
     updated = raw.trimEnd() + '\n' + modsSection;
   }
@@ -790,6 +797,19 @@ function _claudeOnlyModel(gen, model) {
   return (gen && (gen.source === 'api-key' || gen.source === 'claude-login')) ? model : null;
 }
 
+// Тот же класс проблемы, что _isBogusAppearance (было приватно в routes/generation.js) —
+// непустой, но бессмысленный ответ модели (модерационный отказ/утечка рассуждений)
+// не должен приниматься как валидный сгенерированный контент. Обобщено на весь
+// модуль-пайплайн после инцидента 2026-08 (кодревью 2026-08-11, F2): closing/fill
+// генерация принимала отказ Claude OAuth («User Safety: unsafe / Safety Categories:
+// Criminal Planning...») как ok:true и писала его в finale.md/events.md поверх
+// реальных данных пользователя. minLength настраиваемый — ожидаемая длина разного
+// контента разная (портрет ~100-300 символов, финал ~1500-2500, сценарий ~5000+).
+const _BOGUS_GEN_RE = /^(user safety|content policy|i cannot|i can'?t assist|as an ai|i'm not able to|i won'?t)\b/i;
+function isBogusGeneration(text, minLength = 200) {
+  return !text || text.trim().length < minLength || _BOGUS_GEN_RE.test(text.trim());
+}
+
 // Клан → тон дневниковой прозы. Общее между «Log session» (routes/tools.js,
 // каждый отмеченный участник сессии) и закрытием модуля (lifecycle.js,
 // closing-stub каждому участнику модуля) — единый источник, чтобы тон не
@@ -836,7 +856,7 @@ module.exports = {
   _parseScenarioScenesDirect, _parseScenarioScenesLegacy, _parseScenarioScenes, _parseScenarioLocations,
   _parseModuleLocSlugs, _writeModuleLocSlugs, unlinkLocationFromAllModules, _parseSessions, _cleanNpcName, _npcCardHref,
   _parseNpcEntries, _findNpcMdSection, _findNpcMdSections, _removeNpcEntry, _parseNpcMdGroups, _renderSessionBlock,
-  _writeSessionsFile, _patchModuleMain, _claudeOnlyModel,
+  _writeSessionsFile, _patchModuleMain, _claudeOnlyModel, isBogusGeneration,
   _upsertSceneNoteEntry, _upsertModuleSection, _readModuleSection,
   sanitizeInlineText, escapeTableCell, unescapeTableCell, sanitizeFreeformBody, unescapeFreeformBody,
   diaryToneFor,

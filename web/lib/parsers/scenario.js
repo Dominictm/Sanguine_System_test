@@ -76,11 +76,19 @@ function serializeScenarioSections(preamble, sections) {
   for (let i = 0; i < sections.length; i++) {
     const s = sections[i];
     if (s.level === 3) continue; // handled by its parent below
-    let block = `## ${s.heading}\n\n${s.body ? s.body + '\n' : ''}`;
+    // Кодревью 2026-08-11: раньше отсутствие собственного intro-тела у секции
+    // («## Пролог»/«## Сцена N» в новом 3-блочном шаблоне — весь контент живёт
+    // в ### -детях, s.body пуст) давало лишнюю пустую строку перед первым
+    // ребёнком (`## Heading\n\n` + `\n### Child` = 2 пустые строки вместо 1).
+    // Собираем все части (заголовок, опциональное тело, каждый ### -ребёнок)
+    // единым join('\n\n') — интервал между частями одинаковый независимо от
+    // того, какие из них присутствуют.
+    const parts = [`## ${s.heading}`];
+    if (s.body) parts.push(s.body);
     for (let j = i + 1; j < sections.length && sections[j].level === 3 && sections[j].parent === s.heading; j++) {
-      block += `\n### ${sections[j].heading}\n\n${sections[j].body}\n`;
+      parts.push(`### ${sections[j].heading}\n\n${sections[j].body}`);
     }
-    blocks.push(block);
+    blocks.push(parts.join('\n\n') + '\n');
   }
   return preamble.replace(/\n*$/, '\n\n') + blocks.join('\n---\n\n');
 }

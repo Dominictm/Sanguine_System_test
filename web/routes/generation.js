@@ -15,6 +15,7 @@ const {
   getAllCharacters, EDITABLE_FIELD_MAP,
 } = require('../lib/db');
 const { loadLiteraryStyle, loadDiaryStyleRules, compressChronicleEvents, parseEventsText } = require('../lib/context_builder');
+const { isBogusGeneration } = require('./modules/shared');
 
 // «Информация» — карточные факты (без биографии/внешности/голоса/характера, которые
 // генераторы передают отдельно) для подмешивания в AI-промты, чтобы сгенерированный
@@ -185,8 +186,9 @@ module.exports = function generationRouter({
       // не описание, а артефакт модерационного классификатора («User Safety: safe»
       // и т.п.) — валидный непустой текст, но не то, что просили. Раньше это тихо
       // принималось как успех и автосохранялось поверх настоящей внешности персонажа.
-      const _isBogusAppearance = text => !text || text.trim().length < 25
-        || /^(user safety|content policy|i cannot|i can'?t assist|as an ai)/i.test(text.trim());
+      // Обобщённый хелпер (modules/shared.js, F2 кодревью 2026-08-11) — здесь только
+      // короткий алиас с исходным порогом длины (портрет — короткий текст, не сценарий).
+      const _isBogusAppearance = text => isBogusGeneration(text, 25);
 
       let appearance = '';
       const imgContents = imageBuffers.map(({ buf, mime }) => ({

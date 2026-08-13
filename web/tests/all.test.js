@@ -2221,6 +2221,107 @@ describe('npc.md — ростер модуля', () => {
   });
 });
 
+// Кодревью 2026-08-11 (F2): непустой, но бессмысленный ответ AI (модерационный
+// отказ/утечка рассуждений) раньше проходил как успех в fill.js/lifecycle.js —
+// реальный инцидент этой сессии: Claude OAuth вернул буквальный отказ на
+// криминальный модуль, запись ушла в finale.md/events.md поверх данных пользователя.
+describe('isBogusGeneration — детектор отказа модерации/утечки рассуждений', () => {
+  const { isBogusGeneration } = require('../routes/modules/shared');
+
+  it('пустая строка / null / undefined → true', () => {
+    assert.equal(isBogusGeneration(''), true);
+    assert.equal(isBogusGeneration(null), true);
+    assert.equal(isBogusGeneration(undefined), true);
+  });
+
+  it('строка короче minLength → true', () => {
+    assert.equal(isBogusGeneration('Слишком короткий текст.', 200), true);
+    assert.equal(isBogusGeneration('Короткий текст, но длиннее 25 символов подряд.', 25), false);
+  });
+
+  it('реальный текст отказа модерации, пойманный в этой сессии → true', () => {
+    const refusal = 'User Safety: unsafe\nSafety Categories: Criminal Planning/Confessions, Violence';
+    assert.equal(isBogusGeneration(refusal, 200), true);
+  });
+
+  it('другие маркеры отказа (content policy / i cannot / as an ai) → true', () => {
+    assert.equal(isBogusGeneration('I cannot assist with generating content depicting violence.', 25), true);
+    assert.equal(isBogusGeneration('Content policy prevents me from writing this scene.', 25), true);
+    assert.equal(isBogusGeneration('As an AI, I am not able to produce this kind of narrative.', 25), true);
+  });
+
+  it('реалистичный образец нормального сценария/финала → false', () => {
+    const normal = `## Пролог — Тень над Barbès\n\n### Описание для игрока\n\nНочь опускается на Барбес быстро — фонари зажигаются раньше, чем гаснет закат. Котерия собирается у метро, обсуждая план на вечер. Гиль проверяет оружие в последний раз.\n\n### GM-подсказки\n\nЕсли игроки медлят — Клод торопит их через сообщение.`;
+    assert.equal(isBogusGeneration(normal, 200), false);
+  });
+
+  it('дефолтный minLength — 200', () => {
+    assert.equal(isBogusGeneration('x'.repeat(199)), true);
+    assert.equal(isBogusGeneration('x'.repeat(200)), false);
+  });
+});
+
+// Миграция старого формата scenario.md (tools/migrate_old_scenario_format.js).
+// Скрипт стал пользовательским (migrate-scenario.bat в корне, guide.md §21) и
+// переписывает прозу уже сыгранных модулей — тесты закрывают три случая молчаливой
+// ПОТЕРИ ТЕКСТА, найденные кодревью 2026-08-11: во всех трёх секция-источник
+// удалялась целиком, хотя её содержимое лежало в ### -детях, а лог рапортовал
+// об успешном переносе.
+describe('migrate_old_scenario_format — перенос без потери текста', () => {
+  const mig = require('../../tools/migrate_old_scenario_format.js');
+
+  it('GM-справка ПОСЛЕ Пролога — секреты не теряются (splice по устаревшему индексу)', () => {
+    const raw = ['# X', '', '---', '', '## Пролог — Начало', '', '### Описание для игрока', '', 'Текст.', '',
+      '---', '', '## 🔒 GM-справка — закрытая информация', '', '### Тайная мотивация', '', 'СЕКРЕТ', '',
+      '---', '', '## Финал — Конец', '', '### Раскрытие', '', 'Развязка.'].join('\n');
+    const { text, notes } = mig.migrateScenarioFormat(raw);
+    assert.match(text, /СЕКРЕТ/, 'текст GM-справки потерян при переносе');
+    assert.ok(!/GM-справка/i.test(text), 'сама секция GM-справки должна исчезнуть');
+    assert.ok(notes.some(n => /перенесена/.test(n)));
+  });
+
+  it('«Открытые вопросы» с ### -подразделами — переносятся вместе с детьми', () => {
+    const raw = ['# X', '', '---', '', '## Пролог', '', '### Описание для игрока', '', 'Т.', '',
+      '---', '', '## Финал', '', '### Раскрытие', '', 'Р.', '',
+      '---', '', '## Открытые вопросы после модуля', '', '### Нить один', '', 'ВОПРОС-А', '', '### Нить два', '', 'ВОПРОС-Б'].join('\n');
+    const { text } = mig.migrateScenarioFormat(raw);
+    assert.match(text, /ВОПРОС-А/, 'первый подраздел открытых вопросов потерян');
+    assert.match(text, /ВОПРОС-Б/, 'второй подраздел открытых вопросов потерян');
+  });
+
+  it('закрывающий колорит с ### -подразделами — не удаляется как «дубликат»', () => {
+    const raw = ['# X', '', '---', '', '## Пролог', '', '### Описание для игрока', '', 'Т.', '',
+      '---', '', '## Сцена 1 — Бар', '', '### Колорит', '', 'Запах пива.', '',
+      '---', '', '## Финал', '', '### Раскрытие', '', 'Р.', '',
+      '---', '', '## Парижский колорит — три детали', '', '### Язык', '', 'УНИКАЛЬНЫЙ-КОЛОРИТ'].join('\n');
+    const { text } = mig.migrateScenarioFormat(raw);
+    assert.match(text, /УНИКАЛЬНЫЙ-КОЛОРИТ/, 'не дублирующий колорит удалён вместо переноса');
+  });
+
+  it('нет «## Финал» — секция остаётся на месте, а не удаляется', () => {
+    const raw = ['# X', '', '---', '', '## Пролог', '', '### Описание для игрока', '', 'Т.', '',
+      '---', '', '## Открытые вопросы после модуля', '', 'ВАЖНЫЙ-ХВОСТ'].join('\n');
+    const { text, notes } = mig.migrateScenarioFormat(raw);
+    assert.match(text, /ВАЖНЫЙ-ХВОСТ/, 'текст удалён при отсутствии цели переноса');
+    assert.ok(notes.some(n => /ВНИМАНИЕ/.test(n)), 'должно быть предупреждение для ручной проверки');
+  });
+
+  it('canAutoMigrate отбраковывает нестандартную структуру и мусорную преамбулу', () => {
+    const branching = ['# X', '', '---', '', '## Пролог', '', 'Т.', '', '---', '', '## Путь А — банк', '', 'Т.'].join('\n');
+    assert.equal(mig.canAutoMigrate(branching).ok, false, 'ветвление «Путь А» должно пропускаться');
+
+    const leaked = ['# X', '', 'Давайте создадим сценарий. ' + 'бла '.repeat(250), '', '## Пролог', '', 'Т.'].join('\n');
+    assert.equal(mig.canAutoMigrate(leaked).ok, false, 'длинная преамбула (утёкшие рассуждения AI) должна пропускаться');
+  });
+
+  it('идемпотентность: на уже мигрированном файле нечего менять', () => {
+    const raw = ['# X', '', '---', '', '## Пролог', '', '### Описание для игрока', '', 'Т.', '',
+      '---', '', '## Сцена 1 — Бар', '', '### Колорит', '', 'Запах.', '',
+      '---', '', '## Финал', '', '### Раскрытие', '', 'Р.'].join('\n');
+    assert.equal(mig.needsMigration(raw), false);
+  });
+});
+
 // ══════════════════════════════════════════════════════════════════════════════
 // INTEGRATION — API
 // ══════════════════════════════════════════════════════════════════════════════
@@ -4818,8 +4919,15 @@ describe('API — integration', () => {
     it('PUT /api/chronicles/:chr/modules/:mod/move — переносит модуль в другую хронику', async () => {
       if (!chr) return;
       const { body: allChrs } = await apiJson(`/api/chronicles${CITY}&include_hidden=1`);
-      const otherChr = (Array.isArray(allChrs) ? allChrs : []).map(c => c.slug).find(s => s !== chr);
-      if (!otherChr) return; // фикстура с одной хроникой — нечего использовать целью
+      // chronicle.md опционален (старые хроники хранят только events.md + модули —
+      // см. web/routes/chronicles.js:450) — цель для переноса берём только среди тех,
+      // где он есть, иначе dstChrMd ниже закономерно пуст и ассерт падает не из-за бага.
+      const otherSlugs = (Array.isArray(allChrs) ? allChrs : []).map(c => c.slug).filter(s => s !== chr);
+      let otherChr = null;
+      for (const s of otherSlugs) {
+        if (await fs.stat(path.join(CITY_ROOT, 'chronicles', s, 'chronicle.md')).catch(() => null)) { otherChr = s; break; }
+      }
+      if (!otherChr) return; // нет хроники-цели с chronicle.md — нечего использовать целью
 
       const moveMod = `test_move_mod_${Date.now()}`;
       const create = await apiJson(`/api/chronicles/${encodeURIComponent(chr)}/modules${CITY}`, {
@@ -7067,6 +7175,44 @@ describe('GET/PUT /api/chronicles/:slug/fields — Настроение/Опис
     assert.equal(get.status, 404);
     const put = await apiJson(`/api/chronicles/net_takoy_hroniki/fields${qs()}`, { method: 'PUT', body: JSON.stringify({ mood: 'x' }) });
     assert.equal(put.status, 404);
+  });
+
+  // Код-ревью 2026-08-11 (F1): chronicle.md опционален (старые хроники хранят
+  // только events.md + модули, web/routes/chronicles.js:450) — раньше и GET, и
+  // PUT 404'или на отсутствие самого файла, хотя папка хроники реально
+  // существовала. GET должен отдавать нули без побочных эффектов записи; PUT —
+  // создать chronicle.md с нуля и применить поля как обычно.
+  describe('хроника без chronicle.md (папка + events.md есть, файла карточки нет)', () => {
+    let noMdSlug;
+    before(async () => {
+      const chrDir = path.join(cityDir, 'chronicles', 'stariy_bez_kartochki');
+      await fs.mkdir(path.join(chrDir, 'modules'), { recursive: true });
+      await fs.writeFile(path.join(chrDir, 'events.md'), '# Старая Хроника — События\n\n---\n', 'utf-8');
+      noMdSlug = 'stariy_bez_kartochki';
+    });
+
+    it('GET на хронику без chronicle.md — не 404, пустые поля, файл не создаётся', async () => {
+      const r = await apiJson(`/api/chronicles/${noMdSlug}/fields${qs()}`);
+      assert.equal(r.status, 200);
+      assert.deepEqual(r.body, { mood: '', description: '' });
+      const exists = await fs.stat(path.join(cityDir, 'chronicles', noMdSlug, 'chronicle.md')).catch(() => null);
+      assert.equal(exists, null, 'GET не должен создавать chronicle.md — только PUT');
+    });
+
+    it('PUT на хронику без chronicle.md — создаёт файл с названием из events.md и применяет поля', async () => {
+      const put = await apiJson(`/api/chronicles/${noMdSlug}/fields${qs()}`, { method: 'PUT', body: JSON.stringify({
+        mood: 'Меланхолия', description: 'Восстановлено после миграции.',
+      }) });
+      assert.equal(put.status, 200, put.body.error);
+      assert.equal(put.body.mood, 'Меланхолия');
+      assert.equal(put.body.description, 'Восстановлено после миграции.');
+
+      const card = await fs.readFile(path.join(cityDir, 'chronicles', noMdSlug, 'chronicle.md'), 'utf-8');
+      assert.match(card, /Старая Хроника/, 'название должно быть взято из H1 events.md, не из slug');
+
+      const get = await apiJson(`/api/chronicles/${noMdSlug}/fields${qs()}`);
+      assert.deepEqual(get.body, put.body, 'повторный GET должен читать уже созданный файл');
+    });
   });
 });
 

@@ -16,7 +16,7 @@ const {
   _parseModuleLocSlugs, _writeModuleLocSlugs, _parseSessions, _cleanNpcName, _npcCardHref,
   _parseNpcEntries, _findNpcMdSection, _removeNpcEntry, _parseNpcMdGroups, _renderSessionBlock,
   _writeSessionsFile, _patchModuleMain, _claudeOnlyModel, _logAiCall, _logAiFail, _hasTraversal,
-  unescapeFreeformBody,
+  unescapeFreeformBody, isBogusGeneration,
 } = require('./shared');
 const { buildCityConstraints, buildThreatClocks, buildCityNaming } = require('../../lib/context_builder');
 
@@ -167,6 +167,17 @@ module.exports = function fillRouter({ makeGenerationClient, genTextWithRetry })
       }
 
       if (!scenarioText) return res.status(500).json({ ok: false, error: 'AI вернул пустой ответ.' });
+
+      // Кодревью 2026-08-11 (F2): непустой, но бессмысленный ответ (модерационный
+      // отказ/утечка рассуждений) раньше проходил как успех и писался в scenario.md —
+      // подтверждено вживую на реальном криминальном модуле через Claude OAuth.
+      // Порог 800 — ниже реального объёма (типовой сценарий ~4000-6000 символов),
+      // но заведомо выше любого правдоподобного отказа/обрывка.
+      if (isBogusGeneration(scenarioText, 800)) {
+        _logAiFail(`fill/${chr}/${mod}: сценарий`, new Error('bogus/refusal output: ' + scenarioText.slice(0, 200)), gen);
+        return res.status(502).json({ ok: false,
+          error: 'AI вернул нерабочий ответ (похоже на отказ модерации или сбой генерации) — файл не изменён. Попробуй другого AI-провайдера в Инструменты → Модели AI, либо переформулируй описание модуля.' });
+      }
 
       // Save as scenario.md
       const scenarioPath = path.join(modDir, 'scenario.md');

@@ -17,6 +17,7 @@ const {
   _parseModuleLocSlugs, _writeModuleLocSlugs, _parseSessions, _cleanNpcName, _npcCardHref,
   _parseNpcEntries, _findNpcMdSection, _removeNpcEntry, _parseNpcMdGroups, _renderSessionBlock,
   _writeSessionsFile, _patchModuleMain, _claudeOnlyModel, _logAiCall, _logAiFail, _hasTraversal,
+  isBogusGeneration,
 } = require('./shared');
 const { buildThreatClocks } = require('../../lib/context_builder');
 
@@ -238,10 +239,21 @@ module.exports = function lifecycleRouter({ makeGenerationClient, genTextWithRet
   # ПРАВИЛА ЗАКРЫТИЯ МОДУЛЯ (Фаза C)
   ${phaseC}`;
 
-      const runGen = async (system, user, maxTokens) => {
+      // Кодревью 2026-08-11 (F2): непустой, но бессмысленный ответ (модерационный
+      // отказ/утечка рассуждений) раньше проходил как успех — реальный инцидент:
+      // Claude OAuth вернул отказ на криминальный модуль, запись ушла в finale.md/
+      // events.md поверх данных пользователя. Бросок здесь — тот же путь, что и
+      // сетевая ошибка ниже: вызывающий код уже оборачивает runGen() в .catch(() => '')
+      // и проверяет `if (text) {...}` перед записью, так что это не требует правок
+      // на местах вызова — просто ничего не запишется, как при реальном сбое сети.
+      const runGen = async (system, user, maxTokens, minLength = 200) => {
         try {
           const out = await genTextWithRetry(gen, { system, user, maxTokens, model: _claudeOnlyModel(gen, 'claude-opus-5') });
-          return out.text.trim();
+          const text = out.text.trim();
+          if (isBogusGeneration(text, minLength)) {
+            throw new Error('bogus/refusal output: ' + text.slice(0, 200));
+          }
+          return text;
         } catch (e) {
           _logAiFail(`close/${chr}/${mod}`, e, gen);
           throw e;

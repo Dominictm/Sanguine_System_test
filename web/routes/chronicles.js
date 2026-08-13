@@ -149,6 +149,23 @@ module.exports = function chroniclesRouter({
 }) {
   const router = express.Router();
 
+  // Защита от path traversal для всех роутов этого роутера, берущих имя хроники
+  // из URL (:slug — 7 роутов, включая DELETE, который рекурсивно удаляет папку;
+  // :chr — события/модули). FIX-17 (docs/audit/2026-07-28-fix-plan.md) ввёл
+  // _hasTraversal для 16 роутов модулей, но chronicles.js тогда не покрыли.
+  // Подтверждено live 2026-08-11: PUT /api/chronicles/..%2F<dir>/fields писал
+  // chronicle.md за пределы chronicles/ (раньше та же дыра только читала —
+  // запись появилась вместе с самолечением chronicle.md, F1).
+  // router.param регистрирует проверку один раз на весь роутер вместо копии
+  // условия в каждом хендлере — новые роуты с :slug/:chr защищены автоматически.
+  const _rejectTraversal = (req, res, next, value) => {
+    if (typeof value === 'string' && (value.includes('..') || value.includes('/') || value.includes('\\')))
+      return res.status(400).json({ error: 'Недопустимое имя хроники' });
+    next();
+  };
+  router.param('slug', _rejectTraversal);
+  router.param('chr',  _rejectTraversal);
+
   router.get('/api/chronicles', async (req, res) => {
     try {
       const city = reqCity(req);
@@ -251,14 +268,22 @@ module.exports = function chroniclesRouter({
 
   // ── Настроение/Описание хроники (вкладка «📝 Описание» модалки) ────────────────
 
+  // chronicle.md опционален (web/routes/chronicles.js «chronicle.md опционален —
+  // старые хроники хранят только events.md + модули», см. GET /:slug/detail ниже) —
+  // «хроника найдена» значит «папка хроники существует», не «chronicle.md есть».
+  // FIX (код-ревью 2026-08-11, F1): GET/PUT раньше 404'или на отсутствие самого
+  // файла, хотя хроника реально существовала (2 из 5 реальных хроник Парижа) —
+  // тот же класс бага, что чинился у локаций (2026-08-09, «Ключевые точки»).
   router.get('/api/chronicles/:slug/fields', async (req, res) => {
     try {
       const city = reqCity(req);
       const slug = req.params.slug;
-      const mdPath = path.join(chroniclesDir(city), slug, 'chronicle.md');
-      const raw = await fs.readFile(mdPath, 'utf-8').catch(() => null);
-      if (raw === null) return res.status(404).json({ error: 'Хроника не найдена' });
-      res.json(parseChronicleFields(raw));
+      const chrDir = path.join(chroniclesDir(city), slug);
+      if (!await fs.stat(chrDir).catch(() => null))
+        return res.status(404).json({ error: 'Хроника не найдена' });
+
+      const raw = await fs.readFile(path.join(chrDir, 'chronicle.md'), 'utf-8').catch(() => null);
+      res.json(raw === null ? { mood: '', description: '' } : parseChronicleFields(raw));
     } catch (e) { serverError(res, e); }
   });
 
@@ -267,9 +292,23 @@ module.exports = function chroniclesRouter({
       const city = reqCity(req);
       const slug = req.params.slug;
       const { mood, description } = req.body || {};
-      const mdPath = path.join(chroniclesDir(city), slug, 'chronicle.md');
-      const raw = await fs.readFile(mdPath, 'utf-8').catch(() => null);
-      if (raw === null) return res.status(404).json({ error: 'Хроника не найдена' });
+      const chrDir = path.join(chroniclesDir(city), slug);
+      if (!await fs.stat(chrDir).catch(() => null))
+        return res.status(404).json({ error: 'Хроника не найдена' });
+
+      const mdPath = path.join(chrDir, 'chronicle.md');
+      let raw = await fs.readFile(mdPath, 'utf-8').catch(() => null);
+      if (raw === null) {
+        // Название неоткуда взять из уже отсутствующего chronicle.md — тот же
+        // фоллбэк на H1 events.md, что и GET /api/chronicles (строки 163-168).
+        let display = slug;
+        const evRaw = await fs.readFile(path.join(chrDir, 'events.md'), 'utf-8').catch(() => null);
+        if (evRaw) {
+          const m = evRaw.replace(/^﻿/, '').match(/^#\s+(.+?)\s+—\s+События/m);
+          if (m) display = m[1].replace(/^[^\p{L}\p{N}]+/u, '').trim();
+        }
+        raw = renderChronicleMd(display, slug, city, '', []);
+      }
 
       const card = writeChronicleFields(raw, { mood, description });
       await writeFileAtomic(mdPath, card, 'utf-8');

@@ -117,7 +117,9 @@ async function openChrDetail(slug, display, tab) {
     }
   } else if (_chrDetailTab === 'description') {
     try {
-      const fields = await fetch(`/api/chronicles/${encodeURIComponent(slug)}/fields${qs}`).then(r => r.json());
+      const r = await fetch(`/api/chronicles/${encodeURIComponent(slug)}/fields${qs}`);
+      if (!r.ok) throw new Error('not ok');
+      const fields = await r.json();
       STATE._chrFields = STATE._chrFields || {};
       STATE._chrFields[slug] = fields;
       body.innerHTML = _chrDescPanelHtml(fields);
@@ -1587,7 +1589,7 @@ function _renderScenarioPanel(data) {
           <div id="moddet-scensec${it.idx}-view" class="modp-md">${mdToHtmlPlain(it.body)}</div>
           <div id="moddet-scensec${it.idx}-edit" style="display:none">
             <textarea class="cdet-edit-textarea" id="moddet-scensec${it.idx}-ta" rows="10"
-              style="width:100%;font-family:monospace;font-size:var(--fs-lg,12px)">${escHtml(it.body)}</textarea>
+              style="width:100%;font-family:monospace;font-size:var(--fs-lg)">${escHtml(it.body)}</textarea>
           </div>
           <div class="modp-edit-bar" id="moddet-scensec${it.idx}-bar" style="display:none">
             <button class="modp-save-btn" data-savemod="scensec${it.idx}">Сохранить</button>
@@ -1628,7 +1630,7 @@ function _renderScenarioPanel(data) {
   <div id="moddet-scenario-view">${blocksHtml}</div>
   <div id="moddet-scenario-edit" style="display:none">
     <textarea class="cdet-edit-textarea" id="moddet-scenario-ta" rows="40"
-      style="width:100%;font-family:monospace;font-size:var(--fs-lg,12px)">${escHtml(raw)}</textarea>
+      style="width:100%;font-family:monospace;font-size:var(--fs-lg)">${escHtml(raw)}</textarea>
   </div>
   <div class="modp-edit-bar" id="moddet-scenario-bar" style="display:none">
     <button class="modp-save-btn" data-savemod="scenario">Сохранить</button>
@@ -1734,7 +1736,7 @@ function renderModulePage(data) {
   document.getElementById('modp-panel-finale').innerHTML = finaleRaw
     ? modPanel('finale', finaleViewHtml,
         `<textarea class="cdet-edit-textarea" id="moddet-finale-ta" rows="20"
-          style="width:100%;font-family:monospace;font-size:var(--fs-lg,12px)">${escHtml(finaleRaw)}</textarea>`)
+          style="width:100%;font-family:monospace;font-size:var(--fs-lg)">${escHtml(finaleRaw)}</textarea>`)
     : finaleViewHtml;
 
   // ── СЕССИИ (Фаза B — ведение во время игры) ──
@@ -1823,9 +1825,9 @@ function renderModulePage(data) {
     <button class="modp-edit-btn" id="modp-add-npc-btn">+ Добавить НПС</button>
   </div>
 
-  <div id="modp-npc-add-form" style="display:none;margin-top:12px;padding:12px;border:1px solid var(--border,#444);border-radius:4px">
+  <div id="modp-npc-add-form" style="display:none;margin-top:12px;padding:12px;border:1px solid var(--border);border-radius:var(--r-sm)">
     <div style="margin-bottom:8px">
-      <label style="display:block;font-size:var(--fs-lg,12px);color:var(--text2,#999);margin-bottom:2px">Имя</label>
+      <label style="display:block;font-size:var(--fs-lg);color:var(--text2);margin-bottom:2px">Имя</label>
       <input class="moddet-add-input" id="modp-npc-add-name"
         list="modp-npc-add-datalist" placeholder="Имя персонажа…" autocomplete="off" style="width:100%">
       <datalist id="modp-npc-add-datalist">
@@ -1833,7 +1835,7 @@ function renderModulePage(data) {
       </datalist>
     </div>
     <div style="margin-bottom:8px">
-      <label style="display:block;font-size:var(--fs-lg,12px);color:var(--text2,#999);margin-bottom:2px">Группа</label>
+      <label style="display:block;font-size:var(--fs-lg);color:var(--text2);margin-bottom:2px">Группа</label>
       <select class="moddet-add-input" id="modp-npc-add-group" style="width:100%">
         <option value="modular">🆕 Модульный НПС (создать карточку)</option>
         <option value="canon">📚 Каноничный НПС (из персонажей города)</option>
