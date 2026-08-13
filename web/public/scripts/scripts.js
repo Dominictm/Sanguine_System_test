@@ -951,6 +951,7 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     if (tab === 'lib-flaws')       loadFlawsLibrary('физические');
     if (tab === 'lib-backgrounds') loadBackgroundsLibrary('general');
     if (tab === 'guide')           loadGuideTab();
+    if (tab === 'backup')          loadBackupTab();
   });
 
   // Merits subtabs (physical/mental/social/supernatural)

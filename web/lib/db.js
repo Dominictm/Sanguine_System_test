@@ -470,6 +470,22 @@ async function _findModularNpcCard(npcRoot, name) {
   return null;
 }
 
+// Суммарный размер дерева в байтах — для «Инструменты → Бэкап» (показать вес города
+// до архивации). В отличие от countMdFiles считает ВСЕ файлы (арт — основной вклад
+// в размер, ради него бэкап и нужен), включая _deleted/, чтобы цифра совпадала с тем,
+// что реально попадёт в архив (архивируется вся папка города как есть).
+async function dirSize(dir) {
+  let n = 0;
+  try {
+    for (const item of await fs.readdir(dir, { withFileTypes: true })) {
+      const full = path.join(dir, item.name);
+      if (item.isDirectory()) n += await dirSize(full);
+      else n += (await fs.stat(full).catch(() => ({ size: 0 }))).size;
+    }
+  } catch {}
+  return n;
+}
+
 // ── Misc shared helpers ────────────────────────────────────────────────────────
 async function countMdFiles(dir) {
   let n = 0;
@@ -615,6 +631,6 @@ module.exports = {
   RU_MONTH_STEMS, eventDateScore, aggregateEvents,
   makeNameResolver, getDiaryIndex, eventMonthKey,
   renderChronicleEventsSkeleton, renderOpenThreadsSkeleton,
-  findMdFiles, rmdir,
+  findMdFiles, rmdir, dirSize,
   _normName, _nameMatch, _findModularNpcCard,
 };

@@ -8885,3 +8885,228 @@ test('source-guard: styles.css — .modp-npc-card-del стоит выше .char-
   assert.ok(scopedZ > overlayZ,
     `z-index кнопки удаления (${scopedZ}) должен быть больше z-index .char-card-overlay (${overlayZ}) в контексте .modp-char-cards`);
 });
+
+describe('Инструменты → Бэкап: /api/backup/* (docs/design/2026-08-13-backup-tab-techspec.md)', () => {
+  before(async () => { await startServer(); });
+  after(async () => { await stopServer(); });
+
+  describe('валидация', () => {
+    it('POST /api/backup/city — пустой список слагов → 400', async () => {
+      const r = await apiJson('/api/backup/city', { method: 'POST', body: JSON.stringify({ slugs: [] }) });
+      assert.equal(r.status, 400);
+    });
+
+    it('POST /api/backup/city — traversal через слаг → 400, без побочных эффектов', async () => {
+      const r = await apiJson('/api/backup/city', { method: 'POST', body: JSON.stringify({ slugs: ['../etc'] }) });
+      assert.equal(r.status, 400);
+    });
+
+    it('POST /api/backup/city — слаг не из listCities() → 400', async () => {
+      const r = await apiJson('/api/backup/city', { method: 'POST', body: JSON.stringify({ slugs: ['__nonexistent_city__'] }) });
+      assert.equal(r.status, 400);
+    });
+
+    it('GET /api/backup/job/:id — неизвестный id → 404', async () => {
+      const r = await apiJson('/api/backup/job/deadbeef00000000');
+      assert.equal(r.status, 404);
+    });
+
+    it('GET /api/backup/job/:id/download — неизвестный id → 404', async () => {
+      const r = await apiJson('/api/backup/job/deadbeef00000000/download');
+      assert.equal(r.status, 404);
+    });
+
+    it('POST /api/backup/restore/commit — без inspectId (или истёкшим) → 404', async () => {
+      const r = await apiJson('/api/backup/restore/commit', { method: 'POST', body: JSON.stringify({ inspectId: 'nope' }) });
+      assert.equal(r.status, 404);
+    });
+
+    it('POST /api/backup/restore/inspect — не-ZIP тело → 400, не роняет сервер', async () => {
+      const r = await apiJson('/api/backup/restore/inspect', {
+        method: 'POST', headers: { 'Content-Type': 'application/octet-stream' },
+        body: Buffer.from('это не архив'),
+      });
+      assert.equal(r.status, 400);
+    });
+
+    it('POST /api/backup/restore/inspect — ZIP без city.md внутри папки → 400', async () => {
+      const { createZip } = require('../lib/zip');
+      const zipBuf = createZip([{ name: 'somecity/notes.txt', data: 'без city.md' }]);
+      const r = await apiJson('/api/backup/restore/inspect', {
+        method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: zipBuf,
+      });
+      assert.equal(r.status, 400);
+      assert.match(r.body.error, /city\.md/);
+    });
+
+    it('POST /api/backup/restore/inspect — недопустимое имя папки в архиве → 400', async () => {
+      const { createZip } = require('../lib/zip');
+      const zipBuf = createZip([{ name: '../evil/city.md', data: '# X\n' }]);
+      const r = await apiJson('/api/backup/restore/inspect', {
+        method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: zipBuf,
+      });
+      assert.equal(r.status, 400);
+    });
+
+    // code-review (2026-08-13): голый /^[a-z0-9_]+$/ пропускал папки, начинающиеся с
+    // '_' — "_deleted"/"_restore_tmp" зарезервированы сервером (мягкое удаление,
+    // временная распаковка restore), а listCities() их не видит, так что commit
+    // трактовал бы такую папку как «новый город» и подменял бы служебную директорию
+    // содержимым из чужого архива. slugify() никогда не производит слаг с ведущим
+    // '_', так что запрет ничего легитимного не блокирует.
+    it('POST /api/backup/restore/inspect — папка с ведущим "_" (коллизия с _deleted/_restore_tmp) → 400', async () => {
+      const { createZip } = require('../lib/zip');
+      const zipBuf = createZip([{ name: '_deleted/city.md', data: '# Захват служебной папки\n' }]);
+      const r = await apiJson('/api/backup/restore/inspect', {
+        method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: zipBuf,
+      });
+      assert.equal(r.status, 400);
+      assert.match(r.body.error, /Недопустимое имя папки/);
+    });
+  });
+
+  it('GET /api/backup/cities-info — отражает listCities(), sizeMb — число', async () => {
+    const r = await apiJson('/api/backup/cities-info');
+    assert.equal(r.status, 200);
+    assert.ok(Array.isArray(r.body.cities) && r.body.cities.length > 0);
+    for (const c of r.body.cities) {
+      assert.equal(typeof c.slug, 'string');
+      assert.equal(typeof c.sizeMb, 'number');
+    }
+  });
+
+  it('POST /api/backup/settings — отдаёт zip (без утверждений о содержимом ключей)', async () => {
+    const resp = await fetch(BASE + '/api/backup/settings', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ aiFeaturePrefs: '{}' }),
+    });
+    assert.equal(resp.status, 200);
+    assert.match(resp.headers.get('content-type') || '', /zip/);
+    const buf = Buffer.from(await resp.arrayBuffer());
+    assert.ok(buf.length > 0);
+  });
+
+  // Полный цикл на синтетическом городе (не на реальном cities/paris, по установленной
+  // в проекте практике самодостаточных фикстур) — покрывает критический риск Р1
+  // (workplan §«Риски»): бэкап → город исчез → восстановление возвращает данные;
+  // бэкап поверх СУЩЕСТВУЮЩЕГО города откатывает старую версию в _deleted, а не стирает.
+  describe('полный цикл: создание → удаление → восстановление; замена с откатом', () => {
+    let citySlug, cityCardPath;
+    const qs = () => `?city=${citySlug}`;
+
+    before(async () => {
+      const create = await apiJson('/api/cities', { method: 'POST', body: JSON.stringify({
+        name: 'Backup Roundtrip Testcity', year: '2010',
+      }) });
+      assert.equal(create.status, 200, create.body.error);
+      citySlug = create.body.slug;
+      const char = await apiJson(`/api/characters${qs()}`, { method: 'POST', body: JSON.stringify({
+        name: 'Бэкап Тест Персонаж', lineage: 'vampire', gender: 'Мужской', clan: 'Тремер', sect: 'Камарилья',
+      }) });
+      assert.equal(char.status, 200, char.body.error);
+      cityCardPath = path.join(__dirname, '../../cities', citySlug, 'city.md');
+    });
+    after(async () => {
+      await fs.rm(path.join(__dirname, '../../cities', citySlug), { recursive: true, force: true });
+      await fs.rm(path.join(__dirname, '../../cities/_deleted'), { recursive: true, force: true }).catch(() => {});
+    });
+
+    async function createAndDownloadBackup(slug) {
+      const start = await apiJson('/api/backup/city', { method: 'POST', body: JSON.stringify({ slugs: [slug] }) });
+      assert.equal(start.status, 200, start.body.error);
+      let job;
+      for (let i = 0; i < 60; i++) {
+        job = await apiJson(`/api/backup/job/${start.body.id}`);
+        assert.equal(job.status, 200);
+        if (job.body.status !== 'running') break;
+        await new Promise(r => setTimeout(r, 500));
+      }
+      assert.equal(job.body.status, 'done', job.body.error);
+      const resp = await fetch(`${BASE}/api/backup/job/${start.body.id}/download`);
+      assert.equal(resp.status, 200);
+      return Buffer.from(await resp.arrayBuffer());
+    }
+
+    async function inspectAndCommit(zipBuf) {
+      const inspResp = await fetch(BASE + '/api/backup/restore/inspect', {
+        method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: zipBuf,
+      });
+      const insp = await inspResp.json();
+      assert.equal(inspResp.status, 200, insp.error);
+      const commit = await apiJson('/api/backup/restore/commit', {
+        method: 'POST', body: JSON.stringify({ inspectId: insp.inspectId }),
+      });
+      assert.equal(commit.status, 200, commit.body.error);
+      return { summary: insp.summary, results: commit.body.results };
+    }
+
+    it('бэкап → город удалён с диска → restore возвращает город (rolledBackTo: null, exists:false)', async () => {
+      const zipBuf = await createAndDownloadBackup(citySlug);
+
+      await fs.rm(path.join(__dirname, '../../cities', citySlug), { recursive: true, force: true });
+      const gone = await apiJson('/api/cities');
+      assert.ok(!gone.body.cities.includes(citySlug), 'город должен реально отсутствовать перед восстановлением');
+
+      const { summary, results } = await inspectAndCommit(zipBuf);
+      assert.equal(summary[0].slug, citySlug);
+      assert.equal(summary[0].exists, false);
+      assert.equal(results[0].rolledBackTo, null);
+
+      const back = await apiJson('/api/cities');
+      assert.ok(back.body.cities.includes(citySlug), 'город должен вернуться после restore/commit');
+      const cardRaw = await fs.readFile(cityCardPath, 'utf-8');
+      assert.match(cardRaw, /Backup Roundtrip Testcity/);
+    });
+
+    it('restore поверх СУЩЕСТВУЮЩЕГО города: старая версия уходит в _deleted, новая — на месте', async () => {
+      // Город уже восстановлен предыдущим тестом (тем же citySlug) — берём свежий бэкап
+      // с текущим содержимым, затем меняем живой файл, чтобы отличить «старую» версию
+      // (должна уйти в _deleted) от «восстановленной» (должна встать на место).
+      const zipBuf = await createAndDownloadBackup(citySlug);
+      await fs.writeFile(cityCardPath, (await fs.readFile(cityCardPath, 'utf-8')) + '\n<!-- изменено после бэкапа -->\n');
+
+      const { summary, results } = await inspectAndCommit(zipBuf);
+      assert.equal(summary[0].exists, true);
+      assert.ok(results[0].rolledBackTo, 'должен быть путь отката для существовавшего города');
+      assert.match(results[0].rolledBackTo, new RegExp(`cities/_deleted/${citySlug}__before_restore_`));
+
+      const rolledBackRaw = await fs.readFile(path.join(__dirname, '../..', results[0].rolledBackTo, 'city.md'), 'utf-8');
+      assert.match(rolledBackRaw, /изменено после бэкапа/, 'откаченная копия должна содержать ИЗМЕНЁННУЮ (дозабэкапную) версию');
+
+      const restoredRaw = await fs.readFile(cityCardPath, 'utf-8');
+      assert.doesNotMatch(restoredRaw, /изменено после бэкапа/, 'на месте должна быть версия ИЗ бэкапа, без ручной правки');
+    });
+
+    // QA-находка Д-1 (2026-08-13, docs/design/2026-08-13-backup-tab-qa-fixes-techspec.md):
+    // displayNameFromDir раньше (как cityDisplayName) всегда читал ЖИВУЮ cities/<slug>/,
+    // даже когда summary формируется по распакованному архиву restore/inspect — так что
+    // переименование живого города между «сделать бэкап» и «восстановить им же» показывало
+    // в сводке текущее (уже неактуальное) имя вместо того, что реально лежит в архиве.
+    // Отдельный синтетический город, не citySlug из describe — тест не должен зависеть
+    // от порядка двух предыдущих it().
+    it('restore/inspect: сводка показывает имя ИЗ АРХИВА, а не текущее имя живого города', async () => {
+      const create = await apiJson('/api/cities', { method: 'POST', body: JSON.stringify({
+        name: 'QA Display Name Testcity', year: '2020',
+      }) });
+      assert.equal(create.status, 200, create.body.error);
+      const slug = create.body.slug;
+      const cardPath = path.join(__dirname, '../../cities', slug, 'city.md');
+      try {
+        const zipBuf = await createAndDownloadBackup(slug);
+
+        const renamed = (await fs.readFile(cardPath, 'utf-8')).replace(
+          'QA Display Name Testcity', 'RENAMED AFTER BACKUP');
+        await fs.writeFile(cardPath, renamed, 'utf-8');
+
+        const inspResp = await fetch(BASE + '/api/backup/restore/inspect', {
+          method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: zipBuf,
+        });
+        const insp = await inspResp.json();
+        assert.equal(inspResp.status, 200, insp.error);
+        assert.equal(insp.summary[0].display, 'QA Display Name Testcity',
+          'сводка должна показывать имя ИЗ АРХИВА, не текущее имя живого города');
+      } finally {
+        await fs.rm(path.join(__dirname, '../../cities', slug), { recursive: true, force: true });
+      }
+    });
+  });
+});

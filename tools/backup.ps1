@@ -34,6 +34,13 @@ Get-ChildItem -Path $Root -Force | Where-Object { $_.Name -notin $exclude } | Fo
 # Also copy tools folder (scripts themselves)
 Copy-Item -Path (Join-Path $Root "tools") -Destination $tempDir -Recurse -Force
 
+# Ключи AI (web/.env, service-account JSON) не должны попадать в ручной бэкап — "web"
+# не в $exclude (внутри неё лежат сами данные городов при старой раскладке — сейчас нет,
+# но исключать всю папку не вариант), поэтому файлы с ключами вычищаются точечно уже
+# после копирования. Отправленный кому-то архив иначе становится утечкой ключей.
+Remove-Item -Path (Join-Path $tempDir "web\.env") -Force -ErrorAction SilentlyContinue
+Remove-Item -Path (Join-Path $tempDir "web\.gemini-vertex-key.json") -Force -ErrorAction SilentlyContinue
+
 # node_modules (web/ + web/tests/, ~88 МБ) полностью восстанавливаются через
 # `npm install` — в архиве смысла не имеют. Отсечь их одним $exclude выше нельзя:
 # они вложенные, а Copy-Item -Recurse тянет их вместе с web/. Удаляем после

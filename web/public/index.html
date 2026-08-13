@@ -583,6 +583,29 @@
       </div>
     </div>
 
+    <!-- Backup restore confirmation (tab «Бэкап») -->
+    <div id="bkp-restore-modal" class="chr-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="bkp-restore-title">
+      <div class="chr-modal" style="max-width:560px">
+        <div class="chr-modal-title" id="bkp-restore-title">⚠ Восстановить из архива?</div>
+        <div class="chr-modal-body">
+          <div class="chr-modal-warn">
+            Старые версии заменяемых городов будут перенесены в «Удалённые» — восстановление
+            оттуда ручное, не автоматическое.
+          </div>
+          <div id="bkp-restore-items"></div>
+        </div>
+        <div style="margin:0 0 16px;font-size:var(--fs-lg);color:var(--text2)">
+          <label>
+            <input type="checkbox" id="bkp-restore-unlock-check"> Я понимаю, что текущие данные будут заменены
+          </label>
+        </div>
+        <div class="chr-modal-actions">
+          <button id="bkp-restore-cancel-btn" class="chr-modal-btn cancel">Отмена</button>
+          <button id="bkp-restore-confirm-btn" class="chr-modal-btn danger" disabled>Восстановить</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Module close confirmation (Фаза C) -->
     <div id="modp-close-modal" class="chr-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="modp-close-title">
       <div class="chr-modal" style="max-width:460px">
@@ -1057,6 +1080,7 @@
         <button class="tab-btn" data-tab="ai-connect">🔌 Подключение AI</button>
         <button class="tab-btn" data-tab="ai-features">⚡ Назначение генераций</button>
         <button class="tab-btn" data-tab="guide">📖 Инструкции</button>
+        <button class="tab-btn" data-tab="backup">💾 Бэкап</button>
       </div>
 
       <!-- Validate / Учёт данных (объединено с «Ещё», П.3-Б 2026-08-07) -->
@@ -1124,6 +1148,13 @@
       <!-- Инструкции (guide.md) -->
       <div class="tab-panel" id="tab-guide">
         <div id="guide-content">
+          <div class="loading-state"><div class="spinner"></div>Загрузка...</div>
+        </div>
+      </div>
+
+      <!-- Бэкап -->
+      <div class="tab-panel" id="tab-backup">
+        <div id="backup-content">
           <div class="loading-state"><div class="spinner"></div>Загрузка...</div>
         </div>
       </div>
@@ -1443,5 +1474,6 @@
 <script src="scripts/log-session.js"></script>
 <script src="scripts/search.js"></script>
 <script src="scripts/tour.js"></script>
+<script src="scripts/backup.js"></script>
 </body>
 </html>

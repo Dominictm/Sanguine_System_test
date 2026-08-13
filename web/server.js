@@ -34,6 +34,7 @@ const modulesRouterFactory = require('./routes/modules');
 const generationRouterFactory = require('./routes/generation');
 const { router: dashboardRouter } = require('./routes/dashboard');
 const toolsRouterFactory = require('./routes/tools');
+const backupRouterFactory = require('./routes/backup');
 // Load .env file (secrets not committed to git)
 try {
   const envRaw = require('fs').readFileSync(path.join(__dirname, '.env'), 'utf-8');
@@ -270,6 +271,7 @@ app.use(toolsRouterFactory({
   envPath:         () => ENV_PATH,
   defaultClaudeModel: () => DEFAULT_CLAUDE_MODEL,
 }));
+app.use(backupRouterFactory({ envPath: () => ENV_PATH }));
 
 // ── Markdown / card / chronicle parsers ───────────────────────────────────────
 // categorizeRel, parseCharacter, parseLocation, parseChronicle* and the md* helpers

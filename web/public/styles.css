@@ -8473,6 +8473,140 @@ a.md-link-loc:hover {
   margin-bottom: 0;
 }
 
+/* ═══════════════════════════════════════════════════════════════
+   Backup tab (Инструменты → Бэкап)
+   docs/design/2026-08-13-backup-tab-design.md
+   ═══════════════════════════════════════════════════════════════ */
+.bkp-city-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 10px 0 16px;
+}
+
+.bkp-city-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  transition: background .15s;
+}
+
+.bkp-city-row:hover { background: rgba(255, 255, 255, .03); }
+
+.bkp-city-row--all {
+  font-family: var(--f-heading);
+  font-size: var(--fs-xs);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--text2);
+  padding: 6px 10px 10px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 6px;
+}
+
+.bkp-city-name { flex: 1; font-size: var(--fs-lg); color: var(--text); }
+
+.bkp-city-size {
+  font-family: var(--f-mono);
+  font-size: var(--fs-sm);
+  color: var(--text3);
+  min-width: 64px;
+  text-align: right;
+}
+
+@media (pointer: coarse) {
+  .bkp-city-row { min-height: 44px; }
+}
+
+.bkp-progress {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 14px;
+  color: var(--text2);
+  font-size: var(--fs-md);
+}
+
+.bkp-settings-warn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  margin-bottom: 14px;
+  background: rgba(184, 134, 11, .07);
+  border: 1px solid rgba(184, 134, 11, .3);
+  border-radius: var(--r-sm);
+  color: var(--gold);
+  font-size: var(--fs-md);
+}
+
+.bkp-danger-zone {
+  border-color: rgba(139, 0, 0, .35);
+  background: color-mix(in srgb, var(--bg2) 92%, var(--accent) 8%);
+}
+
+.bkp-danger-title { color: var(--c-danger-text); }
+
+.bkp-restore-btn {
+  background: rgba(139, 0, 0, .15);
+  border-color: var(--accent);
+  color: var(--c-danger-text);
+}
+
+.bkp-restore-btn:hover:not(:disabled) {
+  background: rgba(139, 0, 0, .3);
+}
+
+.bkp-restore-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.bkp-restore-item:last-child { border-bottom: none; }
+
+.bkp-restore-item-name { font-size: var(--fs-lg); color: var(--text); }
+
+.bkp-restore-item-meta {
+  flex: 1;
+  font-family: var(--f-mono);
+  font-size: var(--fs-sm);
+  color: var(--text3);
+}
+
+.bkp-restore-badge {
+  font-family: var(--f-heading);
+  font-size: var(--fs-2xs);
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  padding: 3px 9px;
+  border-radius: var(--r-sm);
+  border: 1px solid;
+  white-space: nowrap;
+}
+
+.bkp-restore-badge--replace {
+  color: var(--c-danger-text);
+  border-color: rgba(200, 40, 0, .4);
+  background: rgba(139, 0, 0, .08);
+}
+
+.bkp-restore-badge--new {
+  color: var(--c-success);
+  border-color: rgba(125, 206, 130, .4);
+  background: rgba(125, 206, 130, .06);
+}
+
+@media (max-width: 480px) {
+  .bkp-restore-item { flex-wrap: wrap; }
+  .bkp-restore-item-name { flex: 1 1 100%; }
+}
+
 /* City switcher (multi-city) — «шёпот до касания»: в покое выглядит как
    обычная надпись «Город, Год» (см. domain-badge, который эта надпись
    заменила), при наведении/фокусе проявляется как настоящий select. */
