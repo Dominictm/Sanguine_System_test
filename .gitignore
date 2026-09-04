@@ -42,3 +42,7 @@ TgWsProxy_data/
 # бинарник платформозависимый и тяжёлый (~40MB), в репозиторий не кладём.
 web/tests/bin/
 web/se-metadata.json
+
+# Временные артефакты локальной среды
+.kilo/
+cities/_restore_tmp/
