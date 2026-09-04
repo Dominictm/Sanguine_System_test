@@ -1,0 +1,37 @@
+{
+  "name": "@vuf/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "REST API Vuf (Express + TypeScript + Prisma + MySQL)",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "typecheck": "tsc --noEmit",
+    "prisma:generate": "prisma generate --schema ../../infra/migrations/schema.prisma",
+    "prisma:migrate": "prisma migrate dev --schema ../../infra/migrations/schema.prisma",
+    "prisma:deploy": "prisma migrate deploy --schema ../../infra/migrations/schema.prisma",
+    "prisma:studio": "prisma studio --schema ../../infra/migrations/schema.prisma",
+    "seed": "tsx prisma/seed.ts"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.20.0",
+    "@vuf/shared": "0.1.0",
+    "cors": "^2.8.5",
+    "express": "^4.21.0",
+    "helmet": "^8.0.0",
+    "morgan": "^1.10.0",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.17",
+    "@types/express": "^4.17.21",
+    "@types/morgan": "^1.9.9",
+    "@types/node": "^20.16.0",
+    "prisma": "^5.20.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.5.0"
+  }
+}

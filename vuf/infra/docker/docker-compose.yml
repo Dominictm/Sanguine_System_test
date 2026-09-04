@@ -1,0 +1,29 @@
+version: "3.9"
+
+# Локальная инфраструктура Vuf: MySQL для разработки.
+# Запуск:  docker compose -f infra/docker/docker-compose.yml up -d
+# После подъёма БД выполнить миграции:
+#   npm install && npm run db:generate && npm run db:migrate
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: vuf-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: vuf
+      MYSQL_USER: vuf
+      MYSQL_PASSWORD: vuf
+    ports:
+      - "3306:3306"
+    volumes:
+      - vuf_mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  vuf_mysql_data:

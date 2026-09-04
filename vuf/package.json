@@ -1,0 +1,24 @@
+{
+  "name": "vuf",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Vuf — веб-приложение для настольной игры Vampire: The Masquerade (персонажи, локации, сценарии)",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:api": "npm run dev --workspace @vuf/api",
+    "dev:web": "npm run dev --workspace @vuf/web",
+    "build": "npm run build --workspaces",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "seed": "npm run seed --workspace @vuf/api",
+    "db:migrate": "npm run prisma:migrate --workspace @vuf/api",
+    "db:generate": "npm run prisma:generate --workspace @vuf/api",
+    "db:studio": "npm run prisma:studio --workspace @vuf/api"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "MIT"
+}

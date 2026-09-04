@@ -1,0 +1,213 @@
+// Vuf — Prisma schema (MySQL 8)
+// Модель данных по проекту Vuf (см. docs/setup.md и проектный документ VUF-16).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// ------------- Владельцы данных -------------
+
+model User {
+  id            Int       @id @default(autoincrement())
+  email         String    @unique
+  name          String?
+  passwordHash  String?
+  role          String    @default("root") // MVP: root. Далее: admin/gm/player
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  characters Character[]
+  locations  Location[]
+  scenarios  Scenario[]
+}
+
+// ------------- Справочники (enums) -------------
+
+enum Clan {
+  BRUJAH
+  GANGREL
+  MALKAVIAN
+  NOSFERATU
+  TOREADOR
+  TREMERE
+  TZIMISCE
+  VENTRUE
+  CAPPADOCIAN
+  ASSAMITE
+  TRUE_BRUJAH
+  CAITIFF
+  OTHER
+  NONE // смертные и прочие линейки
+}
+
+enum Lineage {
+  VAMPIRE
+  MAGE
+  WEREWOLF
+  FAIRY
+  MORTAL
+  HUNTER
+  UNKNOWN
+}
+
+enum CharacterStatus {
+  ALIVE
+  TORPOR
+  DEAD
+  MISSING
+  UNKNOWN
+  ACTIVE
+}
+
+enum LocationType {
+  HAVEN
+  CLUB
+  ELYSIUM
+  STREET
+  OFFICE
+  RESIDENCE
+  GOVERNMENT
+  UNDERGROUND
+  OTHER
+}
+
+enum ScenarioStatus {
+  DRAFT
+  READY
+  PLAYED
+  ARCHIVED
+}
+
+enum ScenarioPhase {
+  A // завязка
+  B // развитие
+  C // кульминация / последствия
+}
+
+enum CharacterRole {
+  PLAYER
+  NPC
+  EPISODIC
+  FAMILIAR
+}
+
+// ------------- Персонажи -------------
+
+model Character {
+  id            Int            @id @default(autoincrement())
+  userId        Int?
+  user          User?          @relation(fields: [userId], references: [id])
+  name          String
+  slug          String         @unique
+  concept       String?
+  lineage       Lineage        @default(VAMPIRE)
+  clan          Clan           @default(NONE)
+  generation    Int?
+  sire          String?
+  status        CharacterStatus @default(ALIVE)
+  role          CharacterRole  @default(NPC)
+  playerName    String?
+  nature        String?
+  demeanor      String?
+  // Игромеханика V20 (JSON: { <атрибут/способность/добродетель/дисциплина>: уровень })
+  attributes    Json?
+  abilities     Json?
+  virtues       Json?
+  disciplines   Json?
+  backgrounds   Json?
+  humanity      Int?
+  path          String?
+  willpower     Int?
+  bloodPool     Int?
+  experience    Json?
+  appearance    Json?
+  biography     String?        @db.Text
+  goals         String?        @db.Text
+  notes         String?        @db.Text
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  scenarioCharacters ScenarioCharacter[]
+
+  @@index([userId])
+  @@index([clan])
+  @@index([status])
+}
+
+// ------------- Локации -------------
+
+model Location {
+  id          Int            @id @default(autoincrement())
+  userId      Int?
+  user        User?          @relation(fields: [userId], references: [id])
+  name        String
+  slug        String         @unique
+  type        LocationType   @default(OTHER)
+  city        String?
+  district    String?
+  address     String?
+  description String?        @db.Text
+  atmosphere  String?        @db.Text
+  hooks       String?        @db.Text // сюжетные крючки
+  notes       String?        @db.Text
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  scenarioLocations ScenarioLocation[]
+
+  @@index([userId])
+  @@index([type])
+  @@index([city])
+}
+
+// ------------- Сценарии -------------
+
+model Scenario {
+  id          Int            @id @default(autoincrement())
+  userId      Int?
+  user        User?          @relation(fields: [userId], references: [id])
+  title       String
+  summary     String?        @db.Text
+  phase       ScenarioPhase  @default(A)
+  status      ScenarioStatus @default(DRAFT)
+  notes       String?        @db.Text
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  characters ScenarioCharacter[]
+  locations  ScenarioLocation[]
+
+  @@index([userId])
+  @@index([status])
+}
+
+// ------------- Связки: Сценарий ⇄ Персонажи / Локации (M:N) -------------
+
+model ScenarioCharacter {
+  scenarioId  Int
+  characterId Int
+  role        String? // роль персонажа в сцене (по VUF-16 проекту)
+
+  scenario  Scenario  @relation(fields: [scenarioId], references: [id], onDelete: Cascade)
+  character Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+
+  @@id([scenarioId, characterId])
+  @@index([characterId])
+}
+
+model ScenarioLocation {
+  scenarioId Int
+  locationId Int
+  purpose    String? // зачем локация в сценарии (по VUF-16 проекту)
+
+  scenario Scenario @relation(fields: [scenarioId], references: [id], onDelete: Cascade)
+  location Location @relation(fields: [locationId], references: [id], onDelete: Cascade)
+
+  @@id([scenarioId, locationId])
+  @@index([locationId])
+}
